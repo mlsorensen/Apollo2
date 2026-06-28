@@ -54,6 +54,27 @@ const char* battery_icon(int pct) {
   return LV_SYMBOL_BATTERY_EMPTY;
 }
 
+const char* battery_fill_icon(int frame) {
+  switch (frame % 5) {
+    case 0:  return LV_SYMBOL_BATTERY_EMPTY;
+    case 1:  return LV_SYMBOL_BATTERY_1;
+    case 2:  return LV_SYMBOL_BATTERY_2;
+    case 3:  return LV_SYMBOL_BATTERY_3;
+    default: return LV_SYMBOL_BATTERY_FULL;
+  }
+}
+
+// Loops the battery fill while charging (no percent — SoC is unknowable then).
+void battery_anim_cb(lv_timer_t* t) {
+  auto* w = static_cast<ui::HomeWidgets*>(lv_timer_get_user_data(t));
+  if (!w->charging) return;
+  w->charge_frame = (w->charge_frame + 1) % 5;
+  char buf[24];
+  std::snprintf(buf, sizeof(buf), LV_SYMBOL_CHARGE " %s",
+                battery_fill_icon(w->charge_frame));
+  lv_label_set_text(w->battery_label, buf);
+}
+
 }  // namespace
 
 namespace ui {
@@ -108,6 +129,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& 
   out.battery_label = lv_label_create(bar);
   lv_obj_set_style_text_color(out.battery_label, lv_color_hex(ui::theme::muted), 0);
   lv_obj_set_style_text_font(out.battery_label, sub_font, 0);
+  out.batt_timer = lv_timer_create(battery_anim_cb, 350, &out);  // drives charge anim
 
   // --- Two temperature panels, side by side -------------------------------
   lv_obj_t* row = lv_obj_create(parent);
@@ -144,7 +166,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& 
   lv_obj_center(out.power_label);
 }
 
-void update_home(const HomeWidgets& w, const core::MachineSnapshot& state,
+void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
                  const core::BatteryState& battery) {
   const bool connected = state.link == core::Link::Connected;
   const bool on = state.power == core::Power::On;
@@ -183,19 +205,26 @@ void update_home(const HomeWidgets& w, const core::MachineSnapshot& state,
   lv_label_set_text(w.status_label, status);
   lv_obj_set_style_bg_color(w.status_dot, lv_color_hex(dot), 0);
 
-  // Battery (top-right): charge bolt (if charging) + level icon + percent.
+  // Battery (top-right). Charging: bolt + a looping fill animation, NO percent
+  // (terminal voltage is elevated under charge, so SoC is unknowable). Idle:
+  // level icon + percent.
+  w.charging = battery.present && battery.charging;
   if (!battery.present) {
     lv_label_set_text(w.battery_label, "");
+  } else if (battery.charging) {
+    lv_obj_set_style_text_color(w.battery_label, lv_color_hex(ui::theme::ok), 0);
+    char bb[24];
+    std::snprintf(bb, sizeof(bb), LV_SYMBOL_CHARGE " %s",
+                  battery_fill_icon(w.charge_frame));  // timer advances frames
+    lv_label_set_text(w.battery_label, bb);
   } else {
     char bb[24];
-    std::snprintf(bb, sizeof(bb), "%s%s %d%%", battery.charging ? LV_SYMBOL_CHARGE " " : "",
-                  battery_icon(battery.percent), battery.percent);
+    std::snprintf(bb, sizeof(bb), "%s %d%%", battery_icon(battery.percent),
+                  battery.percent);
     lv_label_set_text(w.battery_label, bb);
     lv_obj_set_style_text_color(
         w.battery_label,
-        lv_color_hex(battery.percent < 15 && !battery.charging ? ui::theme::alert
-                                                               : ui::theme::muted),
-        0);
+        lv_color_hex(battery.percent < 15 ? ui::theme::alert : ui::theme::muted), 0);
   }
 
   // Power button: only actionable when connected.

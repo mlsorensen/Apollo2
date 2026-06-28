@@ -18,6 +18,8 @@ namespace ui {
 
 class App {
  public:
+  ~App();
+
   void build(core::IMachine& machine, core::IProvisioner& provisioner,
              core::IBattery& battery, const ScreenProfile& screen);
 

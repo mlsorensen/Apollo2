@@ -65,6 +65,10 @@ void on_segment_clicked(lv_event_t* e) {
 
 namespace ui {
 
+App::~App() {
+  if (home_.batt_timer != nullptr) lv_timer_delete(home_.batt_timer);
+}
+
 void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                 core::IBattery& battery, const ScreenProfile& screen) {
   machine_ = &machine;
