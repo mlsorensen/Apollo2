@@ -3,8 +3,8 @@
 #include <string>
 
 // Persistent device configuration in NVS flash: the saved machine (BLE MAC +
-// display name) chosen via the Settings scan. The auth token will move here
-// later; it is compile-time (secrets.h) for now.
+// display name) chosen via the Settings scan, and the auth token entered via
+// the WiFi setup page. Nothing is compiled in.
 
 namespace platform {
 

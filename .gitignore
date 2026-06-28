@@ -5,8 +5,5 @@
 .vscode/ipch
 renders/
 
-# Per-machine secret (BLE auth token)
-include/secrets.h
-
 # Claude Code local settings
 .claude/settings.local.json

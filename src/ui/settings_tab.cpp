@@ -62,14 +62,15 @@ void build_bluetooth_panel(lv_obj_t* panel, const lv_font_t* font,
   lv_obj_set_flex_grow(out.list, 1);  // fills remaining height -> scrolls on overflow
   lv_obj_set_flex_flow(out.list, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_style_pad_row(out.list, 6, 0);
+  lv_obj_set_style_pad_hor(out.list, 12, 0);  // symmetric gutters; rows clear the scrollbar
 
-  // A visible scrollbar so it's obvious the list scrolls when there are more
-  // machines than fit (remove_style_all stripped the default one).
+  // A visible scrollbar in the gutter (AUTO: only when the list overflows).
   lv_obj_set_scrollbar_mode(out.list, LV_SCROLLBAR_MODE_AUTO);
-  lv_obj_set_style_bg_color(out.list, lv_color_hex(ui::theme::accent), LV_PART_SCROLLBAR);
+  lv_obj_set_style_bg_color(out.list, lv_color_hex(ui::theme::muted), LV_PART_SCROLLBAR);
   lv_obj_set_style_bg_opa(out.list, LV_OPA_COVER, LV_PART_SCROLLBAR);
-  lv_obj_set_style_width(out.list, 6, LV_PART_SCROLLBAR);
+  lv_obj_set_style_width(out.list, 5, LV_PART_SCROLLBAR);
   lv_obj_set_style_radius(out.list, 3, LV_PART_SCROLLBAR);
+  lv_obj_set_style_pad_right(out.list, 3, LV_PART_SCROLLBAR);  // inset from the edge
 }
 
 // A placeholder section until the capabilities-driven temperature controls land.
