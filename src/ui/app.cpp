@@ -66,9 +66,10 @@ void on_segment_clicked(lv_event_t* e) {
 namespace ui {
 
 void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
-                const ScreenProfile& screen) {
+                core::IBattery& battery, const ScreenProfile& screen) {
   machine_ = &machine;
   provisioner_ = &provisioner;
+  battery_ = &battery;
   const bool compact = is_compact(screen);
 
   lv_obj_t* scr = lv_screen_active();
@@ -104,8 +105,9 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     style_tab_button(lv_tabview_get_tab_button(tv, i), tab_font);
   }
 
-  build_home_tab(home, machine_->snapshot(), screen, home_);
+  build_home_tab(home, screen, home_);
   lv_obj_add_event_cb(home_.power_btn, on_power_clicked, LV_EVENT_CLICKED, this);
+  update_home(home_, machine_->snapshot(), battery_->battery());
 
   build_settings_tab(settings, screen, settings_);
   for (int i = 0; i < kSectionCount; ++i) {
@@ -121,7 +123,9 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
 }
 
 void App::refresh() {
-  if (machine_ != nullptr) update_home(home_, machine_->snapshot());
+  if (machine_ != nullptr && battery_ != nullptr) {
+    update_home(home_, machine_->snapshot(), battery_->battery());
+  }
   update_settings_view();
 }
 

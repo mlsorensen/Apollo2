@@ -2,33 +2,34 @@
 
 #include <lvgl.h>
 
+#include "core/battery.h"
 #include "core/machine.h"
 #include "ui/screen.h"
 
-// Home tab: built once, then updated in place from new snapshots (no rebuild,
-// so tab state and touch targets are preserved). Internal to the ui/ layer —
-// ui::App owns the tab shell and wires the power button to a command.
+// Home tab: built once, then updated in place from new snapshots (no rebuild).
+// Top bar carries the connection status (left) and battery (right); below are
+// the temperature cards and the power button. ui::App owns it.
 
 namespace ui {
 
-// Handles to the Home tab's dynamic widgets, retained for live updates.
 struct HomeWidgets {
+  lv_obj_t* status_dot = nullptr;     // top-left
+  lv_obj_t* status_label = nullptr;
+  lv_obj_t* battery_label = nullptr;  // top-right
   lv_obj_t* brew_value = nullptr;
   lv_obj_t* brew_set = nullptr;
   lv_obj_t* boiler_value = nullptr;
   lv_obj_t* boiler_set = nullptr;
-  lv_obj_t* status_label = nullptr;
-  lv_obj_t* status_dot = nullptr;
   lv_obj_t* power_btn = nullptr;
   lv_obj_t* power_label = nullptr;
 };
 
-// Build the Home tab content into `parent`, sized for `screen`; fills `out`
-// with widget handles and sets initial values from `state`.
-void build_home_tab(lv_obj_t* parent, const core::MachineSnapshot& state,
-                    const ScreenProfile& screen, HomeWidgets& out);
+// Build the Home widgets into `parent`, sized for `screen` (values are set by a
+// following update_home call).
+void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& out);
 
-// Apply a snapshot to already-built widgets (live update, no rebuild).
-void update_home(const HomeWidgets& w, const core::MachineSnapshot& state);
+// Apply machine + battery state to the built widgets (live update, no rebuild).
+void update_home(const HomeWidgets& w, const core::MachineSnapshot& state,
+                 const core::BatteryState& battery);
 
 }  // namespace ui

@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <lvgl.h>
 
+#include "platform_esp32/battery.h"
 #include "platform_esp32/board_config.h"
 #include "platform_esp32/config.h"
 #include "platform_esp32/display.h"
@@ -24,6 +25,7 @@ platform::Config g_config;
 platform::MicraLink g_micra;
 platform::TokenSetup g_token_setup{g_config, g_micra};
 platform::Provisioner g_provisioner{g_micra, g_config, g_token_setup};
+platform::Battery g_battery;
 ui::App g_app;
 
 constexpr uint32_t kUiRefreshMs = 500;
@@ -48,10 +50,11 @@ void setup() {
     Serial.println("WARN: CST816 touch not detected on I2C");
   }
 
-  // Build the UI bound to the machine (renders the initial Disconnected state
-  // and routes the power button to g_micra.set_power()).
+  g_battery.begin();
+
+  // Build the UI bound to the machine + provisioner + battery.
   const ui::ScreenProfile screen{g_display.width(), g_display.height()};
-  g_app.build(g_micra, g_provisioner, screen);
+  g_app.build(g_micra, g_provisioner, g_battery, screen);
 
   // Seed the link from saved config, then start the background BLE task. With
   // no MAC -> Unconfigured; MAC but no token -> NeedsToken (Settings "Setup").

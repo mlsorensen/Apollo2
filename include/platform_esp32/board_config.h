@@ -42,6 +42,19 @@ constexpr bool kTouchSwapXY = true;
 constexpr bool kTouchMirrorX = false;
 constexpr bool kTouchMirrorY = true;
 
+// --- Battery monitoring (from the vendor demo) ---
+// GPIO5 = ADC1_CH4, battery divided by 3. Use analogReadMilliVolts for the
+// calibrated reading. NOTE: GPIO5 is also a MOSFET-control solder pad on this
+// board — we only ever read it as an ADC input. This board exposes NO charge-
+// status pin, so charging is inferred from voltage (kBatteryChargingVolts).
+constexpr int   kBatteryAdc = 5;             // ADC GPIO reading battery voltage
+constexpr float kBatteryDivider = 3.0f;      // battery_volts = adc_volts * divider
+constexpr int   kBatteryChargePin = -1;      // none on this board -> infer
+constexpr bool  kBatteryChargeActiveLow = true;  // (unused; no pin)
+constexpr float kBatteryFullVolts = 4.20f;
+constexpr float kBatteryEmptyVolts = 3.30f;
+constexpr float kBatteryChargingVolts = 4.15f;   // infer charging above this
+
 #else
 #error "No board selected. Add -DBOARD_WAVESHARE_S3_LCD_2 to build_flags in platformio.ini."
 #endif

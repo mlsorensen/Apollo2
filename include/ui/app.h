@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/battery.h"
 #include "core/machine.h"
 #include "core/provisioner.h"
 #include "ui/home_tab.h"
@@ -18,7 +19,7 @@ namespace ui {
 class App {
  public:
   void build(core::IMachine& machine, core::IProvisioner& provisioner,
-             const ScreenProfile& screen);
+             core::IBattery& battery, const ScreenProfile& screen);
 
   // Reflect the latest machine state and scan results in the UI (no I/O).
   void refresh();
@@ -43,6 +44,7 @@ class App {
 
   core::IMachine* machine_ = nullptr;
   core::IProvisioner* provisioner_ = nullptr;
+  core::IBattery* battery_ = nullptr;
   lv_obj_t* tabview_ = nullptr;
   lv_obj_t* setup_modal_ = nullptr;  // token-setup instructions overlay, if open
   HomeWidgets home_{};

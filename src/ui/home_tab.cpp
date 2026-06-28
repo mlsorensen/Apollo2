@@ -7,13 +7,12 @@
 namespace {
 
 // NOTE: the built-in Montserrat fonts don't carry the degree glyph (U+00B0),
-// so we spell the unit plainly for now. A subset font with the degree sign is
-// a later polish item.
+// so we spell the unit plainly for now.
 void format_now(char* out, size_t n, float c) { std::snprintf(out, n, "%.1f C", c); }
 void format_set(char* out, size_t n, float c) { std::snprintf(out, n, "Set  %.1f C", c); }
 
-// One temperature panel: caption (static) on top, big current value, set point
-// below. The value and set labels are returned so update_home can refresh them.
+// A temperature panel: caption (static) on top, big current value, set point
+// below. The value/set labels are returned for live updates.
 void make_temp_card(lv_obj_t* parent, const char* caption,
                     const lv_font_t* value_font, const lv_font_t* sub_font,
                     int pad, lv_obj_t** out_value, lv_obj_t** out_set) {
@@ -47,12 +46,19 @@ void make_temp_card(lv_obj_t* parent, const char* caption,
   *out_set = set;
 }
 
+const char* battery_icon(int pct) {
+  if (pct >= 90) return LV_SYMBOL_BATTERY_FULL;
+  if (pct >= 65) return LV_SYMBOL_BATTERY_3;
+  if (pct >= 40) return LV_SYMBOL_BATTERY_2;
+  if (pct >= 15) return LV_SYMBOL_BATTERY_1;
+  return LV_SYMBOL_BATTERY_EMPTY;
+}
+
 }  // namespace
 
 namespace ui {
 
-void build_home_tab(lv_obj_t* parent, const core::MachineSnapshot& state,
-                    const ScreenProfile& screen, HomeWidgets& out) {
+void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& out) {
   const bool compact = is_compact(screen);
 
   const int pad = compact ? 8 : 20;
@@ -71,6 +77,38 @@ void build_home_tab(lv_obj_t* parent, const core::MachineSnapshot& state,
                         LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_row(parent, gap, 0);
 
+  // --- Top bar: status (left) + battery (right) ---------------------------
+  lv_obj_t* bar = lv_obj_create(parent);
+  lv_obj_remove_style_all(bar);
+  lv_obj_remove_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_width(bar, lv_pct(100));
+  lv_obj_set_height(bar, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(bar, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(bar, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+
+  lv_obj_t* status_group = lv_obj_create(bar);
+  lv_obj_remove_style_all(status_group);
+  lv_obj_set_size(status_group, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(status_group, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(status_group, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(status_group, 8, 0);
+
+  out.status_dot = lv_obj_create(status_group);
+  lv_obj_remove_style_all(out.status_dot);
+  lv_obj_set_size(out.status_dot, 12, 12);
+  lv_obj_set_style_radius(out.status_dot, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_opa(out.status_dot, LV_OPA_COVER, 0);
+
+  out.status_label = lv_label_create(status_group);
+  lv_obj_set_style_text_color(out.status_label, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_font(out.status_label, sub_font, 0);
+
+  out.battery_label = lv_label_create(bar);
+  lv_obj_set_style_text_color(out.battery_label, lv_color_hex(ui::theme::muted), 0);
+  lv_obj_set_style_text_font(out.battery_label, sub_font, 0);
+
   // --- Two temperature panels, side by side -------------------------------
   lv_obj_t* row = lv_obj_create(parent);
   lv_obj_remove_style_all(row);
@@ -86,26 +124,6 @@ void build_home_tab(lv_obj_t* parent, const core::MachineSnapshot& state,
                  &out.brew_set);
   make_temp_card(row, "BOILER", value_font, sub_font, card_pad, &out.boiler_value,
                  &out.boiler_set);
-
-  // --- Status line ---------------------------------------------------------
-  lv_obj_t* status = lv_obj_create(parent);
-  lv_obj_remove_style_all(status);
-  lv_obj_remove_flag(status, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_size(status, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-  lv_obj_set_flex_flow(status, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(status, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
-                        LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(status, 8, 0);
-
-  out.status_dot = lv_obj_create(status);
-  lv_obj_remove_style_all(out.status_dot);
-  lv_obj_set_size(out.status_dot, 12, 12);
-  lv_obj_set_style_radius(out.status_dot, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_bg_opa(out.status_dot, LV_OPA_COVER, 0);
-
-  out.status_label = lv_label_create(status);
-  lv_obj_set_style_text_color(out.status_label, lv_color_hex(ui::theme::text), 0);
-  lv_obj_set_style_text_font(out.status_label, sub_font, 0);
 
   // --- Spacer pushes the action button to the bottom ----------------------
   lv_obj_t* spacer = lv_obj_create(parent);
@@ -124,11 +142,10 @@ void build_home_tab(lv_obj_t* parent, const core::MachineSnapshot& state,
   lv_obj_set_style_text_color(out.power_label, lv_color_hex(ui::theme::text), 0);
   lv_obj_set_style_text_font(out.power_label, btn_font, 0);
   lv_obj_center(out.power_label);
-
-  update_home(out, state);  // set initial values/colors
 }
 
-void update_home(const HomeWidgets& w, const core::MachineSnapshot& state) {
+void update_home(const HomeWidgets& w, const core::MachineSnapshot& state,
+                 const core::BatteryState& battery) {
   const bool connected = state.link == core::Link::Connected;
   const bool on = state.power == core::Power::On;
 
@@ -150,7 +167,7 @@ void update_home(const HomeWidgets& w, const core::MachineSnapshot& state) {
     lv_label_set_text(w.boiler_set, "Set  --");
   }
 
-  // Status line: text + dot color derived from link + power.
+  // Status (top-left): text + dot color from link + power.
   const char* status = "Disconnected";
   uint32_t dot = ui::theme::muted;
   switch (state.link) {
@@ -165,6 +182,21 @@ void update_home(const HomeWidgets& w, const core::MachineSnapshot& state) {
   }
   lv_label_set_text(w.status_label, status);
   lv_obj_set_style_bg_color(w.status_dot, lv_color_hex(dot), 0);
+
+  // Battery (top-right): charge bolt (if charging) + level icon + percent.
+  if (!battery.present) {
+    lv_label_set_text(w.battery_label, "");
+  } else {
+    char bb[24];
+    std::snprintf(bb, sizeof(bb), "%s%s %d%%", battery.charging ? LV_SYMBOL_CHARGE " " : "",
+                  battery_icon(battery.percent), battery.percent);
+    lv_label_set_text(w.battery_label, bb);
+    lv_obj_set_style_text_color(
+        w.battery_label,
+        lv_color_hex(battery.percent < 15 && !battery.charging ? ui::theme::alert
+                                                               : ui::theme::muted),
+        0);
+  }
 
   // Power button: only actionable when connected.
   if (connected) {
