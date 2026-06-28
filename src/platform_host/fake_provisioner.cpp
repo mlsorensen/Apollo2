@@ -15,6 +15,8 @@ std::vector<core::ScanResult> FakeProvisioner::scan_results() const {
   };
   add("MICRA_MR000011", "30:c6:f7:00:00:13", -61);
   add("MICRA_MR000012", "30:c6:f7:00:00:12", -78);
+  add("MICRA_MR000013", "30:c6:f7:00:00:14", -83);
+  add("MICRA_MR000014", "30:c6:f7:00:00:11", -90);
   return out;
 }
 
