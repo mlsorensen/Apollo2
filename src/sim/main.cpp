@@ -46,6 +46,7 @@ int main() {
   bool ok = true;
   ok &= render(machine, provisioner, battery, {800, 480}, "renders/home_800x480.png");
   ok &= render(machine, provisioner, battery, {320, 240}, "renders/home_320x240.png");
+  ok &= render(machine, provisioner, battery, {800, 480}, "renders/settings_800x480.png", 1);
   ok &= render(machine, provisioner, battery, {320, 240}, "renders/settings_320x240.png", 1);
   return ok ? 0 : 1;
 }

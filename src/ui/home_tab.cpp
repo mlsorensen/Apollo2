@@ -70,7 +70,7 @@ void battery_anim_cb(lv_timer_t* t) {
   if (!w->charging) return;
   w->charge_frame = (w->charge_frame + 1) % 5;
   char buf[24];
-  std::snprintf(buf, sizeof(buf), LV_SYMBOL_CHARGE " %s",
+  std::snprintf(buf, sizeof(buf), "%s " LV_SYMBOL_CHARGE,
                 battery_fill_icon(w->charge_frame));
   lv_label_set_text(w->battery_label, buf);
 }
@@ -127,6 +127,10 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& 
   lv_obj_set_style_text_font(out.status_label, sub_font, 0);
 
   out.battery_label = lv_label_create(bar);
+  // Fixed width + left-aligned so the battery icon (first glyph) stays put; the
+  // percent / charge bolt occupies the space to its right either way.
+  lv_obj_set_width(out.battery_label, compact ? 78 : 120);
+  lv_obj_set_style_text_align(out.battery_label, LV_TEXT_ALIGN_LEFT, 0);
   lv_obj_set_style_text_color(out.battery_label, lv_color_hex(ui::theme::muted), 0);
   lv_obj_set_style_text_font(out.battery_label, sub_font, 0);
   out.batt_timer = lv_timer_create(battery_anim_cb, 350, &out);  // drives charge anim
@@ -214,7 +218,7 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   } else if (battery.charging) {
     lv_obj_set_style_text_color(w.battery_label, lv_color_hex(ui::theme::ok), 0);
     char bb[24];
-    std::snprintf(bb, sizeof(bb), LV_SYMBOL_CHARGE " %s",
+    std::snprintf(bb, sizeof(bb), "%s " LV_SYMBOL_CHARGE,
                   battery_fill_icon(w.charge_frame));  // timer advances frames
     lv_label_set_text(w.battery_label, bb);
   } else {
