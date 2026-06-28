@@ -103,22 +103,10 @@ bool MicraLink::refresh() {
   std::string mode_json;
   std::string boilers_json;
   bool ok = true;
-  if (read_setting("machineMode", mode_json)) {
-    Serial.printf("  raw machineMode (%d): '%s'\n", (int)mode_json.size(),
-                  mode_json.c_str());
-    parse_mode(mode_json);
-  } else {
-    Serial.println("  machineMode: read failed");
-    ok = false;
-  }
-  if (read_setting("boilers", boilers_json)) {
-    Serial.printf("  raw boilers (%d): '%s'\n", (int)boilers_json.size(),
-                  boilers_json.c_str());
-    parse_boilers(boilers_json);
-  } else {
-    Serial.println("  boilers: read failed");
-    ok = false;
-  }
+  if (read_setting("machineMode", mode_json)) parse_mode(mode_json);
+  else ok = false;
+  if (read_setting("boilers", boilers_json)) parse_boilers(boilers_json);
+  else ok = false;
 
   status_ = (power_ == core::Power::On) ? "Ready" : "Standby";
   return ok;
@@ -152,12 +140,15 @@ void MicraLink::parse_boilers(const std::string& json) {
   }
 }
 
-bool MicraLink::setPower(bool on) {
-  if (!isConnected() || g_write == nullptr) return false;
+void MicraLink::set_power(bool on) {
+  if (!isConnected() || g_write == nullptr) return;
   const std::string json =
       on ? R"({"name":"MachineChangeMode","parameter":{"mode":"BrewingMode"}})"
          : R"({"name":"MachineChangeMode","parameter":{"mode":"StandBy"}})";
-  return write_with_nul(g_write, json);
+  if (write_with_nul(g_write, json)) {
+    delay(200);  // let the machine apply the change, then re-read our cache
+    refresh();
+  }
 }
 
 core::MachineSnapshot MicraLink::snapshot() const {

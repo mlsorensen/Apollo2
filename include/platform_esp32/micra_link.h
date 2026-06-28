@@ -30,11 +30,12 @@ class MicraLink : public core::IMachine {
   // on a successful read + parse.
   bool refresh();
 
-  // Command: machine on (BrewingMode) vs standby.
-  bool setPower(bool on);
-
   // core::IMachine — returns the last refreshed state (cheap, no I/O).
   core::MachineSnapshot snapshot() const override;
+
+  // core::IMachine — command machine on (BrewingMode) vs standby, then refresh
+  // the cached snapshot so the next snapshot() reflects it.
+  void set_power(bool on) override;
 
  private:
   void parse_mode(const std::string& json);

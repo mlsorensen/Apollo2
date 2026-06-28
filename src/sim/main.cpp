@@ -14,13 +14,14 @@
 
 namespace {
 
-bool render(const core::MachineSnapshot& state, ui::ScreenProfile screen,
+bool render(core::IMachine& machine, ui::ScreenProfile screen,
             const char* out_path) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
   host::PngDisplay display(screen.width, screen.height);
-  ui::create_app(state, screen);
+  ui::App app;
+  app.build(machine, screen);
   display.render_frame();
   if (!display.save_png(out_path)) {
     std::fprintf(stderr, "error: failed to write %s\n", out_path);
@@ -34,11 +35,10 @@ bool render(const core::MachineSnapshot& state, ui::ScreenProfile screen,
 
 int main() {
   host::FakeMachine machine;
-  const core::MachineSnapshot state = machine.snapshot();
 
   // One PNG per supported layout. Add a line here when a new form factor lands.
   bool ok = true;
-  ok &= render(state, {800, 480}, "renders/home_800x480.png");  // wide (4.3")
-  ok &= render(state, {320, 240}, "renders/home_320x240.png");  // compact (2")
+  ok &= render(machine, {800, 480}, "renders/home_800x480.png");  // wide (4.3")
+  ok &= render(machine, {320, 240}, "renders/home_320x240.png");  // compact (2")
   return ok ? 0 : 1;
 }

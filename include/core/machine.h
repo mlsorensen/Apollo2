@@ -33,13 +33,21 @@ struct MachineSnapshot {
   const char* status;          // short human-readable status, e.g. "Ready"
 };
 
-// The port the UI depends on. Anything that can describe a machine's state
-// implements this. Command methods (set_power, start_brew, ...) will be added
-// here as Stage 3 brings the BLE link online.
+// The port the UI depends on. Anything that can describe and control a machine
+// implements this — the BLE link, the host fake, future devices. The UI holds
+// only a reference to this interface, never a concrete transport.
 class IMachine {
  public:
   virtual ~IMachine() = default;
+
+  // Latest known state. Cheap and synchronous (a cached read) — implementations
+  // must not block on I/O here.
   virtual MachineSnapshot snapshot() const = 0;
+
+  // Command: switch the machine on (brew mode) or to standby. May block briefly
+  // on a transport write; implementations should update their cached snapshot so
+  // a subsequent snapshot() reflects the change.
+  virtual void set_power(bool on) = 0;
 };
 
 }  // namespace core

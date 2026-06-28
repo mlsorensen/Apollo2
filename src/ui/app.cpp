@@ -2,13 +2,10 @@
 
 #include <lvgl.h>
 
-#include "ui/home_tab.h"
 #include "ui/theme.h"
 
 namespace {
 
-// Style one tab-bar button: transparent normally, accent-filled when its tab is
-// active. `font` scales the glyph to the form factor.
 void style_tab_button(lv_obj_t* btn, const lv_font_t* font) {
   lv_obj_set_style_text_font(btn, font, 0);
   lv_obj_set_style_text_color(btn, lv_color_hex(ui::theme::muted), 0);
@@ -16,16 +13,12 @@ void style_tab_button(lv_obj_t* btn, const lv_font_t* font) {
   lv_obj_set_style_radius(btn, 10, 0);
   lv_obj_set_style_border_width(btn, 0, 0);
 
-  lv_obj_set_style_text_color(btn, lv_color_hex(ui::theme::text),
-                              LV_STATE_CHECKED);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(ui::theme::accent),
-                            LV_STATE_CHECKED);
+  lv_obj_set_style_text_color(btn, lv_color_hex(ui::theme::text), LV_STATE_CHECKED);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(ui::theme::accent), LV_STATE_CHECKED);
   lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, LV_STATE_CHECKED);
 }
 
-// A simple centered-label placeholder for tabs we haven't built yet.
-void build_placeholder(lv_obj_t* parent, const char* title,
-                       const lv_font_t* font) {
+void build_placeholder(lv_obj_t* parent, const char* title, const lv_font_t* font) {
   lv_obj_remove_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_t* lbl = lv_label_create(parent);
   lv_label_set_text(lbl, title);
@@ -34,11 +27,17 @@ void build_placeholder(lv_obj_t* parent, const char* title,
   lv_obj_center(lbl);
 }
 
+void on_power_clicked(lv_event_t* e) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  app->toggle_power();
+}
+
 }  // namespace
 
 namespace ui {
 
-void create_app(const core::MachineSnapshot& state, const ScreenProfile& screen) {
+void App::build(core::IMachine& machine, const ScreenProfile& screen) {
+  machine_ = &machine;
   const bool compact = is_compact(screen);
 
   lv_obj_t* scr = lv_screen_active();
@@ -46,8 +45,8 @@ void create_app(const core::MachineSnapshot& state, const ScreenProfile& screen)
   lv_obj_set_style_bg_color(scr, lv_color_hex(ui::theme::bg), 0);
   lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
-  // Compact panels get a bottom tab bar (more usable width); wide panels get a
-  // left rail. Sizes/fonts scale with the form factor.
+  // Compact panels get a bottom tab bar (more usable width); wide panels a left
+  // rail. Sizes/fonts scale with the form factor.
   const lv_font_t* tab_font = compact ? &lv_font_montserrat_20 : &lv_font_montserrat_28;
 
   lv_obj_t* tv = lv_tabview_create(scr);
@@ -75,9 +74,22 @@ void create_app(const core::MachineSnapshot& state, const ScreenProfile& screen)
     style_tab_button(lv_tabview_get_tab_button(tv, i), tab_font);
   }
 
-  build_home_tab(home, state, screen);
+  build_home_tab(home, machine_->snapshot(), screen, home_);
+  lv_obj_add_event_cb(home_.power_btn, on_power_clicked, LV_EVENT_CLICKED, this);
+
   build_placeholder(settings, "Settings", tab_font);
   build_placeholder(stats, "Stats", tab_font);
+}
+
+void App::refresh() {
+  if (machine_ != nullptr) update_home(home_, machine_->snapshot());
+}
+
+void App::toggle_power() {
+  if (machine_ == nullptr) return;
+  const bool on = machine_->snapshot().power == core::Power::On;
+  machine_->set_power(!on);
+  refresh();
 }
 
 }  // namespace ui

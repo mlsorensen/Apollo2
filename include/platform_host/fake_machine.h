@@ -13,6 +13,10 @@ namespace host {
 class FakeMachine : public core::IMachine {
  public:
   core::MachineSnapshot snapshot() const override;
+  void set_power(bool on) override;
+
+ private:
+  core::Power power_ = core::Power::On;
 };
 
 }  // namespace host
