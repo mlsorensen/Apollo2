@@ -14,9 +14,13 @@ class FakeMachine : public core::IMachine {
  public:
   core::MachineSnapshot snapshot() const override;
   void set_power(bool on) override;
+  void set_brew_target(float celsius) override;
+  void set_steam_target(float celsius) override;
 
  private:
   core::Power power_ = core::Power::On;
+  float brew_target_ = 93.0f;
+  float steam_target_ = 131.0f;
 };
 
 }  // namespace host

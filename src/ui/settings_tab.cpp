@@ -73,14 +73,59 @@ void build_bluetooth_panel(lv_obj_t* panel, const lv_font_t* font,
   lv_obj_set_style_pad_right(out.list, 3, LV_PART_SCROLLBAR);  // inset from the edge
 }
 
-// A placeholder section until the capabilities-driven temperature controls land.
-void build_placeholder_panel(lv_obj_t* panel, const char* text,
-                             const lv_font_t* font) {
-  lv_obj_t* lbl = lv_label_create(panel);
-  lv_label_set_text(lbl, text);
-  lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::muted), 0);
-  lv_obj_set_style_text_font(lbl, font, 0);
-  lv_obj_center(lbl);
+lv_obj_t* make_step_button(lv_obj_t* parent, const char* symbol, int size,
+                           const lv_font_t* font) {
+  lv_obj_t* btn = lv_button_create(parent);
+  lv_obj_set_size(btn, size, size);
+  lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(ui::theme::card), 0);
+  lv_obj_t* l = lv_label_create(btn);
+  lv_label_set_text(l, symbol);
+  lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_font(l, font, 0);
+  lv_obj_center(l);
+  return btn;
+}
+
+// A temperature stepper section: caption, [-] value [+], optional sub-label.
+void build_stepper_panel(lv_obj_t* panel, const char* caption,
+                         const lv_font_t* value_font, const lv_font_t* small_font,
+                         int btn_size, lv_obj_t** out_minus, lv_obj_t** out_value,
+                         lv_obj_t** out_plus, lv_obj_t** out_sub) {
+  lv_obj_remove_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_row(panel, 6, 0);
+
+  lv_obj_t* cap = lv_label_create(panel);
+  lv_label_set_text(cap, caption);
+  lv_obj_set_style_text_color(cap, lv_color_hex(ui::theme::muted), 0);
+  lv_obj_set_style_text_font(cap, small_font, 0);
+
+  lv_obj_t* row = lv_obj_create(panel);
+  lv_obj_remove_style_all(row);
+  lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(row, 16, 0);
+
+  *out_minus = make_step_button(row, LV_SYMBOL_MINUS, btn_size, value_font);
+
+  *out_value = lv_label_create(row);
+  lv_obj_set_width(*out_value, btn_size * 2);  // stable width so buttons don't shift
+  lv_obj_set_style_text_align(*out_value, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_color(*out_value, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_font(*out_value, value_font, 0);
+
+  *out_plus = make_step_button(row, LV_SYMBOL_PLUS, btn_size, value_font);
+
+  if (out_sub != nullptr) {
+    *out_sub = lv_label_create(panel);
+    lv_obj_set_style_text_color(*out_sub, lv_color_hex(ui::theme::muted), 0);
+    lv_obj_set_style_text_font(*out_sub, small_font, 0);
+  }
 }
 
 }  // namespace
@@ -123,9 +168,15 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_set_width(out.panel[i], lv_pct(100));
     lv_obj_set_flex_grow(out.panel[i], 1);
   }
+  const lv_font_t* value_font = compact ? &lv_font_montserrat_28 : &lv_font_montserrat_48;
+  const int btn_size = compact ? 52 : 72;
+
   build_bluetooth_panel(out.panel[kSectionBluetooth], font, out);
-  build_placeholder_panel(out.panel[kSectionBrew], "Brew temperature\n(coming soon)", font);
-  build_placeholder_panel(out.panel[kSectionBoiler], "Boiler temperature\n(coming soon)", font);
+  build_stepper_panel(out.panel[kSectionBrew], "Brew temperature", value_font, font,
+                      btn_size, &out.brew_minus, &out.brew_value, &out.brew_plus, nullptr);
+  build_stepper_panel(out.panel[kSectionBoiler], "Steam boiler", value_font, font,
+                      btn_size, &out.boiler_minus, &out.boiler_value, &out.boiler_plus,
+                      &out.boiler_sub);
 
   settings_select_section(out, kSectionBluetooth);
 }

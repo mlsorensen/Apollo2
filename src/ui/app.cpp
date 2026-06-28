@@ -1,5 +1,6 @@
 #include "ui/app.h"
 
+#include <cmath>
 #include <cstdio>
 
 #include <lvgl.h>
@@ -61,6 +62,77 @@ void on_segment_clicked(lv_event_t* e) {
   app->select_settings_section(static_cast<int>(lv_obj_get_index(btn)));
 }
 
+// Brew +/- : short click steps 0.1; long-press (and repeat) steps 0.5 snapped.
+void on_brew_step(lv_event_t* e, int dir) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  switch (lv_event_get_code(e)) {
+    case LV_EVENT_SHORT_CLICKED: app->brew_adjust(dir, /*half=*/false); break;
+    case LV_EVENT_LONG_PRESSED:
+    case LV_EVENT_LONG_PRESSED_REPEAT: app->brew_adjust(dir, /*half=*/true); break;
+    default: break;
+  }
+}
+void on_brew_minus(lv_event_t* e) { on_brew_step(e, -1); }
+void on_brew_plus(lv_event_t* e) { on_brew_step(e, +1); }
+void on_boiler_minus(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->boiler_adjust(-1);
+}
+void on_boiler_plus(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->boiler_adjust(+1);
+}
+
+// Switching the main tab (e.g. leaving Settings) commits any pending temp edit.
+void on_tab_changed(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->commit_temp_edits();
+}
+
+float clampf(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+int nearest_steam_level(float c) {
+  int best = 0;
+  float best_d = 1e9f;
+  for (int i = 0; i < 3; ++i) {
+    const float d = std::fabs(c - core::kSteamLevelsC[i]);
+    if (d < best_d) { best_d = d; best = i; }
+  }
+  return best;
+}
+
+void set_brew_label(ui::SettingsWidgets& s, bool connected) {
+  if (!connected) { lv_label_set_text(s.brew_value, "--"); return; }
+  char b[16];
+  std::snprintf(b, sizeof(b), "%.1f C", s.brew_target);
+  lv_label_set_text(s.brew_value, b);
+}
+
+void set_boiler_label(ui::SettingsWidgets& s, bool connected) {
+  if (!connected) {
+    lv_label_set_text(s.boiler_value, "--");
+    if (s.boiler_sub) lv_label_set_text(s.boiler_sub, "");
+    return;
+  }
+  char b[16];
+  std::snprintf(b, sizeof(b), "%.0f C", core::kSteamLevelsC[s.boiler_level]);
+  lv_label_set_text(s.boiler_value, b);
+  char l[16];
+  std::snprintf(l, sizeof(l), "Level %d of 3", s.boiler_level + 1);
+  if (s.boiler_sub) lv_label_set_text(s.boiler_sub, l);
+}
+
+void set_temp_buttons_enabled(ui::SettingsWidgets& s, bool en) {
+  lv_obj_t* btns[] = {s.brew_minus, s.brew_plus, s.boiler_minus, s.boiler_plus};
+  for (lv_obj_t* b : btns) {
+    if (b == nullptr) continue;
+    if (en) {
+      lv_obj_remove_state(b, LV_STATE_DISABLED);
+      lv_obj_add_flag(b, LV_OBJ_FLAG_CLICKABLE);
+    } else {
+      lv_obj_add_state(b, LV_STATE_DISABLED);
+      lv_obj_remove_flag(b, LV_OBJ_FLAG_CLICKABLE);  // DISABLED only dims; also block input
+    }
+  }
+}
+
 }  // namespace
 
 namespace ui {
@@ -85,6 +157,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
 
   lv_obj_t* tv = lv_tabview_create(scr);
   tabview_ = tv;
+  lv_obj_add_event_cb(tv, on_tab_changed, LV_EVENT_VALUE_CHANGED, this);  // commit on tab exit
   lv_tabview_set_tab_bar_position(tv, compact ? LV_DIR_BOTTOM : LV_DIR_LEFT);
   lv_tabview_set_tab_bar_size(tv, compact ? 44 : 88);
   lv_obj_set_style_bg_opa(tv, LV_OPA_TRANSP, 0);
@@ -120,17 +193,84 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(settings_.scan_btn, on_scan_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.setup_btn, on_setup_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.forget_btn, on_forget_clicked, LV_EVENT_CLICKED, this);
+  lv_obj_add_event_cb(settings_.brew_minus, on_brew_minus, LV_EVENT_ALL, this);
+  lv_obj_add_event_cb(settings_.brew_plus, on_brew_plus, LV_EVENT_ALL, this);
+  lv_obj_add_event_cb(settings_.boiler_minus, on_boiler_minus, LV_EVENT_CLICKED, this);
+  lv_obj_add_event_cb(settings_.boiler_plus, on_boiler_plus, LV_EVENT_CLICKED, this);
 
   build_placeholder(stats, "Stats", tab_font);
 
   update_settings_view();
+  update_temp_panels(machine_->snapshot());
 }
 
 void App::refresh() {
-  if (machine_ != nullptr && battery_ != nullptr) {
-    update_home(home_, machine_->snapshot(), battery_->battery());
+  if (machine_ != nullptr) {
+    const core::MachineSnapshot snap = machine_->snapshot();
+    if (battery_ != nullptr) update_home(home_, snap, battery_->battery());
+    update_temp_panels(snap);
   }
   update_settings_view();
+}
+
+// Stepping only changes the LOCAL value/display; the BLE write is deferred to
+// commit_temp_edits() (on exit) so we don't write on every press.
+void App::brew_adjust(int dir, bool half) {
+  float v = settings_.brew_target;
+  if (half) {  // long-press: snap to the next 0.5 grid point in the direction
+    v = (dir > 0) ? std::ceil((v + 0.01f) / 0.5f) * 0.5f
+                  : std::floor((v - 0.01f) / 0.5f) * 0.5f;
+  } else {
+    v += dir * 0.1f;
+  }
+  settings_.brew_target = clampf(v, core::kBrewTargetMinC, core::kBrewTargetMaxC);
+  settings_.brew_edited = true;
+  settings_.brew_dirty = true;
+  set_brew_label(settings_, true);
+}
+
+void App::boiler_adjust(int dir) {
+  int lvl = settings_.boiler_level + dir;
+  lvl = lvl < 0 ? 0 : (lvl > 2 ? 2 : lvl);
+  settings_.boiler_level = lvl;
+  settings_.boiler_edited = true;
+  settings_.boiler_dirty = true;
+  set_boiler_label(settings_, true);
+}
+
+void App::commit_temp_edits() {
+  if (machine_ == nullptr) return;
+  if (settings_.brew_dirty) {
+    machine_->set_brew_target(settings_.brew_target);
+    settings_.brew_dirty = false;
+  }
+  if (settings_.boiler_dirty) {
+    machine_->set_steam_target(core::kSteamLevelsC[settings_.boiler_level]);
+    settings_.boiler_dirty = false;
+  }
+}
+
+void App::update_temp_panels(const core::MachineSnapshot& s) {
+  const bool connected = s.link == core::Link::Connected;
+  if (connected) {
+    // Keep showing the machine's target until the user edits it (handles the
+    // early-connect race where the first read hasn't populated temps yet).
+    if (!settings_.brew_edited) {
+      settings_.brew_target = s.brew_target_c;
+      set_brew_label(settings_, true);
+    }
+    if (!settings_.boiler_edited) {
+      settings_.boiler_level = nearest_steam_level(s.boiler_target_c);
+      set_boiler_label(settings_, true);
+    }
+    set_temp_buttons_enabled(settings_, true);
+  } else {
+    settings_.brew_edited = settings_.brew_dirty = false;
+    settings_.boiler_edited = settings_.boiler_dirty = false;
+    set_brew_label(settings_, false);
+    set_boiler_label(settings_, false);
+    set_temp_buttons_enabled(settings_, false);
+  }
 }
 
 void App::show_tab(int index) {
@@ -225,6 +365,7 @@ void App::close_setup_modal() {
 }
 
 void App::select_settings_section(int section) {
+  commit_temp_edits();  // write pending edits from the section we're leaving
   settings_select_section(settings_, section);
 }
 

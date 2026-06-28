@@ -18,7 +18,7 @@ namespace {
 
 bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             core::IBattery& battery, ui::ScreenProfile screen, const char* out_path,
-            int tab = 0) {
+            int tab = 0, int settings_section = -1) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
@@ -26,6 +26,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   ui::App app;
   app.build(machine, provisioner, battery, screen);
   app.show_tab(tab);
+  if (settings_section >= 0) app.select_settings_section(settings_section);
   display.render_frame();
   if (!display.save_png(out_path)) {
     std::fprintf(stderr, "error: failed to write %s\n", out_path);
@@ -48,5 +49,9 @@ int main() {
   ok &= render(machine, provisioner, battery, {320, 240}, "renders/home_320x240.png");
   ok &= render(machine, provisioner, battery, {800, 480}, "renders/settings_800x480.png", 1);
   ok &= render(machine, provisioner, battery, {320, 240}, "renders/settings_320x240.png", 1);
+  ok &= render(machine, provisioner, battery, {320, 240}, "renders/brew_320x240.png", 1,
+               ui::kSectionBrew);
+  ok &= render(machine, provisioner, battery, {320, 240}, "renders/boiler_320x240.png", 1,
+               ui::kSectionBoiler);
   return ok ? 0 : 1;
 }

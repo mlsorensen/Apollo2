@@ -8,9 +8,9 @@ core::MachineSnapshot FakeMachine::snapshot() const {
       .link = core::Link::Connected,  // the fake is always "connected"
       .power = power_,
       .brew_temp_c = 93.0f,
-      .brew_target_c = 93.0f,
+      .brew_target_c = brew_target_,
       .boiler_temp_c = 123.0f,
-      .boiler_target_c = 125.0f,
+      .boiler_target_c = steam_target_,
       .brewing = false,
   };
 }
@@ -18,5 +18,8 @@ core::MachineSnapshot FakeMachine::snapshot() const {
 void FakeMachine::set_power(bool on) {
   power_ = on ? core::Power::On : core::Power::Standby;
 }
+
+void FakeMachine::set_brew_target(float celsius) { brew_target_ = celsius; }
+void FakeMachine::set_steam_target(float celsius) { steam_target_ = celsius; }
 
 }  // namespace host

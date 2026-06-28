@@ -14,6 +14,12 @@ namespace core {
 // rather than a hard off, so we model three states.
 enum class Power { Off, Standby, On };
 
+// Settable target ranges (Micra). The brew/coffee boiler is continuous; the
+// steam boiler is 3 discrete levels (the app's Level 1/2/3).
+constexpr float kBrewTargetMinC = 85.0f;
+constexpr float kBrewTargetMaxC = 104.0f;
+constexpr float kSteamLevelsC[3] = {126.0f, 128.0f, 131.0f};
+
 // Transport/link state to the machine. The UI renders differently per state
 // (e.g. a "disconnected" treatment) rather than only showing machine data.
 //   Unconfigured: no machine address saved yet — needs setup (Settings scan).
@@ -57,6 +63,10 @@ class IMachine {
   // on a transport write; implementations should update their cached snapshot so
   // a subsequent snapshot() reflects the change.
   virtual void set_power(bool on) = 0;
+
+  // Commands: set boiler target temperatures (Celsius).
+  virtual void set_brew_target(float celsius) = 0;
+  virtual void set_steam_target(float celsius) = 0;
 };
 
 }  // namespace core

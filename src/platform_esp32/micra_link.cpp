@@ -4,6 +4,7 @@
 #include <ArduinoJson.h>
 #include <NimBLEDevice.h>
 
+#include <cmath>
 #include <cstring>
 #include <vector>
 
@@ -127,8 +128,8 @@ void MicraLink::task_loop() {
       set_link(core::Link::Connecting);
       if (do_connect(addr, token)) {
         connected = true;
-        set_link(core::Link::Connected);
-        do_refresh();
+        do_refresh();  // populate state BEFORE announcing Connected (so the UI
+        set_link(core::Link::Connected);  // seeds temps from real values, not 0)
         last_refresh = millis();
       } else {
         set_link(core::Link::Disconnected);
@@ -143,12 +144,24 @@ void MicraLink::task_loop() {
       continue;
     }
 
-    const int cmd = pending_power_.exchange(-1);
-    if (cmd >= 0) {
-      do_set_power(cmd == 1);
-      do_refresh();
-      last_refresh = millis();
-    } else if (millis() - last_refresh > kPollIntervalMs) {
+    bool cmd_sent = false;
+    const int p = pending_power_.exchange(-1);
+    if (p >= 0) { do_set_power(p == 1); cmd_sent = true; }
+    const int b = pending_brew_tenths_.exchange(-1);
+    if (b >= 0) {
+      char v[8];
+      std::snprintf(v, sizeof(v), "%.1f", b / 10.0f);
+      do_set_boiler_target("CoffeeBoiler1", v);
+      cmd_sent = true;
+    }
+    const int st = pending_steam_whole_.exchange(-1);
+    if (st >= 0) {
+      char v[8];
+      std::snprintf(v, sizeof(v), "%d", st);
+      do_set_boiler_target("SteamBoiler", v);
+      cmd_sent = true;
+    }
+    if (cmd_sent || millis() - last_refresh > kPollIntervalMs) {
       do_refresh();  // a failed read just means we re-detect the drop next loop
       last_refresh = millis();
     }
@@ -246,6 +259,22 @@ core::MachineSnapshot MicraLink::snapshot() const {
 }
 
 void MicraLink::set_power(bool on) { pending_power_.store(on ? 1 : 0); }
+
+void MicraLink::set_brew_target(float celsius) {
+  pending_brew_tenths_.store(static_cast<int>(lroundf(celsius * 10.0f)));
+}
+
+void MicraLink::set_steam_target(float celsius) {
+  pending_steam_whole_.store(static_cast<int>(lroundf(celsius)));
+}
+
+void MicraLink::do_set_boiler_target(const char* identifier, const char* value) {
+  if (g_write == nullptr) return;
+  std::string json =
+      std::string(R"({"name":"SettingBoilerTarget","parameter":{"identifier":")") +
+      identifier + R"(","value":)" + value + "}}";
+  write_with_nul(g_write, json);
+}
 
 void MicraLink::request_scan() {
   scanning_.store(true);       // reflect immediately in the UI

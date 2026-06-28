@@ -36,8 +36,10 @@ class MicraLink : public core::IMachine {
   // core::IMachine — thread-safe cached read.
   core::MachineSnapshot snapshot() const override;
 
-  // core::IMachine — post a power command for the task to apply (non-blocking).
+  // core::IMachine — post commands for the task to apply (non-blocking).
   void set_power(bool on) override;
+  void set_brew_target(float celsius) override;
+  void set_steam_target(float celsius) override;
 
   // Discovery, run on the BLE task. request_scan() is non-blocking; results are
   // published when the scan finishes. Used by the device Provisioner.
@@ -51,6 +53,7 @@ class MicraLink : public core::IMachine {
   bool do_connect(const std::string& address, const std::string& token);
   bool do_refresh();        // task thread: read + parse into the cache
   void do_set_power(bool on);  // task thread: write the command
+  void do_set_boiler_target(const char* identifier, const char* value);
   void do_scan();           // task thread: scan + publish results
   void set_link(core::Link link);
 
@@ -67,7 +70,9 @@ class MicraLink : public core::IMachine {
   float boiler_target_c_ = 0.0f;
   bool brewing_ = false;
 
-  std::atomic<int> pending_power_{-1};      // -1 none, 0 standby, 1 on
+  std::atomic<int> pending_power_{-1};        // -1 none, 0 standby, 1 on
+  std::atomic<int> pending_brew_tenths_{-1};  // target*10, -1 none
+  std::atomic<int> pending_steam_whole_{-1};  // target C, -1 none
   std::atomic<bool> reconnect_requested_{false};
   std::atomic<bool> scan_requested_{false};
   std::atomic<bool> scanning_{false};

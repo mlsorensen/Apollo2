@@ -38,9 +38,13 @@ class App {
   void start_token_setup();    // Settings "Setup" button -> WiFi portal + modal
   void cancel_token_setup();   // modal "Cancel"
   void select_settings_section(int section);  // Settings segmented selector
+  void brew_adjust(int dir, bool half);  // Brew +/- (half: 0.5 snap, long-press)
+  void boiler_adjust(int dir);           // Boiler level +/-
+  void commit_temp_edits();              // write pending temp edits (on exit)
 
  private:
   void update_settings_view();
+  void update_temp_panels(const core::MachineSnapshot& state);
   void show_setup_modal();
   void close_setup_modal();
 
