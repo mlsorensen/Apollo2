@@ -105,11 +105,12 @@ lv_obj_t* make_setting_row(lv_obj_t* parent, const char* label,
   return row;
 }
 
-// A [-] value [+] control for the right of a setting row. The value is a small
+// A [-] value [+] control for the right of a setting row. Value is a small
 // vertical stack (value + optional sub) so the boiler can show "Level 3" with
-// "131 C" tight beneath it.
-void make_inline_stepper(lv_obj_t* row, const lv_font_t* value_font,
-                         const lv_font_t* sub_font, int btn_size,
+// "131 C" tight beneath it; both lines use the small text_font (value white,
+// sub muted). symbol_font sizes the +/- glyphs.
+void make_inline_stepper(lv_obj_t* row, const lv_font_t* text_font,
+                         const lv_font_t* symbol_font, int btn_size,
                          lv_obj_t** out_minus, lv_obj_t** out_value,
                          lv_obj_t** out_plus, lv_obj_t** out_sub) {
   lv_obj_t* grp = lv_obj_create(row);
@@ -118,9 +119,9 @@ void make_inline_stepper(lv_obj_t* row, const lv_font_t* value_font,
   lv_obj_set_flex_flow(grp, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(grp, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(grp, 8, 0);
+  lv_obj_set_style_pad_column(grp, 4, 0);  // buttons close to the value
 
-  *out_minus = make_step_button(grp, LV_SYMBOL_MINUS, btn_size, value_font);
+  *out_minus = make_step_button(grp, LV_SYMBOL_MINUS, btn_size, symbol_font);
 
   lv_obj_t* stack = lv_obj_create(grp);
   lv_obj_remove_style_all(stack);
@@ -132,15 +133,15 @@ void make_inline_stepper(lv_obj_t* row, const lv_font_t* value_font,
   *out_value = lv_label_create(stack);
   lv_obj_set_style_text_align(*out_value, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_text_color(*out_value, lv_color_hex(ui::theme::text), 0);
-  lv_obj_set_style_text_font(*out_value, value_font, 0);
+  lv_obj_set_style_text_font(*out_value, text_font, 0);
 
   if (out_sub != nullptr) {
     *out_sub = lv_label_create(stack);
     lv_obj_set_style_text_color(*out_sub, lv_color_hex(ui::theme::muted), 0);
-    lv_obj_set_style_text_font(*out_sub, sub_font, 0);
+    lv_obj_set_style_text_font(*out_sub, text_font, 0);
   }
 
-  *out_plus = make_step_button(grp, LV_SYMBOL_PLUS, btn_size, value_font);
+  *out_plus = make_step_button(grp, LV_SYMBOL_PLUS, btn_size, symbol_font);
 }
 
 void make_settings_list(lv_obj_t* panel) {
@@ -153,27 +154,27 @@ void make_settings_list(lv_obj_t* panel) {
 }
 
 // Brew section: one "Temperature" row with a stepper.
-void build_brew_panel(lv_obj_t* panel, const lv_font_t* value_font,
-                      const lv_font_t* label_font, int btn_size,
+void build_brew_panel(lv_obj_t* panel, const lv_font_t* text_font,
+                      const lv_font_t* symbol_font, int btn_size,
                       ui::SettingsWidgets& out) {
   make_settings_list(panel);
-  lv_obj_t* r = make_setting_row(panel, "Temperature", label_font);
-  make_inline_stepper(r, value_font, label_font, btn_size, &out.brew_minus,
+  lv_obj_t* r = make_setting_row(panel, "Temperature", text_font);
+  make_inline_stepper(r, text_font, symbol_font, btn_size, &out.brew_minus,
                       &out.brew_value, &out.brew_plus, nullptr);
 }
 
-// Steam boiler section: an "Enable" switch row + a "Level" stepper row.
-void build_boiler_panel(lv_obj_t* panel, const lv_font_t* value_font,
-                        const lv_font_t* label_font, int btn_size,
+// Steam boiler section: an "Enable" switch row + a "Temperature" stepper row.
+void build_boiler_panel(lv_obj_t* panel, const lv_font_t* text_font,
+                        const lv_font_t* symbol_font, int btn_size,
                         ui::SettingsWidgets& out) {
   make_settings_list(panel);
 
-  lv_obj_t* r1 = make_setting_row(panel, "Enable", label_font);
+  lv_obj_t* r1 = make_setting_row(panel, "Enable", text_font);
   out.steam_switch = lv_switch_create(r1);
-  lv_obj_set_size(out.steam_switch, btn_size + 6, btn_size / 2 + 4);
+  lv_obj_set_size(out.steam_switch, btn_size + 8, btn_size / 2 + 6);
 
-  lv_obj_t* r2 = make_setting_row(panel, "Temperature", label_font);
-  make_inline_stepper(r2, value_font, label_font, btn_size, &out.boiler_minus,
+  lv_obj_t* r2 = make_setting_row(panel, "Temperature", text_font);
+  make_inline_stepper(r2, text_font, symbol_font, btn_size, &out.boiler_minus,
                       &out.boiler_value, &out.boiler_plus, &out.boiler_sub);
 }
 
@@ -217,12 +218,14 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_set_width(out.panel[i], lv_pct(100));
     lv_obj_set_flex_grow(out.panel[i], 1);
   }
-  const lv_font_t* value_font = compact ? &lv_font_montserrat_20 : &lv_font_montserrat_28;
-  const int btn_size = compact ? 46 : 64;
+  // Small value text (matching the sub) + a slightly larger +/- glyph; compact
+  // stepper buttons.
+  const lv_font_t* symbol_font = compact ? &lv_font_montserrat_20 : &lv_font_montserrat_28;
+  const int btn_size = compact ? 36 : 50;
 
   build_bluetooth_panel(out.panel[kSectionBluetooth], font, out);
-  build_brew_panel(out.panel[kSectionBrew], value_font, font, btn_size, out);
-  build_boiler_panel(out.panel[kSectionBoiler], value_font, font, btn_size, out);
+  build_brew_panel(out.panel[kSectionBrew], font, symbol_font, btn_size, out);
+  build_boiler_panel(out.panel[kSectionBoiler], font, symbol_font, btn_size, out);
 
   // Display section — device prefs (brightness, color schemes) are TODO.
   lv_obj_remove_flag(out.panel[kSectionDisplay], LV_OBJ_FLAG_SCROLLABLE);
