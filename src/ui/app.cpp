@@ -116,17 +116,17 @@ void set_boiler_label(ui::SettingsWidgets& s, bool connected) {
     if (s.boiler_sub) lv_label_set_text(s.boiler_sub, "");
     return;
   }
-  if (!s.steam_enabled) {  // steam boiler off
+  if (!s.steam_enabled) {
     lv_label_set_text(s.boiler_value, "Off");
     if (s.boiler_sub) lv_label_set_text(s.boiler_sub, "");
     return;
   }
   char b[16];
-  std::snprintf(b, sizeof(b), "%.0f C", core::kSteamLevelsC[s.boiler_level]);
+  std::snprintf(b, sizeof(b), "Level %d", s.boiler_level + 1);
   lv_label_set_text(s.boiler_value, b);
-  char l[16];
-  std::snprintf(l, sizeof(l), "Level %d of 3", s.boiler_level + 1);
-  if (s.boiler_sub) lv_label_set_text(s.boiler_sub, l);
+  char t[16];
+  std::snprintf(t, sizeof(t), "%.0f C", core::kSteamLevelsC[s.boiler_level]);
+  if (s.boiler_sub) lv_label_set_text(s.boiler_sub, t);
 }
 
 void set_clickable(lv_obj_t* o, bool en) {
