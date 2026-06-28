@@ -128,7 +128,7 @@ void build_stepper_panel(lv_obj_t* panel, const char* caption,
   }
 }
 
-// Steam boiler panel: an on/off switch header + the level stepper.
+// Steam boiler panel: the level stepper, then an "Enable" on/off switch below.
 void build_boiler_panel(lv_obj_t* panel, const lv_font_t* value_font,
                         const lv_font_t* small_font, int btn_size,
                         ui::SettingsWidgets& out) {
@@ -136,22 +136,22 @@ void build_boiler_panel(lv_obj_t* panel, const lv_font_t* value_font,
                       &out.boiler_minus, &out.boiler_value, &out.boiler_plus,
                       &out.boiler_sub);
 
-  // A switch row, placed at the top of the panel (above the caption).
-  lv_obj_t* sw_row = lv_obj_create(panel);
-  lv_obj_remove_style_all(sw_row);
-  lv_obj_set_size(sw_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-  lv_obj_set_flex_flow(sw_row, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(sw_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+  // "Enable" + switch, below the stepper, with a comfortable touch target.
+  lv_obj_t* en_row = lv_obj_create(panel);
+  lv_obj_remove_style_all(en_row);
+  lv_obj_set_size(en_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(en_row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(en_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(sw_row, 10, 0);
-  lv_obj_move_to_index(sw_row, 0);  // top of the column
+  lv_obj_set_style_pad_column(en_row, 14, 0);
 
-  lv_obj_t* lbl = lv_label_create(sw_row);
-  lv_label_set_text(lbl, "Steam");
+  lv_obj_t* lbl = lv_label_create(en_row);
+  lv_label_set_text(lbl, "Enable");
   lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text), 0);
-  lv_obj_set_style_text_font(lbl, small_font, 0);
+  lv_obj_set_style_text_font(lbl, value_font, 0);
 
-  out.steam_switch = lv_switch_create(sw_row);
+  out.steam_switch = lv_switch_create(en_row);
+  lv_obj_set_size(out.steam_switch, btn_size + 14, btn_size / 2 + 8);  // bigger target
 }
 
 }  // namespace
