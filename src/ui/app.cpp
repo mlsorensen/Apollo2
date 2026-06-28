@@ -1,5 +1,7 @@
 #include "ui/app.h"
 
+#include <cstdio>
+
 #include <lvgl.h>
 
 #include "ui/theme.h"
@@ -28,16 +30,31 @@ void build_placeholder(lv_obj_t* parent, const char* title, const lv_font_t* fon
 }
 
 void on_power_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->toggle_power();
+}
+
+void on_scan_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->start_scan();
+}
+
+void on_result_clicked(lv_event_t* e) {
   auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
-  app->toggle_power();
+  auto* row = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  app->save_scanned(static_cast<int>(lv_obj_get_index(row)));
+}
+
+void on_forget_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->forget();
 }
 
 }  // namespace
 
 namespace ui {
 
-void App::build(core::IMachine& machine, const ScreenProfile& screen) {
+void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
+                const ScreenProfile& screen) {
   machine_ = &machine;
+  provisioner_ = &provisioner;
   const bool compact = is_compact(screen);
 
   lv_obj_t* scr = lv_screen_active();
@@ -45,11 +62,10 @@ void App::build(core::IMachine& machine, const ScreenProfile& screen) {
   lv_obj_set_style_bg_color(scr, lv_color_hex(ui::theme::bg), 0);
   lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
-  // Compact panels get a bottom tab bar (more usable width); wide panels a left
-  // rail. Sizes/fonts scale with the form factor.
   const lv_font_t* tab_font = compact ? &lv_font_montserrat_20 : &lv_font_montserrat_28;
 
   lv_obj_t* tv = lv_tabview_create(scr);
+  tabview_ = tv;
   lv_tabview_set_tab_bar_position(tv, compact ? LV_DIR_BOTTOM : LV_DIR_LEFT);
   lv_tabview_set_tab_bar_size(tv, compact ? 44 : 88);
   lv_obj_set_style_bg_opa(tv, LV_OPA_TRANSP, 0);
@@ -77,12 +93,22 @@ void App::build(core::IMachine& machine, const ScreenProfile& screen) {
   build_home_tab(home, machine_->snapshot(), screen, home_);
   lv_obj_add_event_cb(home_.power_btn, on_power_clicked, LV_EVENT_CLICKED, this);
 
-  build_placeholder(settings, "Settings", tab_font);
+  build_settings_tab(settings, screen, settings_);
+  lv_obj_add_event_cb(settings_.scan_btn, on_scan_clicked, LV_EVENT_CLICKED, this);
+  lv_obj_add_event_cb(settings_.forget_btn, on_forget_clicked, LV_EVENT_CLICKED, this);
+
   build_placeholder(stats, "Stats", tab_font);
+
+  update_settings_view();
 }
 
 void App::refresh() {
   if (machine_ != nullptr) update_home(home_, machine_->snapshot());
+  update_settings_view();
+}
+
+void App::show_tab(int index) {
+  if (tabview_ != nullptr) lv_tabview_set_active(tabview_, index, LV_ANIM_OFF);
 }
 
 void App::toggle_power() {
@@ -90,6 +116,75 @@ void App::toggle_power() {
   const bool on = machine_->snapshot().power == core::Power::On;
   machine_->set_power(!on);
   refresh();
+}
+
+void App::start_scan() {
+  if (provisioner_ == nullptr) return;
+  provisioner_->start_scan();
+  settings_.last_count = -1;  // force the list to rebuild on next refresh
+}
+
+void App::save_scanned(int index) {
+  if (provisioner_ == nullptr) return;
+  const std::vector<core::ScanResult> results = provisioner_->scan_results();
+  if (index < 0 || index >= static_cast<int>(results.size())) return;
+
+  provisioner_->save_device(results[index]);
+  lv_label_set_text(settings_.status, "Saved - connecting...");
+  if (tabview_ != nullptr) lv_tabview_set_active(tabview_, 0, LV_ANIM_ON);  // Home
+}
+
+void App::forget() {
+  if (provisioner_ == nullptr) return;
+  provisioner_->forget();
+  settings_.last_count = -1;  // force a refresh of the settings view
+}
+
+void App::update_settings_view() {
+  if (provisioner_ == nullptr) return;
+
+  // Saved-machine row: shown with the name + Forget when a machine is saved.
+  const std::string saved = provisioner_->saved_name();
+  if (saved.empty()) {
+    lv_obj_add_flag(settings_.saved_row, LV_OBJ_FLAG_HIDDEN);
+  } else {
+    lv_obj_remove_flag(settings_.saved_row, LV_OBJ_FLAG_HIDDEN);
+    char buf[48];
+    std::snprintf(buf, sizeof(buf), "Saved: %s", saved.c_str());
+    lv_label_set_text(settings_.saved_label, buf);
+  }
+
+  const bool scanning = provisioner_->scanning();
+  const std::vector<core::ScanResult> results = provisioner_->scan_results();
+  const int count = static_cast<int>(results.size());
+
+  if (scanning) {
+    lv_label_set_text(settings_.status, "Scanning...");
+  } else if (count == 0) {
+    lv_label_set_text(settings_.status, "Tap Scan to find your machine");
+  } else {
+    lv_label_set_text(settings_.status, "Tap a machine to save it");
+  }
+
+  // Only rebuild the row list when results actually change (avoids flicker).
+  if (count == settings_.last_count && scanning == settings_.last_scanning) return;
+  settings_.last_count = count;
+  settings_.last_scanning = scanning;
+
+  lv_obj_clean(settings_.list);
+  for (int i = 0; i < count; ++i) {
+    lv_obj_t* row = lv_button_create(settings_.list);
+    lv_obj_set_width(row, lv_pct(100));
+    lv_obj_set_style_bg_color(row, lv_color_hex(ui::theme::card), 0);
+    lv_obj_add_event_cb(row, on_result_clicked, LV_EVENT_CLICKED, this);
+
+    lv_obj_t* lbl = lv_label_create(row);
+    char buf[48];
+    std::snprintf(buf, sizeof(buf), "%s   %d dBm", results[i].name, results[i].rssi);
+    lv_label_set_text(lbl, buf);
+    lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text), 0);
+    lv_obj_center(lbl);
+  }
 }
 
 }  // namespace ui

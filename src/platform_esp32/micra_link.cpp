@@ -5,6 +5,7 @@
 #include <NimBLEDevice.h>
 
 #include <cstring>
+#include <vector>
 
 namespace {
 
@@ -55,9 +56,17 @@ namespace platform {
 MicraLink::MicraLink(std::string auth_token) : token_(std::move(auth_token)) {}
 
 void MicraLink::begin(std::string address) {
-  address_ = std::move(address);
+  address_ = std::move(address);  // task not started yet — no lock needed
   xTaskCreatePinnedToCore(&MicraLink::task_entry, "micra_link", 8192, this,
                           /*priority=*/1, nullptr, /*core=*/1);
+}
+
+void MicraLink::set_address(std::string address) {
+  {
+    std::lock_guard<std::mutex> lk(mutex_);
+    address_ = std::move(address);
+  }
+  reconnect_requested_.store(true);
 }
 
 void MicraLink::task_entry(void* arg) { static_cast<MicraLink*>(arg)->task_loop(); }
@@ -75,9 +84,34 @@ void MicraLink::task_loop() {
   uint32_t last_refresh = 0;
 
   for (;;) {
+    if (scan_requested_.exchange(false)) do_scan();  // works in any link state
+
+    std::string addr;
+    {
+      std::lock_guard<std::mutex> lk(mutex_);
+      addr = address_;
+    }
+
+    // No machine configured yet: idle as Unconfigured (don't spin on connect).
+    if (addr.empty()) {
+      if (connected && g_client != nullptr) {
+        g_client->disconnect();
+        connected = false;
+      }
+      set_link(core::Link::Unconfigured);
+      vTaskDelay(pdMS_TO_TICKS(500));
+      continue;
+    }
+
+    // Address changed (e.g. user saved a new MAC): drop the old connection.
+    if (reconnect_requested_.exchange(false) && connected && g_client != nullptr) {
+      g_client->disconnect();
+      connected = false;
+    }
+
     if (!connected) {
       set_link(core::Link::Connecting);
-      if (do_connect()) {
+      if (do_connect(addr)) {
         connected = true;
         set_link(core::Link::Connected);
         do_refresh();
@@ -109,12 +143,12 @@ void MicraLink::task_loop() {
   }
 }
 
-bool MicraLink::do_connect() {
+bool MicraLink::do_connect(const std::string& address) {
   if (g_client == nullptr) g_client = NimBLEDevice::createClient();
 
   // Try public then random address type so we needn't store/know which it is.
-  if (!g_client->connect(NimBLEAddress(address_, BLE_ADDR_PUBLIC)) &&
-      !g_client->connect(NimBLEAddress(address_, BLE_ADDR_RANDOM))) {
+  if (!g_client->connect(NimBLEAddress(address, BLE_ADDR_PUBLIC)) &&
+      !g_client->connect(NimBLEAddress(address, BLE_ADDR_RANDOM))) {
     Serial.println("MicraLink: connect failed");
     return false;
   }
@@ -198,5 +232,43 @@ core::MachineSnapshot MicraLink::snapshot() const {
 }
 
 void MicraLink::set_power(bool on) { pending_power_.store(on ? 1 : 0); }
+
+void MicraLink::request_scan() {
+  scanning_.store(true);       // reflect immediately in the UI
+  scan_requested_.store(true);  // the task performs the actual scan
+}
+
+bool MicraLink::scanning() const { return scanning_.load(); }
+
+std::vector<core::ScanResult> MicraLink::scan_results() const {
+  std::lock_guard<std::mutex> lk(mutex_);
+  return scan_results_;
+}
+
+void MicraLink::do_scan() {
+  NimBLEScan* scan = NimBLEDevice::getScan();
+  scan->setActiveScan(true);  // also fetch scan-response for the full name
+  NimBLEScanResults results = scan->getResults(5000, false);
+
+  std::vector<core::ScanResult> found;
+  for (int i = 0; i < results.getCount(); ++i) {
+    const NimBLEAdvertisedDevice* d = results.getDevice(i);
+    const std::string name = d->getName();
+    if (name.rfind("MICRA", 0) != 0) continue;  // La Marzocco name prefix
+
+    core::ScanResult r{};
+    std::strncpy(r.name, name.c_str(), sizeof(r.name) - 1);
+    std::strncpy(r.mac, d->getAddress().toString().c_str(), sizeof(r.mac) - 1);
+    r.rssi = d->getRSSI();
+    found.push_back(r);
+  }
+  scan->clearResults();
+
+  {
+    std::lock_guard<std::mutex> lk(mutex_);
+    scan_results_ = std::move(found);
+  }
+  scanning_.store(false);
+}
 
 }  // namespace platform

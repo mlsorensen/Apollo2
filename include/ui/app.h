@@ -1,32 +1,46 @@
 #pragma once
 
 #include "core/machine.h"
+#include "core/provisioner.h"
 #include "ui/home_tab.h"
 #include "ui/screen.h"
+#include "ui/settings_tab.h"
 
-// The on-screen application: the tab shell plus every tab's content, built into
-// the active LVGL screen and laid out for a screen profile. Holds a reference
-// to a core::IMachine so it can render its state and issue commands — and
-// nothing more; it never sees the concrete transport (BLE, fake, ...).
+// The on-screen application: the tab shell plus each tab's content, built into
+// the active LVGL screen and laid out for a screen profile. Holds references to
+// the core ports (IMachine for control/state, IProvisioner for setup) and
+// nothing more — it never sees the concrete transport.
 //
-// Usage: build() once, then refresh() whenever new machine state is available
-// (e.g. on a poll). The power button issues commands through the same interface.
+// Usage: build() once, then refresh() on a timer to reflect the latest state.
 
 namespace ui {
 
 class App {
  public:
-  void build(core::IMachine& machine, const ScreenProfile& screen);
+  void build(core::IMachine& machine, core::IProvisioner& provisioner,
+             const ScreenProfile& screen);
 
-  // Re-read the machine snapshot and update the on-screen widgets in place.
+  // Reflect the latest machine state and scan results in the UI (no I/O).
   void refresh();
 
-  // Command bound to the power button: flip power, then refresh.
-  void toggle_power();
+  // Switch the active tab by index (0=Home, 1=Settings, 2=Stats). Mainly for
+  // the simulator to render a specific tab.
+  void show_tab(int index);
+
+  // Bound to UI events:
+  void toggle_power();         // power button
+  void start_scan();           // Settings "Scan" button
+  void save_scanned(int index);  // a result row in the Settings list
+  void forget();               // Settings "Forget" button
 
  private:
+  void update_settings_view();
+
   core::IMachine* machine_ = nullptr;
+  core::IProvisioner* provisioner_ = nullptr;
+  lv_obj_t* tabview_ = nullptr;
   HomeWidgets home_{};
+  SettingsWidgets settings_{};
 };
 
 }  // namespace ui

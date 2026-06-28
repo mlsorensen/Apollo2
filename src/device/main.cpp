@@ -2,8 +2,10 @@
 #include <lvgl.h>
 
 #include "platform_esp32/board_config.h"
+#include "platform_esp32/config.h"
 #include "platform_esp32/display.h"
 #include "platform_esp32/micra_link.h"
+#include "platform_esp32/provisioner.h"
 #include "platform_esp32/touch.h"
 #include "secrets.h"
 #include "ui/app.h"
@@ -18,7 +20,9 @@ namespace {
 
 platform::Display g_display;
 platform::Touch g_touch;
+platform::Config g_config;
 platform::MicraLink g_micra{MICRA_BLE_TOKEN};
+platform::Provisioner g_provisioner{g_micra, g_config};
 ui::App g_app;
 
 constexpr uint32_t kUiRefreshMs = 500;
@@ -46,10 +50,13 @@ void setup() {
   // Build the UI bound to the machine (renders the initial Disconnected state
   // and routes the power button to g_micra.set_power()).
   const ui::ScreenProfile screen{g_display.width(), g_display.height()};
-  g_app.build(g_micra, screen);
+  g_app.build(g_micra, g_provisioner, screen);
 
-  // Start the background BLE task: connect, auth, poll, auto-reconnect.
-  g_micra.begin(MICRA_BLE_ADDRESS);
+  // Start the background BLE task using the saved MAC (empty on first boot ->
+  // the UI shows "Set up in Settings" until one is saved via the scan).
+  const std::string mac = g_config.mac();
+  Serial.printf("Saved machine MAC: %s\n", mac.empty() ? "(none)" : mac.c_str());
+  g_micra.begin(mac);
 }
 
 void loop() {
