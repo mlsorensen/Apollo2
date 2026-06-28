@@ -32,8 +32,16 @@ class IProvisioner {
   // The saved machine's display name, or "" if none is saved.
   virtual std::string saved_name() const = 0;
 
-  // Clear the saved machine -> back to Unconfigured.
+  // Clear the saved machine (and its token) -> back to Unconfigured.
   virtual void forget() = 0;
+
+  // --- Token setup (WiFi portal) ---
+  virtual bool has_token() const = 0;          // is a token saved for the machine?
+  virtual void start_token_setup() = 0;        // bring up the WiFi paste page
+  virtual void stop_token_setup() = 0;         // cancel it
+  virtual bool token_setup_active() const = 0;
+  virtual const char* setup_ssid() const = 0;  // WiFi name to join
+  virtual const char* setup_url() const = 0;   // URL to open
 };
 
 }  // namespace core

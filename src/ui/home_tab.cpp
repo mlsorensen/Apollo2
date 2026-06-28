@@ -155,6 +155,7 @@ void update_home(const HomeWidgets& w, const core::MachineSnapshot& state) {
   uint32_t dot = ui::theme::muted;
   switch (state.link) {
     case core::Link::Unconfigured: status = "Set up in Settings"; dot = ui::theme::muted; break;
+    case core::Link::NeedsToken:   status = "Token needed - Settings"; dot = ui::theme::warn; break;
     case core::Link::Disconnected: status = "Disconnected"; dot = ui::theme::alert; break;
     case core::Link::Connecting:   status = "Connecting..."; dot = ui::theme::warn; break;
     case core::Link::Connected:

@@ -32,13 +32,18 @@ class App {
   void start_scan();           // Settings "Scan" button
   void save_scanned(int index);  // a result row in the Settings list
   void forget();               // Settings "Forget" button
+  void start_token_setup();    // Settings "Setup" button -> WiFi portal + modal
+  void cancel_token_setup();   // modal "Cancel"
 
  private:
   void update_settings_view();
+  void show_setup_modal();
+  void close_setup_modal();
 
   core::IMachine* machine_ = nullptr;
   core::IProvisioner* provisioner_ = nullptr;
   lv_obj_t* tabview_ = nullptr;
+  lv_obj_t* setup_modal_ = nullptr;  // token-setup instructions overlay, if open
   HomeWidgets home_{};
   SettingsWidgets settings_{};
 };

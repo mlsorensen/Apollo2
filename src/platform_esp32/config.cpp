@@ -8,6 +8,7 @@ namespace {
 constexpr char kNamespace[] = "micra";
 constexpr char kMacKey[] = "mac";
 constexpr char kNameKey[] = "name";
+constexpr char kTokenKey[] = "token";
 }  // namespace
 
 namespace platform {
@@ -29,6 +30,8 @@ std::string Config::mac() const { return read_key(kMacKey); }
 
 std::string Config::name() const { return read_key(kNameKey); }
 
+std::string Config::token() const { return read_key(kTokenKey); }
+
 void Config::save(const std::string& mac, const std::string& name) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
@@ -37,11 +40,19 @@ void Config::save(const std::string& mac, const std::string& name) {
   p.end();
 }
 
+void Config::set_token(const std::string& token) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putString(kTokenKey, token.c_str());
+  p.end();
+}
+
 void Config::clear() {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.remove(kMacKey);
   p.remove(kNameKey);
+  p.remove(kTokenKey);  // wipe the secret too
   p.end();
 }
 

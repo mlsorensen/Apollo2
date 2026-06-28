@@ -16,6 +16,13 @@ class FakeProvisioner : public core::IProvisioner {
   void save_device(const core::ScanResult& /*device*/) override {}
   std::string saved_name() const override { return ""; }
   void forget() override {}
+
+  bool has_token() const override { return true; }
+  void start_token_setup() override {}
+  void stop_token_setup() override {}
+  bool token_setup_active() const override { return false; }
+  const char* setup_ssid() const override { return "Micra-Setup"; }
+  const char* setup_url() const override { return "http://192.168.4.1"; }
 };
 
 }  // namespace host

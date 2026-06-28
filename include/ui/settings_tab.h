@@ -11,8 +11,9 @@
 namespace ui {
 
 struct SettingsWidgets {
-  lv_obj_t* saved_row = nullptr;    // "Saved: <name>  [Forget]" — shown if saved
+  lv_obj_t* saved_row = nullptr;    // "Saved: <name>  [Setup] [Forget]" if saved
   lv_obj_t* saved_label = nullptr;
+  lv_obj_t* setup_btn = nullptr;    // token WiFi setup — shown if no token yet
   lv_obj_t* forget_btn = nullptr;
   lv_obj_t* scan_btn = nullptr;
   lv_obj_t* status = nullptr;

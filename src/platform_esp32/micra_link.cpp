@@ -53,8 +53,6 @@ core::Power parse_mode(const std::string& json) {
 
 namespace platform {
 
-MicraLink::MicraLink(std::string auth_token) : token_(std::move(auth_token)) {}
-
 void MicraLink::begin(std::string address) {
   address_ = std::move(address);  // task not started yet — no lock needed
   xTaskCreatePinnedToCore(&MicraLink::task_entry, "micra_link", 8192, this,
@@ -67,6 +65,19 @@ void MicraLink::set_address(std::string address) {
     address_ = std::move(address);
   }
   reconnect_requested_.store(true);
+}
+
+void MicraLink::set_token(std::string token) {
+  {
+    std::lock_guard<std::mutex> lk(mutex_);
+    token_ = std::move(token);
+  }
+  reconnect_requested_.store(true);
+}
+
+void MicraLink::set_name(std::string name) {
+  std::lock_guard<std::mutex> lk(mutex_);
+  name_ = name.empty() ? "Micra" : std::move(name);
 }
 
 void MicraLink::task_entry(void* arg) { static_cast<MicraLink*>(arg)->task_loop(); }
@@ -87,18 +98,21 @@ void MicraLink::task_loop() {
     if (scan_requested_.exchange(false)) do_scan();  // works in any link state
 
     std::string addr;
+    std::string token;
     {
       std::lock_guard<std::mutex> lk(mutex_);
       addr = address_;
+      token = token_;
     }
 
-    // No machine configured yet: idle as Unconfigured (don't spin on connect).
-    if (addr.empty()) {
+    // Not fully provisioned: idle in the matching state (don't spin on connect).
+    //   no address -> Unconfigured;  address but no token -> NeedsToken.
+    if (addr.empty() || token.empty()) {
       if (connected && g_client != nullptr) {
         g_client->disconnect();
         connected = false;
       }
-      set_link(core::Link::Unconfigured);
+      set_link(addr.empty() ? core::Link::Unconfigured : core::Link::NeedsToken);
       vTaskDelay(pdMS_TO_TICKS(500));
       continue;
     }
@@ -111,7 +125,7 @@ void MicraLink::task_loop() {
 
     if (!connected) {
       set_link(core::Link::Connecting);
-      if (do_connect(addr)) {
+      if (do_connect(addr, token)) {
         connected = true;
         set_link(core::Link::Connected);
         do_refresh();
@@ -143,7 +157,7 @@ void MicraLink::task_loop() {
   }
 }
 
-bool MicraLink::do_connect(const std::string& address) {
+bool MicraLink::do_connect(const std::string& address, const std::string& token) {
   if (g_client == nullptr) g_client = NimBLEDevice::createClient();
 
   // Try public then random address type so we needn't store/know which it is.
@@ -169,8 +183,8 @@ bool MicraLink::do_connect(const std::string& address) {
   }
 
   // Authenticate: token as raw UTF-8, NO trailing NUL, write-with-response.
-  if (!g_auth->writeValue(reinterpret_cast<const uint8_t*>(token_.data()),
-                          token_.size(), true)) {
+  if (!g_auth->writeValue(reinterpret_cast<const uint8_t*>(token.data()),
+                          token.size(), true)) {
     Serial.println("MicraLink: auth write failed");
     g_client->disconnect();
     return false;
@@ -220,7 +234,7 @@ void MicraLink::do_set_power(bool on) {
 core::MachineSnapshot MicraLink::snapshot() const {
   std::lock_guard<std::mutex> lk(mutex_);
   return core::MachineSnapshot{
-      .name = "Linea Micra",
+      .name = name_.c_str(),
       .link = link_,
       .power = power_,
       .brew_temp_c = brew_temp_c_,

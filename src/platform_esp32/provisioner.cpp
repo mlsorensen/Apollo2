@@ -4,11 +4,12 @@
 
 #include "platform_esp32/config.h"
 #include "platform_esp32/micra_link.h"
+#include "platform_esp32/token_setup.h"
 
 namespace platform {
 
-Provisioner::Provisioner(MicraLink& link, Config& config)
-    : link_(link), config_(config) {}
+Provisioner::Provisioner(MicraLink& link, Config& config, TokenSetup& token_setup)
+    : link_(link), config_(config), token_setup_(token_setup) {}
 
 void Provisioner::start_scan() { link_.request_scan(); }
 
@@ -29,8 +30,21 @@ std::string Provisioner::saved_name() const {
 }
 
 void Provisioner::forget() {
-  config_.clear();
-  link_.set_address("");  // -> Unconfigured
+  config_.clear();         // wipes MAC + name + token
+  link_.set_token("");
+  link_.set_address("");   // -> Unconfigured
 }
+
+bool Provisioner::has_token() const { return !config_.token().empty(); }
+
+void Provisioner::start_token_setup() { token_setup_.start(); }
+
+void Provisioner::stop_token_setup() { token_setup_.stop(); }
+
+bool Provisioner::token_setup_active() const { return token_setup_.active(); }
+
+const char* Provisioner::setup_ssid() const { return token_setup_.ssid(); }
+
+const char* Provisioner::setup_url() const { return token_setup_.url(); }
 
 }  // namespace platform

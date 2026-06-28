@@ -10,11 +10,13 @@ namespace platform {
 
 class Config {
  public:
-  std::string mac() const;   // saved MAC, or "" if none
-  std::string name() const;  // saved display name, or "" if none
+  std::string mac() const;    // saved MAC, or "" if none
+  std::string name() const;   // saved display name, or "" if none
+  std::string token() const;  // saved BLE auth token, or "" if none
 
   void save(const std::string& mac, const std::string& name);
-  void clear();              // forget the saved machine
+  void set_token(const std::string& token);
+  void clear();               // forget the saved machine (incl. its token)
 };
 
 }  // namespace platform

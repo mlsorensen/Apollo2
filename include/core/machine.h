@@ -17,7 +17,8 @@ enum class Power { Off, Standby, On };
 // Transport/link state to the machine. The UI renders differently per state
 // (e.g. a "disconnected" treatment) rather than only showing machine data.
 //   Unconfigured: no machine address saved yet — needs setup (Settings scan).
-enum class Link { Unconfigured, Disconnected, Connecting, Connected };
+//   NeedsToken:   machine saved but no auth token yet — needs the token entered.
+enum class Link { Unconfigured, NeedsToken, Disconnected, Connecting, Connected };
 
 // A flat, copyable snapshot of everything the UI needs to draw one frame.
 // Commands (set power, start brew, change target) will be added to IMachine as

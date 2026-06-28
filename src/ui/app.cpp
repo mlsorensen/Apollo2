@@ -47,6 +47,14 @@ void on_forget_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->forget();
 }
 
+void on_setup_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->start_token_setup();
+}
+
+void on_modal_cancel(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cancel_token_setup();
+}
+
 }  // namespace
 
 namespace ui {
@@ -95,6 +103,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
 
   build_settings_tab(settings, screen, settings_);
   lv_obj_add_event_cb(settings_.scan_btn, on_scan_clicked, LV_EVENT_CLICKED, this);
+  lv_obj_add_event_cb(settings_.setup_btn, on_setup_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.forget_btn, on_forget_clicked, LV_EVENT_CLICKED, this);
 
   build_placeholder(stats, "Stats", tab_font);
@@ -140,10 +149,68 @@ void App::forget() {
   settings_.last_count = -1;  // force a refresh of the settings view
 }
 
+void App::start_token_setup() {
+  if (provisioner_ == nullptr) return;
+  provisioner_->start_token_setup();
+  show_setup_modal();
+}
+
+void App::cancel_token_setup() {
+  if (provisioner_ != nullptr) provisioner_->stop_token_setup();
+  close_setup_modal();
+}
+
+void App::show_setup_modal() {
+  if (setup_modal_ != nullptr || provisioner_ == nullptr) return;
+
+  lv_obj_t* bg = lv_obj_create(lv_layer_top());  // full-screen dimmed overlay
+  lv_obj_remove_style_all(bg);
+  lv_obj_set_size(bg, lv_pct(100), lv_pct(100));
+  lv_obj_set_style_bg_color(bg, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_opa(bg, LV_OPA_70, 0);
+  setup_modal_ = bg;
+
+  lv_obj_t* card = lv_obj_create(bg);
+  lv_obj_set_size(card, lv_pct(88), LV_SIZE_CONTENT);
+  lv_obj_center(card);
+  lv_obj_set_style_bg_color(card, lv_color_hex(ui::theme::card), 0);
+  lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_style_pad_all(card, 12, 0);
+  lv_obj_set_style_pad_row(card, 8, 0);
+
+  lv_obj_t* title = lv_label_create(card);
+  lv_label_set_text(title, "Enter token");
+  lv_obj_set_style_text_color(title, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
+
+  lv_obj_t* steps = lv_label_create(card);
+  char buf[160];
+  std::snprintf(buf, sizeof(buf), "1. Join WiFi: %s\n2. Open: %s\n3. Paste token, Save",
+                provisioner_->setup_ssid(), provisioner_->setup_url());
+  lv_label_set_text(steps, buf);
+  lv_obj_set_style_text_color(steps, lv_color_hex(ui::theme::muted), 0);
+  lv_obj_set_style_text_font(steps, &lv_font_montserrat_14, 0);
+
+  lv_obj_t* cancel = lv_button_create(card);
+  lv_obj_set_style_bg_color(cancel, lv_color_hex(ui::theme::rail), 0);
+  lv_obj_add_event_cb(cancel, on_modal_cancel, LV_EVENT_CLICKED, this);
+  lv_obj_t* cl = lv_label_create(cancel);
+  lv_label_set_text(cl, "Cancel");
+  lv_obj_set_style_text_color(cl, lv_color_hex(ui::theme::text), 0);
+  lv_obj_center(cl);
+}
+
+void App::close_setup_modal() {
+  if (setup_modal_ != nullptr) {
+    lv_obj_delete(setup_modal_);
+    setup_modal_ = nullptr;
+  }
+}
+
 void App::update_settings_view() {
   if (provisioner_ == nullptr) return;
 
-  // Saved-machine row: shown with the name + Forget when a machine is saved.
+  // Saved-machine row: name + (Setup if no token) + Forget, when a machine is saved.
   const std::string saved = provisioner_->saved_name();
   if (saved.empty()) {
     lv_obj_add_flag(settings_.saved_row, LV_OBJ_FLAG_HIDDEN);
@@ -152,6 +219,17 @@ void App::update_settings_view() {
     char buf[48];
     std::snprintf(buf, sizeof(buf), "Saved: %s", saved.c_str());
     lv_label_set_text(settings_.saved_label, buf);
+    if (provisioner_->has_token()) {
+      lv_obj_add_flag(settings_.setup_btn, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_remove_flag(settings_.setup_btn, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
+
+  // Auto-close the setup modal once the token's been received (portal ended).
+  if (setup_modal_ != nullptr && !provisioner_->token_setup_active()) {
+    close_setup_modal();
+    if (tabview_ != nullptr) lv_tabview_set_active(tabview_, 0, LV_ANIM_ON);  // Home
   }
 
   const bool scanning = provisioner_->scanning();

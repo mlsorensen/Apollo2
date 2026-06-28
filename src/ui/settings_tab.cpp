@@ -29,6 +29,14 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   lv_obj_set_style_text_font(out.saved_label, font, 0);
   lv_obj_set_flex_grow(out.saved_label, 1);
 
+  out.setup_btn = lv_button_create(out.saved_row);  // shown only when no token
+  lv_obj_set_style_bg_color(out.setup_btn, lv_color_hex(ui::theme::accent), 0);
+  lv_obj_t* setup_lbl = lv_label_create(out.setup_btn);
+  lv_label_set_text(setup_lbl, "Setup");
+  lv_obj_set_style_text_color(setup_lbl, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_font(setup_lbl, font, 0);
+  lv_obj_center(setup_lbl);
+
   out.forget_btn = lv_button_create(out.saved_row);
   lv_obj_set_style_bg_color(out.forget_btn, lv_color_hex(ui::theme::alert), 0);
   lv_obj_t* forget_lbl = lv_label_create(out.forget_btn);

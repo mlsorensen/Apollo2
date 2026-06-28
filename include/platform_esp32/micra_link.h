@@ -20,16 +20,18 @@ namespace platform {
 
 class MicraLink : public core::IMachine {
  public:
-  explicit MicraLink(std::string auth_token);
+  MicraLink() = default;
 
-  // Start the background connection task (non-blocking). Connects to `address`,
-  // authenticates, polls state every few seconds, and reconnects on drop. An
-  // empty address leaves the link Unconfigured and idle until set_address().
+  // Start the background connection task (non-blocking). With both an address
+  // and a token set, connects/authenticates/polls and reconnects on drop. Empty
+  // address -> Unconfigured; address but no token -> NeedsToken; both idle.
   void begin(std::string address);
 
-  // Change the target address at runtime (e.g. after the user saves a scanned
-  // MAC). Empty -> Unconfigured/idle. Thread-safe; triggers a reconnect.
+  // Runtime setters (thread-safe; trigger a reconnect). Address/token empty
+  // leave the link idle in the corresponding state.
   void set_address(std::string address);
+  void set_token(std::string token);
+  void set_name(std::string name);  // display name for the snapshot
 
   // core::IMachine — thread-safe cached read.
   core::MachineSnapshot snapshot() const override;
@@ -46,17 +48,18 @@ class MicraLink : public core::IMachine {
  private:
   static void task_entry(void* arg);
   void task_loop();
-  bool do_connect(const std::string& address);  // task thread: connect + auth
+  bool do_connect(const std::string& address, const std::string& token);
   bool do_refresh();        // task thread: read + parse into the cache
   void do_set_power(bool on);  // task thread: write the command
   void do_scan();           // task thread: scan + publish results
   void set_link(core::Link link);
 
-  std::string token_;
-  std::string address_;
+  std::string token_;     // guarded by mutex_
+  std::string address_;   // guarded by mutex_
+  std::string name_ = "Micra";  // guarded by mutex_
 
   mutable std::mutex mutex_;  // guards the cached fields below
-  core::Link link_ = core::Link::Disconnected;
+  core::Link link_ = core::Link::Unconfigured;
   core::Power power_ = core::Power::Off;
   float brew_temp_c_ = 0.0f;
   float brew_target_c_ = 0.0f;
