@@ -55,6 +55,12 @@ void on_modal_cancel(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cancel_token_setup();
 }
 
+void on_segment_clicked(lv_event_t* e) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  auto* btn = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  app->select_settings_section(static_cast<int>(lv_obj_get_index(btn)));
+}
+
 }  // namespace
 
 namespace ui {
@@ -102,6 +108,9 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(home_.power_btn, on_power_clicked, LV_EVENT_CLICKED, this);
 
   build_settings_tab(settings, screen, settings_);
+  for (int i = 0; i < kSectionCount; ++i) {
+    lv_obj_add_event_cb(settings_.seg[i], on_segment_clicked, LV_EVENT_CLICKED, this);
+  }
   lv_obj_add_event_cb(settings_.scan_btn, on_scan_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.setup_btn, on_setup_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.forget_btn, on_forget_clicked, LV_EVENT_CLICKED, this);
@@ -205,6 +214,10 @@ void App::close_setup_modal() {
     lv_obj_delete(setup_modal_);
     setup_modal_ = nullptr;
   }
+}
+
+void App::select_settings_section(int section) {
+  settings_select_section(settings_, section);
 }
 
 void App::update_settings_view() {

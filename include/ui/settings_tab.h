@@ -4,13 +4,20 @@
 
 #include "ui/screen.h"
 
-// Settings tab: a Scan button, a status line, and a scrollable list of found
-// machines. ui::App owns it — it builds the static frame here and (re)populates
-// the list from scan results, wiring each row to save its MAC.
+// Settings tab: a segmented selector (Bluetooth / Brew / Boiler) that switches
+// between section panels. ui::App owns it — builds the frame here, switches
+// sections, and (re)populates the Bluetooth panel's scan list.
 
 namespace ui {
 
+enum SettingsSection { kSectionBluetooth = 0, kSectionBrew, kSectionBoiler, kSectionCount };
+
 struct SettingsWidgets {
+  lv_obj_t* seg[kSectionCount] = {nullptr, nullptr, nullptr};      // selector buttons
+  lv_obj_t* panel[kSectionCount] = {nullptr, nullptr, nullptr};    // section panels
+  int active = kSectionBluetooth;
+
+  // Bluetooth panel widgets:
   lv_obj_t* saved_row = nullptr;    // "Saved: <name>  [Setup] [Forget]" if saved
   lv_obj_t* saved_label = nullptr;
   lv_obj_t* setup_btn = nullptr;    // token WiFi setup — shown if no token yet
@@ -26,5 +33,8 @@ struct SettingsWidgets {
 
 void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
                         SettingsWidgets& out);
+
+// Show one section's panel and highlight its selector button.
+void settings_select_section(SettingsWidgets& w, int section);
 
 }  // namespace ui

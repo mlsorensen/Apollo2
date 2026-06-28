@@ -34,6 +34,7 @@ class App {
   void forget();               // Settings "Forget" button
   void start_token_setup();    // Settings "Setup" button -> WiFi portal + modal
   void cancel_token_setup();   // modal "Cancel"
+  void select_settings_section(int section);  // Settings segmented selector
 
  private:
   void update_settings_view();
