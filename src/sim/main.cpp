@@ -53,5 +53,9 @@ int main() {
                ui::kSectionBrew);
   ok &= render(machine, provisioner, battery, {320, 240}, "renders/boiler_320x240.png", 1,
                ui::kSectionBoiler);
+  ok &= render(machine, provisioner, battery, {800, 480}, "renders/brew_800x480.png", 1,
+               ui::kSectionBrew);
+  ok &= render(machine, provisioner, battery, {800, 480}, "renders/boiler_800x480.png", 1,
+               ui::kSectionBoiler);
   return ok ? 0 : 1;
 }

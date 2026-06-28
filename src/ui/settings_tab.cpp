@@ -98,10 +98,12 @@ void build_stepper_panel(lv_obj_t* panel, const char* caption,
                         LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_row(panel, 6, 0);
 
-  lv_obj_t* cap = lv_label_create(panel);
-  lv_label_set_text(cap, caption);
-  lv_obj_set_style_text_color(cap, lv_color_hex(ui::theme::muted), 0);
-  lv_obj_set_style_text_font(cap, small_font, 0);
+  if (caption != nullptr && caption[0] != '\0') {
+    lv_obj_t* cap = lv_label_create(panel);
+    lv_label_set_text(cap, caption);
+    lv_obj_set_style_text_color(cap, lv_color_hex(ui::theme::muted), 0);
+    lv_obj_set_style_text_font(cap, small_font, 0);
+  }
 
   lv_obj_t* row = lv_obj_create(panel);
   lv_obj_remove_style_all(row);
@@ -132,26 +134,28 @@ void build_stepper_panel(lv_obj_t* panel, const char* caption,
 void build_boiler_panel(lv_obj_t* panel, const lv_font_t* value_font,
                         const lv_font_t* small_font, int btn_size,
                         ui::SettingsWidgets& out) {
-  build_stepper_panel(panel, "Steam boiler", value_font, small_font, btn_size,
+  // No caption — the "Boiler" segment already titles this panel.
+  build_stepper_panel(panel, nullptr, value_font, small_font, btn_size,
                       &out.boiler_minus, &out.boiler_value, &out.boiler_plus,
                       &out.boiler_sub);
 
-  // "Enable" + switch, below the stepper, with a comfortable touch target.
+  // "Enable" + switch below the stepper. Small label (the temp is the hero),
+  // medium switch for a comfortable but not oversized touch target.
   lv_obj_t* en_row = lv_obj_create(panel);
   lv_obj_remove_style_all(en_row);
   lv_obj_set_size(en_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(en_row, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(en_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(en_row, 14, 0);
+  lv_obj_set_style_pad_column(en_row, 12, 0);
 
   lv_obj_t* lbl = lv_label_create(en_row);
   lv_label_set_text(lbl, "Enable");
-  lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text), 0);
-  lv_obj_set_style_text_font(lbl, value_font, 0);
+  lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::muted), 0);
+  lv_obj_set_style_text_font(lbl, small_font, 0);
 
   out.steam_switch = lv_switch_create(en_row);
-  lv_obj_set_size(out.steam_switch, btn_size + 14, btn_size / 2 + 8);  // bigger target
+  lv_obj_set_size(out.steam_switch, btn_size + 6, btn_size / 2 + 4);
 }
 
 }  // namespace
@@ -176,7 +180,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   lv_obj_set_flex_flow(seg_row, LV_FLEX_FLOW_ROW);
   lv_obj_set_style_pad_column(seg_row, 6, 0);
 
-  const char* labels[kSectionCount] = {LV_SYMBOL_BLUETOOTH, "Brew", "Boiler"};
+  const char* labels[kSectionCount] = {LV_SYMBOL_BLUETOOTH, "Brew", "Boiler", "Display"};
   for (int i = 0; i < kSectionCount; ++i) {
     out.seg[i] = lv_button_create(seg_row);
     lv_obj_set_flex_grow(out.seg[i], 1);
@@ -201,6 +205,15 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   build_stepper_panel(out.panel[kSectionBrew], "Brew temperature", value_font, font,
                       btn_size, &out.brew_minus, &out.brew_value, &out.brew_plus, nullptr);
   build_boiler_panel(out.panel[kSectionBoiler], value_font, font, btn_size, out);
+
+  // Display section — device prefs (brightness, color schemes) are TODO.
+  lv_obj_remove_flag(out.panel[kSectionDisplay], LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_t* soon = lv_label_create(out.panel[kSectionDisplay]);
+  lv_label_set_text(soon, "Display settings\ncoming soon");
+  lv_obj_set_style_text_align(soon, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_color(soon, lv_color_hex(ui::theme::muted), 0);
+  lv_obj_set_style_text_font(soon, font, 0);
+  lv_obj_center(soon);
 
   settings_select_section(out, kSectionBluetooth);
 }

@@ -10,7 +10,13 @@
 
 namespace ui {
 
-enum SettingsSection { kSectionBluetooth = 0, kSectionBrew, kSectionBoiler, kSectionCount };
+enum SettingsSection {
+  kSectionBluetooth = 0,
+  kSectionBrew,
+  kSectionBoiler,
+  kSectionDisplay,
+  kSectionCount
+};
 
 struct SettingsWidgets {
   lv_obj_t* seg[kSectionCount] = {nullptr, nullptr, nullptr};      // selector buttons
