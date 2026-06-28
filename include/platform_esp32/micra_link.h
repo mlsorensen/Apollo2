@@ -1,18 +1,18 @@
 #pragma once
 
+#include <atomic>
+#include <mutex>
 #include <string>
 
 #include "core/machine.h"
 
-// BLE client for the La Marzocco Micra, implementing the device-agnostic
-// core::IMachine port. The UI and the rest of the app talk to this exactly as
-// they talk to the host FakeMachine — they never see NimBLE.
+// BLE client for the La Marzocco Micra, implementing core::IMachine.
 //
-// Protocol (reverse-engineered, from pylamarzocco): connect to a device whose
-// name starts with "MICRA", write the auth token to the AUTH characteristic,
-// then read state by writing a setting name to the READ characteristic and
-// reading the JSON back, and send commands as JSON to the WRITE characteristic.
-// All NimBLE details live in the .cpp so this header stays transport-free.
+// All BLE work (connect, auth, polling, auto-reconnect) runs in a dedicated
+// FreeRTOS task started by begin(), so it never blocks the UI/main loop. The
+// task updates a mutex-guarded cached snapshot; snapshot() reads it safely from
+// the main thread. Commands (set_power) are posted to the task rather than
+// executed inline, keeping all NimBLE access on the one task thread.
 
 namespace platform {
 
@@ -20,40 +20,37 @@ class MicraLink : public core::IMachine {
  public:
   explicit MicraLink(std::string auth_token);
 
-  // Blocking: connect to the machine at `address` (e.g. "30:c6:f7:..."),
-  // discover characteristics, and authenticate. No scan — the address is
-  // expected to be known/saved. Progress and failures are logged to Serial.
-  bool connect(const std::string& address);
-  bool isConnected() const;
+  // Start the background connection task (non-blocking). Connects to `address`,
+  // authenticates, polls state every few seconds, and reconnects on drop.
+  void begin(std::string address);
 
-  // Read current state from the machine into the cached snapshot. Returns true
-  // on a successful read + parse.
-  bool refresh();
-
-  // core::IMachine — returns the last refreshed state (cheap, no I/O).
+  // core::IMachine — thread-safe cached read.
   core::MachineSnapshot snapshot() const override;
 
-  // core::IMachine — command machine on (BrewingMode) vs standby, then refresh
-  // the cached snapshot so the next snapshot() reflects it.
+  // core::IMachine — post a power command for the task to apply (non-blocking).
   void set_power(bool on) override;
 
  private:
-  void parse_mode(const std::string& json);
-  void parse_boilers(const std::string& json);
+  static void task_entry(void* arg);
+  void task_loop();
+  bool do_connect();        // task thread: connect + discover + auth
+  bool do_refresh();        // task thread: read + parse into the cache
+  void do_set_power(bool on);  // task thread: write the command
+  void set_link(core::Link link);
 
   std::string token_;
+  std::string address_;
 
-  // Cached state; snapshot() returns pointers into name_/status_, so they must
-  // outlive the returned snapshot (they live as long as this object).
-  std::string name_ = "Micra";
-  std::string status_;
+  mutable std::mutex mutex_;  // guards the cached fields below
+  core::Link link_ = core::Link::Disconnected;
   core::Power power_ = core::Power::Off;
   float brew_temp_c_ = 0.0f;
   float brew_target_c_ = 0.0f;
   float boiler_temp_c_ = 0.0f;
   float boiler_target_c_ = 0.0f;
   bool brewing_ = false;
-  bool connected_ = false;
+
+  std::atomic<int> pending_power_{-1};  // -1 none, 0 standby, 1 on
 };
 
 }  // namespace platform

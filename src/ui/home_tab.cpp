@@ -129,26 +129,53 @@ void build_home_tab(lv_obj_t* parent, const core::MachineSnapshot& state,
 }
 
 void update_home(const HomeWidgets& w, const core::MachineSnapshot& state) {
-  char buf[24];
-  format_now(buf, sizeof(buf), state.brew_temp_c);
-  lv_label_set_text(w.brew_value, buf);
-  format_set(buf, sizeof(buf), state.brew_target_c);
-  lv_label_set_text(w.brew_set, buf);
-
-  format_now(buf, sizeof(buf), state.boiler_temp_c);
-  lv_label_set_text(w.boiler_value, buf);
-  format_set(buf, sizeof(buf), state.boiler_target_c);
-  lv_label_set_text(w.boiler_set, buf);
-
+  const bool connected = state.link == core::Link::Connected;
   const bool on = state.power == core::Power::On;
-  lv_label_set_text(w.status_label, state.status ? state.status : "");
-  lv_obj_set_style_bg_color(
-      w.status_dot, lv_color_hex(on ? ui::theme::ok : ui::theme::warn), 0);
 
-  lv_obj_set_style_bg_color(
-      w.power_btn, lv_color_hex(on ? ui::theme::card : ui::theme::accent), 0);
-  lv_label_set_text(w.power_label,
-                    on ? LV_SYMBOL_POWER "  STANDBY" : LV_SYMBOL_POWER "  TURN ON");
+  // Temperatures: real values when connected, placeholders otherwise.
+  char buf[24];
+  if (connected) {
+    format_now(buf, sizeof(buf), state.brew_temp_c);
+    lv_label_set_text(w.brew_value, buf);
+    format_set(buf, sizeof(buf), state.brew_target_c);
+    lv_label_set_text(w.brew_set, buf);
+    format_now(buf, sizeof(buf), state.boiler_temp_c);
+    lv_label_set_text(w.boiler_value, buf);
+    format_set(buf, sizeof(buf), state.boiler_target_c);
+    lv_label_set_text(w.boiler_set, buf);
+  } else {
+    lv_label_set_text(w.brew_value, "--");
+    lv_label_set_text(w.brew_set, "Set  --");
+    lv_label_set_text(w.boiler_value, "--");
+    lv_label_set_text(w.boiler_set, "Set  --");
+  }
+
+  // Status line: text + dot color derived from link + power.
+  const char* status = "Disconnected";
+  uint32_t dot = ui::theme::muted;
+  switch (state.link) {
+    case core::Link::Disconnected: status = "Disconnected"; dot = ui::theme::alert; break;
+    case core::Link::Connecting:   status = "Connecting..."; dot = ui::theme::warn; break;
+    case core::Link::Connected:
+      status = on ? "Ready" : "Standby";
+      dot = on ? ui::theme::ok : ui::theme::warn;
+      break;
+  }
+  lv_label_set_text(w.status_label, status);
+  lv_obj_set_style_bg_color(w.status_dot, lv_color_hex(dot), 0);
+
+  // Power button: only actionable when connected.
+  if (connected) {
+    lv_obj_remove_state(w.power_btn, LV_STATE_DISABLED);
+    lv_obj_set_style_bg_color(
+        w.power_btn, lv_color_hex(on ? ui::theme::card : ui::theme::accent), 0);
+    lv_label_set_text(w.power_label,
+                      on ? LV_SYMBOL_POWER "  STANDBY" : LV_SYMBOL_POWER "  TURN ON");
+  } else {
+    lv_obj_add_state(w.power_btn, LV_STATE_DISABLED);
+    lv_obj_set_style_bg_color(w.power_btn, lv_color_hex(ui::theme::card), 0);
+    lv_label_set_text(w.power_label, LV_SYMBOL_POWER "  OFFLINE");
+  }
 }
 
 }  // namespace ui

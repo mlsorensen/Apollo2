@@ -9,10 +9,10 @@
 #include "ui/app.h"
 
 // Device entry. Brings up the panel + touch, builds the UI bound to the BLE
-// machine, connects, and polls the machine on a timer to keep the UI live.
-//
-// Connection is still blocking in setup() and there's no disconnected-state UI
-// or reconnect yet — that's the next step (connection manager).
+// machine, and starts MicraLink's background connection task. The main loop only
+// runs LVGL and periodically refreshes the UI from MicraLink's cached snapshot —
+// all BLE I/O (connect, poll, reconnect) happens off-thread, so the UI stays
+// responsive whether the machine is connected, connecting, or offline.
 
 namespace {
 
@@ -21,7 +21,7 @@ platform::Touch g_touch;
 platform::MicraLink g_micra{MICRA_BLE_TOKEN};
 ui::App g_app;
 
-constexpr uint32_t kPollIntervalMs = 3000;
+constexpr uint32_t kUiRefreshMs = 500;
 
 }  // namespace
 
@@ -43,28 +43,23 @@ void setup() {
     Serial.println("WARN: CST816 touch not detected on I2C");
   }
 
-  // Build the UI bound to the machine (renders its current — initially empty —
-  // state, and routes the power button to g_micra.set_power()).
+  // Build the UI bound to the machine (renders the initial Disconnected state
+  // and routes the power button to g_micra.set_power()).
   const ui::ScreenProfile screen{g_display.width(), g_display.height()};
   g_app.build(g_micra, screen);
 
-  // Connect, then push the first real reading into the UI.
-  if (g_micra.connect(MICRA_BLE_ADDRESS) && g_micra.refresh()) {
-    Serial.println("Micra: connected");
-    g_app.refresh();
-  } else {
-    Serial.println("Micra: connect/auth/read did not complete (see log above)");
-  }
+  // Start the background BLE task: connect, auth, poll, auto-reconnect.
+  g_micra.begin(MICRA_BLE_ADDRESS);
 }
 
 void loop() {
   lv_timer_handler();  // LVGL render/input
 
-  // Poll the machine periodically and push fresh values into the UI.
+  // Reflect the latest cached machine state in the UI (cheap; no BLE here).
   static uint32_t last = 0;
-  if (g_micra.isConnected() && millis() - last > kPollIntervalMs) {
+  if (millis() - last > kUiRefreshMs) {
     last = millis();
-    if (g_micra.refresh()) g_app.refresh();
+    g_app.refresh();
   }
 
   delay(5);

@@ -14,16 +14,16 @@ constexpr char kReadUuid[] = "0a0b7847-e12b-09a8-b04b-8e0922a9abab";   // state
 constexpr char kWriteUuid[] = "0b0b7847-e12b-09a8-b04b-8e0922a9abab";  // command
 constexpr char kAuthUuid[] = "0d0b7847-e12b-09a8-b04b-8e0922a9abab";   // token
 
-// One machine, one link: the NimBLE handles live here (mirrors how display.cpp
-// and touch.cpp keep their hardware handles at file scope).
+constexpr uint32_t kPollIntervalMs = 3000;
+constexpr uint32_t kReconnectBackoffMs = 3000;
+
+// One link: the NimBLE handles live at file scope and are touched ONLY by the
+// connection task (mirrors display.cpp / touch.cpp).
 NimBLEClient* g_client = nullptr;
 NimBLERemoteCharacteristic* g_read = nullptr;
 NimBLERemoteCharacteristic* g_write = nullptr;
 NimBLERemoteCharacteristic* g_auth = nullptr;
 
-// Write `payload` (with response) and, for read/command characteristics, append
-// the single trailing NUL the firmware expects. (The auth write is the one
-// exception — see authenticate() — so it doesn't use this.)
 bool write_with_nul(NimBLERemoteCharacteristic* chr, const std::string& payload) {
   std::string buf = payload;
   buf.push_back('\0');
@@ -31,7 +31,6 @@ bool write_with_nul(NimBLERemoteCharacteristic* chr, const std::string& payload)
                          true);
 }
 
-// Write a setting name to the READ characteristic, then read the JSON response.
 bool read_setting(const char* name, std::string& out) {
   if (g_read == nullptr) return false;
   if (!write_with_nul(g_read, name)) return false;
@@ -41,30 +40,85 @@ bool read_setting(const char* name, std::string& out) {
   return !out.empty();
 }
 
+core::Power parse_mode(const std::string& json) {
+  JsonDocument doc;
+  if (deserializeJson(doc, json)) return core::Power::Standby;
+  const char* mode = doc.as<const char*>();
+  if (mode != nullptr && std::strcmp(mode, "BrewingMode") == 0) return core::Power::On;
+  return core::Power::Standby;  // StandBy / EcoMode
+}
+
 }  // namespace
 
 namespace platform {
 
 MicraLink::MicraLink(std::string auth_token) : token_(std::move(auth_token)) {}
 
-bool MicraLink::connect(const std::string& address) {
+void MicraLink::begin(std::string address) {
+  address_ = std::move(address);
+  xTaskCreatePinnedToCore(&MicraLink::task_entry, "micra_link", 8192, this,
+                          /*priority=*/1, nullptr, /*core=*/1);
+}
+
+void MicraLink::task_entry(void* arg) { static_cast<MicraLink*>(arg)->task_loop(); }
+
+void MicraLink::set_link(core::Link link) {
+  std::lock_guard<std::mutex> lk(mutex_);
+  link_ = link;
+}
+
+void MicraLink::task_loop() {
   NimBLEDevice::init("micra-remote");
   NimBLEDevice::setMTU(247);  // machineCapabilities (~180B) exceeds default MTU
 
-  // --- Connect directly to the (known/saved) address ---
-  Serial.printf("MicraLink: connecting to %s ...\n", address.c_str());
-  g_client = NimBLEDevice::createClient();
+  bool connected = false;
+  uint32_t last_refresh = 0;
 
-  // Try a public address first, then random — saves us needing to know/store
-  // the address type. (A failed connect leaves the client reusable.)
-  if (!g_client->connect(NimBLEAddress(address, BLE_ADDR_PUBLIC)) &&
-      !g_client->connect(NimBLEAddress(address, BLE_ADDR_RANDOM))) {
+  for (;;) {
+    if (!connected) {
+      set_link(core::Link::Connecting);
+      if (do_connect()) {
+        connected = true;
+        set_link(core::Link::Connected);
+        do_refresh();
+        last_refresh = millis();
+      } else {
+        set_link(core::Link::Disconnected);
+        vTaskDelay(pdMS_TO_TICKS(kReconnectBackoffMs));
+        continue;
+      }
+    }
+
+    if (g_client == nullptr || !g_client->isConnected()) {
+      connected = false;
+      set_link(core::Link::Disconnected);
+      continue;
+    }
+
+    const int cmd = pending_power_.exchange(-1);
+    if (cmd >= 0) {
+      do_set_power(cmd == 1);
+      do_refresh();
+      last_refresh = millis();
+    } else if (millis() - last_refresh > kPollIntervalMs) {
+      do_refresh();  // a failed read just means we re-detect the drop next loop
+      last_refresh = millis();
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+}
+
+bool MicraLink::do_connect() {
+  if (g_client == nullptr) g_client = NimBLEDevice::createClient();
+
+  // Try public then random address type so we needn't store/know which it is.
+  if (!g_client->connect(NimBLEAddress(address_, BLE_ADDR_PUBLIC)) &&
+      !g_client->connect(NimBLEAddress(address_, BLE_ADDR_RANDOM))) {
     Serial.println("MicraLink: connect failed");
     return false;
   }
-  Serial.printf("MicraLink: connected, mtu=%d\n", g_client->getMTU());
 
-  // --- Discover our characteristics by UUID across all services ---
   g_read = g_write = g_auth = nullptr;
   for (NimBLERemoteService* svc : g_client->getServices(true)) {
     for (NimBLERemoteCharacteristic* c : svc->getCharacteristics(true)) {
@@ -75,93 +129,74 @@ bool MicraLink::connect(const std::string& address) {
     }
   }
   if (g_read == nullptr || g_write == nullptr || g_auth == nullptr) {
-    Serial.printf("MicraLink: missing characteristics (read=%d write=%d auth=%d)\n",
-                  g_read != nullptr, g_write != nullptr, g_auth != nullptr);
+    Serial.println("MicraLink: missing characteristics");
     g_client->disconnect();
     return false;
   }
 
-  // --- Authenticate: token as raw UTF-8, NO trailing NUL, write-with-response ---
+  // Authenticate: token as raw UTF-8, NO trailing NUL, write-with-response.
   if (!g_auth->writeValue(reinterpret_cast<const uint8_t*>(token_.data()),
                           token_.size(), true)) {
     Serial.println("MicraLink: auth write failed");
     g_client->disconnect();
     return false;
   }
-  Serial.println("MicraLink: authenticated");
-  connected_ = true;
+  Serial.println("MicraLink: connected + authenticated");
   return true;
 }
 
-bool MicraLink::isConnected() const {
-  return connected_ && g_client != nullptr && g_client->isConnected();
-}
-
-bool MicraLink::refresh() {
-  if (!isConnected()) return false;
-
+bool MicraLink::do_refresh() {
   std::string mode_json;
   std::string boilers_json;
-  bool ok = true;
-  if (read_setting("machineMode", mode_json)) parse_mode(mode_json);
-  else ok = false;
-  if (read_setting("boilers", boilers_json)) parse_boilers(boilers_json);
-  else ok = false;
+  if (!read_setting("machineMode", mode_json)) return false;
+  if (!read_setting("boilers", boilers_json)) return false;
 
-  status_ = (power_ == core::Power::On) ? "Ready" : "Standby";
-  return ok;
-}
+  const core::Power power = parse_mode(mode_json);
 
-void MicraLink::parse_mode(const std::string& json) {
-  // machineMode is a JSON string, e.g. "BrewingMode".
+  float brew_c = 0, brew_t = 0, boiler_c = 0, boiler_t = 0;
   JsonDocument doc;
-  if (deserializeJson(doc, json)) return;
-  const char* mode = doc.as<const char*>();
-  if (mode == nullptr) return;
-  if (std::strcmp(mode, "BrewingMode") == 0) power_ = core::Power::On;
-  else power_ = core::Power::Standby;  // StandBy / EcoMode
-}
-
-void MicraLink::parse_boilers(const std::string& json) {
-  // boilers is a JSON array of {id,isEnabled,target,current}.
-  JsonDocument doc;
-  if (deserializeJson(doc, json)) return;
-  for (JsonObject b : doc.as<JsonArray>()) {
-    const char* id = b["id"] | "";
-    const float current = b["current"] | 0.0f;
-    const float target = b["target"] | 0.0f;
-    if (std::strcmp(id, "CoffeeBoiler1") == 0) {
-      brew_temp_c_ = current;
-      brew_target_c_ = target;
-    } else if (std::strcmp(id, "SteamBoiler") == 0) {
-      boiler_temp_c_ = current;
-      boiler_target_c_ = target;
+  if (!deserializeJson(doc, boilers_json)) {
+    for (JsonObject b : doc.as<JsonArray>()) {
+      const char* id = b["id"] | "";
+      const float current = b["current"] | 0.0f;
+      const float target = b["target"] | 0.0f;
+      if (std::strcmp(id, "CoffeeBoiler1") == 0) { brew_c = current; brew_t = target; }
+      else if (std::strcmp(id, "SteamBoiler") == 0) { boiler_c = current; boiler_t = target; }
     }
   }
+
+  // Commit the parsed values to the shared cache under lock.
+  std::lock_guard<std::mutex> lk(mutex_);
+  power_ = power;
+  brew_temp_c_ = brew_c;
+  brew_target_c_ = brew_t;
+  boiler_temp_c_ = boiler_c;
+  boiler_target_c_ = boiler_t;
+  return true;
 }
 
-void MicraLink::set_power(bool on) {
-  if (!isConnected() || g_write == nullptr) return;
+void MicraLink::do_set_power(bool on) {
+  if (g_write == nullptr) return;
   const std::string json =
       on ? R"({"name":"MachineChangeMode","parameter":{"mode":"BrewingMode"}})"
          : R"({"name":"MachineChangeMode","parameter":{"mode":"StandBy"}})";
-  if (write_with_nul(g_write, json)) {
-    delay(200);  // let the machine apply the change, then re-read our cache
-    refresh();
-  }
+  write_with_nul(g_write, json);
 }
 
 core::MachineSnapshot MicraLink::snapshot() const {
+  std::lock_guard<std::mutex> lk(mutex_);
   return core::MachineSnapshot{
-      .name = name_.c_str(),
+      .name = "Linea Micra",
+      .link = link_,
       .power = power_,
       .brew_temp_c = brew_temp_c_,
       .brew_target_c = brew_target_c_,
       .boiler_temp_c = boiler_temp_c_,
       .boiler_target_c = boiler_target_c_,
       .brewing = brewing_,
-      .status = status_.empty() ? "" : status_.c_str(),
   };
 }
+
+void MicraLink::set_power(bool on) { pending_power_.store(on ? 1 : 0); }
 
 }  // namespace platform

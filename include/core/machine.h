@@ -14,6 +14,10 @@ namespace core {
 // rather than a hard off, so we model three states.
 enum class Power { Off, Standby, On };
 
+// Transport/link state to the machine. The UI renders differently per state
+// (e.g. a "disconnected" treatment) rather than only showing machine data.
+enum class Link { Disconnected, Connecting, Connected };
+
 // A flat, copyable snapshot of everything the UI needs to draw one frame.
 // Commands (set power, start brew, change target) will be added to IMachine as
 // methods later; reads stay in this struct so the UI can render from a value
@@ -22,15 +26,18 @@ enum class Power { Off, Standby, On };
 // The Linea Micra has two thermal zones: the brew (coffee) boiler and the
 // steam boiler. We surface both. Values are placeholders until the BLE link
 // fills them in for real.
+// All fields are trivially-copyable values (the `name` points to a stable
+// string), so a snapshot can be copied across threads safely. The UI derives
+// any status text from `link` + `power` rather than carrying a string here.
 struct MachineSnapshot {
-  const char* name;            // e.g. "Linea Micra"
+  const char* name;            // e.g. "Linea Micra" (stable pointer)
+  Link        link;            // transport/connection state
   Power       power;
   float       brew_temp_c;     // brew/coffee boiler — current
   float       brew_target_c;   // brew/coffee boiler — set point
   float       boiler_temp_c;   // steam boiler — current
   float       boiler_target_c; // steam boiler — set point
   bool        brewing;         // a shot is currently being pulled
-  const char* status;          // short human-readable status, e.g. "Ready"
 };
 
 // The port the UI depends on. Anything that can describe and control a machine
