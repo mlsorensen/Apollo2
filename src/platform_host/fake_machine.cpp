@@ -11,6 +11,7 @@ core::MachineSnapshot FakeMachine::snapshot() const {
       .brew_target_c = brew_target_,
       .boiler_temp_c = 123.0f,
       .boiler_target_c = steam_target_,
+      .steam_enabled = steam_enabled_,
       .brewing = false,
   };
 }
@@ -21,5 +22,6 @@ void FakeMachine::set_power(bool on) {
 
 void FakeMachine::set_brew_target(float celsius) { brew_target_ = celsius; }
 void FakeMachine::set_steam_target(float celsius) { steam_target_ = celsius; }
+void FakeMachine::set_steam_enabled(bool enabled) { steam_enabled_ = enabled; }
 
 }  // namespace host

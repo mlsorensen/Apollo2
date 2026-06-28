@@ -161,6 +161,8 @@ void MicraLink::task_loop() {
       do_set_boiler_target("SteamBoiler", v);
       cmd_sent = true;
     }
+    const int se = pending_steam_enable_.exchange(-1);
+    if (se >= 0) { do_set_steam_enabled(se == 1); cmd_sent = true; }
     if (cmd_sent || millis() - last_refresh > kPollIntervalMs) {
       do_refresh();  // a failed read just means we re-detect the drop next loop
       last_refresh = millis();
@@ -215,6 +217,7 @@ bool MicraLink::do_refresh() {
   const core::Power power = parse_mode(mode_json);
 
   float brew_c = 0, brew_t = 0, boiler_c = 0, boiler_t = 0;
+  bool steam_en = true;
   JsonDocument doc;
   if (!deserializeJson(doc, boilers_json)) {
     for (JsonObject b : doc.as<JsonArray>()) {
@@ -222,7 +225,11 @@ bool MicraLink::do_refresh() {
       const float current = b["current"] | 0.0f;
       const float target = b["target"] | 0.0f;
       if (std::strcmp(id, "CoffeeBoiler1") == 0) { brew_c = current; brew_t = target; }
-      else if (std::strcmp(id, "SteamBoiler") == 0) { boiler_c = current; boiler_t = target; }
+      else if (std::strcmp(id, "SteamBoiler") == 0) {
+        boiler_c = current;
+        boiler_t = target;
+        steam_en = b["isEnabled"] | true;
+      }
     }
   }
 
@@ -233,6 +240,7 @@ bool MicraLink::do_refresh() {
   brew_target_c_ = brew_t;
   boiler_temp_c_ = boiler_c;
   boiler_target_c_ = boiler_t;
+  steam_enabled_ = steam_en;
   return true;
 }
 
@@ -254,6 +262,7 @@ core::MachineSnapshot MicraLink::snapshot() const {
       .brew_target_c = brew_target_c_,
       .boiler_temp_c = boiler_temp_c_,
       .boiler_target_c = boiler_target_c_,
+      .steam_enabled = steam_enabled_,
       .brewing = brewing_,
   };
 }
@@ -268,11 +277,23 @@ void MicraLink::set_steam_target(float celsius) {
   pending_steam_whole_.store(static_cast<int>(lroundf(celsius)));
 }
 
+void MicraLink::set_steam_enabled(bool enabled) {
+  pending_steam_enable_.store(enabled ? 1 : 0);
+}
+
 void MicraLink::do_set_boiler_target(const char* identifier, const char* value) {
   if (g_write == nullptr) return;
   std::string json =
       std::string(R"({"name":"SettingBoilerTarget","parameter":{"identifier":")") +
       identifier + R"(","value":)" + value + "}}";
+  write_with_nul(g_write, json);
+}
+
+void MicraLink::do_set_steam_enabled(bool enabled) {
+  if (g_write == nullptr) return;
+  std::string json =
+      std::string(R"({"name":"SettingBoilerEnable","parameter":{"identifier":"SteamBoiler","state":)") +
+      (enabled ? "true" : "false") + "}}";
   write_with_nul(g_write, json);
 }
 

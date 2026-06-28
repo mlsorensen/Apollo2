@@ -38,13 +38,16 @@ struct SettingsWidgets {
   bool brew_dirty = false;  // uncommitted local edit; until set, the panel tracks
                             // the machine's polled target
 
-  // Boiler/steam stepper (3 discrete levels)
+  // Boiler/steam stepper (3 discrete levels) + on/off switch
+  lv_obj_t* steam_switch = nullptr;
   lv_obj_t* boiler_minus = nullptr;
   lv_obj_t* boiler_plus = nullptr;
   lv_obj_t* boiler_value = nullptr;
   lv_obj_t* boiler_sub = nullptr;  // "Level N"
   int boiler_level = 0;            // 0..2 -> kSteamLevelsC
-  bool boiler_dirty = false;       // uncommitted local edit (else tracks machine)
+  bool boiler_dirty = false;       // uncommitted local target edit
+  bool steam_enabled = true;       // local on/off (tracks machine unless dirty)
+  bool steam_enable_dirty = false; // toggled, awaiting machine confirmation
 };
 
 void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,

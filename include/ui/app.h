@@ -40,6 +40,7 @@ class App {
   void select_settings_section(int section);  // Settings segmented selector
   void brew_adjust(int dir, bool half);  // Brew +/- (half: 0.5 snap, long-press)
   void boiler_adjust(int dir);           // Boiler level +/-
+  void steam_set_enabled(bool on);       // steam boiler on/off switch
   void commit_temp_edits();              // write pending temp edits (on exit)
 
  private:

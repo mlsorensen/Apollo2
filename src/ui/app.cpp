@@ -80,6 +80,11 @@ void on_boiler_minus(lv_event_t* e) {
 void on_boiler_plus(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->boiler_adjust(+1);
 }
+void on_steam_switch(lv_event_t* e) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  app->steam_set_enabled(lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
 
 // Switching the main tab (e.g. leaving Settings) commits any pending temp edit.
 void on_tab_changed(lv_event_t* e) {
@@ -111,6 +116,11 @@ void set_boiler_label(ui::SettingsWidgets& s, bool connected) {
     if (s.boiler_sub) lv_label_set_text(s.boiler_sub, "");
     return;
   }
+  if (!s.steam_enabled) {  // steam boiler off
+    lv_label_set_text(s.boiler_value, "Off");
+    if (s.boiler_sub) lv_label_set_text(s.boiler_sub, "");
+    return;
+  }
   char b[16];
   std::snprintf(b, sizeof(b), "%.0f C", core::kSteamLevelsC[s.boiler_level]);
   lv_label_set_text(s.boiler_value, b);
@@ -119,18 +129,24 @@ void set_boiler_label(ui::SettingsWidgets& s, bool connected) {
   if (s.boiler_sub) lv_label_set_text(s.boiler_sub, l);
 }
 
-void set_temp_buttons_enabled(ui::SettingsWidgets& s, bool en) {
-  lv_obj_t* btns[] = {s.brew_minus, s.brew_plus, s.boiler_minus, s.boiler_plus};
-  for (lv_obj_t* b : btns) {
-    if (b == nullptr) continue;
-    if (en) {
-      lv_obj_remove_state(b, LV_STATE_DISABLED);
-      lv_obj_add_flag(b, LV_OBJ_FLAG_CLICKABLE);
-    } else {
-      lv_obj_add_state(b, LV_STATE_DISABLED);
-      lv_obj_remove_flag(b, LV_OBJ_FLAG_CLICKABLE);  // DISABLED only dims; also block input
-    }
+void set_clickable(lv_obj_t* o, bool en) {
+  if (o == nullptr) return;
+  if (en) {
+    lv_obj_remove_state(o, LV_STATE_DISABLED);
+    lv_obj_add_flag(o, LV_OBJ_FLAG_CLICKABLE);
+  } else {
+    lv_obj_add_state(o, LV_STATE_DISABLED);
+    lv_obj_remove_flag(o, LV_OBJ_FLAG_CLICKABLE);  // DISABLED only dims; also block input
   }
+}
+
+void set_temp_controls_enabled(ui::SettingsWidgets& s, bool connected) {
+  set_clickable(s.brew_minus, connected);
+  set_clickable(s.brew_plus, connected);
+  set_clickable(s.steam_switch, connected);
+  const bool boiler_en = connected && s.steam_enabled;  // can't set level when off
+  set_clickable(s.boiler_minus, boiler_en);
+  set_clickable(s.boiler_plus, boiler_en);
 }
 
 }  // namespace
@@ -197,6 +213,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(settings_.brew_plus, on_brew_plus, LV_EVENT_ALL, this);
   lv_obj_add_event_cb(settings_.boiler_minus, on_boiler_minus, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.boiler_plus, on_boiler_plus, LV_EVENT_CLICKED, this);
+  lv_obj_add_event_cb(settings_.steam_switch, on_steam_switch, LV_EVENT_VALUE_CHANGED, this);
 
   build_placeholder(stats, "Stats", tab_font);
 
@@ -236,6 +253,14 @@ void App::boiler_adjust(int dir) {
   set_boiler_label(settings_, true);
 }
 
+void App::steam_set_enabled(bool on) {
+  settings_.steam_enabled = on;
+  settings_.steam_enable_dirty = true;  // hold until the machine confirms
+  set_boiler_label(settings_, true);    // reflect Off / level
+  set_temp_controls_enabled(settings_, true);
+  if (machine_ != nullptr) machine_->set_steam_enabled(on);  // immediate (single toggle)
+}
+
 void App::commit_temp_edits() {
   if (machine_ == nullptr) return;
   if (settings_.brew_dirty) {
@@ -251,24 +276,33 @@ void App::commit_temp_edits() {
 void App::update_temp_panels(const core::MachineSnapshot& s) {
   const bool connected = s.link == core::Link::Connected;
   if (connected) {
-    // Track the machine's polled target whenever we're not mid-edit, so an
+    // Track the machine's polled values whenever we're not mid-edit, so an
     // app-side change flows in as the new value/starting point (and the early-
     // connect race where the first read hasn't populated temps self-corrects).
+    if (!settings_.steam_enable_dirty) {
+      settings_.steam_enabled = s.steam_enabled;
+    } else if (s.steam_enabled == settings_.steam_enabled) {
+      settings_.steam_enable_dirty = false;  // machine confirmed the toggle
+    }
+    if (settings_.steam_enabled) lv_obj_add_state(settings_.steam_switch, LV_STATE_CHECKED);
+    else lv_obj_remove_state(settings_.steam_switch, LV_STATE_CHECKED);
+
     if (!settings_.brew_dirty) {
       settings_.brew_target = s.brew_target_c;
       set_brew_label(settings_, true);
     }
     if (!settings_.boiler_dirty) {
       settings_.boiler_level = nearest_steam_level(s.boiler_target_c);
-      set_boiler_label(settings_, true);
     }
-    set_temp_buttons_enabled(settings_, true);
+    set_boiler_label(settings_, true);  // reflects level + steam on/off
+    set_temp_controls_enabled(settings_, true);
   } else {
     settings_.brew_dirty = false;
     settings_.boiler_dirty = false;
+    settings_.steam_enable_dirty = false;
     set_brew_label(settings_, false);
     set_boiler_label(settings_, false);
-    set_temp_buttons_enabled(settings_, false);
+    set_temp_controls_enabled(settings_, false);
   }
 }
 

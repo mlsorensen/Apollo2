@@ -45,6 +45,7 @@ struct MachineSnapshot {
   float       brew_target_c;   // brew/coffee boiler — set point
   float       boiler_temp_c;   // steam boiler — current
   float       boiler_target_c; // steam boiler — set point
+  bool        steam_enabled;   // steam boiler on/off
   bool        brewing;         // a shot is currently being pulled
 };
 
@@ -67,6 +68,9 @@ class IMachine {
   // Commands: set boiler target temperatures (Celsius).
   virtual void set_brew_target(float celsius) = 0;
   virtual void set_steam_target(float celsius) = 0;
+
+  // Command: turn the steam boiler on/off.
+  virtual void set_steam_enabled(bool enabled) = 0;
 };
 
 }  // namespace core

@@ -128,6 +128,32 @@ void build_stepper_panel(lv_obj_t* panel, const char* caption,
   }
 }
 
+// Steam boiler panel: an on/off switch header + the level stepper.
+void build_boiler_panel(lv_obj_t* panel, const lv_font_t* value_font,
+                        const lv_font_t* small_font, int btn_size,
+                        ui::SettingsWidgets& out) {
+  build_stepper_panel(panel, "Steam boiler", value_font, small_font, btn_size,
+                      &out.boiler_minus, &out.boiler_value, &out.boiler_plus,
+                      &out.boiler_sub);
+
+  // A switch row, placed at the top of the panel (above the caption).
+  lv_obj_t* sw_row = lv_obj_create(panel);
+  lv_obj_remove_style_all(sw_row);
+  lv_obj_set_size(sw_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(sw_row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(sw_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(sw_row, 10, 0);
+  lv_obj_move_to_index(sw_row, 0);  // top of the column
+
+  lv_obj_t* lbl = lv_label_create(sw_row);
+  lv_label_set_text(lbl, "Steam");
+  lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_font(lbl, small_font, 0);
+
+  out.steam_switch = lv_switch_create(sw_row);
+}
+
 }  // namespace
 
 namespace ui {
@@ -174,9 +200,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   build_bluetooth_panel(out.panel[kSectionBluetooth], font, out);
   build_stepper_panel(out.panel[kSectionBrew], "Brew temperature", value_font, font,
                       btn_size, &out.brew_minus, &out.brew_value, &out.brew_plus, nullptr);
-  build_stepper_panel(out.panel[kSectionBoiler], "Steam boiler", value_font, font,
-                      btn_size, &out.boiler_minus, &out.boiler_value, &out.boiler_plus,
-                      &out.boiler_sub);
+  build_boiler_panel(out.panel[kSectionBoiler], value_font, font, btn_size, out);
 
   settings_select_section(out, kSectionBluetooth);
 }

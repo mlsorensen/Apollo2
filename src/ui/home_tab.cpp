@@ -181,10 +181,15 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     lv_label_set_text(w.brew_value, buf);
     format_set(buf, sizeof(buf), state.brew_target_c);
     lv_label_set_text(w.brew_set, buf);
-    format_now(buf, sizeof(buf), state.boiler_temp_c);
-    lv_label_set_text(w.boiler_value, buf);
-    format_set(buf, sizeof(buf), state.boiler_target_c);
-    lv_label_set_text(w.boiler_set, buf);
+    if (state.steam_enabled) {
+      format_now(buf, sizeof(buf), state.boiler_temp_c);
+      lv_label_set_text(w.boiler_value, buf);
+      format_set(buf, sizeof(buf), state.boiler_target_c);
+      lv_label_set_text(w.boiler_set, buf);
+    } else {
+      lv_label_set_text(w.boiler_value, "Off");
+      lv_label_set_text(w.boiler_set, "");
+    }
   } else {
     lv_label_set_text(w.brew_value, "--");
     lv_label_set_text(w.brew_set, "Set  --");
