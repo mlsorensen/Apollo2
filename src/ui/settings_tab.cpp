@@ -178,6 +178,16 @@ void build_boiler_panel(lv_obj_t* panel, const lv_font_t* text_font,
                       &out.boiler_value, &out.boiler_plus, &out.boiler_sub);
 }
 
+// Display section: a "Brightness" stepper row.
+void build_display_panel(lv_obj_t* panel, const lv_font_t* text_font,
+                         const lv_font_t* symbol_font, int btn_size,
+                         ui::SettingsWidgets& out) {
+  make_settings_list(panel);
+  lv_obj_t* r = make_setting_row(panel, "Brightness", text_font);
+  make_inline_stepper(r, text_font, symbol_font, btn_size, &out.brightness_minus,
+                      &out.brightness_value, &out.brightness_plus, nullptr);
+}
+
 }  // namespace
 
 namespace ui {
@@ -226,15 +236,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   build_bluetooth_panel(out.panel[kSectionBluetooth], font, out);
   build_brew_panel(out.panel[kSectionBrew], font, symbol_font, btn_size, out);
   build_boiler_panel(out.panel[kSectionBoiler], font, symbol_font, btn_size, out);
-
-  // Display section — device prefs (brightness, color schemes) are TODO.
-  lv_obj_remove_flag(out.panel[kSectionDisplay], LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_t* soon = lv_label_create(out.panel[kSectionDisplay]);
-  lv_label_set_text(soon, "Display settings\ncoming soon");
-  lv_obj_set_style_text_align(soon, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_set_style_text_color(soon, lv_color_hex(ui::theme::muted), 0);
-  lv_obj_set_style_text_font(soon, font, 0);
-  lv_obj_center(soon);
+  build_display_panel(out.panel[kSectionDisplay], font, symbol_font, btn_size, out);
 
   settings_select_section(out, kSectionBluetooth);
 }

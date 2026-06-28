@@ -17,6 +17,9 @@ class Config {
   void save(const std::string& mac, const std::string& name);
   void set_token(const std::string& token);
   void clear();               // forget the saved machine (incl. its token)
+
+  int brightness() const;     // screen brightness 0..100 (default 100)
+  void set_brightness(int percent);
 };
 
 }  // namespace platform

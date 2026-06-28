@@ -85,6 +85,18 @@ void on_steam_switch(lv_event_t* e) {
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
   app->steam_set_enabled(lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
+void on_brightness_minus(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->brightness_adjust(-1);
+}
+void on_brightness_plus(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->brightness_adjust(+1);
+}
+
+void set_brightness_label(ui::SettingsWidgets& s) {
+  char b[12];
+  std::snprintf(b, sizeof(b), "%d %%", s.brightness);
+  lv_label_set_text(s.brightness_value, b);
+}
 
 // Switching the main tab (e.g. leaving Settings) commits any pending temp edit.
 void on_tab_changed(lv_event_t* e) {
@@ -158,10 +170,12 @@ App::~App() {
 }
 
 void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
-                core::IBattery& battery, const ScreenProfile& screen) {
+                core::IBattery& battery, core::IDisplaySettings& display,
+                const ScreenProfile& screen) {
   machine_ = &machine;
   provisioner_ = &provisioner;
   battery_ = &battery;
+  display_ = &display;
   const bool compact = is_compact(screen);
 
   lv_obj_t* scr = lv_screen_active();
@@ -214,11 +228,16 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(settings_.boiler_minus, on_boiler_minus, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.boiler_plus, on_boiler_plus, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.steam_switch, on_steam_switch, LV_EVENT_VALUE_CHANGED, this);
+  lv_obj_add_event_cb(settings_.brightness_minus, on_brightness_minus, LV_EVENT_CLICKED, this);
+  lv_obj_add_event_cb(settings_.brightness_plus, on_brightness_plus, LV_EVENT_CLICKED, this);
 
   build_placeholder(stats, "Stats", tab_font);
 
   update_settings_view();
   update_temp_panels(machine_->snapshot());
+
+  settings_.brightness = display_->brightness();
+  set_brightness_label(settings_);
 }
 
 void App::refresh() {
@@ -259,6 +278,15 @@ void App::steam_set_enabled(bool on) {
   set_boiler_label(settings_, true);    // reflect Off / level
   set_temp_controls_enabled(settings_, true);
   if (machine_ != nullptr) machine_->set_steam_enabled(on);  // immediate (single toggle)
+}
+
+void App::brightness_adjust(int dir) {
+  int b = settings_.brightness + dir * 10;
+  if (b < 10) b = 10;  // never fully dark (can't see to turn it back up)
+  if (b > 100) b = 100;
+  settings_.brightness = b;
+  set_brightness_label(settings_);
+  if (display_ != nullptr) display_->set_brightness(b);  // live + persisted
 }
 
 void App::commit_temp_edits() {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/battery.h"
+#include "core/display_settings.h"
 #include "core/machine.h"
 #include "core/provisioner.h"
 #include "ui/home_tab.h"
@@ -21,7 +22,8 @@ class App {
   ~App();
 
   void build(core::IMachine& machine, core::IProvisioner& provisioner,
-             core::IBattery& battery, const ScreenProfile& screen);
+             core::IBattery& battery, core::IDisplaySettings& display,
+             const ScreenProfile& screen);
 
   // Reflect the latest machine state and scan results in the UI (no I/O).
   void refresh();
@@ -41,6 +43,7 @@ class App {
   void brew_adjust(int dir, bool half);  // Brew +/- (half: 0.5 snap, long-press)
   void boiler_adjust(int dir);           // Boiler level +/-
   void steam_set_enabled(bool on);       // steam boiler on/off switch
+  void brightness_adjust(int dir);       // Display brightness +/-
   void commit_temp_edits();              // write pending temp edits (on exit)
 
  private:
@@ -52,6 +55,7 @@ class App {
   core::IMachine* machine_ = nullptr;
   core::IProvisioner* provisioner_ = nullptr;
   core::IBattery* battery_ = nullptr;
+  core::IDisplaySettings* display_ = nullptr;
   lv_obj_t* tabview_ = nullptr;
   lv_obj_t* setup_modal_ = nullptr;  // token-setup instructions overlay, if open
   HomeWidgets home_{};

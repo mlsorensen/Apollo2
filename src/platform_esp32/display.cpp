@@ -48,8 +48,8 @@ bool Display::begin() {
   if (!g_gfx->begin(board::kLcdSpiHz)) return false;
   g_gfx->fillScreen(0x0000);  // RGB565 black (Arduino_GFX 1.6 renamed BLACK)
 
-  pinMode(board::kLcdBacklight, OUTPUT);
-  digitalWrite(board::kLcdBacklight, HIGH);  // full brightness; PWM dimming later
+  ledcAttach(board::kLcdBacklight, 5000, 8);  // 5 kHz, 8-bit PWM backlight
+  ledcWrite(board::kLcdBacklight, 255);       // full until the saved level is applied
 
   lv_init();
   lv_tick_set_cb(tick_cb);
@@ -73,5 +73,11 @@ bool Display::begin() {
 
 int Display::width() const { return g_gfx ? g_gfx->width() : 0; }
 int Display::height() const { return g_gfx ? g_gfx->height() : 0; }
+
+void Display::set_brightness(int percent) {
+  if (percent < 0) percent = 0;
+  if (percent > 100) percent = 100;
+  ledcWrite(board::kLcdBacklight, percent * 255 / 100);
+}
 
 }  // namespace platform

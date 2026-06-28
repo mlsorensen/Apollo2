@@ -54,6 +54,12 @@ struct SettingsWidgets {
   bool boiler_dirty = false;       // uncommitted local target edit
   bool steam_enabled = true;       // local on/off (tracks machine unless dirty)
   bool steam_enable_dirty = false; // toggled, awaiting machine confirmation
+
+  // Display section
+  lv_obj_t* brightness_minus = nullptr;
+  lv_obj_t* brightness_plus = nullptr;
+  lv_obj_t* brightness_value = nullptr;
+  int brightness = 100;
 };
 
 void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,

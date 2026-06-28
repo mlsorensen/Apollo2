@@ -18,6 +18,8 @@ class Display {
 
   int width() const;   // logical width after rotation (0 before begin())
   int height() const;  // logical height after rotation
+
+  void set_brightness(int percent);  // backlight PWM, 0..100
 };
 
 }  // namespace platform

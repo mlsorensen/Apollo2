@@ -5,6 +5,7 @@
 #include "platform_esp32/board_config.h"
 #include "platform_esp32/config.h"
 #include "platform_esp32/display.h"
+#include "platform_esp32/display_settings.h"
 #include "platform_esp32/micra_link.h"
 #include "platform_esp32/provisioner.h"
 #include "platform_esp32/token_setup.h"
@@ -26,6 +27,7 @@ platform::MicraLink g_micra;
 platform::TokenSetup g_token_setup{g_config, g_micra};
 platform::Provisioner g_provisioner{g_micra, g_config, g_token_setup};
 platform::Battery g_battery;
+platform::DisplaySettings g_display_settings{g_display, g_config};
 ui::App g_app;
 
 constexpr uint32_t kUiRefreshMs = 500;
@@ -51,10 +53,11 @@ void setup() {
   }
 
   g_battery.begin();
+  g_display.set_brightness(g_config.brightness());  // restore saved brightness
 
-  // Build the UI bound to the machine + provisioner + battery.
+  // Build the UI bound to the machine + provisioner + battery + display.
   const ui::ScreenProfile screen{g_display.width(), g_display.height()};
-  g_app.build(g_micra, g_provisioner, g_battery, screen);
+  g_app.build(g_micra, g_provisioner, g_battery, g_display_settings, screen);
 
   // Seed the link from saved config, then start the background BLE task. With
   // no MAC -> Unconfigured; MAC but no token -> NeedsToken (Settings "Setup").

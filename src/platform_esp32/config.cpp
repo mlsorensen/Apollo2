@@ -9,6 +9,7 @@ constexpr char kNamespace[] = "micra";
 constexpr char kMacKey[] = "mac";
 constexpr char kNameKey[] = "name";
 constexpr char kTokenKey[] = "token";
+constexpr char kBrightnessKey[] = "bright";
 }  // namespace
 
 namespace platform {
@@ -53,6 +54,21 @@ void Config::clear() {
   p.remove(kMacKey);
   p.remove(kNameKey);
   p.remove(kTokenKey);  // wipe the secret too
+  p.end();
+}
+
+int Config::brightness() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 100;
+  const int v = p.isKey(kBrightnessKey) ? p.getInt(kBrightnessKey, 100) : 100;
+  p.end();
+  return v;
+}
+
+void Config::set_brightness(int percent) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putInt(kBrightnessKey, percent);
   p.end();
 }
 
