@@ -12,21 +12,22 @@ constexpr char kNameKey[] = "name";
 
 namespace platform {
 
-std::string Config::mac() const {
+// Read a string key, returning "" if the namespace or key doesn't exist yet —
+// without the ERROR log Preferences::getString() emits on a missing key.
+namespace {
+std::string read_key(const char* key) {
   Preferences p;
-  p.begin(kNamespace, /*readOnly=*/true);
-  const String v = p.getString(kMacKey, "");
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return "";  // namespace absent
+  std::string out;
+  if (p.isKey(key)) out = p.getString(key, "").c_str();
   p.end();
-  return std::string(v.c_str());
+  return out;
 }
+}  // namespace
 
-std::string Config::name() const {
-  Preferences p;
-  p.begin(kNamespace, /*readOnly=*/true);
-  const String v = p.getString(kNameKey, "");
-  p.end();
-  return std::string(v.c_str());
-}
+std::string Config::mac() const { return read_key(kMacKey); }
+
+std::string Config::name() const { return read_key(kNameKey); }
 
 void Config::save(const std::string& mac, const std::string& name) {
   Preferences p;
