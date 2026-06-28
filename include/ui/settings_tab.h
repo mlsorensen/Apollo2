@@ -35,8 +35,8 @@ struct SettingsWidgets {
   lv_obj_t* brew_plus = nullptr;
   lv_obj_t* brew_value = nullptr;
   float brew_target = 0.0f;
-  bool brew_edited = false;  // once true, local value is authoritative (stop syncing)
-  bool brew_dirty = false;   // edited but not yet written to the machine
+  bool brew_dirty = false;  // uncommitted local edit; until set, the panel tracks
+                            // the machine's polled target
 
   // Boiler/steam stepper (3 discrete levels)
   lv_obj_t* boiler_minus = nullptr;
@@ -44,8 +44,7 @@ struct SettingsWidgets {
   lv_obj_t* boiler_value = nullptr;
   lv_obj_t* boiler_sub = nullptr;  // "Level N"
   int boiler_level = 0;            // 0..2 -> kSteamLevelsC
-  bool boiler_edited = false;      // once true, local value is authoritative
-  bool boiler_dirty = false;       // edited but not yet written to the machine
+  bool boiler_dirty = false;       // uncommitted local edit (else tracks machine)
 };
 
 void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,

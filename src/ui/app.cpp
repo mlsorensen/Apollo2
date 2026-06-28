@@ -224,7 +224,6 @@ void App::brew_adjust(int dir, bool half) {
     v += dir * 0.1f;
   }
   settings_.brew_target = clampf(v, core::kBrewTargetMinC, core::kBrewTargetMaxC);
-  settings_.brew_edited = true;
   settings_.brew_dirty = true;
   set_brew_label(settings_, true);
 }
@@ -233,7 +232,6 @@ void App::boiler_adjust(int dir) {
   int lvl = settings_.boiler_level + dir;
   lvl = lvl < 0 ? 0 : (lvl > 2 ? 2 : lvl);
   settings_.boiler_level = lvl;
-  settings_.boiler_edited = true;
   settings_.boiler_dirty = true;
   set_boiler_label(settings_, true);
 }
@@ -253,20 +251,21 @@ void App::commit_temp_edits() {
 void App::update_temp_panels(const core::MachineSnapshot& s) {
   const bool connected = s.link == core::Link::Connected;
   if (connected) {
-    // Keep showing the machine's target until the user edits it (handles the
-    // early-connect race where the first read hasn't populated temps yet).
-    if (!settings_.brew_edited) {
+    // Track the machine's polled target whenever we're not mid-edit, so an
+    // app-side change flows in as the new value/starting point (and the early-
+    // connect race where the first read hasn't populated temps self-corrects).
+    if (!settings_.brew_dirty) {
       settings_.brew_target = s.brew_target_c;
       set_brew_label(settings_, true);
     }
-    if (!settings_.boiler_edited) {
+    if (!settings_.boiler_dirty) {
       settings_.boiler_level = nearest_steam_level(s.boiler_target_c);
       set_boiler_label(settings_, true);
     }
     set_temp_buttons_enabled(settings_, true);
   } else {
-    settings_.brew_edited = settings_.brew_dirty = false;
-    settings_.boiler_edited = settings_.boiler_dirty = false;
+    settings_.brew_dirty = false;
+    settings_.boiler_dirty = false;
     set_brew_label(settings_, false);
     set_boiler_label(settings_, false);
     set_temp_buttons_enabled(settings_, false);
