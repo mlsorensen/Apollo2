@@ -16,8 +16,8 @@ enum class Power { Off, Standby, On };
 
 // Settable target ranges (Micra). The brew/coffee boiler is continuous; the
 // steam boiler is 3 discrete levels (the app's Level 1/2/3).
-constexpr float kBrewTargetMinC = 85.0f;
-constexpr float kBrewTargetMaxC = 104.0f;
+constexpr float kBrewTargetMinC = 80.0f;   // matches the La Marzocco app's range
+constexpr float kBrewTargetMaxC = 100.0f;
 constexpr float kSteamLevelsC[3] = {126.0f, 128.0f, 131.0f};
 
 // Transport/link state to the machine. The UI renders differently per state
