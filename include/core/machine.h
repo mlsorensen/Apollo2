@@ -39,6 +39,12 @@ enum class Link { Unconfigured, NeedsToken, Disconnected, Connecting, Connected 
 // any status text from `link` + `power` rather than carrying a string here.
 struct MachineSnapshot {
   const char* name;            // e.g. "Linea Micra" (stable pointer)
+  // Device Information Service (BLE 0x180A) strings; "" until read. Stable pointers.
+  const char* manufacturer;
+  const char* model;
+  const char* serial;
+  const char* firmware;
+  const char* software;
   Link        link;            // transport/connection state
   Power       power;
   float       brew_temp_c;     // brew/coffee boiler — current

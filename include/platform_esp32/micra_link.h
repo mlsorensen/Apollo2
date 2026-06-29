@@ -76,6 +76,8 @@ class MicraLink : public core::IMachine {
   std::string name_ = "Micra";  // guarded by mutex_
 
   mutable std::mutex mutex_;  // guards the cached fields below
+  // Device Information Service strings, read once per connect (guarded by mutex_).
+  std::string dis_manufacturer_, dis_model_, dis_serial_, dis_firmware_, dis_software_;
   core::Link link_ = core::Link::Unconfigured;
   core::Power power_ = core::Power::Off;
   float brew_temp_c_ = 0.0f;

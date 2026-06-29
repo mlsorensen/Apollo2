@@ -223,12 +223,23 @@ bool MicraLink::do_connect(const std::string& address, const std::string& token)
   }
 
   g_read = g_write = g_auth = nullptr;
+  // Standard Device Information Service (0x180A) string characteristics.
+  NimBLERemoteCharacteristic* dis_mfr = nullptr;
+  NimBLERemoteCharacteristic* dis_model = nullptr;
+  NimBLERemoteCharacteristic* dis_serial = nullptr;
+  NimBLERemoteCharacteristic* dis_fw = nullptr;
+  NimBLERemoteCharacteristic* dis_sw = nullptr;
   for (NimBLERemoteService* svc : g_client->getServices(true)) {
     for (NimBLERemoteCharacteristic* c : svc->getCharacteristics(true)) {
       const NimBLEUUID u = c->getUUID();
       if (u == NimBLEUUID(kReadUuid)) g_read = c;
       else if (u == NimBLEUUID(kWriteUuid)) g_write = c;
       else if (u == NimBLEUUID(kAuthUuid)) g_auth = c;
+      else if (u == NimBLEUUID(static_cast<uint16_t>(0x2A29))) dis_mfr = c;
+      else if (u == NimBLEUUID(static_cast<uint16_t>(0x2A24))) dis_model = c;
+      else if (u == NimBLEUUID(static_cast<uint16_t>(0x2A25))) dis_serial = c;
+      else if (u == NimBLEUUID(static_cast<uint16_t>(0x2A26))) dis_fw = c;
+      else if (u == NimBLEUUID(static_cast<uint16_t>(0x2A28))) dis_sw = c;
     }
   }
   if (g_read == nullptr || g_write == nullptr || g_auth == nullptr) {
@@ -244,6 +255,22 @@ bool MicraLink::do_connect(const std::string& address, const std::string& token)
     g_client->disconnect();
     return false;
   }
+
+  // Read the Device Information Service strings once (read-only standard chars).
+  auto read_dis = [](NimBLERemoteCharacteristic* c, std::string& out) {
+    if (c == nullptr) return;
+    NimBLEAttValue v = c->readValue();
+    out.assign(reinterpret_cast<const char*>(v.data()), v.length());
+  };
+  {
+    std::lock_guard<std::mutex> lk(mutex_);
+    read_dis(dis_mfr, dis_manufacturer_);
+    read_dis(dis_model, dis_model_);
+    read_dis(dis_serial, dis_serial_);
+    read_dis(dis_fw, dis_firmware_);
+    read_dis(dis_sw, dis_software_);
+  }
+
   Serial.println("MicraLink: connected + authenticated");
   return true;
 }
@@ -304,6 +331,11 @@ core::MachineSnapshot MicraLink::snapshot() const {
   std::lock_guard<std::mutex> lk(mutex_);
   return core::MachineSnapshot{
       .name = name_.c_str(),
+      .manufacturer = dis_manufacturer_.c_str(),
+      .model = dis_model_.c_str(),
+      .serial = dis_serial_.c_str(),
+      .firmware = dis_firmware_.c_str(),
+      .software = dis_software_.c_str(),
       .link = link_,
       .power = power_,
       .brew_temp_c = brew_temp_c_,

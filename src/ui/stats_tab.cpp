@@ -177,8 +177,8 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
   // --- Info view: a key/value table ------------------------------------------
   out.info_box = make_box(parent);
   lv_obj_set_style_pad_row(out.info_box, 0, 0);
-  static const char* kInfoKeys[kStatsInfoRows] = {"Name", "Manufacturer", "Model",
-                                                  "Serial", "Firmware"};
+  static const char* kInfoKeys[kStatsInfoRows] = {"Manufacturer", "Model", "Serial",
+                                                  "Firmware", "Software"};
   for (int i = 0; i < kStatsInfoRows; ++i) {
     lv_obj_t* row = lv_obj_create(out.info_box);
     lv_obj_remove_style_all(row);

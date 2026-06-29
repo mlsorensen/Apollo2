@@ -5,6 +5,11 @@ namespace host {
 core::MachineSnapshot FakeMachine::snapshot() const {
   return core::MachineSnapshot{
       .name = "Linea Micra",
+      .manufacturer = "La Marzocco",
+      .model = "Linea Micra",
+      .serial = "MR002018",
+      .firmware = "1.40",
+      .software = "v5.0.9",
       .link = core::Link::Connected,  // the fake is always "connected"
       .power = power_,
       .brew_temp_c = 93.0f,

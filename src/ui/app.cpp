@@ -809,11 +809,13 @@ void App::update_stats_view() {
   const bool connected = snap.link == core::Link::Connected;
 
   if (stats_.active == kStatsInfo) {
-    // Row 0 is the BLE name (known); the rest come from the device-information
-    // service, which we don't read yet, so they stay "-".
-    if (stats_.info_val[0] != nullptr) {
-      const bool have = snap.name != nullptr && snap.name[0] != '\0';
-      lv_label_set_text(stats_.info_val[0], have ? snap.name : "-");
+    // Device Information Service fields (read on connect); "-" until populated.
+    const char* vals[kStatsInfoRows] = {snap.manufacturer, snap.model, snap.serial,
+                                        snap.firmware, snap.software};
+    for (int i = 0; i < kStatsInfoRows; ++i) {
+      if (stats_.info_val[i] == nullptr) continue;
+      const bool have = vals[i] != nullptr && vals[i][0] != '\0';
+      lv_label_set_text(stats_.info_val[i], have ? vals[i] : "-");
     }
     return;
   }
