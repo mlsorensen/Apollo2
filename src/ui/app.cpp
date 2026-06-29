@@ -815,20 +815,55 @@ void App::zoom_step(int dir) {
 }
 
 void App::update_battery_runtime(const core::BatteryState& b) {
-  // No estimate while charging / on USB / no battery — reset the window.
+  const uint32_t now = lv_tick_get();
+
+  // --- Ring maintenance (every refresh, to catch the minute boundary) ---
   if (!b.present || b.charging) {
-    batt_hist_count_ = 0;
+    batt_hist_count_ = 0;  // charging / USB / no battery -> no window
     batt_hist_head_ = 0;
     batt_last_sample_ms_ = 0;
-    return;
-  }
-  // Sample percent once a minute into a ring -> a ~10-min sliding window.
-  const uint32_t now = lv_tick_get();
-  if (batt_hist_count_ == 0 || now - batt_last_sample_ms_ >= 60000u) {
-    batt_hist_[batt_hist_head_] = {now, b.percent};
+  } else if (batt_hist_count_ == 0 || now - batt_last_sample_ms_ >= 60000u) {
+    batt_hist_[batt_hist_head_] = {now, b.percent};  // one sample / minute
     batt_hist_head_ = (batt_hist_head_ + 1) % kBattHist;
     if (batt_hist_count_ < kBattHist) ++batt_hist_count_;
     batt_last_sample_ms_ = now;
+  }
+
+  // --- Recompute the displayed estimate at most every 5 s (no need to churn it
+  //     every 500 ms; the rate comes from ring samples that change once a min). ---
+  if (batt_runtime_calc_ms_ != 0 && now - batt_runtime_calc_ms_ < 5000u) return;
+  batt_runtime_calc_ms_ = now;
+
+  char* rt = batt_runtime_text_;
+  const size_t n = sizeof(batt_runtime_text_);
+  if (!b.present) {
+    std::snprintf(rt, n, "-");
+  } else if (b.charging) {
+    std::snprintf(rt, n, "Charging");
+  } else if (batt_hist_count_ < 2) {
+    std::snprintf(rt, n, "Estimating...");
+  } else {
+    // Rate from ring samples only (oldest vs newest) — a ~10-min average.
+    const int oldest = (batt_hist_head_ - batt_hist_count_ + 2 * kBattHist) % kBattHist;
+    const int newest = (batt_hist_head_ - 1 + kBattHist) % kBattHist;
+    const uint32_t span = batt_hist_[newest].t_ms - batt_hist_[oldest].t_ms;
+    const int drop = batt_hist_[oldest].pct - batt_hist_[newest].pct;
+    const int cur = batt_hist_[newest].pct;
+    if (span < 3u * 60 * 1000) {
+      std::snprintf(rt, n, "Estimating...");
+    } else if (drop <= 0) {
+      std::snprintf(rt, n, ">24h");  // not dropping -> effectively infinite
+    } else {
+      const uint64_t rem_min =
+          static_cast<uint64_t>(cur) * span / (static_cast<uint32_t>(drop) * 60000u);
+      if (rem_min >= 24 * 60)
+        std::snprintf(rt, n, ">24h");
+      else if (rem_min >= 60)
+        std::snprintf(rt, n, "%uh %um", static_cast<unsigned>(rem_min / 60),
+                      static_cast<unsigned>(rem_min % 60));
+      else
+        std::snprintf(rt, n, "%um", static_cast<unsigned>(rem_min));
+    }
   }
 }
 
@@ -848,39 +883,14 @@ void App::update_stats_view() {
     else
       std::snprintf(rfw, sizeof(rfw), "v%s", fw::kVersion);
 
-    // Battery runtime: drain rate over the ~10-min window (oldest sample vs now)
-    // extrapolated to empty. ">24h" when essentially flat (the font has no ∞).
-    char rt[24];
-    if (!battery_state_.present) {
-      std::snprintf(rt, sizeof(rt), "-");
-    } else if (battery_state_.charging) {
-      std::snprintf(rt, sizeof(rt), "Charging");
-    } else if (batt_hist_count_ < 2) {
-      std::snprintf(rt, sizeof(rt), "Estimating...");
-    } else {
-      const int tail = (batt_hist_head_ - batt_hist_count_ + 2 * kBattHist) % kBattHist;
-      const uint32_t dt = lv_tick_get() - batt_hist_[tail].t_ms;        // window span (ms)
-      const int drop = batt_hist_[tail].pct - battery_state_.percent;   // % drained
-      if (dt < 3u * 60 * 1000) {
-        std::snprintf(rt, sizeof(rt), "Estimating...");
-      } else if (drop <= 0) {
-        std::snprintf(rt, sizeof(rt), ">24h");  // not dropping -> effectively infinite
-      } else {
-        const uint64_t rem_min =
-            static_cast<uint64_t>(battery_state_.percent) * dt /
-            (static_cast<uint32_t>(drop) * 60000u);
-        if (rem_min >= 24 * 60)
-          std::snprintf(rt, sizeof(rt), ">24h");
-        else if (rem_min >= 60)
-          std::snprintf(rt, sizeof(rt), "%uh %um", static_cast<unsigned>(rem_min / 60),
-                        static_cast<unsigned>(rem_min % 60));
-        else
-          std::snprintf(rt, sizeof(rt), "%um", static_cast<unsigned>(rem_min));
-      }
-    }
-
-    const char* vals[kStatsInfoRows] = {rfw,         rt,            snap.manufacturer,
-                                        snap.model,  snap.serial,   snap.firmware,
+    // Battery runtime is computed (throttled, ~10-min average) in
+    // update_battery_runtime; just display the cached string here.
+    const char* vals[kStatsInfoRows] = {rfw,
+                                        batt_runtime_text_,
+                                        snap.manufacturer,
+                                        snap.model,
+                                        snap.serial,
+                                        snap.firmware,
                                         snap.software};
     for (int i = 0; i < kStatsInfoRows; ++i) {
       if (stats_.info_val[i] == nullptr) continue;

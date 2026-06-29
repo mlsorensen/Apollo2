@@ -107,6 +107,8 @@ class App {
   int batt_hist_count_ = 0;
   int batt_hist_head_ = 0;
   uint32_t batt_last_sample_ms_ = 0;
+  char batt_runtime_text_[24] = "-";  // cached estimate, recomputed every ~5 s
+  uint32_t batt_runtime_calc_ms_ = 0;
 };
 
 }  // namespace ui
