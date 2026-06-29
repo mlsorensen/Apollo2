@@ -3,6 +3,7 @@
 #include <cstdio>
 
 #include "ui/theme.h"
+#include "ui/widgets.h"
 
 namespace {
 
@@ -169,7 +170,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& 
   lv_obj_set_flex_grow(spacer, 1);
 
   // --- Power toggle --------------------------------------------------------
-  out.power_btn = lv_button_create(parent);
+  out.power_btn = ui::make_button(parent);
   lv_obj_set_width(out.power_btn, lv_pct(100));
   lv_obj_set_height(out.power_btn, btn_h);
   lv_obj_set_style_radius(out.power_btn, 14, 0);

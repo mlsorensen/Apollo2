@@ -7,6 +7,7 @@
 #include <lvgl.h>
 
 #include "ui/theme.h"
+#include "ui/widgets.h"
 
 namespace {
 
@@ -73,7 +74,7 @@ void on_wifi_cancel(lv_event_t* e) {
 
 lv_obj_t* modal_button(lv_obj_t* parent, const char* label, uint32_t color,
                        lv_event_cb_t cb, void* app) {
-  lv_obj_t* b = lv_button_create(parent);
+  lv_obj_t* b = ui::make_button(parent);
   lv_obj_set_style_bg_color(b, lv_color_hex(color), 0);
   lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, app);
   lv_obj_t* l = lv_label_create(b);
@@ -715,7 +716,7 @@ void App::update_settings_view() {
 
   lv_obj_clean(settings_.list);
   for (int i = 0; i < count; ++i) {
-    lv_obj_t* row = lv_button_create(settings_.list);
+    lv_obj_t* row = ui::make_button(settings_.list);
     lv_obj_set_width(row, lv_pct(100));
     lv_obj_set_style_bg_color(row, lv_color_hex(ui::theme::card()), 0);
     lv_obj_add_event_cb(row, on_result_clicked, LV_EVENT_CLICKED, this);

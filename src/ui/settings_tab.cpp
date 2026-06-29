@@ -1,6 +1,7 @@
 #include "ui/settings_tab.h"
 
 #include "ui/theme.h"
+#include "ui/widgets.h"
 
 namespace {
 
@@ -26,7 +27,7 @@ void build_bluetooth_panel(lv_obj_t* panel, const lv_font_t* font,
   lv_obj_set_style_text_font(out.saved_label, font, 0);
   lv_obj_set_flex_grow(out.saved_label, 1);
 
-  out.setup_btn = lv_button_create(out.saved_row);
+  out.setup_btn = ui::make_button(out.saved_row);
   lv_obj_set_style_bg_color(out.setup_btn, lv_color_hex(ui::theme::accent()), 0);
   lv_obj_t* setup_lbl = lv_label_create(out.setup_btn);
   lv_label_set_text(setup_lbl, "Setup");
@@ -34,7 +35,7 @@ void build_bluetooth_panel(lv_obj_t* panel, const lv_font_t* font,
   lv_obj_set_style_text_font(setup_lbl, font, 0);
   lv_obj_center(setup_lbl);
 
-  out.forget_btn = lv_button_create(out.saved_row);
+  out.forget_btn = ui::make_button(out.saved_row);
   lv_obj_set_style_bg_color(out.forget_btn, lv_color_hex(ui::theme::alert()), 0);
   lv_obj_t* forget_lbl = lv_label_create(out.forget_btn);
   lv_label_set_text(forget_lbl, "Forget");
@@ -42,7 +43,7 @@ void build_bluetooth_panel(lv_obj_t* panel, const lv_font_t* font,
   lv_obj_set_style_text_font(forget_lbl, font, 0);
   lv_obj_center(forget_lbl);
 
-  out.scan_btn = lv_button_create(panel);
+  out.scan_btn = ui::make_button(panel);
   lv_obj_set_width(out.scan_btn, lv_pct(100));
   lv_obj_set_style_bg_color(out.scan_btn, lv_color_hex(ui::theme::accent()), 0);
   lv_obj_t* btn_lbl = lv_label_create(out.scan_btn);
@@ -75,11 +76,10 @@ void build_bluetooth_panel(lv_obj_t* panel, const lv_font_t* font,
 
 lv_obj_t* make_step_button(lv_obj_t* parent, const char* symbol, int size,
                            const lv_font_t* font) {
-  lv_obj_t* btn = lv_button_create(parent);
+  lv_obj_t* btn = ui::make_button(parent);  // shadow already stripped
   lv_obj_set_size(btn, size, size);
   lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
   lv_obj_set_style_bg_color(btn, lv_color_hex(ui::theme::card()), 0);
-  lv_obj_set_style_shadow_width(btn, 0, 0);  // theme's drop shadow flattens the circle
   lv_obj_t* l = lv_label_create(btn);
   lv_label_set_text(l, symbol);
   lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::text()), 0);
@@ -221,9 +221,8 @@ void build_device_panel(lv_obj_t* panel, const lv_font_t* text_font,
 
   // Theme: a button showing the current scheme; tapping it cycles to the next.
   lv_obj_t* rt = make_setting_row(panel, "Theme", text_font);
-  out.theme_btn = lv_button_create(rt);
+  out.theme_btn = ui::make_button(rt);
   lv_obj_set_style_bg_color(out.theme_btn, lv_color_hex(ui::theme::card()), 0);
-  lv_obj_set_style_shadow_width(out.theme_btn, 0, 0);
   out.theme_value = lv_label_create(out.theme_btn);
   lv_obj_set_style_text_color(out.theme_value, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(out.theme_value, text_font, 0);
@@ -254,7 +253,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
 
   const char* labels[kSectionCount] = {LV_SYMBOL_BLUETOOTH, "Brew", "Boiler", "Device"};
   for (int i = 0; i < kSectionCount; ++i) {
-    out.seg[i] = lv_button_create(seg_row);
+    out.seg[i] = ui::make_button(seg_row);
     lv_obj_set_flex_grow(out.seg[i], 1);
     lv_obj_set_style_radius(out.seg[i], 8, 0);
     lv_obj_t* l = lv_label_create(out.seg[i]);
