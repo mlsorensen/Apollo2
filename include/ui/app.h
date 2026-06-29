@@ -65,6 +65,7 @@ class App {
   void update_settings_view();
   void update_stats_view();   // refill the chart / info from history
   void update_temp_panels(const core::MachineSnapshot& state);
+  void sync_home_setpoints(bool connected);  // mirror set-points to the Home steppers
   void seed_time_steppers();  // load the clock into the Hour/Minute steppers
   void rebuild();             // tear down + rebuild the UI (e.g. after a theme change)
   void handle_pairing(core::Link link);

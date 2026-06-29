@@ -250,13 +250,24 @@ void set_clickable(lv_obj_t* o, bool en) {
   }
 }
 
+// Whether a step is still in range (so we can grey out a stepper at its limit —
+// otherwise pressing + at max gives no feedback).
+bool brew_can_dec(const ui::SettingsWidgets& s) {
+  return s.brew_target > core::kBrewTargetMinC + 0.001f;
+}
+bool brew_can_inc(const ui::SettingsWidgets& s) {
+  return s.brew_target < core::kBrewTargetMaxC - 0.001f;
+}
+bool boiler_can_dec(const ui::SettingsWidgets& s) { return s.boiler_level > 0; }
+bool boiler_can_inc(const ui::SettingsWidgets& s) { return s.boiler_level < 2; }
+
 void set_temp_controls_enabled(ui::SettingsWidgets& s, bool connected) {
-  set_clickable(s.brew_minus, connected);
-  set_clickable(s.brew_plus, connected);
+  set_clickable(s.brew_minus, connected && brew_can_dec(s));
+  set_clickable(s.brew_plus, connected && brew_can_inc(s));
   set_clickable(s.steam_switch, connected);
   const bool boiler_en = connected && s.steam_enabled;  // can't set level when off
-  set_clickable(s.boiler_minus, boiler_en);
-  set_clickable(s.boiler_plus, boiler_en);
+  set_clickable(s.boiler_minus, boiler_en && boiler_can_dec(s));
+  set_clickable(s.boiler_plus, boiler_en && boiler_can_inc(s));
 }
 
 }  // namespace
@@ -327,6 +338,14 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
 
   build_home_tab(home, screen, home_);
   lv_obj_add_event_cb(home_.power_btn, on_power_clicked, LV_EVENT_CLICKED, this);
+  // Inline set-point steppers (large screens): reuse the Settings handlers so Home
+  // edits flow through the same brew_adjust/boiler_adjust + deferred-commit path.
+  if (home_.brew_minus != nullptr) {
+    lv_obj_add_event_cb(home_.brew_minus, on_brew_minus, LV_EVENT_ALL, this);
+    lv_obj_add_event_cb(home_.brew_plus, on_brew_plus, LV_EVENT_ALL, this);
+    lv_obj_add_event_cb(home_.boiler_minus, on_boiler_minus, LV_EVENT_CLICKED, this);
+    lv_obj_add_event_cb(home_.boiler_plus, on_boiler_plus, LV_EVENT_CLICKED, this);
+  }
   update_home(home_, machine_->snapshot(), battery_->battery(), clock_->now(),
               clock_->use_24h());
 
@@ -398,8 +417,10 @@ void App::refresh() {
   }
 }
 
-// Stepping only changes the LOCAL value/display; the BLE write is deferred to
-// commit_temp_edits() (on exit) so we don't write on every press.
+// A press updates the local value AND writes it to the machine right away (the
+// link coalesces rapid writes via an atomic, so this isn't BLE spam). "dirty" is
+// held until the machine confirms the new value (update_temp_panels) so the
+// displayed set-point doesn't flicker back during the write round-trip.
 void App::brew_adjust(int dir, bool half) {
   float v = settings_.brew_target;
   if (half) {  // long-press: snap to the next 0.5 grid point in the direction
@@ -411,6 +432,9 @@ void App::brew_adjust(int dir, bool half) {
   settings_.brew_target = clampf(v, core::kBrewTargetMinC, core::kBrewTargetMaxC);
   settings_.brew_dirty = true;
   set_brew_label(settings_, true);
+  set_temp_controls_enabled(settings_, true);  // re-grey at the new extreme
+  sync_home_setpoints(true);
+  if (machine_ != nullptr) machine_->set_brew_target(settings_.brew_target);
 }
 
 void App::boiler_adjust(int dir) {
@@ -419,6 +443,9 @@ void App::boiler_adjust(int dir) {
   settings_.boiler_level = lvl;
   settings_.boiler_dirty = true;
   set_boiler_label(settings_, true);
+  set_temp_controls_enabled(settings_, true);  // re-grey at level 1/3
+  sync_home_setpoints(true);
+  if (machine_ != nullptr) machine_->set_steam_target(core::kSteamLevelsC[lvl]);
 }
 
 void App::steam_set_enabled(bool on) {
@@ -426,7 +453,38 @@ void App::steam_set_enabled(bool on) {
   settings_.steam_enable_dirty = true;  // hold until the machine confirms
   set_boiler_label(settings_, true);    // reflect Off / level
   set_temp_controls_enabled(settings_, true);
+  sync_home_setpoints(true);
   if (machine_ != nullptr) machine_->set_steam_enabled(on);  // immediate (single toggle)
+}
+
+// Mirror the editable set-points onto the Home tab's inline steppers (large
+// screens; no-op on compact, where Home has no steppers and update_home owns the
+// labels). Same dirty-aware source as the Settings labels, so an edit shows on
+// both tabs and the deferred commit still applies on tab exit.
+void App::sync_home_setpoints(bool connected) {
+  if (home_.brew_minus == nullptr) return;  // compact: no Home steppers
+  const bool steam = settings_.steam_enabled;
+
+  char b[16];
+  if (!connected) {
+    lv_label_set_text(home_.brew_set, "--");
+  } else {
+    std::snprintf(b, sizeof(b), "%.1f C", settings_.brew_target);
+    lv_label_set_text(home_.brew_set, b);
+  }
+  if (!connected) {
+    lv_label_set_text(home_.boiler_set, "--");
+  } else if (!steam) {
+    lv_label_set_text(home_.boiler_set, "Off");
+  } else {
+    std::snprintf(b, sizeof(b), "%.0f C", core::kSteamLevelsC[settings_.boiler_level]);
+    lv_label_set_text(home_.boiler_set, b);
+  }
+
+  set_clickable(home_.brew_minus, connected && brew_can_dec(settings_));
+  set_clickable(home_.brew_plus, connected && brew_can_inc(settings_));
+  set_clickable(home_.boiler_minus, connected && steam && boiler_can_dec(settings_));
+  set_clickable(home_.boiler_plus, connected && steam && boiler_can_inc(settings_));
 }
 
 void App::brightness_adjust(int dir) {
@@ -503,15 +561,13 @@ void App::rebuild() {
 }
 
 void App::commit_temp_edits() {
+  // Edits are written on each press now; this is just a safety re-assert of the
+  // latest value when leaving a screen. We do NOT clear dirty here — that happens
+  // on machine confirmation (update_temp_panels), so the value can't revert.
   if (machine_ == nullptr) return;
-  if (settings_.brew_dirty) {
-    machine_->set_brew_target(settings_.brew_target);
-    settings_.brew_dirty = false;
-  }
-  if (settings_.boiler_dirty) {
+  if (settings_.brew_dirty) machine_->set_brew_target(settings_.brew_target);
+  if (settings_.boiler_dirty)
     machine_->set_steam_target(core::kSteamLevelsC[settings_.boiler_level]);
-    settings_.boiler_dirty = false;
-  }
 }
 
 void App::update_temp_panels(const core::MachineSnapshot& s) {
@@ -528,15 +584,23 @@ void App::update_temp_panels(const core::MachineSnapshot& s) {
     if (settings_.steam_enabled) lv_obj_add_state(settings_.steam_switch, LV_STATE_CHECKED);
     else lv_obj_remove_state(settings_.steam_switch, LV_STATE_CHECKED);
 
+    // Track the machine's value unless we have an unconfirmed local edit; clear
+    // the edit once the machine reports it back (then resume tracking).
     if (!settings_.brew_dirty) {
       settings_.brew_target = s.brew_target_c;
-      set_brew_label(settings_, true);
+    } else if (std::fabs(s.brew_target_c - settings_.brew_target) < 0.05f) {
+      settings_.brew_dirty = false;
     }
+    set_brew_label(settings_, true);
+
     if (!settings_.boiler_dirty) {
       settings_.boiler_level = nearest_steam_level(s.boiler_target_c);
+    } else if (nearest_steam_level(s.boiler_target_c) == settings_.boiler_level) {
+      settings_.boiler_dirty = false;
     }
     set_boiler_label(settings_, true);  // reflects level + steam on/off
     set_temp_controls_enabled(settings_, true);
+    sync_home_setpoints(true);
   } else {
     settings_.brew_dirty = false;
     settings_.boiler_dirty = false;
@@ -544,6 +608,7 @@ void App::update_temp_panels(const core::MachineSnapshot& s) {
     set_brew_label(settings_, false);
     set_boiler_label(settings_, false);
     set_temp_controls_enabled(settings_, false);
+    sync_home_setpoints(false);
   }
 }
 

@@ -74,20 +74,6 @@ void build_bluetooth_panel(lv_obj_t* panel, const lv_font_t* font,
   lv_obj_set_style_pad_right(out.list, 3, LV_PART_SCROLLBAR);  // inset from the edge
 }
 
-lv_obj_t* make_step_button(lv_obj_t* parent, const char* symbol, int size,
-                           const lv_font_t* font) {
-  lv_obj_t* btn = ui::make_button(parent);  // shadow already stripped
-  lv_obj_set_size(btn, size, size);
-  lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(ui::theme::card()), 0);
-  lv_obj_t* l = lv_label_create(btn);
-  lv_label_set_text(l, symbol);
-  lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(l, font, 0);
-  lv_obj_center(l);
-  return btn;
-}
-
 // One settings row: a left-aligned label and a right-aligned control slot. The
 // caller adds the control (switch / stepper / ...) and it lands on the right.
 lv_obj_t* make_setting_row(lv_obj_t* parent, const char* label,
@@ -124,7 +110,7 @@ void make_inline_stepper(lv_obj_t* row, const lv_font_t* text_font,
                         LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(grp, 4, 0);  // buttons close to the value
 
-  *out_minus = make_step_button(grp, LV_SYMBOL_MINUS, btn_size, symbol_font);
+  *out_minus = ui::make_step_button(grp, LV_SYMBOL_MINUS, btn_size, symbol_font);
 
   lv_obj_t* stack = lv_obj_create(grp);
   lv_obj_remove_style_all(stack);
@@ -145,7 +131,7 @@ void make_inline_stepper(lv_obj_t* row, const lv_font_t* text_font,
     lv_obj_set_style_text_font(*out_sub, text_font, 0);
   }
 
-  *out_plus = make_step_button(grp, LV_SYMBOL_PLUS, btn_size, symbol_font);
+  *out_plus = ui::make_step_button(grp, LV_SYMBOL_PLUS, btn_size, symbol_font);
 }
 
 void make_settings_list(lv_obj_t* panel) {

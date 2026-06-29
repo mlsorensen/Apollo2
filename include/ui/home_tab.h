@@ -22,6 +22,12 @@ struct HomeWidgets {
   lv_obj_t* brew_set = nullptr;
   lv_obj_t* boiler_value = nullptr;
   lv_obj_t* boiler_set = nullptr;
+  // Inline set-point steppers flanking the set label (large screens only; null on
+  // compact). Wired to the same brew_adjust/boiler_adjust as the Settings tab.
+  lv_obj_t* brew_minus = nullptr;
+  lv_obj_t* brew_plus = nullptr;
+  lv_obj_t* boiler_minus = nullptr;
+  lv_obj_t* boiler_plus = nullptr;
   lv_obj_t* power_btn = nullptr;
   lv_obj_t* power_label = nullptr;
 

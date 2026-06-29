@@ -13,10 +13,15 @@ void format_now(char* out, size_t n, float c) { std::snprintf(out, n, "%.1f C", 
 void format_set(char* out, size_t n, float c) { std::snprintf(out, n, "Set  %.1f C", c); }
 
 // A temperature panel: caption (static) on top, big current value, set point
-// below. The value/set labels are returned for live updates.
+// below. On large screens the set point is flanked by [-]/[+] steppers (returned
+// for wiring); on compact it's a plain label. The value/set labels are returned
+// for live updates.
 void make_temp_card(lv_obj_t* parent, const char* caption,
-                    const lv_font_t* value_font, const lv_font_t* sub_font,
-                    int pad, lv_obj_t** out_value, lv_obj_t** out_set) {
+                    const lv_font_t* caption_font, const lv_font_t* value_font,
+                    const lv_font_t* sub_font, int pad, bool with_steppers,
+                    int btn_size, const lv_font_t* symbol_font,
+                    lv_obj_t** out_value, lv_obj_t** out_set,
+                    lv_obj_t** out_minus, lv_obj_t** out_plus) {
   lv_obj_t* card = lv_obj_create(parent);
   lv_obj_remove_style_all(card);
   lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
@@ -30,7 +35,7 @@ void make_temp_card(lv_obj_t* parent, const char* caption,
   lv_obj_t* cap = lv_label_create(card);
   lv_label_set_text(cap, caption);
   lv_obj_set_style_text_color(cap, lv_color_hex(ui::theme::muted()), 0);
-  lv_obj_set_style_text_font(cap, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_font(cap, caption_font, 0);
   lv_obj_align(cap, LV_ALIGN_TOP_MID, 0, 0);
 
   lv_obj_t* val = lv_label_create(card);
@@ -38,10 +43,36 @@ void make_temp_card(lv_obj_t* parent, const char* caption,
   lv_obj_set_style_text_font(val, value_font, 0);
   lv_obj_align(val, LV_ALIGN_CENTER, 0, 0);
 
-  lv_obj_t* set = lv_label_create(card);
-  lv_obj_set_style_text_color(set, lv_color_hex(ui::theme::muted()), 0);
-  lv_obj_set_style_text_font(set, sub_font, 0);
-  lv_obj_align(set, LV_ALIGN_BOTTOM_MID, 0, 0);
+  lv_obj_t* set;
+  if (with_steppers) {
+    // [-]  set  [+] row pinned to the bottom of the card.
+    lv_obj_t* setrow = lv_obj_create(card);
+    lv_obj_remove_style_all(setrow);
+    lv_obj_remove_flag(setrow, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_size(setrow, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(setrow, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(setrow, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(setrow, 12, 0);
+    lv_obj_align(setrow, LV_ALIGN_BOTTOM_MID, 0, 0);
+
+    *out_minus = ui::make_step_button(setrow, LV_SYMBOL_MINUS, btn_size, symbol_font);
+
+    set = lv_label_create(setrow);
+    lv_obj_set_width(set, btn_size * 2);  // stable width so the buttons don't shift
+    lv_obj_set_style_text_align(set, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(set, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(set, sub_font, 0);
+
+    *out_plus = ui::make_step_button(setrow, LV_SYMBOL_PLUS, btn_size, symbol_font);
+  } else {
+    set = lv_label_create(card);
+    lv_obj_set_style_text_color(set, lv_color_hex(ui::theme::muted()), 0);
+    lv_obj_set_style_text_font(set, sub_font, 0);
+    lv_obj_align(set, LV_ALIGN_BOTTOM_MID, 0, 0);
+    *out_minus = nullptr;
+    *out_plus = nullptr;
+  }
 
   *out_value = val;
   *out_set = set;
@@ -94,6 +125,13 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& 
       compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
   const lv_font_t* btn_font =
       compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
+  // Card caption ("BREW"/"BOILER"): scale up with the screen (the big panel has
+  // room). Set-point steppers exist on non-compact tiers only.
+  const lv_font_t* caption_font =
+      compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
+  const lv_font_t* step_font = compact ? &lv_font_montserrat_20 : &lv_font_montserrat_28;
+  const int step_btn = compact ? 36 : xl ? 64 : 50;
+  const bool steppers = !compact;
 
   lv_obj_remove_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_pad_all(parent, pad, 0);
@@ -160,10 +198,12 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& 
                         LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(row, gap, 0);
 
-  make_temp_card(row, "BREW", value_font, sub_font, card_pad, &out.brew_value,
-                 &out.brew_set);
-  make_temp_card(row, "BOILER", value_font, sub_font, card_pad, &out.boiler_value,
-                 &out.boiler_set);
+  make_temp_card(row, "BREW", caption_font, value_font, sub_font, card_pad, steppers,
+                 step_btn, step_font, &out.brew_value, &out.brew_set, &out.brew_minus,
+                 &out.brew_plus);
+  make_temp_card(row, "BOILER", caption_font, value_font, sub_font, card_pad, steppers,
+                 step_btn, step_font, &out.boiler_value, &out.boiler_set,
+                 &out.boiler_minus, &out.boiler_plus);
 
   // --- Spacer pushes the action button to the bottom ----------------------
   lv_obj_t* spacer = lv_obj_create(parent);
