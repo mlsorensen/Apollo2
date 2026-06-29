@@ -32,6 +32,8 @@ struct StatsWidgets {
   lv_obj_t* graph_box = nullptr;
   lv_obj_t* chart = nullptr;
   lv_chart_series_t* series = nullptr;
+  lv_obj_t* zoom_in = nullptr;      // overlaid +/- to zoom the time (X) axis
+  lv_obj_t* zoom_out = nullptr;
   lv_obj_t* empty_label = nullptr;  // "No data yet" overlay when the window is empty
   int zoom_idx = 0;          // index into the App's window table
   int y_min = 20;            // chart Y range; also drives the drawn Y labels

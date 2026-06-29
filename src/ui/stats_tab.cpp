@@ -97,13 +97,23 @@ void chart_overlay_cb(lv_event_t* e) {
     lv_draw_label(layer, &lbl, &la);
   }
 
-  // Time scale (bottom margin): 4 ticks, left = -window .. right = now
-  lbl.align = LV_TEXT_ALIGN_CENTER;
+  // Time scale (bottom margin): 4 ticks, left = -window .. right = now. Anchor the
+  // end labels inward (left-align the first, right-align "now") so neither clips.
   for (int t = 0; t <= 3; ++t) {
     fmt_ago(buf, sizeof(buf), static_cast<uint32_t>(w->window_s * (3 - t) / 3));
     lbl.text = buf;
     const int32_t x = plot.x1 + static_cast<int32_t>(w_px * t / 3);
-    lv_area_t la = {x - 24, plot.y2 + 4, x + 24, plot.y2 + 20};
+    lv_area_t la;
+    if (t == 0) {
+      lbl.align = LV_TEXT_ALIGN_LEFT;
+      la = {plot.x1, plot.y2 + 4, plot.x1 + 60, plot.y2 + 20};
+    } else if (t == 3) {
+      lbl.align = LV_TEXT_ALIGN_RIGHT;
+      la = {plot.x2 - 60, plot.y2 + 4, plot.x2, plot.y2 + 20};
+    } else {
+      lbl.align = LV_TEXT_ALIGN_CENTER;
+      la = {x - 30, plot.y2 + 4, x + 30, plot.y2 + 20};
+    }
     lv_draw_label(layer, &lbl, &la);
   }
 }
@@ -155,16 +165,25 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
   lv_obj_set_style_bg_opa(out.chart, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(out.chart, 0, 0);
   lv_obj_set_style_radius(out.chart, 12, 0);
-  lv_obj_set_style_line_color(out.chart, lv_color_hex(ui::theme::rail()), LV_PART_MAIN);
+  // Gridlines in scrollbar() (a mid-tone) — rail() is darker than the card bg and
+  // was nearly invisible.
+  lv_obj_set_style_line_color(out.chart, lv_color_hex(ui::theme::scrollbar()), LV_PART_MAIN);
   // Reserve margins for the drawn axes: left for Y temperature labels, bottom for
   // the time scale, a little top room so the top Y label isn't clipped.
   lv_obj_set_style_pad_left(out.chart, compact ? 34 : 48, 0);
   lv_obj_set_style_pad_bottom(out.chart, 22, 0);
   lv_obj_set_style_pad_top(out.chart, 10, 0);
-  lv_obj_add_flag(out.chart, LV_OBJ_FLAG_CLICKABLE);  // tap cycles the time window
   out.series = lv_chart_add_series(out.chart, lv_color_hex(ui::theme::accent()),
                                    LV_CHART_AXIS_PRIMARY_Y);
   lv_obj_add_event_cb(out.chart, chart_overlay_cb, LV_EVENT_DRAW_POST_END, &out);
+
+  // Overlaid +/- to zoom the time (X) axis, tucked in the chart's top-right.
+  const int zsz = compact ? 30 : 42;
+  const lv_font_t* zglyph = compact ? &lv_font_montserrat_20 : &lv_font_montserrat_28;
+  out.zoom_out = ui::make_step_button(out.chart, LV_SYMBOL_MINUS, zsz, zglyph);
+  lv_obj_align(out.zoom_out, LV_ALIGN_BOTTOM_RIGHT, -(zsz + 6), -6);
+  out.zoom_in = ui::make_step_button(out.chart, LV_SYMBOL_PLUS, zsz, zglyph);
+  lv_obj_align(out.zoom_in, LV_ALIGN_BOTTOM_RIGHT, -2, -6);
 
   // Centered "No data yet" overlay, shown when the whole window is empty.
   out.empty_label = lv_label_create(out.chart);

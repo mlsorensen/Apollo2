@@ -58,7 +58,7 @@ class App {
   void theme_select(int index);          // Device theme roller selection
   void apply_pending_theme();            // deferred rebuild (from lv_async_call)
   void select_stats_section(int section); // Stats segmented selector
-  void cycle_zoom();                      // Stats chart zoom button
+  void zoom_step(int dir);                // Stats time-axis zoom: -1 in, +1 out
   void commit_temp_edits();              // write pending temp edits (on exit)
 
  private:

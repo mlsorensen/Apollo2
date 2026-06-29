@@ -88,8 +88,11 @@ void on_stats_segment(lv_event_t* e) {
   auto* btn = static_cast<lv_obj_t*>(lv_event_get_target(e));
   app->select_stats_section(static_cast<int>(lv_obj_get_index(btn)));
 }
-void on_zoom_clicked(lv_event_t* e) {
-  static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_zoom();
+void on_zoom_in(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->zoom_step(-1);  // shorter window
+}
+void on_zoom_out(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->zoom_step(+1);  // longer window
 }
 
 // Stats chart x-axis windows the zoom button cycles through.
@@ -381,7 +384,8 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   for (int i = 0; i < kStatsCount; ++i) {
     lv_obj_add_event_cb(stats_.seg[i], on_stats_segment, LV_EVENT_CLICKED, this);
   }
-  lv_obj_add_event_cb(stats_.chart, on_zoom_clicked, LV_EVENT_CLICKED, this);  // tap to zoom
+  lv_obj_add_event_cb(stats_.zoom_in, on_zoom_in, LV_EVENT_CLICKED, this);
+  lv_obj_add_event_cb(stats_.zoom_out, on_zoom_out, LV_EVENT_CLICKED, this);
 
   update_settings_view();
   update_temp_panels(machine_->snapshot());
@@ -796,8 +800,11 @@ void App::select_stats_section(int section) {
   update_stats_view();
 }
 
-void App::cycle_zoom() {
-  stats_.zoom_idx = (stats_.zoom_idx + 1) % kZoomCount;
+void App::zoom_step(int dir) {
+  int i = stats_.zoom_idx + dir;
+  if (i < 0) i = 0;
+  if (i >= kZoomCount) i = kZoomCount - 1;  // clamp (no wrap)
+  stats_.zoom_idx = i;
   update_stats_view();
 }
 
