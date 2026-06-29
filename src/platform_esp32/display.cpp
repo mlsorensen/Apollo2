@@ -126,8 +126,9 @@ void Display::set_brightness(int percent) {
   if (percent < 0) percent = 0;
   if (percent > 100) percent = 100;
 #if defined(BOARD_DISPLAY_RGB)
-  // Backlight rides the IO extension: PWM register for level + keep enable on.
-  io_extension().set_pwm(static_cast<uint8_t>(percent));
+  // Backlight via the IO extension. Its PWM register is inverted-duty (higher
+  // value = dimmer, observed on the 7B), so write 100-percent; keep enable on.
+  io_extension().set_pwm(static_cast<uint8_t>(100 - percent));
   io_extension().set(board::kIoExtBacklight, percent > 0);
 #else
   ledcWrite(board::kLcdBacklight, percent * 255 / 100);
