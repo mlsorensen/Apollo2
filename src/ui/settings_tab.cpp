@@ -79,6 +79,7 @@ lv_obj_t* make_step_button(lv_obj_t* parent, const char* symbol, int size,
   lv_obj_set_size(btn, size, size);
   lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
   lv_obj_set_style_bg_color(btn, lv_color_hex(ui::theme::card), 0);
+  lv_obj_set_style_shadow_width(btn, 0, 0);  // theme's drop shadow flattens the circle
   lv_obj_t* l = lv_label_create(btn);
   lv_label_set_text(l, symbol);
   lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::text), 0);
@@ -93,7 +94,7 @@ lv_obj_t* make_setting_row(lv_obj_t* parent, const char* label,
                            const lv_font_t* font) {
   lv_obj_t* row = lv_obj_create(parent);
   lv_obj_remove_style_all(row);
-  lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);  // layout only — don't clip children
+  lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);  // layout only
   lv_obj_set_width(row, lv_pct(100));
   lv_obj_set_height(row, LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
@@ -116,7 +117,7 @@ void make_inline_stepper(lv_obj_t* row, const lv_font_t* text_font,
                          lv_obj_t** out_plus, lv_obj_t** out_sub) {
   lv_obj_t* grp = lv_obj_create(row);
   lv_obj_remove_style_all(grp);
-  lv_obj_remove_flag(grp, LV_OBJ_FLAG_SCROLLABLE);  // else it clips the round buttons
+  lv_obj_remove_flag(grp, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_size(grp, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(grp, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(grp, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
@@ -186,12 +187,21 @@ void build_device_panel(lv_obj_t* panel, const lv_font_t* text_font,
                          const lv_font_t* symbol_font, int btn_size,
                          ui::SettingsWidgets& out) {
   make_settings_list(panel);
-  // More rows than fit on the compact screen: top-align and allow scrolling.
+  // More rows than fit on the compact screen: top-align, scroll, and show a
+  // scrollbar in a right gutter (so it clears the +/- buttons).
   lv_obj_add_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scroll_dir(panel, LV_DIR_VER);  // vertical only (rows overflow horizontally)
   lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_row(panel, 12, 0);
   lv_obj_set_style_pad_ver(panel, 4, 0);
+  lv_obj_set_style_pad_right(panel, 10, 0);  // gutter for the scrollbar
+  lv_obj_set_scrollbar_mode(panel, LV_SCROLLBAR_MODE_ON);  // always visible: signals more below
+  lv_obj_set_style_bg_color(panel, lv_color_hex(ui::theme::text), LV_PART_SCROLLBAR);
+  lv_obj_set_style_bg_opa(panel, LV_OPA_COVER, LV_PART_SCROLLBAR);
+  lv_obj_set_style_width(panel, 6, LV_PART_SCROLLBAR);
+  lv_obj_set_style_radius(panel, 3, LV_PART_SCROLLBAR);
+  lv_obj_set_style_pad_right(panel, 2, LV_PART_SCROLLBAR);
 
   lv_obj_t* rb = make_setting_row(panel, "Brightness", text_font);
   make_inline_stepper(rb, text_font, symbol_font, btn_size, &out.brightness_minus,
