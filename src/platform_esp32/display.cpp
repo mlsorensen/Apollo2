@@ -46,11 +46,15 @@ bool Display::begin() {
   // can release the panel reset and turn the backlight on.
   Wire.begin(board::kI2cSda, board::kI2cScl);
   Wire.setClock(400000);
-  io_extension().begin(board::kIoExtAddr);
+  const bool io_ok = io_extension().begin(board::kIoExtAddr);
+  Serial.printf("7B: IO extension @0x%02X on I2C(SDA=%d,SCL=%d): %s\n",
+                board::kIoExtAddr, board::kI2cSda, board::kI2cScl,
+                io_ok ? "ACK" : "NO ACK (backlight/reset won't work!)");
   io_extension().set(board::kIoExtLcdReset, false);
   delay(20);
   io_extension().set(board::kIoExtLcdReset, true);  // release reset
   delay(50);
+  io_extension().set(board::kIoExtBacklight, true);  // backlight on early
 
   auto* rgbpanel = new Arduino_ESP32RGBPanel(
       board::kRgbDe, board::kRgbVsync, board::kRgbHsync, board::kRgbPclk,
@@ -63,8 +67,12 @@ bool Display::begin() {
       board::kRgbPclkActiveNeg, board::kRgbPclkHz);
   g_gfx = new Arduino_RGB_Display(board::kLcdNativeW, board::kLcdNativeH, rgbpanel,
                                   board::kLcdRotation, /*auto_flush=*/true);
-  if (!g_gfx->begin()) return false;
-  g_gfx->fillScreen(0x0000);
+  if (!g_gfx->begin()) {
+    Serial.println("7B: RGB panel begin() FAILED (framebuffer alloc? PSRAM?)");
+    return false;
+  }
+  Serial.printf("7B: RGB panel up %dx%d\n", g_gfx->width(), g_gfx->height());
+  g_gfx->fillScreen(0xF800);  // bright red: a quick 'is the panel/timing alive' check
   io_extension().set(board::kIoExtBacklight, true);  // backlight on
 #else
   // SPI ST7789 panel (e.g. 2-inch).

@@ -10,8 +10,6 @@
 #
 # The serial port is auto-detected (single board) or taken from $PORT / -p.
 
-DEFAULT_BOARD="2inch"   # used when nothing is specified and no banner is seen
-
 board_to_env() {
   case "$1" in
     2|2inch|lcd2|s3-lcd-2|esp32-s3-micra)        echo "esp32-s3-micra" ;;
@@ -68,8 +66,12 @@ elif [ -n "$PORT" ]; then
   [ -n "$ENV" ] && echo "flash: detected $ENV on $PORT" >&2
 fi
 if [ -z "$ENV" ]; then
-  ENV="$(board_to_env "$DEFAULT_BOARD")"
-  echo "flash: defaulting to $ENV (pass 2inch|7b to override)" >&2
+  echo "flash: couldn't tell which board this is (the two share an MCU, and no" >&2
+  echo "       running Micra firmware was detected to read its banner)." >&2
+  echo "       Re-run with the board so we don't flash the wrong build:" >&2
+  echo "         make flash-7b        (7\" 1024x600)" >&2
+  echo "         make flash-2inch     (2\" 320x240)" >&2
+  exit 2
 fi
 
 if [ -z "$PORT" ]; then
