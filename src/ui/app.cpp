@@ -455,9 +455,21 @@ void App::apply_pending_theme() {
 
 void App::rebuild() {
   if (machine_ == nullptr) return;  // never built yet
+  // Preserve the Device panel's scroll position (the theme button sits below the
+  // fold, so a naive rebuild would bounce the user back to the top each cycle).
+  int32_t scroll_y = 0;
+  if (settings_.panel[kSectionDevice] != nullptr)
+    scroll_y = lv_obj_get_scroll_y(settings_.panel[kSectionDevice]);
+
   build(*machine_, *provisioner_, *battery_, *display_, *clock_, screen_);
   show_tab(1);                                   // back to Settings...
   select_settings_section(kSectionDevice);       // ...on the Device section
+
+  lv_obj_t* dev = settings_.panel[kSectionDevice];
+  if (dev != nullptr) {
+    lv_obj_update_layout(dev);                   // compute the scroll range first
+    lv_obj_scroll_to_y(dev, scroll_y, LV_ANIM_OFF);
+  }
 }
 
 void App::commit_temp_edits() {
