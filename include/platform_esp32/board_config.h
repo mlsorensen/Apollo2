@@ -55,7 +55,10 @@ constexpr int   kBatteryChargePin = -1;      // none on this board -> infer
 constexpr bool  kBatteryChargeActiveLow = true;  // (unused; no pin)
 constexpr float kBatteryFullVolts = 4.20f;
 constexpr float kBatteryEmptyVolts = 3.30f;
-constexpr float kBatteryChargingVolts = 4.15f;   // infer charging above this
+constexpr float kBatteryChargingVolts = 4.15f;   // (legacy voltage-only charge guess)
+// On USB power with NO cell installed, the charge node floats above any real
+// battery; above this we report "no battery" (plug icon) rather than a percent.
+constexpr float kBatteryNoCellVolts = 4.35f;
 
 #elif defined(BOARD_WAVESHARE_S3_LCD_7B)
 
@@ -110,6 +113,7 @@ constexpr bool  kBatteryChargeActiveLow = true;
 constexpr float kBatteryFullVolts = 4.20f;
 constexpr float kBatteryEmptyVolts = 3.30f;
 constexpr float kBatteryChargingVolts = 4.15f;
+constexpr float kBatteryNoCellVolts = 4.35f;
 
 #else
 #error "No board selected. Add -DBOARD_WAVESHARE_S3_LCD_2 (or _7B) to build_flags in platformio.ini."

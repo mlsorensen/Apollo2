@@ -10,7 +10,10 @@ namespace host {
 class FakeBattery : public core::IBattery {
  public:
   core::BatteryState battery() const override {
-    return core::BatteryState{/*present=*/true, /*charging=*/false, /*percent=*/82};
+    core::BatteryState s;
+    s.present = true;
+    s.percent = 82;
+    return s;  // idle on battery (no USB) for the sim preview
   }
 };
 

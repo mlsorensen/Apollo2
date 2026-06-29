@@ -25,11 +25,12 @@ struct HomeWidgets {
   lv_obj_t* power_btn = nullptr;
   lv_obj_t* power_label = nullptr;
 
-  // Charging animation (we can't know SoC while charging, so we just loop a
-  // filling battery icon instead of a percent).
+  // Charging animation: a looping battery-fill icon shown beside the live
+  // percent (the timer advances the frame between refreshes).
   lv_timer_t* batt_timer = nullptr;
   bool charging = false;
   int charge_frame = 0;
+  int charge_pct = 0;
 };
 
 // Build the Home widgets into `parent`, sized for `screen` (values are set by a

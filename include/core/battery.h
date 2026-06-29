@@ -7,7 +7,8 @@ namespace core {
 
 struct BatteryState {
   bool present = false;   // is a battery connected / readable
-  bool charging = false;
+  bool charging = false;  // present && on external power
+  bool usb = false;       // external (USB) power connected
   int percent = 0;        // 0..100 (meaningful when present)
 };
 
