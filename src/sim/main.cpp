@@ -16,6 +16,7 @@
 #include "platform_host/png_display.h"
 #include "ui/app.h"
 #include "ui/screen.h"
+#include "ui/theme.h"
 
 namespace {
 
@@ -77,13 +78,13 @@ int main() {
   ok &= r({1024, 600}, "renders/boiler_1024x600.png", 1, ui::kSectionBoiler);
   ok &= r({1024, 600}, "renders/device_1024x600.png", 1, ui::kSectionDevice);
 
-  // Theme previews: Home in each color scheme (0..4), plus a Device panel in one
-  // alt scheme to show themed controls + scrollbar.
-  const char* kThemeHome[] = {
-      "renders/theme0_midnight_320x240.png", "renders/theme1_graphite_320x240.png",
-      "renders/theme2_espresso_320x240.png", "renders/theme3_nord_320x240.png",
-      "renders/theme4_solarized_320x240.png"};
-  for (int i = 0; i < 5; ++i) ok &= r({320, 240}, kThemeHome[i], 0, -1, false, i);
+  // Theme previews: Home in every color scheme, plus a Device panel in one alt
+  // scheme to show themed controls + scrollbar.
+  for (int i = 0; i < ui::theme::count(); ++i) {
+    char path[64];
+    std::snprintf(path, sizeof(path), "renders/theme%d_320x240.png", i);
+    ok &= r({320, 240}, path, 0, -1, false, i);
+  }
   ok &= r({320, 240}, "renders/device_espresso_320x240.png", 1, ui::kSectionDevice, false, 2);
   return ok ? 0 : 1;
 }
