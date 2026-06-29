@@ -78,6 +78,12 @@ int main() {
   ok &= r({1024, 600}, "renders/boiler_1024x600.png", 1, ui::kSectionBoiler);
   ok &= r({1024, 600}, "renders/device_1024x600.png", 1, ui::kSectionDevice);
 
+  // Stats tab (tab 2): graph sections + info.
+  ok &= r({320, 240}, "renders/stats_brew_320x240.png", 2, -1, false, 0, ui::kStatsBrew);
+  ok &= r({320, 240}, "renders/stats_info_320x240.png", 2, -1, false, 0, ui::kStatsInfo);
+  ok &= r({1024, 600}, "renders/stats_brew_1024x600.png", 2, -1, false, 0, ui::kStatsBrew);
+  ok &= r({1024, 600}, "renders/stats_boiler_1024x600.png", 2, -1, false, 0, ui::kStatsBoiler);
+
   // Theme previews: Home in every color scheme, plus a Device panel in one alt
   // scheme to show themed controls + scrollbar.
   for (int i = 0; i < ui::theme::count(); ++i) {

@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(perl -0pi -e 's/#include <cstdio>\\\\n#include <cstdio>\\\\n/#include <cstdio>\\\\n/' src/ui/app.cpp)"
+    ]
+  }
+}

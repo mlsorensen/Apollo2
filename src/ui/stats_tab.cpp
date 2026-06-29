@@ -13,10 +13,99 @@ lv_obj_t* make_box(lv_obj_t* parent) {
   lv_obj_remove_style_all(box);
   lv_obj_remove_flag(box, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_width(box, lv_pct(100));
-  lv_obj_set_height(box, LV_SIZE_CONTENT);  // TEST: was flex_grow 1
+  lv_obj_set_flex_grow(box, 1);  // fill the height below the selector
   lv_obj_set_flex_flow(box, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_style_pad_row(box, 6, 0);
   return box;
+}
+
+// Compact "time ago" for the bottom scale.
+void fmt_ago(char* buf, size_t n, uint32_t secs) {
+  if (secs == 0) lv_snprintf(buf, n, "now");
+  else if (secs < 3600) lv_snprintf(buf, n, "%um", secs / 60);
+  else lv_snprintf(buf, n, "%uh", secs / 3600);
+}
+
+// Post-draw overlay for the chart (this widget has no built-in axes): grey every
+// no-data (NaN) run (leading "before recording" spans and mid-stream BLE-drop
+// gaps), draw the set-point reference line, the Y temperature labels (left
+// margin) and the time scale (bottom margin).
+void chart_overlay_cb(lv_event_t* e) {
+  auto* w = static_cast<StatsWidgets*>(lv_event_get_user_data(e));
+  if (w->series == nullptr) return;
+  auto* chart = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  lv_layer_t* layer = lv_event_get_layer(e);
+
+  lv_area_t plot;
+  lv_obj_get_content_coords(chart, &plot);  // plot area (inside padding)
+  lv_area_t obj;
+  lv_obj_get_coords(chart, &obj);
+  const int64_t w_px = plot.x2 - plot.x1 + 1;
+  const int32_t h_px = plot.y2 - plot.y1;
+  const int32_t range = (w->y_max > w->y_min) ? (w->y_max - w->y_min) : 1;
+  const uint32_t cnt = lv_chart_get_point_count(chart);
+  const int32_t* ys = lv_chart_get_series_y_array(chart, w->series);
+
+  // grey contiguous no-data runs
+  lv_draw_rect_dsc_t rect;
+  lv_draw_rect_dsc_init(&rect);
+  rect.bg_color = lv_color_hex(ui::theme::rail());
+  rect.bg_opa = LV_OPA_50;
+  for (uint32_t i = 0; i < cnt;) {
+    if (ys[i] == LV_CHART_POINT_NONE) {
+      uint32_t j = i;
+      while (j < cnt && ys[j] == LV_CHART_POINT_NONE) j++;
+      lv_area_t a = plot;
+      a.x1 = plot.x1 + static_cast<int32_t>(i * w_px / cnt);
+      a.x2 = plot.x1 + static_cast<int32_t>(j * w_px / cnt);
+      lv_draw_rect(layer, &rect, &a);
+      i = j;
+    } else {
+      i++;
+    }
+  }
+
+  // set-point reference line (NaN target => skip; NaN != itself)
+  if (w->target == w->target && w->target >= w->y_min && w->target <= w->y_max) {
+    const int32_t y =
+        plot.y2 - static_cast<int32_t>((w->target - w->y_min) * h_px / range);
+    lv_draw_line_dsc_t line;
+    lv_draw_line_dsc_init(&line);
+    line.color = lv_color_hex(ui::theme::warn());
+    line.width = 2;
+    line.p1.x = plot.x1;
+    line.p1.y = y;
+    line.p2.x = plot.x2;
+    line.p2.y = y;
+    lv_draw_line(layer, &line);
+  }
+
+  lv_draw_label_dsc_t lbl;
+  lv_draw_label_dsc_init(&lbl);
+  lbl.color = lv_color_hex(ui::theme::muted());
+  lbl.font = &lv_font_montserrat_14;
+  char buf[8];
+
+  // Y labels (left margin): 5 ticks, top = y_max .. bottom = y_min
+  lbl.align = LV_TEXT_ALIGN_RIGHT;
+  for (int t = 0; t <= 4; ++t) {
+    lv_snprintf(buf, sizeof(buf), "%d", w->y_max - range * t / 4);
+    lbl.text = buf;
+    const int32_t y = plot.y1 + h_px * t / 4;
+    lv_area_t la = {obj.x1 + 2, static_cast<int32_t>(y - 9), plot.x1 - 4,
+                    static_cast<int32_t>(y + 9)};
+    lv_draw_label(layer, &lbl, &la);
+  }
+
+  // Time scale (bottom margin): 4 ticks, left = -window .. right = now
+  lbl.align = LV_TEXT_ALIGN_CENTER;
+  for (int t = 0; t <= 3; ++t) {
+    fmt_ago(buf, sizeof(buf), static_cast<uint32_t>(w->window_s * (3 - t) / 3));
+    lbl.text = buf;
+    const int32_t x = plot.x1 + static_cast<int32_t>(w_px * t / 3);
+    lv_area_t la = {x - 24, plot.y2 + 4, x + 24, plot.y2 + 20};
+    lv_draw_label(layer, &lbl, &la);
+  }
 }
 
 }  // namespace
@@ -26,8 +115,6 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
   const bool xl = is_xl(screen);
   const lv_font_t* font =
       compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
-  const lv_font_t* big =
-      compact ? &lv_font_montserrat_20 : xl ? &lv_font_montserrat_48 : &lv_font_montserrat_28;
 
   lv_obj_remove_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_pad_all(parent, compact ? 8 : xl ? 24 : 16, 0);
@@ -53,20 +140,10 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
     lv_obj_center(l);
   }
 
-  (void)big;
-
-  // --- Graph view (Brew/Boiler): a flat vertical stack ---------------------
+  // --- Graph view (Brew/Boiler): a full-height chart with drawn axes ---------
+  // The section is shown by the selector above, and the Y axis is labeled, so no
+  // separate title/current-value is needed.
   out.graph_box = make_box(parent);
-
-  out.title = lv_label_create(out.graph_box);
-  lv_label_set_text(out.title, "Brew");
-  lv_obj_set_style_text_color(out.title, lv_color_hex(ui::theme::muted()), 0);
-  lv_obj_set_style_text_font(out.title, font, 0);
-
-  out.cur_label = lv_label_create(out.graph_box);
-  lv_label_set_text(out.cur_label, "--");
-  lv_obj_set_style_text_color(out.cur_label, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(out.cur_label, font, 0);
 
   out.chart = lv_chart_create(out.graph_box);
   lv_obj_set_width(out.chart, lv_pct(100));
@@ -79,23 +156,53 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
   lv_obj_set_style_border_width(out.chart, 0, 0);
   lv_obj_set_style_radius(out.chart, 12, 0);
   lv_obj_set_style_line_color(out.chart, lv_color_hex(ui::theme::rail()), LV_PART_MAIN);
+  // Reserve margins for the drawn axes: left for Y temperature labels, bottom for
+  // the time scale, a little top room so the top Y label isn't clipped.
+  lv_obj_set_style_pad_left(out.chart, compact ? 34 : 48, 0);
+  lv_obj_set_style_pad_bottom(out.chart, 22, 0);
+  lv_obj_set_style_pad_top(out.chart, 10, 0);
+  lv_obj_add_flag(out.chart, LV_OBJ_FLAG_CLICKABLE);  // tap cycles the time window
   out.series = lv_chart_add_series(out.chart, lv_color_hex(ui::theme::accent()),
                                    LV_CHART_AXIS_PRIMARY_Y);
+  lv_obj_add_event_cb(out.chart, chart_overlay_cb, LV_EVENT_DRAW_POST_END, &out);
 
-  out.zoom_btn = ui::make_button(out.graph_box);
-  lv_obj_set_style_bg_color(out.zoom_btn, lv_color_hex(ui::theme::card()), 0);
-  out.zoom_label = lv_label_create(out.zoom_btn);
-  lv_label_set_text(out.zoom_label, LV_SYMBOL_LOOP "  30m");
-  lv_obj_set_style_text_color(out.zoom_label, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(out.zoom_label, font, 0);
-  lv_obj_center(out.zoom_label);
+  // Centered "No data yet" overlay, shown when the whole window is empty.
+  out.empty_label = lv_label_create(out.chart);
+  lv_label_set_text(out.empty_label, "No data yet");
+  lv_obj_set_style_text_color(out.empty_label, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(out.empty_label, font, 0);
+  lv_obj_center(out.empty_label);
+  lv_obj_add_flag(out.empty_label, LV_OBJ_FLAG_HIDDEN);
 
-  // --- Info view ----------------------------------------------------------
+  // --- Info view: a key/value table ------------------------------------------
   out.info_box = make_box(parent);
-  out.info_label = lv_label_create(out.info_box);
-  lv_label_set_text(out.info_label, "Connect to read device info.");
-  lv_obj_set_style_text_color(out.info_label, lv_color_hex(ui::theme::muted()), 0);
-  lv_obj_set_style_text_font(out.info_label, font, 0);
+  lv_obj_set_style_pad_row(out.info_box, 0, 0);
+  static const char* kInfoKeys[kStatsInfoRows] = {"Name", "Manufacturer", "Model",
+                                                  "Serial", "Firmware"};
+  for (int i = 0; i < kStatsInfoRows; ++i) {
+    lv_obj_t* row = lv_obj_create(out.info_box);
+    lv_obj_remove_style_all(row);
+    lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_width(row, lv_pct(100));
+    lv_obj_set_height(row, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_ver(row, compact ? 6 : 10, 0);
+    lv_obj_set_style_border_side(row, LV_BORDER_SIDE_BOTTOM, 0);
+    lv_obj_set_style_border_width(row, 1, 0);
+    lv_obj_set_style_border_color(row, lv_color_hex(ui::theme::rail()), 0);
+
+    lv_obj_t* key = lv_label_create(row);
+    lv_label_set_text(key, kInfoKeys[i]);
+    lv_obj_set_style_text_color(key, lv_color_hex(ui::theme::muted()), 0);
+    lv_obj_set_style_text_font(key, font, 0);
+
+    out.info_val[i] = lv_label_create(row);
+    lv_label_set_text(out.info_val[i], "-");
+    lv_obj_set_style_text_color(out.info_val[i], lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(out.info_val[i], font, 0);
+  }
 
   stats_select_section(out, kStatsBrew);
 }
@@ -109,7 +216,6 @@ void stats_select_section(StatsWidgets& w, int section) {
   } else {
     lv_obj_remove_flag(w.graph_box, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(w.info_box, LV_OBJ_FLAG_HIDDEN);
-    lv_label_set_text(w.title, section == kStatsBoiler ? "Boiler" : "Brew");
   }
   for (int i = 0; i < kStatsCount; ++i) {
     if (i == section) {

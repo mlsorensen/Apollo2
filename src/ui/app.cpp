@@ -27,15 +27,6 @@ void style_tab_button(lv_obj_t* btn, const lv_font_t* font) {
   lv_obj_set_style_shadow_width(btn, 0, LV_STATE_CHECKED);
 }
 
-void build_placeholder(lv_obj_t* parent, const char* title, const lv_font_t* font) {
-  lv_obj_remove_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_t* lbl = lv_label_create(parent);
-  lv_label_set_text(lbl, title);
-  lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::muted()), 0);
-  lv_obj_set_style_text_font(lbl, font, 0);
-  lv_obj_center(lbl);
-}
-
 void on_power_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->toggle_power();
 }
@@ -386,9 +377,11 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   if (settings_.theme_btn != nullptr)
     lv_obj_add_event_cb(settings_.theme_btn, on_theme_clicked, LV_EVENT_CLICKED, this);
 
-  // Stats UI is parked (build_stats_tab hangs at build — under investigation);
-  // the history backend is wired and sampling, ready to resume.
-  build_placeholder(stats, "Stats", tab_font);
+  build_stats_tab(stats, screen, stats_);
+  for (int i = 0; i < kStatsCount; ++i) {
+    lv_obj_add_event_cb(stats_.seg[i], on_stats_segment, LV_EVENT_CLICKED, this);
+  }
+  lv_obj_add_event_cb(stats_.chart, on_zoom_clicked, LV_EVENT_CLICKED, this);  // tap to zoom
 
   update_settings_view();
   update_temp_panels(machine_->snapshot());
@@ -810,46 +803,59 @@ void App::cycle_zoom() {
 
 void App::update_stats_view() {
   if (history_ == nullptr || stats_.chart == nullptr) return;
+
+  const core::MachineSnapshot snap =
+      (machine_ != nullptr) ? machine_->snapshot() : core::MachineSnapshot{};
+  const bool connected = snap.link == core::Link::Connected;
+
   if (stats_.active == kStatsInfo) {
-    const std::string name = (machine_ != nullptr) ? machine_->snapshot().name : "";
-    std::string text = name.empty() ? "Machine" : name;
-    text += "\n\nDevice info (manufacturer, model, serial, firmware) will appear "
-            "here once read from the machine.";
-    lv_label_set_text(stats_.info_label, text.c_str());
+    // Row 0 is the BLE name (known); the rest come from the device-information
+    // service, which we don't read yet, so they stay "-".
+    if (stats_.info_val[0] != nullptr) {
+      const bool have = snap.name != nullptr && snap.name[0] != '\0';
+      lv_label_set_text(stats_.info_val[0], have ? snap.name : "-");
+    }
     return;
   }
 
   const ZoomLevel& z = kZooms[stats_.zoom_idx];
-  lv_label_set_text(stats_.zoom_label, z.label);
-  // Range to suit each boiler (brew ~80-100, steam ~120-135); start at 0 so the
-  // cold-start ramp is visible.
-  lv_chart_set_range(stats_.chart, LV_CHART_AXIS_PRIMARY_Y, 0,
-                     stats_.active == kStatsBoiler ? 140 : 110);
+  stats_.window_s = z.window_s;
+  // Tight ranges (start near ambient, not 0) so the curve fills the plot and the
+  // 5 drawn Y labels land on round numbers: brew 20/40/60/80/100, steam
+  // 20/50/80/110/140.
+  stats_.y_min = 20;
+  stats_.y_max = (stats_.active == kStatsBoiler) ? 140 : 100;
+  lv_chart_set_range(stats_.chart, LV_CHART_AXIS_PRIMARY_Y, stats_.y_min, stats_.y_max);
+
+  // Set-point reference line: the current target for this boiler (none when
+  // disconnected, or for the steam boiler while steam is off).
+  if (!connected || (stats_.active == kStatsBoiler && !snap.steam_enabled)) {
+    stats_.target = NAN;
+  } else {
+    stats_.target = (stats_.active == kStatsBoiler) ? snap.boiler_target_c : snap.brew_target_c;
+  }
 
   float brew[kStatsPoints];
   float boiler[kStatsPoints];
   history_->series(z.window_s, brew, boiler, kStatsPoints);
   const float* data = (stats_.active == kStatsBoiler) ? boiler : brew;
 
-  float last = NAN;
+  bool any = false;
   for (int i = 0; i < kStatsPoints; ++i) {
     if (std::isnan(data[i])) {
       lv_chart_set_value_by_id(stats_.chart, stats_.series, i, LV_CHART_POINT_NONE);
     } else {
       lv_chart_set_value_by_id(stats_.chart, stats_.series, i,
                                static_cast<int32_t>(std::lroundf(data[i])));
-      last = data[i];
+      any = true;
     }
   }
-  lv_chart_refresh(stats_.chart);
-
-  if (std::isnan(last)) {
-    lv_label_set_text(stats_.cur_label, "--");
-  } else {
-    char b[16];
-    std::snprintf(b, sizeof(b), "%.0f C", last);
-    lv_label_set_text(stats_.cur_label, b);
+  if (stats_.empty_label != nullptr) {
+    if (any) lv_obj_add_flag(stats_.empty_label, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_remove_flag(stats_.empty_label, LV_OBJ_FLAG_HIDDEN);
   }
+  lv_chart_refresh(stats_.chart);
+  lv_obj_invalidate(stats_.chart);  // redraw the overlay (axes, set-point, gaps)
 }
 
 void App::update_settings_view() {
