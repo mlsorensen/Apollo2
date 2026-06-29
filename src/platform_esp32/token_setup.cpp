@@ -16,11 +16,21 @@ const char kForm[] =
     "content='width=device-width,initial-scale=1'></head>"
     "<body style='font-family:sans-serif;max-width:480px;margin:2em auto;padding:0 1em'>"
     "<h2>Micra Remote</h2><p>Paste your machine's BLE token, then Save:</p>"
-    "<form method='POST' action='/save'>"
-    "<input name='token' autocomplete='off' autocapitalize='off' "
+    "<form method='POST' action='/save' onsubmit='return checkTok()'>"
+    "<input id=tok name='token' autocomplete='off' autocapitalize='off' "
     "spellcheck='false' style='width:100%;padding:10px;box-sizing:border-box'>"
+    "<p id=msg style='color:#c00;font-size:.9em'></p>"
     "<p><button style='padding:10px 24px;font-size:1em'>Save</button></p>"
-    "</form></body></html>";
+    "</form>"
+    // Client-side sanity check: a token is a long, space-free printable string.
+    // Catches obvious paste mistakes before the POST (the device still re-checks).
+    "<script>function checkTok(){"
+    "var t=document.getElementById('tok');var v=t.value.trim();t.value=v;"
+    "var m=document.getElementById('msg');"
+    "if(v.length<20||!/^[\\x21-\\x7e]+$/.test(v)){"
+    "m.textContent='That does not look like a token \\u2014 it should be a long "
+    "string with no spaces.';return false;}return true;}</script>"
+    "</body></html>";
 }  // namespace
 
 TokenSetup::TokenSetup(Config& config, MicraLink& link)
