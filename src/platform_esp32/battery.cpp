@@ -28,13 +28,6 @@ core::BatteryState Battery::battery() const {
   for (int i = 0; i < kSamples; ++i) raw_sum += io_extension().read_adc();
   const uint16_t raw = static_cast<uint16_t>(raw_sum / kSamples);
   volts = raw * board::kBatteryIoExtScale;
-  static uint32_t last_log = 0;  // periodic raw dump to calibrate kBatteryIoExtScale
-  if (millis() - last_log > 3000) {
-    last_log = millis();
-    // log_e (not Serial.printf) so it lands on the same console as the IDF/core
-    // [E] lines — Serial.printf goes to the other USB port on this board.
-    log_e("battery: ioext ADC raw=%u -> %.2fV", raw, static_cast<double>(volts));
-  }
   s.usb = HWCDC::isPlugged();
 #else
   // No battery hardware on this board -> external-power (plug) indicator only.
