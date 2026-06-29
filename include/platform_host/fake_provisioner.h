@@ -15,8 +15,10 @@ class FakeProvisioner : public core::IProvisioner {
   std::vector<core::ScanResult> scan_results() const override;
   void save_device(const core::ScanResult& /*device*/) override {}
   void retry_pairing() override {}
-  std::string saved_name() const override { return ""; }
+  std::string saved_name() const override { return "MICRA_MR000000"; }  // preview saved row
   void forget() override {}
+  bool connect_enabled() const override { return connect_enabled_; }
+  void set_connect_enabled(bool enabled) override { connect_enabled_ = enabled; }
 
   bool has_token() const override { return true; }
   void start_token_setup() override {}
@@ -24,6 +26,9 @@ class FakeProvisioner : public core::IProvisioner {
   bool token_setup_active() const override { return false; }
   const char* setup_ssid() const override { return "Micra-Setup"; }
   const char* setup_url() const override { return "http://192.168.4.1"; }
+
+ private:
+  bool connect_enabled_ = true;
 };
 
 }  // namespace host

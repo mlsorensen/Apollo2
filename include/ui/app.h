@@ -43,6 +43,7 @@ class App {
   void start_scan();           // Settings "Scan" button
   void save_scanned(int index);  // a result row in the Settings list
   void forget();               // Settings "Forget" button
+  void toggle_connection();    // Settings "Connect"/"Disconnect" button
   void open_token_setup();     // Settings "Setup" -> token-choice modal
   void retry_pairing();        // modal "Retry pairing"
   void cancel_pairing();       // pairing-spinner "Cancel"

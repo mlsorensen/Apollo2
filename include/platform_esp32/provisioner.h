@@ -25,6 +25,8 @@ class Provisioner : public core::IProvisioner {
   void retry_pairing() override;
   std::string saved_name() const override;
   void forget() override;
+  bool connect_enabled() const override;
+  void set_connect_enabled(bool enabled) override;
 
   bool has_token() const override;
   void start_token_setup() override;

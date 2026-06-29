@@ -38,6 +38,9 @@ void Provisioner::forget() {
   link_.set_address("");   // -> Unconfigured
 }
 
+bool Provisioner::connect_enabled() const { return link_.connect_enabled(); }
+void Provisioner::set_connect_enabled(bool enabled) { link_.set_connect_enabled(enabled); }
+
 bool Provisioner::has_token() const { return !config_.token().empty(); }
 
 void Provisioner::start_token_setup() { token_setup_.start(); }

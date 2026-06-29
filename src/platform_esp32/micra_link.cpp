@@ -71,6 +71,11 @@ void MicraLink::set_token(std::string token) {
   reconnect_requested_.store(true);
 }
 
+void MicraLink::set_connect_enabled(bool enabled) {
+  connect_enabled_.store(enabled);
+  reconnect_requested_.store(true);  // nudge the task to act now (drop or reconnect)
+}
+
 void MicraLink::set_name(std::string name) {
   std::lock_guard<std::mutex> lk(mutex_);
   name_ = name.empty() ? "Micra" : std::move(name);
@@ -141,6 +146,15 @@ void MicraLink::task_loop() {
     if (token_bad_.load()) {
       if (connected && g_client != nullptr) { g_client->disconnect(); connected = false; }
       set_link(core::Link::NeedsToken);
+      vTaskDelay(pdMS_TO_TICKS(500));
+      continue;
+    }
+
+    // User disconnected: drop the link and idle (don't auto-reconnect) so another
+    // remote can take the Micra's single BLE slot.
+    if (!connect_enabled_.load()) {
+      if (connected && g_client != nullptr) { g_client->disconnect(); connected = false; }
+      set_link(core::Link::Disconnected);
       vTaskDelay(pdMS_TO_TICKS(500));
       continue;
     }

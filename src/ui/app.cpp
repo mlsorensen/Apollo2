@@ -49,6 +49,9 @@ void on_forget_clicked(lv_event_t* e) {
 void on_setup_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->open_token_setup();
 }
+void on_connect_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->toggle_connection();
+}
 void on_token_retry(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->retry_pairing();
 }
@@ -366,6 +369,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   }
   lv_obj_add_event_cb(settings_.scan_btn, on_scan_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.setup_btn, on_setup_clicked, LV_EVENT_CLICKED, this);
+  lv_obj_add_event_cb(settings_.connect_btn, on_connect_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.forget_btn, on_forget_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.brew_minus, on_brew_minus, LV_EVENT_ALL, this);
   lv_obj_add_event_cb(settings_.brew_plus, on_brew_plus, LV_EVENT_ALL, this);
@@ -662,6 +666,12 @@ void App::forget() {
   settings_.last_count = -1;  // force a refresh of the settings view
 }
 
+void App::toggle_connection() {
+  if (provisioner_ == nullptr) return;
+  provisioner_->set_connect_enabled(!provisioner_->connect_enabled());
+  update_settings_view();  // reflect the new label/colour immediately
+}
+
 lv_obj_t* App::open_modal(const char* title, const char* body) {
   close_modal();
   lv_obj_t* bg = lv_obj_create(lv_layer_top());  // full-screen dimmed overlay
@@ -956,7 +966,8 @@ void App::update_stats_view() {
 void App::update_settings_view() {
   if (provisioner_ == nullptr) return;
 
-  // Saved-machine row: name + (Setup if no token) + Forget, when a machine is saved.
+  // Saved-machine row: name + Forget, plus one of: Setup (no token yet) or
+  // Connect/Disconnect (tokened) in the same slot.
   const std::string saved = provisioner_->saved_name();
   if (saved.empty()) {
     lv_obj_add_flag(settings_.saved_row, LV_OBJ_FLAG_HIDDEN);
@@ -965,10 +976,18 @@ void App::update_settings_view() {
     char buf[48];
     std::snprintf(buf, sizeof(buf), "Saved: %s", saved.c_str());
     lv_label_set_text(settings_.saved_label, buf);
-    if (provisioner_->has_token()) {
+    const bool tokened = provisioner_->has_token();
+    if (tokened) {
       lv_obj_add_flag(settings_.setup_btn, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_remove_flag(settings_.connect_btn, LV_OBJ_FLAG_HIDDEN);
+      const bool on = provisioner_->connect_enabled();
+      lv_label_set_text(settings_.connect_label, on ? "Disconnect" : "Connect");
+      lv_obj_set_style_bg_color(
+          settings_.connect_btn,
+          lv_color_hex(on ? ui::theme::rail() : ui::theme::accent()), 0);
     } else {
       lv_obj_remove_flag(settings_.setup_btn, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_add_flag(settings_.connect_btn, LV_OBJ_FLAG_HIDDEN);
     }
   }
 

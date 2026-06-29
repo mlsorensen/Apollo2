@@ -40,6 +40,12 @@ class IProvisioner {
   // Clear the saved machine (and its token) -> back to Unconfigured.
   virtual void forget() = 0;
 
+  // Manual connect control for the saved machine. Disabling drops the link and
+  // stops auto-reconnect — only one remote can hold the Micra's single BLE link,
+  // so this frees it for another remote. Meaningful once a machine is configured.
+  virtual bool connect_enabled() const = 0;
+  virtual void set_connect_enabled(bool enabled) = 0;
+
   // --- Token setup (WiFi portal) ---
   virtual bool has_token() const = 0;          // is a token saved for the machine?
   virtual void start_token_setup() = 0;        // bring up the WiFi paste page

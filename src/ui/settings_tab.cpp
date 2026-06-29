@@ -35,6 +35,16 @@ void build_bluetooth_panel(lv_obj_t* panel, const lv_font_t* font,
   lv_obj_set_style_text_font(setup_lbl, font, 0);
   lv_obj_center(setup_lbl);
 
+  // Connect/Disconnect: occupies the Setup slot once the machine is tokened.
+  out.connect_btn = ui::make_button(out.saved_row);
+  lv_obj_set_style_bg_color(out.connect_btn, lv_color_hex(ui::theme::accent()), 0);
+  out.connect_label = lv_label_create(out.connect_btn);
+  lv_label_set_text(out.connect_label, "Disconnect");
+  lv_obj_set_style_text_color(out.connect_label, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(out.connect_label, font, 0);
+  lv_obj_center(out.connect_label);
+  lv_obj_add_flag(out.connect_btn, LV_OBJ_FLAG_HIDDEN);
+
   out.forget_btn = ui::make_button(out.saved_row);
   lv_obj_set_style_bg_color(out.forget_btn, lv_color_hex(ui::theme::alert()), 0);
   lv_obj_t* forget_lbl = lv_label_create(out.forget_btn);

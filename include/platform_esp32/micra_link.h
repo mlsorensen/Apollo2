@@ -44,6 +44,10 @@ class MicraLink : public core::IMachine {
   // this to NVS). Set once before begin().
   void set_token_persister(std::function<void(std::string)> persister);
 
+  // Manual connect gate. Disabling drops the link and stops auto-reconnect.
+  bool connect_enabled() const { return connect_enabled_.load(); }
+  void set_connect_enabled(bool enabled);
+
   // core::IMachine — thread-safe cached read.
   core::MachineSnapshot snapshot() const override;
 
@@ -92,6 +96,7 @@ class MicraLink : public core::IMachine {
   std::atomic<int> pending_steam_whole_{-1};  // target C, -1 none
   std::atomic<int> pending_steam_enable_{-1}; // 0 off, 1 on, -1 none
   std::atomic<bool> reconnect_requested_{false};
+  std::atomic<bool> connect_enabled_{true};   // user gate; false => drop + don't reconnect
   std::atomic<bool> try_pairing_{false};
   std::atomic<bool> token_bad_{false};  // authed but reads rejected -> needs re-entry
   std::atomic<bool> scan_requested_{false};
