@@ -35,7 +35,8 @@ platform::History g_history;
 ui::App g_app;
 
 constexpr uint32_t kUiRefreshMs = 500;
-constexpr uint32_t kSampleMs = 30000;  // temperature history cadence
+constexpr uint32_t kSampleMs =
+    platform::History::kSampleIntervalS * 1000;  // temperature history cadence
 
 }  // namespace
 
