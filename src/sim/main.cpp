@@ -68,6 +68,12 @@ int main() {
   ok &= r({800, 480}, "renders/boiler_800x480.png", 1, ui::kSectionBoiler);
   ok &= r({320, 240}, "renders/device_320x240.png", 1, ui::kSectionDevice);
 
+  // 7" 1024x600 (ESP32-S3-Touch-LCD-7B): the XL tier.
+  ok &= r({1024, 600}, "renders/home_1024x600.png");
+  ok &= r({1024, 600}, "renders/settings_1024x600.png", 1);
+  ok &= r({1024, 600}, "renders/boiler_1024x600.png", 1, ui::kSectionBoiler);
+  ok &= r({1024, 600}, "renders/device_1024x600.png", 1, ui::kSectionDevice);
+
   // Theme previews: Home in each color scheme (0..4), plus a Device panel in one
   // alt scheme to show themed controls + scrollbar.
   const char* kThemeHome[] = {

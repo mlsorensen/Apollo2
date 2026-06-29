@@ -82,15 +82,18 @@ namespace ui {
 
 void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& out) {
   const bool compact = is_compact(screen);
+  const bool xl = is_xl(screen);
 
-  const int pad = compact ? 8 : 20;
-  const int gap = compact ? 6 : 16;
-  const int row_h = compact ? 96 : 210;
-  const int card_pad = compact ? 8 : 16;
-  const int btn_h = compact ? 40 : 64;
+  const int pad = compact ? 8 : xl ? 28 : 20;
+  const int gap = compact ? 6 : xl ? 22 : 16;
+  const int row_h = compact ? 96 : xl ? 300 : 210;
+  const int card_pad = compact ? 8 : xl ? 24 : 16;
+  const int btn_h = compact ? 40 : xl ? 92 : 64;
   const lv_font_t* value_font = compact ? &lv_font_montserrat_28 : &lv_font_montserrat_48;
-  const lv_font_t* sub_font = compact ? &lv_font_montserrat_14 : &lv_font_montserrat_20;
-  const lv_font_t* btn_font = compact ? &lv_font_montserrat_14 : &lv_font_montserrat_20;
+  const lv_font_t* sub_font =
+      compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
+  const lv_font_t* btn_font =
+      compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
 
   lv_obj_remove_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_pad_all(parent, pad, 0);

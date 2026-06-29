@@ -256,6 +256,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   clock_ = &clock;
   screen_ = screen;
   const bool compact = is_compact(screen);
+  const bool xl = is_xl(screen);
 
   ui::theme::set_active(display_->theme());  // pick the palette before any widget is colored
 
@@ -272,12 +273,13 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
   const lv_font_t* tab_font = compact ? &lv_font_montserrat_20 : &lv_font_montserrat_28;
+  const int rail_pad = compact ? 4 : xl ? 12 : 8;
 
   lv_obj_t* tv = lv_tabview_create(scr);
   tabview_ = tv;
   lv_obj_add_event_cb(tv, on_tab_changed, LV_EVENT_VALUE_CHANGED, this);  // commit on tab exit
   lv_tabview_set_tab_bar_position(tv, compact ? LV_DIR_BOTTOM : LV_DIR_LEFT);
-  lv_tabview_set_tab_bar_size(tv, compact ? 44 : 88);
+  lv_tabview_set_tab_bar_size(tv, compact ? 44 : xl ? 120 : 88);
   lv_obj_set_style_bg_opa(tv, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(tv, 0, 0);
 
@@ -288,9 +290,9 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_t* rail = lv_tabview_get_tab_bar(tv);
   lv_obj_set_style_bg_color(rail, lv_color_hex(ui::theme::rail()), 0);
   lv_obj_set_style_bg_opa(rail, LV_OPA_COVER, 0);
-  lv_obj_set_style_pad_all(rail, compact ? 4 : 8, 0);
-  lv_obj_set_style_pad_row(rail, compact ? 4 : 8, 0);
-  lv_obj_set_style_pad_column(rail, compact ? 4 : 8, 0);
+  lv_obj_set_style_pad_all(rail, rail_pad, 0);
+  lv_obj_set_style_pad_row(rail, rail_pad, 0);
+  lv_obj_set_style_pad_column(rail, rail_pad, 0);
 
   lv_obj_t* home = lv_tabview_add_tab(tv, LV_SYMBOL_HOME);
   lv_obj_t* settings = lv_tabview_add_tab(tv, LV_SYMBOL_SETTINGS);

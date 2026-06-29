@@ -236,10 +236,12 @@ namespace ui {
 void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
                         SettingsWidgets& out) {
   const bool compact = is_compact(screen);
-  const lv_font_t* font = compact ? &lv_font_montserrat_14 : &lv_font_montserrat_20;
+  const bool xl = is_xl(screen);
+  const lv_font_t* font =
+      compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
 
   lv_obj_remove_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_pad_all(parent, compact ? 8 : 16, 0);
+  lv_obj_set_style_pad_all(parent, compact ? 8 : xl ? 24 : 16, 0);
   lv_obj_set_flex_flow(parent, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_style_pad_row(parent, 8, 0);
 
@@ -272,7 +274,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   // Small value text (matching the sub) + a slightly larger +/- glyph; compact
   // stepper buttons.
   const lv_font_t* symbol_font = compact ? &lv_font_montserrat_20 : &lv_font_montserrat_28;
-  const int btn_size = compact ? 36 : 50;
+  const int btn_size = compact ? 36 : xl ? 64 : 50;
 
   build_bluetooth_panel(out.panel[kSectionBluetooth], font, out);
   build_brew_panel(out.panel[kSectionBrew], font, symbol_font, btn_size, out);
