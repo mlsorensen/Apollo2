@@ -179,7 +179,7 @@ void build_boiler_panel(lv_obj_t* panel, const lv_font_t* text_font,
 }
 
 // Display section: a "Brightness" stepper row.
-void build_display_panel(lv_obj_t* panel, const lv_font_t* text_font,
+void build_device_panel(lv_obj_t* panel, const lv_font_t* text_font,
                          const lv_font_t* symbol_font, int btn_size,
                          ui::SettingsWidgets& out) {
   make_settings_list(panel);
@@ -210,7 +210,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   lv_obj_set_flex_flow(seg_row, LV_FLEX_FLOW_ROW);
   lv_obj_set_style_pad_column(seg_row, 6, 0);
 
-  const char* labels[kSectionCount] = {LV_SYMBOL_BLUETOOTH, "Brew", "Boiler", "Display"};
+  const char* labels[kSectionCount] = {LV_SYMBOL_BLUETOOTH, "Brew", "Boiler", "Device"};
   for (int i = 0; i < kSectionCount; ++i) {
     out.seg[i] = lv_button_create(seg_row);
     lv_obj_set_flex_grow(out.seg[i], 1);
@@ -236,7 +236,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   build_bluetooth_panel(out.panel[kSectionBluetooth], font, out);
   build_brew_panel(out.panel[kSectionBrew], font, symbol_font, btn_size, out);
   build_boiler_panel(out.panel[kSectionBoiler], font, symbol_font, btn_size, out);
-  build_display_panel(out.panel[kSectionDisplay], font, symbol_font, btn_size, out);
+  build_device_panel(out.panel[kSectionDevice], font, symbol_font, btn_size, out);
 
   settings_select_section(out, kSectionBluetooth);
 }

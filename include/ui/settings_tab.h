@@ -14,7 +14,7 @@ enum SettingsSection {
   kSectionBluetooth = 0,
   kSectionBrew,
   kSectionBoiler,
-  kSectionDisplay,
+  kSectionDevice,  // device prefs: brightness now, time/theme later
   kSectionCount
 };
 

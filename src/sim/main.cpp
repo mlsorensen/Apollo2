@@ -61,7 +61,7 @@ int main() {
   ok &= r({320, 240}, "renders/boiler_320x240.png", 1, ui::kSectionBoiler);
   ok &= r({800, 480}, "renders/brew_800x480.png", 1, ui::kSectionBrew);
   ok &= r({800, 480}, "renders/boiler_800x480.png", 1, ui::kSectionBoiler);
-  ok &= r({320, 240}, "renders/display_320x240.png", 1, ui::kSectionDisplay);
+  ok &= r({320, 240}, "renders/device_320x240.png", 1, ui::kSectionDevice);
   ok &= r({320, 240}, "renders/token_modal_320x240.png", 1, ui::kSectionBluetooth, true);
   return ok ? 0 : 1;
 }
