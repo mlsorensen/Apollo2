@@ -51,6 +51,7 @@ class App {
   void brightness_adjust(int dir);       // Display brightness +/-
   void hour_adjust(int dir);             // Device clock hour +/- (wraps)
   void minute_adjust(int dir);           // Device clock minute +/- (wraps)
+  void set_clock_24h(bool on);           // Device "24-hour" switch
   void commit_temp_edits();              // write pending temp edits (on exit)
 
  private:

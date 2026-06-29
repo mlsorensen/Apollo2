@@ -183,6 +183,13 @@ void build_device_panel(lv_obj_t* panel, const lv_font_t* text_font,
                          const lv_font_t* symbol_font, int btn_size,
                          ui::SettingsWidgets& out) {
   make_settings_list(panel);
+  // More rows than fit on the compact screen: top-align and allow scrolling.
+  lv_obj_add_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_row(panel, 12, 0);
+  lv_obj_set_style_pad_ver(panel, 4, 0);
+
   lv_obj_t* rb = make_setting_row(panel, "Brightness", text_font);
   make_inline_stepper(rb, text_font, symbol_font, btn_size, &out.brightness_minus,
                       &out.brightness_value, &out.brightness_plus, nullptr);
@@ -194,6 +201,10 @@ void build_device_panel(lv_obj_t* panel, const lv_font_t* text_font,
   lv_obj_t* rm = make_setting_row(panel, "Minute", text_font);
   make_inline_stepper(rm, text_font, symbol_font, btn_size, &out.minute_minus,
                       &out.minute_value, &out.minute_plus, nullptr);
+
+  lv_obj_t* rc = make_setting_row(panel, "24-hour", text_font);
+  out.clock_mode_switch = lv_switch_create(rc);
+  lv_obj_set_size(out.clock_mode_switch, btn_size + 8, btn_size / 2 + 6);
 }
 
 }  // namespace

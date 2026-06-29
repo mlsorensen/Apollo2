@@ -10,6 +10,7 @@ constexpr char kMacKey[] = "mac";
 constexpr char kNameKey[] = "name";
 constexpr char kTokenKey[] = "token";
 constexpr char kBrightnessKey[] = "bright";
+constexpr char kClock24Key[] = "clock24";
 }  // namespace
 
 namespace platform {
@@ -69,6 +70,21 @@ void Config::set_brightness(int percent) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putInt(kBrightnessKey, percent);
+  p.end();
+}
+
+bool Config::clock_24h() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return true;
+  const bool v = p.isKey(kClock24Key) ? p.getBool(kClock24Key, true) : true;
+  p.end();
+  return v;
+}
+
+void Config::set_clock_24h(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kClock24Key, on);
   p.end();
 }
 

@@ -29,7 +29,7 @@ platform::TokenSetup g_token_setup{g_config, g_micra};
 platform::Provisioner g_provisioner{g_micra, g_config, g_token_setup};
 platform::Battery g_battery;
 platform::DisplaySettings g_display_settings{g_display, g_config};
-platform::Clock g_clock;
+platform::Clock g_clock{g_config};
 ui::App g_app;
 
 constexpr uint32_t kUiRefreshMs = 500;

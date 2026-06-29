@@ -12,10 +12,13 @@ class FakeClock : public core::IClock {
     hour_ = hour;
     minute_ = minute;
   }
+  bool use_24h() const override { return use_24h_; }
+  void set_24h(bool on) override { use_24h_ = on; }
 
  private:
   int hour_ = 14;
   int minute_ = 30;
+  bool use_24h_ = true;
 };
 
 }  // namespace host

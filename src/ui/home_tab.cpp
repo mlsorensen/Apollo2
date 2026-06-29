@@ -181,7 +181,8 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& 
 }
 
 void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
-                 const core::BatteryState& battery, const core::WallTime& clock) {
+                 const core::BatteryState& battery, const core::WallTime& clock,
+                 bool clock_24h) {
   const bool connected = state.link == core::Link::Connected;
   const bool on = state.power == core::Power::On;
 
@@ -224,13 +225,19 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   lv_label_set_text(w.status_label, status);
   lv_obj_set_style_bg_color(w.status_dot, lv_color_hex(dot), 0);
 
-  // Clock (top-right): "H:MM" once set, dashes until then.
+  // Clock (top-right): "14:30" (24h) or "2:30 PM" (12h); dashes until set.
   if (clock.valid) {
-    char cb[8];
-    std::snprintf(cb, sizeof(cb), "%d:%02d", clock.hour, clock.minute);
+    char cb[12];
+    if (clock_24h) {
+      std::snprintf(cb, sizeof(cb), "%d:%02d", clock.hour, clock.minute);
+    } else {
+      const int h12 = (clock.hour % 12 == 0) ? 12 : clock.hour % 12;
+      std::snprintf(cb, sizeof(cb), "%d:%02d %s", h12, clock.minute,
+                    clock.hour < 12 ? "AM" : "PM");
+    }
     lv_label_set_text(w.clock_label, cb);
   } else {
-    lv_label_set_text(w.clock_label, "--:--");
+    lv_label_set_text(w.clock_label, clock_24h ? "--:--" : "--:-- --");
   }
 
   // Battery (top-right). Charging: bolt + a looping fill animation, NO percent

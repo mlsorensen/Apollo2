@@ -38,6 +38,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& 
 
 // Apply machine + battery state to the built widgets (live update, no rebuild).
 void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
-                 const core::BatteryState& battery, const core::WallTime& clock);
+                 const core::BatteryState& battery, const core::WallTime& clock,
+                 bool clock_24h);
 
 }  // namespace ui

@@ -16,6 +16,10 @@ class IClock {
   virtual ~IClock() = default;
   virtual WallTime now() const = 0;
   virtual void set(int hour, int minute) = 0;
+
+  // Display preference: 24-hour vs 12-hour (AM/PM). Persisted by the device.
+  virtual bool use_24h() const = 0;
+  virtual void set_24h(bool on) = 0;
 };
 
 }  // namespace core

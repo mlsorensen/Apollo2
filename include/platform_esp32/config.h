@@ -20,6 +20,9 @@ class Config {
 
   int brightness() const;     // screen brightness 0..100 (default 100)
   void set_brightness(int percent);
+
+  bool clock_24h() const;     // 24-hour clock display (default true)
+  void set_clock_24h(bool on);
 };
 
 }  // namespace platform
