@@ -126,10 +126,11 @@ void Display::set_brightness(int percent) {
   if (percent < 0) percent = 0;
   if (percent > 100) percent = 100;
 #if defined(BOARD_DISPLAY_RGB)
-  // Backlight via the IO extension's PWM register (set_pwm scales 0-100 -> 0-255,
-  // higher = brighter, per Waveshare). Keep the digital enable on above 0.
+  // Backlight dim is purely the IO-extension PWM register here. This board's PWM
+  // is inverted-duty, so set_pwm writes 255-duty (100% = brightest, 0% = off).
+  // The digital backlight enable is already on from begin(), so we don't re-touch
+  // it per change (avoids a redundant write fighting the PWM on the same pin).
   io_extension().set_pwm(static_cast<uint8_t>(percent));
-  io_extension().set(board::kIoExtBacklight, percent > 0);
 #else
   ledcWrite(board::kLcdBacklight, percent * 255 / 100);
 #endif
