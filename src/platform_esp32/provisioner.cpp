@@ -21,8 +21,11 @@ std::vector<core::ScanResult> Provisioner::scan_results() const {
 
 void Provisioner::save_device(const core::ScanResult& device) {
   config_.save(device.mac, device.name);  // persist for next boot
-  link_.set_address(device.mac);          // connect now
+  link_.set_address(device.mac);
+  link_.request_pairing_read();           // try to grab the token from pairing mode
 }
+
+void Provisioner::retry_pairing() { link_.request_pairing_read(); }
 
 std::string Provisioner::saved_name() const {
   const std::string name = config_.name();

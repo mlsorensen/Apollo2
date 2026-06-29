@@ -64,6 +64,7 @@ void setup() {
   const std::string mac = g_config.mac();
   g_micra.set_name(g_config.name());
   g_micra.set_token(g_config.token());
+  g_micra.set_token_persister([](std::string t) { g_config.set_token(t); });  // pairing-read
   Serial.printf("Saved machine: mac=%s token=%s\n", mac.empty() ? "(none)" : mac.c_str(),
                 g_config.token().empty() ? "(none)" : "set");
   g_micra.begin(mac);

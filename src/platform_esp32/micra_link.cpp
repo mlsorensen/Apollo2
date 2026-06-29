@@ -14,7 +14,8 @@ namespace {
 // published, so we discover characteristics by UUID across all services.
 constexpr char kReadUuid[] = "0a0b7847-e12b-09a8-b04b-8e0922a9abab";   // state
 constexpr char kWriteUuid[] = "0b0b7847-e12b-09a8-b04b-8e0922a9abab";  // command
-constexpr char kAuthUuid[] = "0d0b7847-e12b-09a8-b04b-8e0922a9abab";   // token
+constexpr char kTokenUuid[] = "0c0b7847-e12b-09a8-b04b-8e0922a9abab";  // pairing-mode token
+constexpr char kAuthUuid[] = "0d0b7847-e12b-09a8-b04b-8e0922a9abab";   // auth
 
 constexpr uint32_t kPollIntervalMs = 3000;
 constexpr uint32_t kReconnectBackoffMs = 3000;
@@ -81,6 +82,12 @@ void MicraLink::set_name(std::string name) {
   name_ = name.empty() ? "Micra" : std::move(name);
 }
 
+void MicraLink::request_pairing_read() { try_pairing_.store(true); }
+
+void MicraLink::set_token_persister(std::function<void(std::string)> persister) {
+  token_persister_ = std::move(persister);
+}
+
 void MicraLink::task_entry(void* arg) { static_cast<MicraLink*>(arg)->task_loop(); }
 
 void MicraLink::set_link(core::Link link) {
@@ -107,13 +114,25 @@ void MicraLink::task_loop() {
     }
 
     // Not fully provisioned: idle in the matching state (don't spin on connect).
-    //   no address -> Unconfigured;  address but no token -> NeedsToken.
-    if (addr.empty() || token.empty()) {
-      if (connected && g_client != nullptr) {
-        g_client->disconnect();
-        connected = false;
+    if (addr.empty()) {
+      if (connected && g_client != nullptr) { g_client->disconnect(); connected = false; }
+      set_link(core::Link::Unconfigured);
+      vTaskDelay(pdMS_TO_TICKS(500));
+      continue;
+    }
+    if (token.empty()) {
+      if (connected && g_client != nullptr) { g_client->disconnect(); connected = false; }
+      // On request (learn / retry), try to read the token from pairing mode.
+      if (try_pairing_.exchange(false)) {
+        set_link(core::Link::Connecting);
+        const std::string t = do_read_pairing_token(addr);
+        if (!t.empty()) {
+          { std::lock_guard<std::mutex> lk(mutex_); token_ = t; }
+          if (token_persister_) token_persister_(t);
+          continue;  // token adopted -> next iteration connects + authenticates
+        }
       }
-      set_link(addr.empty() ? core::Link::Unconfigured : core::Link::NeedsToken);
+      set_link(core::Link::NeedsToken);
       vTaskDelay(pdMS_TO_TICKS(500));
       continue;
     }
@@ -333,6 +352,39 @@ void MicraLink::do_scan() {
     scan_results_ = std::move(found);
   }
   scanning_.store(false);
+}
+
+std::string MicraLink::do_read_pairing_token(const std::string& address) {
+  if (g_client == nullptr) g_client = NimBLEDevice::createClient();
+  if (!g_client->connect(NimBLEAddress(address, BLE_ADDR_PUBLIC)) &&
+      !g_client->connect(NimBLEAddress(address, BLE_ADDR_RANDOM))) {
+    Serial.println("MicraLink: pairing-read connect failed");
+    return "";
+  }
+
+  NimBLERemoteCharacteristic* token_char = nullptr;
+  for (NimBLERemoteService* svc : g_client->getServices(true)) {
+    for (NimBLERemoteCharacteristic* c : svc->getCharacteristics(true)) {
+      if (c->getUUID() == NimBLEUUID(kTokenUuid)) { token_char = c; break; }
+    }
+    if (token_char != nullptr) break;
+  }
+
+  std::string out;
+  if (token_char != nullptr && token_char->canRead()) {
+    NimBLEAttValue v = token_char->readValue();
+    out.assign(reinterpret_cast<const char*>(v.data()), v.length());
+  }
+  g_client->disconnect();
+
+  // Only accept something that looks like a token (long + printable); outside
+  // pairing mode this characteristic is absent or returns empty/garbage.
+  if (out.size() < 16) return "";
+  for (char ch : out) {
+    if (ch < 0x20 || ch > 0x7e) return "";
+  }
+  Serial.println("MicraLink: read token from pairing mode");
+  return out;
 }
 
 }  // namespace platform

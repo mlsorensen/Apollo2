@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <functional>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -33,6 +34,16 @@ class MicraLink : public core::IMachine {
   void set_token(std::string token);
   void set_name(std::string name);  // display name for the snapshot
 
+  // Try to read the auth token from the machine's pairing-mode characteristic
+  // (works only while the machine is in pairing mode). On success the token is
+  // adopted (and persisted via the persister) and the link connects; on failure
+  // the link settles in NeedsToken. Non-blocking; runs on the task.
+  void request_pairing_read();
+
+  // Persist callback for a token obtained via pairing read (the device wires
+  // this to NVS). Set once before begin().
+  void set_token_persister(std::function<void(std::string)> persister);
+
   // core::IMachine — thread-safe cached read.
   core::MachineSnapshot snapshot() const override;
 
@@ -57,6 +68,7 @@ class MicraLink : public core::IMachine {
   void do_set_boiler_target(const char* identifier, const char* value);
   void do_set_steam_enabled(bool enabled);
   void do_scan();           // task thread: scan + publish results
+  std::string do_read_pairing_token(const std::string& address);
   void set_link(core::Link link);
 
   std::string token_;     // guarded by mutex_
@@ -78,7 +90,9 @@ class MicraLink : public core::IMachine {
   std::atomic<int> pending_steam_whole_{-1};  // target C, -1 none
   std::atomic<int> pending_steam_enable_{-1}; // 0 off, 1 on, -1 none
   std::atomic<bool> reconnect_requested_{false};
+  std::atomic<bool> try_pairing_{false};
   std::atomic<bool> scan_requested_{false};
+  std::function<void(std::string)> token_persister_;  // set once before begin()
   std::atomic<bool> scanning_{false};
   std::vector<core::ScanResult> scan_results_;  // guarded by mutex_
 };

@@ -22,6 +22,7 @@ class Provisioner : public core::IProvisioner {
   bool scanning() const override;
   std::vector<core::ScanResult> scan_results() const override;
   void save_device(const core::ScanResult& device) override;
+  void retry_pairing() override;
   std::string saved_name() const override;
   void forget() override;
 

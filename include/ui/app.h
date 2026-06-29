@@ -37,8 +37,11 @@ class App {
   void start_scan();           // Settings "Scan" button
   void save_scanned(int index);  // a result row in the Settings list
   void forget();               // Settings "Forget" button
-  void start_token_setup();    // Settings "Setup" button -> WiFi portal + modal
-  void cancel_token_setup();   // modal "Cancel"
+  void open_token_setup();     // Settings "Setup" -> token-choice modal
+  void retry_pairing();        // modal "Retry pairing"
+  void start_token_setup();    // modal "WiFi" -> WiFi portal + instructions
+  void cancel_token_setup();   // WiFi-modal "Cancel"
+  void dismiss_modal();        // token-modal "Cancel"
   void select_settings_section(int section);  // Settings segmented selector
   void brew_adjust(int dir, bool half);  // Brew +/- (half: 0.5 snap, long-press)
   void boiler_adjust(int dir);           // Boiler level +/-
@@ -49,15 +52,20 @@ class App {
  private:
   void update_settings_view();
   void update_temp_panels(const core::MachineSnapshot& state);
-  void show_setup_modal();
-  void close_setup_modal();
+  void handle_pairing(core::Link link);
+  lv_obj_t* open_modal(const char* title, const char* body);  // returns the card
+  void close_modal();
+  void show_token_modal();  // Retry pairing / WiFi / Cancel
+  void show_wifi_modal();   // WiFi instructions + Cancel
 
   core::IMachine* machine_ = nullptr;
   core::IProvisioner* provisioner_ = nullptr;
   core::IBattery* battery_ = nullptr;
   core::IDisplaySettings* display_ = nullptr;
   lv_obj_t* tabview_ = nullptr;
-  lv_obj_t* setup_modal_ = nullptr;  // token-setup instructions overlay, if open
+  lv_obj_t* modal_ = nullptr;       // current overlay modal, if open
+  bool pairing_active_ = false;     // waiting on a pairing-read outcome
+  bool wifi_setup_shown_ = false;   // WiFi instructions modal is open
   HomeWidgets home_{};
   SettingsWidgets settings_{};
 };

@@ -49,11 +49,32 @@ void on_forget_clicked(lv_event_t* e) {
 }
 
 void on_setup_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->open_token_setup();
+}
+void on_token_retry(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->retry_pairing();
+}
+void on_token_wifi(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->start_token_setup();
 }
-
-void on_modal_cancel(lv_event_t* e) {
+void on_token_cancel(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->dismiss_modal();
+}
+void on_wifi_cancel(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cancel_token_setup();
+}
+
+lv_obj_t* modal_button(lv_obj_t* parent, const char* label, uint32_t color,
+                       lv_event_cb_t cb, void* app) {
+  lv_obj_t* b = lv_button_create(parent);
+  lv_obj_set_style_bg_color(b, lv_color_hex(color), 0);
+  lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, app);
+  lv_obj_t* l = lv_label_create(b);
+  lv_label_set_text(l, label);
+  lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_font(l, &lv_font_montserrat_14, 0);
+  lv_obj_center(l);
+  return b;
 }
 
 void on_segment_clicked(lv_event_t* e) {
@@ -245,6 +266,7 @@ void App::refresh() {
     const core::MachineSnapshot snap = machine_->snapshot();
     if (battery_ != nullptr) update_home(home_, snap, battery_->battery());
     update_temp_panels(snap);
+    handle_pairing(snap.link);
   }
   update_settings_view();
 }
@@ -356,9 +378,9 @@ void App::save_scanned(int index) {
   const std::vector<core::ScanResult> results = provisioner_->scan_results();
   if (index < 0 || index >= static_cast<int>(results.size())) return;
 
-  provisioner_->save_device(results[index]);
-  lv_label_set_text(settings_.status, "Saved - connecting...");
-  if (tabview_ != nullptr) lv_tabview_set_active(tabview_, 0, LV_ANIM_ON);  // Home
+  provisioner_->save_device(results[index]);  // saves + starts pairing-mode read
+  pairing_active_ = true;                      // wait for the outcome (Connected / NeedsToken)
+  lv_label_set_text(settings_.status, "Pairing...");
 }
 
 void App::forget() {
@@ -367,61 +389,106 @@ void App::forget() {
   settings_.last_count = -1;  // force a refresh of the settings view
 }
 
-void App::start_token_setup() {
-  if (provisioner_ == nullptr) return;
-  provisioner_->start_token_setup();
-  show_setup_modal();
-}
-
-void App::cancel_token_setup() {
-  if (provisioner_ != nullptr) provisioner_->stop_token_setup();
-  close_setup_modal();
-}
-
-void App::show_setup_modal() {
-  if (setup_modal_ != nullptr || provisioner_ == nullptr) return;
-
+lv_obj_t* App::open_modal(const char* title, const char* body) {
+  close_modal();
   lv_obj_t* bg = lv_obj_create(lv_layer_top());  // full-screen dimmed overlay
   lv_obj_remove_style_all(bg);
   lv_obj_set_size(bg, lv_pct(100), lv_pct(100));
   lv_obj_set_style_bg_color(bg, lv_color_hex(0x000000), 0);
   lv_obj_set_style_bg_opa(bg, LV_OPA_70, 0);
-  setup_modal_ = bg;
+  modal_ = bg;
 
   lv_obj_t* card = lv_obj_create(bg);
-  lv_obj_set_size(card, lv_pct(88), LV_SIZE_CONTENT);
+  lv_obj_set_width(card, lv_pct(88));
+  lv_obj_set_height(card, LV_SIZE_CONTENT);
   lv_obj_center(card);
   lv_obj_set_style_bg_color(card, lv_color_hex(ui::theme::card), 0);
   lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_style_pad_all(card, 12, 0);
-  lv_obj_set_style_pad_row(card, 8, 0);
+  lv_obj_set_flex_align(card, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_all(card, 14, 0);
+  lv_obj_set_style_pad_row(card, 10, 0);
 
-  lv_obj_t* title = lv_label_create(card);
-  lv_label_set_text(title, "Enter token");
-  lv_obj_set_style_text_color(title, lv_color_hex(ui::theme::text), 0);
-  lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
+  lv_obj_t* t = lv_label_create(card);
+  lv_label_set_text(t, title);
+  lv_obj_set_style_text_color(t, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_font(t, &lv_font_montserrat_20, 0);
 
-  lv_obj_t* steps = lv_label_create(card);
-  char buf[160];
-  std::snprintf(buf, sizeof(buf), "1. Join WiFi: %s\n2. Open: %s\n3. Paste token, Save",
-                provisioner_->setup_ssid(), provisioner_->setup_url());
-  lv_label_set_text(steps, buf);
-  lv_obj_set_style_text_color(steps, lv_color_hex(ui::theme::muted), 0);
-  lv_obj_set_style_text_font(steps, &lv_font_montserrat_14, 0);
-
-  lv_obj_t* cancel = lv_button_create(card);
-  lv_obj_set_style_bg_color(cancel, lv_color_hex(ui::theme::rail), 0);
-  lv_obj_add_event_cb(cancel, on_modal_cancel, LV_EVENT_CLICKED, this);
-  lv_obj_t* cl = lv_label_create(cancel);
-  lv_label_set_text(cl, "Cancel");
-  lv_obj_set_style_text_color(cl, lv_color_hex(ui::theme::text), 0);
-  lv_obj_center(cl);
+  lv_obj_t* b = lv_label_create(card);
+  lv_label_set_text(b, body);
+  lv_obj_set_width(b, lv_pct(100));
+  lv_label_set_long_mode(b, LV_LABEL_LONG_WRAP);
+  lv_obj_set_style_text_align(b, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_color(b, lv_color_hex(ui::theme::muted), 0);
+  lv_obj_set_style_text_font(b, &lv_font_montserrat_14, 0);
+  return card;
 }
 
-void App::close_setup_modal() {
-  if (setup_modal_ != nullptr) {
-    lv_obj_delete(setup_modal_);
-    setup_modal_ = nullptr;
+void App::close_modal() {
+  if (modal_ != nullptr) {
+    lv_obj_delete(modal_);
+    modal_ = nullptr;
+  }
+  wifi_setup_shown_ = false;
+}
+
+// Token-setup choice: try pairing mode again, or fall back to WiFi entry.
+void App::show_token_modal() {
+  lv_obj_t* card = open_modal(
+      "Set up token",
+      "Put the machine in pairing mode and Retry, or enter the token over WiFi.");
+  lv_obj_t* row = lv_obj_create(card);
+  lv_obj_remove_style_all(row);
+  lv_obj_set_width(row, lv_pct(100));
+  lv_obj_set_height(row, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  modal_button(row, "Retry", ui::theme::accent, on_token_retry, this);
+  modal_button(row, "WiFi", ui::theme::rail, on_token_wifi, this);
+  modal_button(row, "Cancel", ui::theme::rail, on_token_cancel, this);
+}
+
+void App::show_wifi_modal() {
+  char body[160];
+  std::snprintf(body, sizeof(body), "Join WiFi: %s\nOpen: %s\nthen paste your token",
+                provisioner_->setup_ssid(), provisioner_->setup_url());
+  lv_obj_t* card = open_modal("Enter token over WiFi", body);
+  modal_button(card, "Cancel", ui::theme::rail, on_wifi_cancel, this);
+  wifi_setup_shown_ = true;
+}
+
+void App::open_token_setup() { show_token_modal(); }
+
+void App::retry_pairing() {
+  close_modal();
+  if (provisioner_ != nullptr) provisioner_->retry_pairing();
+  pairing_active_ = true;
+}
+
+void App::start_token_setup() {
+  if (provisioner_ == nullptr) return;
+  close_modal();
+  provisioner_->start_token_setup();
+  show_wifi_modal();
+}
+
+void App::cancel_token_setup() {
+  if (provisioner_ != nullptr) provisioner_->stop_token_setup();
+  close_modal();
+}
+
+void App::dismiss_modal() { close_modal(); }
+
+void App::handle_pairing(core::Link link) {
+  if (!pairing_active_) return;
+  if (link == core::Link::Connected) {
+    pairing_active_ = false;
+    close_modal();
+    if (tabview_ != nullptr) lv_tabview_set_active(tabview_, 0, LV_ANIM_ON);  // Home
+  } else if (link == core::Link::NeedsToken) {
+    pairing_active_ = false;
+    show_token_modal();  // couldn't auto-read the token; let the user choose
   }
 }
 
@@ -449,9 +516,9 @@ void App::update_settings_view() {
     }
   }
 
-  // Auto-close the setup modal once the token's been received (portal ended).
-  if (setup_modal_ != nullptr && !provisioner_->token_setup_active()) {
-    close_setup_modal();
+  // Auto-close the WiFi modal once the token's been received (portal ended).
+  if (wifi_setup_shown_ && !provisioner_->token_setup_active()) {
+    close_modal();
     if (tabview_ != nullptr) lv_tabview_set_active(tabview_, 0, LV_ANIM_ON);  // Home
   }
 
