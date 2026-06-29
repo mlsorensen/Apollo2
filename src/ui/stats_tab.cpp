@@ -206,7 +206,15 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
   // --- Info view: a key/value table ------------------------------------------
   out.info_box = make_box(parent);
   lv_obj_set_style_pad_row(out.info_box, 0, 0);
-  static const char* kInfoKeys[kStatsInfoRows] = {"Manufacturer", "Model", "Serial",
+  // Scroll on small screens where the rows don't all fit (e.g. the 2-inch).
+  lv_obj_add_flag(out.info_box, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scroll_dir(out.info_box, LV_DIR_VER);
+  lv_obj_set_scrollbar_mode(out.info_box, LV_SCROLLBAR_MODE_AUTO);
+  lv_obj_set_style_pad_right(out.info_box, 6, 0);  // gutter so rows clear the bar
+  // "Remote FW" is THIS device (the ESP32 remote), kept first and distinct from
+  // the machine's own Firmware/Software rows below it.
+  static const char* kInfoKeys[kStatsInfoRows] = {"Remote FW", "Manufacturer",
+                                                  "Model", "Serial",
                                                   "Firmware", "Software"};
   for (int i = 0; i < kStatsInfoRows; ++i) {
     lv_obj_t* row = lv_obj_create(out.info_box);

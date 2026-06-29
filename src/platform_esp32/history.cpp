@@ -25,8 +25,11 @@ void History::series(uint32_t window_s, float* brew, float* boiler, int n) const
   }
   if (count_ == 0 || n <= 0 || window_s == 0) return;
 
-  const uint32_t now = millis() / 1000u;
-  const uint32_t start = (now > window_s) ? now - window_s : 0;
+  // Right edge is always "now"; left edge is now-window (signed — it can sit
+  // before boot while uptime < window, which just leaves the left buckets empty).
+  // Anchoring on boot instead put the newest sample mid-chart, not at "now".
+  const int64_t now = static_cast<int64_t>(millis() / 1000u);
+  const int64_t left = now - static_cast<int64_t>(window_s);
 
   std::array<int, kMaxPoints> cnt{};
   for (int i = 0; i < n; ++i) {
@@ -38,8 +41,9 @@ void History::series(uint32_t window_s, float* brew, float* boiler, int n) const
   for (int i = 0; i < count_; ++i) {
     const int idx = (head_ - count_ + i + 2 * kCap) % kCap;
     const Sample& s = buf_[idx];
-    if (s.t_s < start) continue;
-    int b = static_cast<int>(static_cast<uint64_t>(s.t_s - start) * n / window_s);
+    const int64_t t = static_cast<int64_t>(s.t_s);
+    if (t < left || t > now) continue;  // outside the visible window
+    int b = static_cast<int>((t - left) * n / static_cast<int64_t>(window_s));
     if (b < 0) b = 0;
     if (b >= n) b = n - 1;
     brew[b] += s.brew;

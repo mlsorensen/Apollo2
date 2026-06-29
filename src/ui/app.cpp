@@ -9,6 +9,7 @@
 #include "ui/stats_tab.h"
 #include "ui/theme.h"
 #include "ui/widgets.h"
+#include "version.h"
 
 namespace {
 
@@ -816,9 +817,15 @@ void App::update_stats_view() {
   const bool connected = snap.link == core::Link::Connected;
 
   if (stats_.active == kStatsInfo) {
-    // Device Information Service fields (read on connect); "-" until populated.
-    const char* vals[kStatsInfoRows] = {snap.manufacturer, snap.model, snap.serial,
-                                        snap.firmware, snap.software};
+    // Row 0 is THIS remote's firmware; the rest are the machine's Device
+    // Information Service fields (read on connect; "-" until populated).
+    char rfw[40];
+    if (fw::kGitRev[0] != '\0')
+      std::snprintf(rfw, sizeof(rfw), "v%s (%s)", fw::kVersion, fw::kGitRev);
+    else
+      std::snprintf(rfw, sizeof(rfw), "v%s", fw::kVersion);
+    const char* vals[kStatsInfoRows] = {rfw,          snap.manufacturer, snap.model,
+                                        snap.serial,  snap.firmware,     snap.software};
     for (int i = 0; i < kStatsInfoRows; ++i) {
       if (stats_.info_val[i] == nullptr) continue;
       const bool have = vals[i] != nullptr && vals[i][0] != '\0';
