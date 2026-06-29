@@ -15,10 +15,17 @@ void Battery::begin() {
 
 core::BatteryState Battery::battery() const {
   core::BatteryState s;
-  // External power: USB host connected. HWCDC::isPlugged() uses an IDF
-  // timer/SOF check, so it works without a serial terminal open. (A dumb
-  // charger with no data may not register — true VBUS sensing needs a GPIO.)
-  s.usb = HWCDC::isPlugged();
+  // External power. Prefer a real VBUS (5V) sense on an ADC pin if the board
+  // wires one (works for chargers too); otherwise fall back to the USB
+  // peripheral's host-activity check (HWCDC::isPlugged uses an IDF timer/SOF
+  // check, so no serial terminal is needed, but a data-less charger may miss).
+  if (board::kVbusAdc >= 0) {
+    const float vbus =
+        analogReadMilliVolts(board::kVbusAdc) / 1000.0f * board::kVbusDivider;
+    s.usb = vbus >= board::kVbusPresentVolts;
+  } else {
+    s.usb = HWCDC::isPlugged();
+  }
 
   if (board::kBatteryAdc < 0) return s;  // monitoring disabled for this board
 

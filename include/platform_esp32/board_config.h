@@ -60,6 +60,14 @@ constexpr float kBatteryChargingVolts = 4.15f;   // (legacy voltage-only charge 
 // battery; above this we report "no battery" (plug icon) rather than a percent.
 constexpr float kBatteryNoCellVolts = 4.35f;
 
+// Optional VBUS (USB 5V) sense on an ADC GPIO — the robust "is USB plugged in"
+// signal (catches dumb chargers too, unlike HWCDC::isPlugged). -1 = none, fall
+// back to the USB-peripheral check. If you wire a divider from the 5V bus to a
+// spare ADC pin, set the pin + divider here.
+constexpr int   kVbusAdc = -1;
+constexpr float kVbusDivider = 2.0f;       // vbus_volts = adc_volts * divider
+constexpr float kVbusPresentVolts = 4.0f;  // above this => USB present
+
 #elif defined(BOARD_WAVESHARE_S3_LCD_7B)
 
 // Waveshare ESP32-S3-Touch-LCD-7B — 7", 1024x600 RGB parallel panel, GT911
@@ -114,6 +122,9 @@ constexpr float kBatteryFullVolts = 4.20f;
 constexpr float kBatteryEmptyVolts = 3.30f;
 constexpr float kBatteryChargingVolts = 4.15f;
 constexpr float kBatteryNoCellVolts = 4.35f;
+constexpr int   kVbusAdc = -1;             // VBUS sense ADC pin (see 2-inch notes)
+constexpr float kVbusDivider = 2.0f;
+constexpr float kVbusPresentVolts = 4.0f;
 
 #else
 #error "No board selected. Add -DBOARD_WAVESHARE_S3_LCD_2 (or _7B) to build_flags in platformio.ini."
