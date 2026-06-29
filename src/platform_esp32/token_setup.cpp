@@ -16,6 +16,8 @@ const char kForm[] =
     "content='width=device-width,initial-scale=1'></head>"
     "<body style='font-family:sans-serif;max-width:480px;margin:2em auto;padding:0 1em'>"
     "<h2>Micra Remote</h2><p>Paste your machine's BLE token, then Save:</p>"
+    "<p style='font-size:.82em;color:#888'>No token? Run the <b>lmtoken</b> tool "
+    "on a computer to fetch it from your La Marzocco account.</p>"
     "<form id=f onsubmit='return submitTok()'>"
     "<input id=tok name='token' autocomplete='off' autocapitalize='off' "
     "spellcheck='false' style='width:100%;padding:10px;box-sizing:border-box'>"
