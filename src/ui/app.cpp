@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <string>
 
 #include <lvgl.h>
 
@@ -11,21 +12,24 @@ namespace {
 
 void style_tab_button(lv_obj_t* btn, const lv_font_t* font) {
   lv_obj_set_style_text_font(btn, font, 0);
-  lv_obj_set_style_text_color(btn, lv_color_hex(ui::theme::muted), 0);
+  lv_obj_set_style_text_color(btn, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_bg_opa(btn, LV_OPA_TRANSP, 0);
   lv_obj_set_style_radius(btn, 10, 0);
   lv_obj_set_style_border_width(btn, 0, 0);
+  lv_obj_set_style_shadow_width(btn, 0, 0);  // kill LVGL's default (blue, unthemed) shadow
 
-  lv_obj_set_style_text_color(btn, lv_color_hex(ui::theme::text), LV_STATE_CHECKED);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(ui::theme::accent), LV_STATE_CHECKED);
+  lv_obj_set_style_text_color(btn, lv_color_hex(ui::theme::text()), LV_STATE_CHECKED);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(ui::theme::accent()), LV_STATE_CHECKED);
   lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, LV_STATE_CHECKED);
+  lv_obj_set_style_border_width(btn, 0, LV_STATE_CHECKED);  // kill the theme's blue indicator
+  lv_obj_set_style_shadow_width(btn, 0, LV_STATE_CHECKED);
 }
 
 void build_placeholder(lv_obj_t* parent, const char* title, const lv_font_t* font) {
   lv_obj_remove_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_t* lbl = lv_label_create(parent);
   lv_label_set_text(lbl, title);
-  lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::muted), 0);
+  lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(lbl, font, 0);
   lv_obj_center(lbl);
 }
@@ -74,7 +78,7 @@ lv_obj_t* modal_button(lv_obj_t* parent, const char* label, uint32_t color,
   lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, app);
   lv_obj_t* l = lv_label_create(b);
   lv_label_set_text(l, label);
-  lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(l, &lv_font_montserrat_14, 0);
   lv_obj_center(l);
   return b;
@@ -157,6 +161,18 @@ void on_clock_mode_switch(lv_event_t* e) {
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
   app->set_clock_24h(lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
+void on_theme_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->theme_select(/*next=*/-1);
+}
+// Runs from lv_async_call (after the event handler returns), so it's safe to
+// delete the very widget the click came from and rebuild the screen.
+void theme_rebuild_cb(void* app) {
+  static_cast<ui::App*>(app)->apply_pending_theme();
+}
+
+void set_theme_label(ui::SettingsWidgets& s) {
+  if (s.theme_value != nullptr) lv_label_set_text(s.theme_value, ui::theme::name(s.theme_index));
+}
 
 // Switching the main tab (e.g. leaving Settings) commits any pending temp edit.
 void on_tab_changed(lv_event_t* e) {
@@ -237,11 +253,21 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   battery_ = &battery;
   display_ = &display;
   clock_ = &clock;
+  screen_ = screen;
   const bool compact = is_compact(screen);
+
+  ui::theme::set_active(display_->theme());  // pick the palette before any widget is colored
+
+  // A rebuild (theme change) recreates everything; drop the old charge timer
+  // first so we don't leak it across rebuilds.
+  if (home_.batt_timer != nullptr) {
+    lv_timer_delete(home_.batt_timer);
+    home_.batt_timer = nullptr;
+  }
 
   lv_obj_t* scr = lv_screen_active();
   lv_obj_clean(scr);
-  lv_obj_set_style_bg_color(scr, lv_color_hex(ui::theme::bg), 0);
+  lv_obj_set_style_bg_color(scr, lv_color_hex(ui::theme::bg()), 0);
   lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
   const lv_font_t* tab_font = compact ? &lv_font_montserrat_20 : &lv_font_montserrat_28;
@@ -255,11 +281,11 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_set_style_border_width(tv, 0, 0);
 
   lv_obj_t* content = lv_tabview_get_content(tv);
-  lv_obj_set_style_bg_color(content, lv_color_hex(ui::theme::bg), 0);
+  lv_obj_set_style_bg_color(content, lv_color_hex(ui::theme::bg()), 0);
   lv_obj_set_style_bg_opa(content, LV_OPA_COVER, 0);
 
   lv_obj_t* rail = lv_tabview_get_tab_bar(tv);
-  lv_obj_set_style_bg_color(rail, lv_color_hex(ui::theme::rail), 0);
+  lv_obj_set_style_bg_color(rail, lv_color_hex(ui::theme::rail()), 0);
   lv_obj_set_style_bg_opa(rail, LV_OPA_COVER, 0);
   lv_obj_set_style_pad_all(rail, compact ? 4 : 8, 0);
   lv_obj_set_style_pad_row(rail, compact ? 4 : 8, 0);
@@ -298,6 +324,8 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(settings_.minute_plus, on_minute_plus, LV_EVENT_ALL, this);
   lv_obj_add_event_cb(settings_.clock_mode_switch, on_clock_mode_switch,
                       LV_EVENT_VALUE_CHANGED, this);
+  if (settings_.theme_btn != nullptr)
+    lv_obj_add_event_cb(settings_.theme_btn, on_theme_clicked, LV_EVENT_CLICKED, this);
 
   build_placeholder(stats, "Stats", tab_font);
 
@@ -309,6 +337,9 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   settings_.clock_24h = clock_->use_24h();
   if (settings_.clock_24h) lv_obj_add_state(settings_.clock_mode_switch, LV_STATE_CHECKED);
   seed_time_steppers();
+
+  settings_.theme_index = ui::theme::active_index();
+  set_theme_label(settings_);
 }
 
 void App::refresh() {
@@ -402,6 +433,32 @@ void App::set_clock_24h(bool on) {
   set_time_labels(settings_);  // re-render the Hour stepper; Home updates on refresh
 }
 
+void App::theme_select(int idx) {
+  const int n = ui::theme::count();
+  if (idx < 0) idx = settings_.theme_index + 1;  // tap cycles to the next scheme
+  settings_.theme_index = (idx % n + n) % n;
+  set_theme_label(settings_);  // instant name feedback before the recolor
+  // Defer the recolor: rebuilding the screen here would delete the button that's
+  // mid-click. lv_async_call runs it after this handler returns.
+  if (!theme_rebuild_pending_) {
+    theme_rebuild_pending_ = true;
+    lv_async_call(theme_rebuild_cb, this);
+  }
+}
+
+void App::apply_pending_theme() {
+  theme_rebuild_pending_ = false;
+  if (display_ != nullptr) display_->set_theme(settings_.theme_index);  // persist
+  rebuild();
+}
+
+void App::rebuild() {
+  if (machine_ == nullptr) return;  // never built yet
+  build(*machine_, *provisioner_, *battery_, *display_, *clock_, screen_);
+  show_tab(1);                                   // back to Settings...
+  select_settings_section(kSectionDevice);       // ...on the Device section
+}
+
 void App::commit_temp_edits() {
   if (machine_ == nullptr) return;
   if (settings_.brew_dirty) {
@@ -488,12 +545,16 @@ lv_obj_t* App::open_modal(const char* title, const char* body) {
   lv_obj_set_style_bg_color(bg, lv_color_hex(0x000000), 0);
   lv_obj_set_style_bg_opa(bg, LV_OPA_70, 0);
   modal_ = bg;
+  // Hide the underlying UI while the modal is up: it's fully covered by the
+  // overlay anyway, and not rendering interactive background widgets avoids a
+  // pathological LVGL redraw loop (and saves work — nothing behind is visible).
+  if (tabview_ != nullptr) lv_obj_add_flag(tabview_, LV_OBJ_FLAG_HIDDEN);
 
   lv_obj_t* card = lv_obj_create(bg);
   lv_obj_set_width(card, lv_pct(88));
   lv_obj_set_height(card, LV_SIZE_CONTENT);
   lv_obj_center(card);
-  lv_obj_set_style_bg_color(card, lv_color_hex(ui::theme::card), 0);
+  lv_obj_set_style_bg_color(card, lv_color_hex(ui::theme::card()), 0);
   lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(card, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
@@ -502,7 +563,7 @@ lv_obj_t* App::open_modal(const char* title, const char* body) {
 
   lv_obj_t* t = lv_label_create(card);
   lv_label_set_text(t, title);
-  lv_obj_set_style_text_color(t, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_color(t, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(t, &lv_font_montserrat_20, 0);
 
   lv_obj_t* b = lv_label_create(card);
@@ -510,7 +571,7 @@ lv_obj_t* App::open_modal(const char* title, const char* body) {
   lv_obj_set_width(b, lv_pct(100));
   lv_label_set_long_mode(b, LV_LABEL_LONG_WRAP);
   lv_obj_set_style_text_align(b, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_set_style_text_color(b, lv_color_hex(ui::theme::muted), 0);
+  lv_obj_set_style_text_color(b, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(b, &lv_font_montserrat_14, 0);
   return card;
 }
@@ -520,6 +581,7 @@ void App::close_modal() {
     lv_obj_delete(modal_);
     modal_ = nullptr;
   }
+  if (tabview_ != nullptr) lv_obj_remove_flag(tabview_, LV_OBJ_FLAG_HIDDEN);  // reveal the UI
   wifi_setup_shown_ = false;
 }
 
@@ -529,10 +591,10 @@ void App::show_pairing_modal() {
   lv_obj_t* card = open_modal("Pairing", "Reading the token from the machine...");
   lv_obj_t* spinner = lv_spinner_create(card);
   lv_obj_set_size(spinner, 44, 44);
-  lv_obj_set_style_arc_color(spinner, lv_color_hex(ui::theme::rail), LV_PART_MAIN);
-  lv_obj_set_style_arc_color(spinner, lv_color_hex(ui::theme::accent), LV_PART_INDICATOR);
+  lv_obj_set_style_arc_color(spinner, lv_color_hex(ui::theme::rail()), LV_PART_MAIN);
+  lv_obj_set_style_arc_color(spinner, lv_color_hex(ui::theme::accent()), LV_PART_INDICATOR);
   lv_spinner_set_anim_params(spinner, 1000, 60);
-  modal_button(card, "Cancel", ui::theme::rail, on_pairing_cancel, this);
+  modal_button(card, "Cancel", ui::theme::rail(), on_pairing_cancel, this);
 }
 
 // Token-setup choice: try pairing mode again, or fall back to WiFi entry.
@@ -555,9 +617,9 @@ void App::show_token_modal(bool fetch_failed) {
   lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  modal_button(row, "Retry", ui::theme::accent, on_token_retry, this);
-  modal_button(row, "WiFi", ui::theme::rail, on_token_wifi, this);
-  modal_button(row, "Cancel", ui::theme::rail, on_token_cancel, this);
+  modal_button(row, "Retry", ui::theme::accent(), on_token_retry, this);
+  modal_button(row, "WiFi", ui::theme::rail(), on_token_wifi, this);
+  modal_button(row, "Cancel", ui::theme::rail(), on_token_cancel, this);
 }
 
 void App::show_wifi_modal() {
@@ -565,7 +627,7 @@ void App::show_wifi_modal() {
   std::snprintf(body, sizeof(body), "Join WiFi: %s\nOpen: %s\nthen paste your token",
                 provisioner_->setup_ssid(), provisioner_->setup_url());
   lv_obj_t* card = open_modal("Enter token over WiFi", body);
-  modal_button(card, "Cancel", ui::theme::rail, on_wifi_cancel, this);
+  modal_button(card, "Cancel", ui::theme::rail(), on_wifi_cancel, this);
   wifi_setup_shown_ = true;
 }
 
@@ -655,14 +717,14 @@ void App::update_settings_view() {
   for (int i = 0; i < count; ++i) {
     lv_obj_t* row = lv_button_create(settings_.list);
     lv_obj_set_width(row, lv_pct(100));
-    lv_obj_set_style_bg_color(row, lv_color_hex(ui::theme::card), 0);
+    lv_obj_set_style_bg_color(row, lv_color_hex(ui::theme::card()), 0);
     lv_obj_add_event_cb(row, on_result_clicked, LV_EVENT_CLICKED, this);
 
     lv_obj_t* lbl = lv_label_create(row);
     char buf[48];
     std::snprintf(buf, sizeof(buf), "%s   %d dBm", results[i].name, results[i].rssi);
     lv_label_set_text(lbl, buf);
-    lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text), 0);
+    lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text()), 0);
     lv_obj_center(lbl);
   }
 }

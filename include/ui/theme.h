@@ -2,21 +2,47 @@
 
 #include <cstdint>
 
-// Shared UI palette. Centralizing colors here keeps the look consistent as new
-// tabs and screens are added, and makes a future light/dark toggle a one-file
-// change. Values are 0xRRGGBB; wrap with lv_color_hex() at the call site.
+// Swappable UI palette. Every color the UI draws comes from one of these roles,
+// so the whole look can be changed by selecting a different Palette at runtime.
+// The persisted selection lives in core::IDisplaySettings; ui::theme::set_active()
+// makes it current, and the role accessors below read whichever is active.
+//
+// Roles (the "classes of styling"):
+//   bg/rail/card  - backgrounds: app, tab rail, raised panels
+//   text/muted    - foreground text: primary, secondary/captions
+//   accent        - active/selected/primary controls
+//   scrollbar     - scrollbar thumb
+//   ok/warn/alert - status: ready-on, heating-standby, fault-stop
+//
+// Values are 0xRRGGBB; wrap with lv_color_hex() at the call site.
 
 namespace ui::theme {
 
-constexpr uint32_t bg = 0x0E1216;      // app background
-constexpr uint32_t rail = 0x161B21;    // left tab rail
-constexpr uint32_t card = 0x1B2026;    // raised panels
-constexpr uint32_t text = 0xFFFFFF;    // primary text
-constexpr uint32_t muted = 0x8A949E;   // secondary text / captions
-constexpr uint32_t accent = 0x2E9BE6;  // interactive / selected
+struct Palette {
+  const char* name;
+  uint32_t bg, rail, card;
+  uint32_t text, muted;
+  uint32_t accent;
+  uint32_t scrollbar;
+  uint32_t ok, warn, alert;
+};
 
-constexpr uint32_t ok = 0x2ECC71;      // ready / on
-constexpr uint32_t warn = 0xF1C40F;    // heating / standby
-constexpr uint32_t alert = 0xE74C3C;   // fault / stop
+int count();
+const Palette& palette(int index);  // clamped to [0, count)
+const char* name(int index);
+void set_active(int index);         // select the current scheme
+int active_index();
+
+// Active-palette color accessors (used everywhere instead of literals).
+uint32_t bg();
+uint32_t rail();
+uint32_t card();
+uint32_t text();
+uint32_t muted();
+uint32_t accent();
+uint32_t scrollbar();
+uint32_t ok();
+uint32_t warn();
+uint32_t alert();
 
 }  // namespace ui::theme

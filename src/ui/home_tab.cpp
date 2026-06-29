@@ -21,24 +21,24 @@ void make_temp_card(lv_obj_t* parent, const char* caption,
   lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_height(card, lv_pct(100));
   lv_obj_set_flex_grow(card, 1);
-  lv_obj_set_style_bg_color(card, lv_color_hex(ui::theme::card), 0);
+  lv_obj_set_style_bg_color(card, lv_color_hex(ui::theme::card()), 0);
   lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
   lv_obj_set_style_radius(card, 16, 0);
   lv_obj_set_style_pad_all(card, pad, 0);
 
   lv_obj_t* cap = lv_label_create(card);
   lv_label_set_text(cap, caption);
-  lv_obj_set_style_text_color(cap, lv_color_hex(ui::theme::muted), 0);
+  lv_obj_set_style_text_color(cap, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(cap, &lv_font_montserrat_14, 0);
   lv_obj_align(cap, LV_ALIGN_TOP_MID, 0, 0);
 
   lv_obj_t* val = lv_label_create(card);
-  lv_obj_set_style_text_color(val, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_color(val, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(val, value_font, 0);
   lv_obj_align(val, LV_ALIGN_CENTER, 0, 0);
 
   lv_obj_t* set = lv_label_create(card);
-  lv_obj_set_style_text_color(set, lv_color_hex(ui::theme::muted), 0);
+  lv_obj_set_style_text_color(set, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(set, sub_font, 0);
   lv_obj_align(set, LV_ALIGN_BOTTOM_MID, 0, 0);
 
@@ -123,7 +123,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& 
   lv_obj_set_style_bg_opa(out.status_dot, LV_OPA_COVER, 0);
 
   out.status_label = lv_label_create(status_group);
-  lv_obj_set_style_text_color(out.status_label, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_color(out.status_label, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(out.status_label, sub_font, 0);
 
   // Right group: battery then clock, so the clock sits farthest right like a
@@ -137,11 +137,11 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& 
   lv_obj_set_style_pad_column(right_group, 10, 0);
 
   out.battery_label = lv_label_create(right_group);
-  lv_obj_set_style_text_color(out.battery_label, lv_color_hex(ui::theme::muted), 0);
+  lv_obj_set_style_text_color(out.battery_label, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(out.battery_label, sub_font, 0);
 
   out.clock_label = lv_label_create(right_group);
-  lv_obj_set_style_text_color(out.clock_label, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_color(out.clock_label, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(out.clock_label, sub_font, 0);
   out.batt_timer = lv_timer_create(battery_anim_cb, 350, &out);  // drives charge anim
 
@@ -175,7 +175,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& 
   lv_obj_set_style_radius(out.power_btn, 14, 0);
 
   out.power_label = lv_label_create(out.power_btn);
-  lv_obj_set_style_text_color(out.power_label, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_color(out.power_label, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(out.power_label, btn_font, 0);
   lv_obj_center(out.power_label);
 }
@@ -211,15 +211,15 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
 
   // Status (top-left): text + dot color from link + power.
   const char* status = "Disconnected";
-  uint32_t dot = ui::theme::muted;
+  uint32_t dot = ui::theme::muted();
   switch (state.link) {
-    case core::Link::Unconfigured: status = "Set up in Settings"; dot = ui::theme::muted; break;
-    case core::Link::NeedsToken:   status = "Token needed"; dot = ui::theme::warn; break;
-    case core::Link::Disconnected: status = "Disconnected"; dot = ui::theme::alert; break;
-    case core::Link::Connecting:   status = "Connecting..."; dot = ui::theme::warn; break;
+    case core::Link::Unconfigured: status = "Set up in Settings"; dot = ui::theme::muted(); break;
+    case core::Link::NeedsToken:   status = "Token needed"; dot = ui::theme::warn(); break;
+    case core::Link::Disconnected: status = "Disconnected"; dot = ui::theme::alert(); break;
+    case core::Link::Connecting:   status = "Connecting..."; dot = ui::theme::warn(); break;
     case core::Link::Connected:
       status = on ? "Ready" : "Standby";
-      dot = on ? ui::theme::ok : ui::theme::warn;
+      dot = on ? ui::theme::ok() : ui::theme::warn();
       break;
   }
   lv_label_set_text(w.status_label, status);
@@ -247,7 +247,7 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   if (!battery.present) {
     lv_label_set_text(w.battery_label, "");
   } else if (battery.charging) {
-    lv_obj_set_style_text_color(w.battery_label, lv_color_hex(ui::theme::ok), 0);
+    lv_obj_set_style_text_color(w.battery_label, lv_color_hex(ui::theme::ok()), 0);
     char bb[24];
     std::snprintf(bb, sizeof(bb), LV_SYMBOL_CHARGE " %s",
                   battery_fill_icon(w.charge_frame));  // timer advances frames
@@ -259,19 +259,19 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     lv_label_set_text(w.battery_label, bb);
     lv_obj_set_style_text_color(
         w.battery_label,
-        lv_color_hex(battery.percent < 15 ? ui::theme::alert : ui::theme::muted), 0);
+        lv_color_hex(battery.percent < 15 ? ui::theme::alert() : ui::theme::muted()), 0);
   }
 
   // Power button: only actionable when connected.
   if (connected) {
     lv_obj_remove_state(w.power_btn, LV_STATE_DISABLED);
     lv_obj_set_style_bg_color(
-        w.power_btn, lv_color_hex(on ? ui::theme::card : ui::theme::accent), 0);
+        w.power_btn, lv_color_hex(on ? ui::theme::card() : ui::theme::accent()), 0);
     lv_label_set_text(w.power_label,
                       on ? LV_SYMBOL_POWER "  STANDBY" : LV_SYMBOL_POWER "  TURN ON");
   } else {
     lv_obj_add_state(w.power_btn, LV_STATE_DISABLED);
-    lv_obj_set_style_bg_color(w.power_btn, lv_color_hex(ui::theme::card), 0);
+    lv_obj_set_style_bg_color(w.power_btn, lv_color_hex(ui::theme::card()), 0);
     lv_label_set_text(w.power_label, LV_SYMBOL_POWER "  OFFLINE");
   }
 }

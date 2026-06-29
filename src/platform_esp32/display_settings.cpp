@@ -15,4 +15,8 @@ void DisplaySettings::set_brightness(int percent) {
   config_.set_brightness(percent);   // persist
 }
 
+int DisplaySettings::theme() const { return config_.theme(); }
+
+void DisplaySettings::set_theme(int index) { config_.set_theme(index); }  // UI applies it
+
 }  // namespace platform

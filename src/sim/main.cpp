@@ -21,10 +21,12 @@ namespace {
 bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             core::IBattery& battery, core::IDisplaySettings& disp_settings,
             core::IClock& clock, ui::ScreenProfile screen, const char* out_path,
-            int tab = 0, int settings_section = -1, bool token_modal = false) {
+            int tab = 0, int settings_section = -1, bool token_modal = false,
+            int theme = 0) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
+  disp_settings.set_theme(theme);  // build() reads this into ui::theme::set_active
   host::PngDisplay display(screen.width, screen.height);
   ui::App app;
   app.build(machine, provisioner, battery, disp_settings, clock, screen);
@@ -51,8 +53,9 @@ int main() {
 
   // One PNG per supported layout. Add a line here when a new form factor lands.
   auto r = [&](ui::ScreenProfile s, const char* path, int tab = 0, int sec = -1,
-               bool modal = false) {
-    return render(machine, provisioner, battery, disp, clock, s, path, tab, sec, modal);
+               bool modal = false, int theme = 0) {
+    return render(machine, provisioner, battery, disp, clock, s, path, tab, sec, modal,
+                  theme);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
@@ -64,6 +67,14 @@ int main() {
   ok &= r({800, 480}, "renders/brew_800x480.png", 1, ui::kSectionBrew);
   ok &= r({800, 480}, "renders/boiler_800x480.png", 1, ui::kSectionBoiler);
   ok &= r({320, 240}, "renders/device_320x240.png", 1, ui::kSectionDevice);
-  ok &= r({320, 240}, "renders/token_modal_320x240.png", 1, ui::kSectionBluetooth, true);
+
+  // Theme previews: Home in each color scheme (0..4), plus a Device panel in one
+  // alt scheme to show themed controls + scrollbar.
+  const char* kThemeHome[] = {
+      "renders/theme0_midnight_320x240.png", "renders/theme1_graphite_320x240.png",
+      "renders/theme2_espresso_320x240.png", "renders/theme3_nord_320x240.png",
+      "renders/theme4_solarized_320x240.png"};
+  for (int i = 0; i < 5; ++i) ok &= r({320, 240}, kThemeHome[i], 0, -1, false, i);
+  ok &= r({320, 240}, "renders/device_espresso_320x240.png", 1, ui::kSectionDevice, false, 2);
   return ok ? 0 : 1;
 }

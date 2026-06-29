@@ -71,6 +71,10 @@ struct SettingsWidgets {
   int set_hour = 12;    // local edit buffer, seeded from the clock on section entry
   int set_minute = 0;
   bool clock_24h = true;  // display pref; mirrors IClock::use_24h()
+
+  lv_obj_t* theme_btn = nullptr;    // color scheme: tap the name to cycle
+  lv_obj_t* theme_value = nullptr;
+  int theme_index = 0;
 };
 
 void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,

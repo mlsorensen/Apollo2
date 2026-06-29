@@ -23,6 +23,9 @@ class Config {
 
   bool clock_24h() const;     // 24-hour clock display (default true)
   void set_clock_24h(bool on);
+
+  int theme() const;          // color-scheme index (default 0)
+  void set_theme(int index);
 };
 
 }  // namespace platform

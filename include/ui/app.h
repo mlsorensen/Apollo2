@@ -52,12 +52,15 @@ class App {
   void hour_adjust(int dir);             // Device clock hour +/- (wraps)
   void minute_adjust(int dir);           // Device clock minute +/- (wraps)
   void set_clock_24h(bool on);           // Device "24-hour" switch
+  void theme_select(int index);          // Device theme roller selection
+  void apply_pending_theme();            // deferred rebuild (from lv_async_call)
   void commit_temp_edits();              // write pending temp edits (on exit)
 
  private:
   void update_settings_view();
   void update_temp_panels(const core::MachineSnapshot& state);
   void seed_time_steppers();  // load the clock into the Hour/Minute steppers
+  void rebuild();             // tear down + rebuild the UI (e.g. after a theme change)
   void handle_pairing(core::Link link);
   lv_obj_t* open_modal(const char* title, const char* body);  // returns the card
   void close_modal();
@@ -71,9 +74,11 @@ class App {
   core::IDisplaySettings* display_ = nullptr;
   core::IClock* clock_ = nullptr;
   lv_obj_t* tabview_ = nullptr;
+  ScreenProfile screen_{};          // stored so we can rebuild on a theme change
   lv_obj_t* modal_ = nullptr;       // current overlay modal, if open
   bool pairing_active_ = false;     // waiting on a pairing-read outcome
   bool wifi_setup_shown_ = false;   // WiFi instructions modal is open
+  bool theme_rebuild_pending_ = false;  // coalesce rapid theme cycling into one rebuild
   HomeWidgets home_{};
   SettingsWidgets settings_{};
 };

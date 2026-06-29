@@ -22,38 +22,38 @@ void build_bluetooth_panel(lv_obj_t* panel, const lv_font_t* font,
   lv_obj_add_flag(out.saved_row, LV_OBJ_FLAG_HIDDEN);
 
   out.saved_label = lv_label_create(out.saved_row);
-  lv_obj_set_style_text_color(out.saved_label, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_color(out.saved_label, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(out.saved_label, font, 0);
   lv_obj_set_flex_grow(out.saved_label, 1);
 
   out.setup_btn = lv_button_create(out.saved_row);
-  lv_obj_set_style_bg_color(out.setup_btn, lv_color_hex(ui::theme::accent), 0);
+  lv_obj_set_style_bg_color(out.setup_btn, lv_color_hex(ui::theme::accent()), 0);
   lv_obj_t* setup_lbl = lv_label_create(out.setup_btn);
   lv_label_set_text(setup_lbl, "Setup");
-  lv_obj_set_style_text_color(setup_lbl, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_color(setup_lbl, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(setup_lbl, font, 0);
   lv_obj_center(setup_lbl);
 
   out.forget_btn = lv_button_create(out.saved_row);
-  lv_obj_set_style_bg_color(out.forget_btn, lv_color_hex(ui::theme::alert), 0);
+  lv_obj_set_style_bg_color(out.forget_btn, lv_color_hex(ui::theme::alert()), 0);
   lv_obj_t* forget_lbl = lv_label_create(out.forget_btn);
   lv_label_set_text(forget_lbl, "Forget");
-  lv_obj_set_style_text_color(forget_lbl, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_color(forget_lbl, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(forget_lbl, font, 0);
   lv_obj_center(forget_lbl);
 
   out.scan_btn = lv_button_create(panel);
   lv_obj_set_width(out.scan_btn, lv_pct(100));
-  lv_obj_set_style_bg_color(out.scan_btn, lv_color_hex(ui::theme::accent), 0);
+  lv_obj_set_style_bg_color(out.scan_btn, lv_color_hex(ui::theme::accent()), 0);
   lv_obj_t* btn_lbl = lv_label_create(out.scan_btn);
   lv_label_set_text(btn_lbl, LV_SYMBOL_REFRESH "  Scan");
-  lv_obj_set_style_text_color(btn_lbl, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_color(btn_lbl, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(btn_lbl, font, 0);
   lv_obj_center(btn_lbl);
 
   out.status = lv_label_create(panel);
   lv_label_set_text(out.status, "Tap Scan to find your machine");
-  lv_obj_set_style_text_color(out.status, lv_color_hex(ui::theme::muted), 0);
+  lv_obj_set_style_text_color(out.status, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(out.status, font, 0);
 
   out.list = lv_obj_create(panel);
@@ -66,7 +66,7 @@ void build_bluetooth_panel(lv_obj_t* panel, const lv_font_t* font,
 
   // A visible scrollbar in the gutter (AUTO: only when the list overflows).
   lv_obj_set_scrollbar_mode(out.list, LV_SCROLLBAR_MODE_AUTO);
-  lv_obj_set_style_bg_color(out.list, lv_color_hex(ui::theme::muted), LV_PART_SCROLLBAR);
+  lv_obj_set_style_bg_color(out.list, lv_color_hex(ui::theme::scrollbar()), LV_PART_SCROLLBAR);
   lv_obj_set_style_bg_opa(out.list, LV_OPA_COVER, LV_PART_SCROLLBAR);
   lv_obj_set_style_width(out.list, 5, LV_PART_SCROLLBAR);
   lv_obj_set_style_radius(out.list, 3, LV_PART_SCROLLBAR);
@@ -78,11 +78,11 @@ lv_obj_t* make_step_button(lv_obj_t* parent, const char* symbol, int size,
   lv_obj_t* btn = lv_button_create(parent);
   lv_obj_set_size(btn, size, size);
   lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_bg_color(btn, lv_color_hex(ui::theme::card), 0);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(ui::theme::card()), 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);  // theme's drop shadow flattens the circle
   lv_obj_t* l = lv_label_create(btn);
   lv_label_set_text(l, symbol);
-  lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(l, font, 0);
   lv_obj_center(l);
   return btn;
@@ -102,7 +102,7 @@ lv_obj_t* make_setting_row(lv_obj_t* parent, const char* label,
                         LV_FLEX_ALIGN_CENTER);
   lv_obj_t* lbl = lv_label_create(row);
   lv_label_set_text(lbl, label);
-  lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(lbl, font, 0);
   return row;
 }
@@ -136,12 +136,12 @@ void make_inline_stepper(lv_obj_t* row, const lv_font_t* text_font,
 
   *out_value = lv_label_create(stack);
   lv_obj_set_style_text_align(*out_value, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_set_style_text_color(*out_value, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_color(*out_value, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(*out_value, text_font, 0);
 
   if (out_sub != nullptr) {
     *out_sub = lv_label_create(stack);
-    lv_obj_set_style_text_color(*out_sub, lv_color_hex(ui::theme::muted), 0);
+    lv_obj_set_style_text_color(*out_sub, lv_color_hex(ui::theme::muted()), 0);
     lv_obj_set_style_text_font(*out_sub, text_font, 0);
   }
 
@@ -187,17 +187,17 @@ void build_device_panel(lv_obj_t* panel, const lv_font_t* text_font,
                          const lv_font_t* symbol_font, int btn_size,
                          ui::SettingsWidgets& out) {
   make_settings_list(panel);
-  // More rows than fit on the compact screen: top-align, scroll, and show a
-  // scrollbar in a right gutter (so it clears the +/- buttons).
+  // More rows than fit on the compact screen: top-align + scroll (a centered flex
+  // that overflows can oscillate, esp. with a focusable control under a modal).
   lv_obj_add_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_scroll_dir(panel, LV_DIR_VER);  // vertical only (rows overflow horizontally)
+  lv_obj_set_scroll_dir(panel, LV_DIR_VER);
   lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_row(panel, 12, 0);
   lv_obj_set_style_pad_ver(panel, 4, 0);
   lv_obj_set_style_pad_right(panel, 10, 0);  // gutter for the scrollbar
-  lv_obj_set_scrollbar_mode(panel, LV_SCROLLBAR_MODE_ON);  // always visible: signals more below
-  lv_obj_set_style_bg_color(panel, lv_color_hex(ui::theme::text), LV_PART_SCROLLBAR);
+  lv_obj_set_scrollbar_mode(panel, LV_SCROLLBAR_MODE_ON);
+  lv_obj_set_style_bg_color(panel, lv_color_hex(ui::theme::scrollbar()), LV_PART_SCROLLBAR);
   lv_obj_set_style_bg_opa(panel, LV_OPA_COVER, LV_PART_SCROLLBAR);
   lv_obj_set_style_width(panel, 6, LV_PART_SCROLLBAR);
   lv_obj_set_style_radius(panel, 3, LV_PART_SCROLLBAR);
@@ -218,6 +218,16 @@ void build_device_panel(lv_obj_t* panel, const lv_font_t* text_font,
   lv_obj_t* rc = make_setting_row(panel, "24-hour", text_font);
   out.clock_mode_switch = lv_switch_create(rc);
   lv_obj_set_size(out.clock_mode_switch, btn_size + 8, btn_size / 2 + 6);
+
+  // Theme: a button showing the current scheme; tapping it cycles to the next.
+  lv_obj_t* rt = make_setting_row(panel, "Theme", text_font);
+  out.theme_btn = lv_button_create(rt);
+  lv_obj_set_style_bg_color(out.theme_btn, lv_color_hex(ui::theme::card()), 0);
+  lv_obj_set_style_shadow_width(out.theme_btn, 0, 0);
+  out.theme_value = lv_label_create(out.theme_btn);
+  lv_obj_set_style_text_color(out.theme_value, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(out.theme_value, text_font, 0);
+  lv_obj_center(out.theme_value);
 }
 
 }  // namespace
@@ -278,9 +288,9 @@ void settings_select_section(SettingsWidgets& w, int section) {
   for (int i = 0; i < kSectionCount; ++i) {
     const bool on = (i == section);
     lv_obj_set_style_bg_color(
-        w.seg[i], lv_color_hex(on ? ui::theme::accent : ui::theme::rail), 0);
+        w.seg[i], lv_color_hex(on ? ui::theme::accent() : ui::theme::rail()), 0);
     lv_obj_set_style_text_color(
-        w.seg[i], lv_color_hex(on ? ui::theme::text : ui::theme::muted), 0);
+        w.seg[i], lv_color_hex(on ? ui::theme::text() : ui::theme::muted()), 0);
     if (on) {
       lv_obj_remove_flag(w.panel[i], LV_OBJ_FLAG_HIDDEN);
     } else {

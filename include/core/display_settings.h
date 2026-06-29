@@ -12,6 +12,11 @@ class IDisplaySettings {
 
   virtual int brightness() const = 0;          // 0..100
   virtual void set_brightness(int percent) = 0;  // apply + persist
+
+  // Selected color scheme, as an index into the UI's palette list (ui::theme).
+  // The port only persists the choice; the UI owns the palettes + applies them.
+  virtual int theme() const = 0;
+  virtual void set_theme(int index) = 0;
 };
 
 }  // namespace core
