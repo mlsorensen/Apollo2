@@ -91,6 +91,7 @@ class MicraLink : public core::IMachine {
   std::atomic<int> pending_steam_enable_{-1}; // 0 off, 1 on, -1 none
   std::atomic<bool> reconnect_requested_{false};
   std::atomic<bool> try_pairing_{false};
+  std::atomic<bool> token_bad_{false};  // authed but reads rejected -> needs re-entry
   std::atomic<bool> scan_requested_{false};
   std::function<void(std::string)> token_persister_;  // set once before begin()
   std::atomic<bool> scanning_{false};

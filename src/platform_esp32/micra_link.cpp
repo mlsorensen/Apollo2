@@ -43,14 +43,6 @@ bool read_setting(const char* name, std::string& out) {
   return !out.empty();
 }
 
-core::Power parse_mode(const std::string& json) {
-  JsonDocument doc;
-  if (deserializeJson(doc, json)) return core::Power::Standby;
-  const char* mode = doc.as<const char*>();
-  if (mode != nullptr && std::strcmp(mode, "BrewingMode") == 0) return core::Power::On;
-  return core::Power::Standby;  // StandBy / EcoMode
-}
-
 }  // namespace
 
 namespace platform {
@@ -66,6 +58,7 @@ void MicraLink::set_address(std::string address) {
     std::lock_guard<std::mutex> lk(mutex_);
     address_ = std::move(address);
   }
+  token_bad_.store(false);  // new machine -> give its token a fresh chance
   reconnect_requested_.store(true);
 }
 
@@ -74,6 +67,7 @@ void MicraLink::set_token(std::string token) {
     std::lock_guard<std::mutex> lk(mutex_);
     token_ = std::move(token);
   }
+  token_bad_.store(false);  // a new token deserves a fresh attempt
   reconnect_requested_.store(true);
 }
 
@@ -141,6 +135,16 @@ void MicraLink::task_loop() {
     }
 
     // Address changed (e.g. user saved a new MAC): drop the old connection.
+    // Token authed at the BLE level but reads were rejected: it's a bad token,
+    // not a flaky link. Idle in NeedsToken (don't hammer the machine) until a new
+    // token arrives (set_token / set_address clear this).
+    if (token_bad_.load()) {
+      if (connected && g_client != nullptr) { g_client->disconnect(); connected = false; }
+      set_link(core::Link::NeedsToken);
+      vTaskDelay(pdMS_TO_TICKS(500));
+      continue;
+    }
+
     if (reconnect_requested_.exchange(false) && connected && g_client != nullptr) {
       g_client->disconnect();
       connected = false;
@@ -148,16 +152,30 @@ void MicraLink::task_loop() {
 
     if (!connected) {
       set_link(core::Link::Connecting);
-      if (do_connect(addr, token)) {
-        connected = true;
-        do_refresh();  // populate state BEFORE announcing Connected (so the UI
-        set_link(core::Link::Connected);  // seeds temps from real values, not 0)
-        last_refresh = millis();
-      } else {
-        set_link(core::Link::Disconnected);
+      if (!do_connect(addr, token)) {
+        set_link(core::Link::Disconnected);  // unreachable -> back off and retry
         vTaskDelay(pdMS_TO_TICKS(kReconnectBackoffMs));
         continue;
       }
+      // Connected over BLE; the auth WRITE always "succeeds", so verify the token
+      // really works with a read. Retry a few times to ride out a transient glitch
+      // before concluding the token is bad.
+      bool verified = false;
+      for (int i = 0; i < 3 && !verified; ++i) {
+        if (do_refresh()) verified = true;  // also seeds temps before Connected
+        else vTaskDelay(pdMS_TO_TICKS(300));
+      }
+      if (!verified) {
+        Serial.println("MicraLink: token rejected (reads failed) -> NeedsToken");
+        token_bad_.store(true);
+        if (g_client != nullptr) g_client->disconnect();
+        connected = false;
+        set_link(core::Link::NeedsToken);
+        continue;
+      }
+      connected = true;
+      set_link(core::Link::Connected);
+      last_refresh = millis();
     }
 
     if (g_client == nullptr || !g_client->isConnected()) {
@@ -236,22 +254,30 @@ bool MicraLink::do_refresh() {
   if (!read_setting("machineMode", mode_json)) return false;
   if (!read_setting("boilers", boilers_json)) return false;
 
-  const core::Power power = parse_mode(mode_json);
+  // An authenticated machine answers with parseable JSON; a rejected token
+  // yields a 1-byte NUL / garbage. Unparseable reads => NOT really authenticated,
+  // so this doubles as the token check that gates Connected.
+  JsonDocument mode_doc;
+  if (deserializeJson(mode_doc, mode_json)) return false;
+  JsonDocument doc;
+  if (deserializeJson(doc, boilers_json) || !doc.is<JsonArray>()) return false;
+
+  const char* mode = mode_doc.as<const char*>();
+  const core::Power power =
+      (mode != nullptr && std::strcmp(mode, "BrewingMode") == 0) ? core::Power::On
+                                                                 : core::Power::Standby;
 
   float brew_c = 0, brew_t = 0, boiler_c = 0, boiler_t = 0;
   bool steam_en = true;
-  JsonDocument doc;
-  if (!deserializeJson(doc, boilers_json)) {
-    for (JsonObject b : doc.as<JsonArray>()) {
-      const char* id = b["id"] | "";
-      const float current = b["current"] | 0.0f;
-      const float target = b["target"] | 0.0f;
-      if (std::strcmp(id, "CoffeeBoiler1") == 0) { brew_c = current; brew_t = target; }
-      else if (std::strcmp(id, "SteamBoiler") == 0) {
-        boiler_c = current;
-        boiler_t = target;
-        steam_en = b["isEnabled"] | true;
-      }
+  for (JsonObject b : doc.as<JsonArray>()) {
+    const char* id = b["id"] | "";
+    const float current = b["current"] | 0.0f;
+    const float target = b["target"] | 0.0f;
+    if (std::strcmp(id, "CoffeeBoiler1") == 0) { brew_c = current; brew_t = target; }
+    else if (std::strcmp(id, "SteamBoiler") == 0) {
+      boiler_c = current;
+      boiler_t = target;
+      steam_en = b["isEnabled"] | true;
     }
   }
 
