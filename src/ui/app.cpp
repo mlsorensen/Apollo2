@@ -318,6 +318,20 @@ void App::refresh() {
       update_home(home_, snap, battery_->battery(), clock_->now(), clock_->use_24h());
     update_temp_panels(snap);
     handle_pairing(snap.link);
+
+    // WiFi token portal: close it once the token verifies (Connected). A bad
+    // token leaves the link in NeedsToken with the portal still up, so the user
+    // can paste a corrected token and resubmit; the AP's safety timeout covers a
+    // walk-away (we close the modal if the portal ends on its own).
+    if (wifi_setup_shown_) {
+      if (snap.link == core::Link::Connected) {
+        if (provisioner_ != nullptr) provisioner_->stop_token_setup();
+        close_modal();
+        if (tabview_ != nullptr) lv_tabview_set_active(tabview_, 0, LV_ANIM_ON);  // Home
+      } else if (provisioner_ != nullptr && !provisioner_->token_setup_active()) {
+        close_modal();  // portal ended on its own (safety timeout)
+      }
+    }
   }
   update_settings_view();
 }
@@ -619,11 +633,6 @@ void App::update_settings_view() {
     }
   }
 
-  // Auto-close the WiFi modal once the token's been received (portal ended).
-  if (wifi_setup_shown_ && !provisioner_->token_setup_active()) {
-    close_modal();
-    if (tabview_ != nullptr) lv_tabview_set_active(tabview_, 0, LV_ANIM_ON);  // Home
-  }
 
   const bool scanning = provisioner_->scanning();
   const std::vector<core::ScanResult> results = provisioner_->scan_results();
