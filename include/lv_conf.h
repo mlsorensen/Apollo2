@@ -15,10 +15,16 @@
 #define LV_COLOR_DEPTH 16
 
 // LVGL's built-in allocator for widget objects (the draw/framebuffers are
-// allocated separately by each display backend, not from this pool). 64 KB
-// suits our screens and is easy on the ESP32's internal RAM; bump if a screen
-// ever runs out.
-#define LV_MEM_SIZE (64 * 1024)
+// allocated separately by each display backend, not from this pool). IMPORTANT:
+// LVGL's TLSF allocator spins forever in lv_realloc when this pool is exhausted
+// (instead of returning NULL), so an under-sized pool shows up as a hard hang
+// while building a busy screen, not a graceful failure. 64 KB left the device
+// idling right at the ceiling (a scan with several results could tip it over),
+// so we run 128 KB on-device. The host sim overrides this much higher via
+// build_flags (-D LV_MEM_SIZE=...) since it has the RAM and builds every screen.
+#ifndef LV_MEM_SIZE
+#define LV_MEM_SIZE (128 * 1024)
+#endif
 
 // Quiet by default; flip to 1 with LV_LOG_LEVEL while debugging.
 #define LV_USE_LOG 0
