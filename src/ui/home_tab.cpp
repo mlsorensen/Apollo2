@@ -65,14 +65,14 @@ const char* battery_fill_icon(int frame) {
   }
 }
 
-// Loops the battery fill while charging, alongside the live percent.
+// Loops the battery fill while charging (no percent — see update_home).
 void battery_anim_cb(lv_timer_t* t) {
   auto* w = static_cast<ui::HomeWidgets*>(lv_timer_get_user_data(t));
   if (!w->charging) return;
   w->charge_frame = (w->charge_frame + 1) % 5;
   char buf[24];
-  std::snprintf(buf, sizeof(buf), LV_SYMBOL_CHARGE " %s %d%%",
-                battery_fill_icon(w->charge_frame), w->charge_pct);
+  std::snprintf(buf, sizeof(buf), LV_SYMBOL_CHARGE " %s",
+                battery_fill_icon(w->charge_frame));
   lv_label_set_text(w->battery_label, buf);
 }
 
@@ -245,17 +245,17 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   }
 
   // Battery / power (top-right):
-  //   battery + USB  -> charging: bolt + looping fill animation + percent
+  //   battery + USB  -> charging: bolt + looping fill animation (NO percent —
+  //                    terminal voltage under charge is charger-dependent)
   //   battery only   -> percent + level icon
   //   USB, no cell   -> plug symbol (external power)
   //   nothing        -> blank
   w.charging = battery.present && battery.charging;
-  w.charge_pct = battery.percent;
   char bb[24];
   if (w.charging) {
     lv_obj_set_style_text_color(w.battery_label, lv_color_hex(ui::theme::ok()), 0);
-    std::snprintf(bb, sizeof(bb), LV_SYMBOL_CHARGE " %s %d%%",
-                  battery_fill_icon(w.charge_frame), battery.percent);  // timer animates
+    std::snprintf(bb, sizeof(bb), LV_SYMBOL_CHARGE " %s",
+                  battery_fill_icon(w.charge_frame));  // timer animates the fill
     lv_label_set_text(w.battery_label, bb);
   } else if (battery.present) {
     std::snprintf(bb, sizeof(bb), "%d%% %s", battery.percent, battery_icon(battery.percent));

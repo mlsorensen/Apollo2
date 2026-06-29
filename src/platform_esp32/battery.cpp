@@ -45,8 +45,24 @@ core::BatteryState Battery::battery() const {
     return s;
   }
 
-  // Exponential moving average across calls (~5 s settle at the 500 ms poll) so
-  // the percent doesn't jitter; seed it on the first real sample.
+  s.present = true;
+  // Charging: prefer the USB signal; fall back to an elevated voltage so a dumb
+  // charger (no USB host activity) that bumps the voltage still reads as charging.
+  s.charging = s.usb || (volts >= board::kBatteryChargingVolts);
+
+  if (s.charging) {
+    // Terminal voltage under charge is unreliable — it swings with the charger,
+    // so a percent is meaningless here (the UI shows the fill animation, no
+    // number). Holding the filter at 0 means % re-seeds from the REAL battery
+    // level the instant we unplug, instead of sliding down from the inflated
+    // charging voltage.
+    volts_filt_ = 0.0f;
+    shown_pct_ = -1;
+    return s;  // percent stays 0; not shown while charging
+  }
+
+  // On battery: EMA (~5 s settle at the 500 ms poll) + percent, freshly seeded
+  // right after unplug since the filter was held at 0 while charging.
   constexpr float kAlpha = 0.15f;
   volts_filt_ =
       (volts_filt_ <= 0.0f) ? volts : volts_filt_ + kAlpha * (volts - volts_filt_);
@@ -54,18 +70,13 @@ core::BatteryState Battery::battery() const {
   int pct = static_cast<int>(std::lround(
       (volts_filt_ - board::kBatteryEmptyVolts) /
       (board::kBatteryFullVolts - board::kBatteryEmptyVolts) * 100.0f));
-  // Charging elevates the terminal voltage a little, so the raw reading runs
-  // high; nudge it back down a couple percent while on USB power.
-  if (s.usb) pct -= 2;
   pct = std::max(0, std::min(100, pct));
 
   // Hysteresis: ignore +/-1% flicker at a boundary; only move on a real change.
   const int delta = pct > shown_pct_ ? pct - shown_pct_ : shown_pct_ - pct;
   if (shown_pct_ < 0 || delta >= 2) shown_pct_ = pct;
 
-  s.present = true;
   s.percent = shown_pct_;
-  s.charging = s.usb;  // battery present + external power = charging
   return s;
 }
 
