@@ -15,6 +15,13 @@ void Battery::begin() {
 
 core::BatteryState Battery::battery() const {
   core::BatteryState s;
+  // No battery hardware on this board (e.g. the 7B) -> it's a mains/USB-powered
+  // device; report external power so the UI shows a plug rather than a blank.
+  if (board::kBatteryAdc < 0) {
+    s.usb = true;
+    return s;
+  }
+
   // External power. Prefer a real VBUS (5V) sense on an ADC pin if the board
   // wires one (works for chargers too); otherwise fall back to the USB
   // peripheral's host-activity check (HWCDC::isPlugged uses an IDF timer/SOF
@@ -26,8 +33,6 @@ core::BatteryState Battery::battery() const {
   } else {
     s.usb = HWCDC::isPlugged();
   }
-
-  if (board::kBatteryAdc < 0) return s;  // monitoring disabled for this board
 
   // Oversample to beat per-read ADC noise (calibrated millivolts, averaged),
   // then scale back up through the divider.

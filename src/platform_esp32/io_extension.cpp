@@ -40,7 +40,12 @@ void IoExtension::set(uint8_t pin, bool high) {
   write_reg(kRegOutput, out_);
 }
 
-void IoExtension::set_pwm(uint8_t duty) { write_reg(kRegPwm, duty); }
+void IoExtension::set_pwm(uint8_t percent) {
+  // Matches Waveshare's IO_EXTENSION_Pwm_Output: input 0-100 (capped at 97),
+  // scaled to the register's 0-255 range. Higher = brighter (not inverted).
+  if (percent > 97) percent = 97;
+  write_reg(kRegPwm, static_cast<uint8_t>(percent * 255 / 100));
+}
 
 IoExtension& io_extension() {
   static IoExtension instance;
