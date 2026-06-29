@@ -406,11 +406,13 @@ std::string MicraLink::do_read_pairing_token(const std::string& address) {
   }
   g_client->disconnect();
 
-  // Only accept something that looks like a token (long + printable); outside
-  // pairing mode this characteristic is absent or returns empty/garbage.
-  if (out.size() < 16) return "";
+  // A valid token is exactly 64 hex chars (32 bytes). Outside pairing mode this
+  // characteristic is absent or returns empty/garbage, which fails the check.
+  if (out.size() != 64) return "";
   for (char ch : out) {
-    if (ch < 0x20 || ch > 0x7e) return "";
+    const bool hex = (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') ||
+                     (ch >= 'A' && ch <= 'F');
+    if (!hex) return "";
   }
   Serial.println("MicraLink: read token from pairing mode");
   return out;
