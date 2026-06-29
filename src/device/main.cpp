@@ -7,6 +7,7 @@
 #include "platform_esp32/config.h"
 #include "platform_esp32/display.h"
 #include "platform_esp32/display_settings.h"
+#include "platform_esp32/history.h"
 #include "platform_esp32/micra_link.h"
 #include "platform_esp32/provisioner.h"
 #include "platform_esp32/token_setup.h"
@@ -30,9 +31,11 @@ platform::Provisioner g_provisioner{g_micra, g_config, g_token_setup};
 platform::Battery g_battery;
 platform::DisplaySettings g_display_settings{g_display, g_config};
 platform::Clock g_clock{g_config};
+platform::History g_history;
 ui::App g_app;
 
 constexpr uint32_t kUiRefreshMs = 500;
+constexpr uint32_t kSampleMs = 30000;  // temperature history cadence
 
 }  // namespace
 
@@ -59,7 +62,8 @@ void setup() {
 
   // Build the UI bound to the machine + provisioner + battery + display.
   const ui::ScreenProfile screen{g_display.width(), g_display.height()};
-  g_app.build(g_micra, g_provisioner, g_battery, g_display_settings, g_clock, screen);
+  g_app.build(g_micra, g_provisioner, g_battery, g_display_settings, g_clock, g_history,
+              screen);
 
   // Seed the link from saved config, then start the background BLE task. With
   // no MAC -> Unconfigured; MAC but no token -> NeedsToken (Settings "Setup").
@@ -81,6 +85,16 @@ void loop() {
   if (millis() - last > kUiRefreshMs) {
     last = millis();
     g_app.refresh();
+  }
+
+  // Sample temps into the history ring for the Stats charts (connected only).
+  static uint32_t last_sample = 0;
+  if (millis() - last_sample > kSampleMs) {
+    last_sample = millis();
+    const core::MachineSnapshot snap = g_micra.snapshot();
+    if (snap.link == core::Link::Connected) {
+      g_history.add(snap.brew_temp_c, snap.boiler_temp_c);
+    }
   }
 
   delay(5);

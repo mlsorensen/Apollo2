@@ -6,6 +6,7 @@
 
 #include <lvgl.h>
 
+#include "ui/stats_tab.h"
 #include "ui/theme.h"
 #include "ui/widgets.h"
 
@@ -90,6 +91,26 @@ void on_segment_clicked(lv_event_t* e) {
   auto* btn = static_cast<lv_obj_t*>(lv_event_get_target(e));
   app->select_settings_section(static_cast<int>(lv_obj_get_index(btn)));
 }
+
+void on_stats_segment(lv_event_t* e) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  auto* btn = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  app->select_stats_section(static_cast<int>(lv_obj_get_index(btn)));
+}
+void on_zoom_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_zoom();
+}
+
+// Stats chart x-axis windows the zoom button cycles through.
+struct ZoomLevel {
+  uint32_t window_s;
+  const char* label;
+};
+constexpr ZoomLevel kZooms[] = {
+    {30u * 60, "30m"}, {60u * 60, "1h"},   {3u * 3600, "3h"},
+    {6u * 3600, "6h"}, {12u * 3600, "12h"}, {24u * 3600, "24h"},
+};
+constexpr int kZoomCount = static_cast<int>(sizeof(kZooms) / sizeof(kZooms[0]));
 
 // Brew +/- : short click steps 0.1; long-press (and repeat) steps 0.5 snapped.
 void on_brew_step(lv_event_t* e, int dir) {
@@ -248,12 +269,14 @@ App::~App() {
 
 void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                 core::IBattery& battery, core::IDisplaySettings& display,
-                core::IClock& clock, const ScreenProfile& screen) {
+                core::IClock& clock, core::IHistory& history,
+                const ScreenProfile& screen) {
   machine_ = &machine;
   provisioner_ = &provisioner;
   battery_ = &battery;
   display_ = &display;
   clock_ = &clock;
+  history_ = &history;
   screen_ = screen;
   const bool compact = is_compact(screen);
   const bool xl = is_xl(screen);
@@ -330,6 +353,8 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   if (settings_.theme_btn != nullptr)
     lv_obj_add_event_cb(settings_.theme_btn, on_theme_clicked, LV_EVENT_CLICKED, this);
 
+  // Stats UI is parked (build_stats_tab hangs at build — under investigation);
+  // the history backend is wired and sampling, ready to resume.
   build_placeholder(stats, "Stats", tab_font);
 
   update_settings_view();
@@ -368,6 +393,9 @@ void App::refresh() {
     }
   }
   update_settings_view();
+  if (tabview_ != nullptr && lv_tabview_get_tab_active(tabview_) == 2) {
+    update_stats_view();  // only while the Stats tab is showing
+  }
 }
 
 // Stepping only changes the LOCAL value/display; the BLE write is deferred to
@@ -463,7 +491,7 @@ void App::rebuild() {
   if (settings_.panel[kSectionDevice] != nullptr)
     scroll_y = lv_obj_get_scroll_y(settings_.panel[kSectionDevice]);
 
-  build(*machine_, *provisioner_, *battery_, *display_, *clock_, screen_);
+  build(*machine_, *provisioner_, *battery_, *display_, *clock_, *history_, screen_);
   show_tab(1);                                   // back to Settings...
   select_settings_section(kSectionDevice);       // ...on the Device section
 
@@ -689,6 +717,60 @@ void App::select_settings_section(int section) {
   commit_temp_edits();  // write pending edits from the section we're leaving
   settings_select_section(settings_, section);
   if (section == kSectionDevice) seed_time_steppers();  // show the current time
+}
+
+void App::select_stats_section(int section) {
+  stats_select_section(stats_, section);
+  update_stats_view();
+}
+
+void App::cycle_zoom() {
+  stats_.zoom_idx = (stats_.zoom_idx + 1) % kZoomCount;
+  update_stats_view();
+}
+
+void App::update_stats_view() {
+  if (history_ == nullptr || stats_.chart == nullptr) return;
+  if (stats_.active == kStatsInfo) {
+    const std::string name = (machine_ != nullptr) ? machine_->snapshot().name : "";
+    std::string text = name.empty() ? "Machine" : name;
+    text += "\n\nDevice info (manufacturer, model, serial, firmware) will appear "
+            "here once read from the machine.";
+    lv_label_set_text(stats_.info_label, text.c_str());
+    return;
+  }
+
+  const ZoomLevel& z = kZooms[stats_.zoom_idx];
+  lv_label_set_text(stats_.zoom_label, z.label);
+  // Range to suit each boiler (brew ~80-100, steam ~120-135); start at 0 so the
+  // cold-start ramp is visible.
+  lv_chart_set_range(stats_.chart, LV_CHART_AXIS_PRIMARY_Y, 0,
+                     stats_.active == kStatsBoiler ? 140 : 110);
+
+  float brew[kStatsPoints];
+  float boiler[kStatsPoints];
+  history_->series(z.window_s, brew, boiler, kStatsPoints);
+  const float* data = (stats_.active == kStatsBoiler) ? boiler : brew;
+
+  float last = NAN;
+  for (int i = 0; i < kStatsPoints; ++i) {
+    if (std::isnan(data[i])) {
+      lv_chart_set_value_by_id(stats_.chart, stats_.series, i, LV_CHART_POINT_NONE);
+    } else {
+      lv_chart_set_value_by_id(stats_.chart, stats_.series, i,
+                               static_cast<int32_t>(std::lroundf(data[i])));
+      last = data[i];
+    }
+  }
+  lv_chart_refresh(stats_.chart);
+
+  if (std::isnan(last)) {
+    lv_label_set_text(stats_.cur_label, "--");
+  } else {
+    char b[16];
+    std::snprintf(b, sizeof(b), "%.0f C", last);
+    lv_label_set_text(stats_.cur_label, b);
+  }
 }
 
 void App::update_settings_view() {

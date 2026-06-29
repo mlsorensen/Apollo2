@@ -3,11 +3,13 @@
 #include "core/battery.h"
 #include "core/clock.h"
 #include "core/display_settings.h"
+#include "core/history.h"
 #include "core/machine.h"
 #include "core/provisioner.h"
 #include "ui/home_tab.h"
 #include "ui/screen.h"
 #include "ui/settings_tab.h"
+#include "ui/stats_tab.h"
 
 // The on-screen application: the tab shell plus each tab's content, built into
 // the active LVGL screen and laid out for a screen profile. Holds references to
@@ -24,7 +26,8 @@ class App {
 
   void build(core::IMachine& machine, core::IProvisioner& provisioner,
              core::IBattery& battery, core::IDisplaySettings& display,
-             core::IClock& clock, const ScreenProfile& screen);
+             core::IClock& clock, core::IHistory& history,
+             const ScreenProfile& screen);
 
   // Reflect the latest machine state and scan results in the UI (no I/O).
   void refresh();
@@ -54,10 +57,13 @@ class App {
   void set_clock_24h(bool on);           // Device "24-hour" switch
   void theme_select(int index);          // Device theme roller selection
   void apply_pending_theme();            // deferred rebuild (from lv_async_call)
+  void select_stats_section(int section); // Stats segmented selector
+  void cycle_zoom();                      // Stats chart zoom button
   void commit_temp_edits();              // write pending temp edits (on exit)
 
  private:
   void update_settings_view();
+  void update_stats_view();   // refill the chart / info from history
   void update_temp_panels(const core::MachineSnapshot& state);
   void seed_time_steppers();  // load the clock into the Hour/Minute steppers
   void rebuild();             // tear down + rebuild the UI (e.g. after a theme change)
@@ -73,6 +79,7 @@ class App {
   core::IBattery* battery_ = nullptr;
   core::IDisplaySettings* display_ = nullptr;
   core::IClock* clock_ = nullptr;
+  core::IHistory* history_ = nullptr;
   lv_obj_t* tabview_ = nullptr;
   ScreenProfile screen_{};          // stored so we can rebuild on a theme change
   lv_obj_t* modal_ = nullptr;       // current overlay modal, if open
@@ -81,6 +88,7 @@ class App {
   bool theme_rebuild_pending_ = false;  // coalesce rapid theme cycling into one rebuild
   HomeWidgets home_{};
   SettingsWidgets settings_{};
+  StatsWidgets stats_{};
 };
 
 }  // namespace ui

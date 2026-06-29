@@ -10,6 +10,7 @@
 #include "platform_host/fake_battery.h"
 #include "platform_host/fake_clock.h"
 #include "platform_host/fake_display_settings.h"
+#include "platform_host/fake_history.h"
 #include "platform_host/fake_machine.h"
 #include "platform_host/fake_provisioner.h"
 #include "platform_host/png_display.h"
@@ -20,18 +21,19 @@ namespace {
 
 bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             core::IBattery& battery, core::IDisplaySettings& disp_settings,
-            core::IClock& clock, ui::ScreenProfile screen, const char* out_path,
-            int tab = 0, int settings_section = -1, bool token_modal = false,
-            int theme = 0) {
+            core::IClock& clock, core::IHistory& history, ui::ScreenProfile screen,
+            const char* out_path, int tab = 0, int settings_section = -1,
+            bool token_modal = false, int theme = 0, int stats_section = -1) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
   disp_settings.set_theme(theme);  // build() reads this into ui::theme::set_active
   host::PngDisplay display(screen.width, screen.height);
   ui::App app;
-  app.build(machine, provisioner, battery, disp_settings, clock, screen);
+  app.build(machine, provisioner, battery, disp_settings, clock, history, screen);
   app.show_tab(tab);
   if (settings_section >= 0) app.select_settings_section(settings_section);
+  if (stats_section >= 0) app.select_stats_section(stats_section);
   if (token_modal) app.open_token_setup();
   display.render_frame();
   if (!display.save_png(out_path)) {
@@ -50,12 +52,13 @@ int main() {
   host::FakeBattery battery;
   host::FakeDisplaySettings disp;
   host::FakeClock clock;
+  host::FakeHistory history;
 
   // One PNG per supported layout. Add a line here when a new form factor lands.
   auto r = [&](ui::ScreenProfile s, const char* path, int tab = 0, int sec = -1,
-               bool modal = false, int theme = 0) {
-    return render(machine, provisioner, battery, disp, clock, s, path, tab, sec, modal,
-                  theme);
+               bool modal = false, int theme = 0, int stats = -1) {
+    return render(machine, provisioner, battery, disp, clock, history, s, path, tab, sec,
+                  modal, theme, stats);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
