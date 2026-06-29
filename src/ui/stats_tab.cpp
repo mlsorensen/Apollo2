@@ -128,6 +128,44 @@ void chart_overlay_cb(lv_event_t* e) {
   }
 }
 
+// One key/value row for the Info table; returns the value label to fill later.
+lv_obj_t* make_info_row(lv_obj_t* parent, const char* key, const lv_font_t* font,
+                        bool compact) {
+  lv_obj_t* row = lv_obj_create(parent);
+  lv_obj_remove_style_all(row);
+  lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_width(row, lv_pct(100));
+  lv_obj_set_height(row, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_ver(row, compact ? 6 : 10, 0);
+  lv_obj_set_style_border_side(row, LV_BORDER_SIDE_BOTTOM, 0);
+  lv_obj_set_style_border_width(row, 1, 0);
+  lv_obj_set_style_border_color(row, lv_color_hex(ui::theme::rail()), 0);
+
+  lv_obj_t* key_lbl = lv_label_create(row);
+  lv_label_set_text(key_lbl, key);
+  lv_obj_set_style_text_color(key_lbl, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(key_lbl, font, 0);
+
+  lv_obj_t* val = lv_label_create(row);
+  lv_label_set_text(val, "-");
+  lv_obj_set_style_text_color(val, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(val, font, 0);
+  return val;
+}
+
+// A section header for the Info table (groups the rows under it).
+void make_info_header(lv_obj_t* parent, const char* text, const lv_font_t* font) {
+  lv_obj_t* h = lv_label_create(parent);
+  lv_label_set_text(h, text);
+  lv_obj_set_style_text_color(h, lv_color_hex(ui::theme::accent()), 0);
+  lv_obj_set_style_text_font(h, font, 0);
+  lv_obj_set_style_pad_top(h, 10, 0);  // breathing room above the group
+  lv_obj_set_style_pad_bottom(h, 2, 0);
+}
+
 }  // namespace
 
 void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets& out) {
@@ -209,37 +247,27 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
   // Scroll on small screens where the rows don't all fit (e.g. the 2-inch).
   lv_obj_add_flag(out.info_box, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_scroll_dir(out.info_box, LV_DIR_VER);
-  lv_obj_set_scrollbar_mode(out.info_box, LV_SCROLLBAR_MODE_AUTO);
+  lv_obj_set_scrollbar_mode(out.info_box, LV_SCROLLBAR_MODE_ON);  // always visible
   lv_obj_set_style_pad_right(out.info_box, 6, 0);  // gutter so rows clear the bar
-  // "Remote FW" is THIS device (the ESP32 remote), kept first and distinct from
-  // the machine's own Firmware/Software rows below it.
-  static const char* kInfoKeys[kStatsInfoRows] = {
-      "Remote FW", LV_SYMBOL_BATTERY_2 " Runtime", "Manufacturer", "Model",
-      "Serial", "Firmware", "Software"};
-  for (int i = 0; i < kStatsInfoRows; ++i) {
-    lv_obj_t* row = lv_obj_create(out.info_box);
-    lv_obj_remove_style_all(row);
-    lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_width(row, lv_pct(100));
-    lv_obj_set_height(row, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_ver(row, compact ? 6 : 10, 0);
-    lv_obj_set_style_border_side(row, LV_BORDER_SIDE_BOTTOM, 0);
-    lv_obj_set_style_border_width(row, 1, 0);
-    lv_obj_set_style_border_color(row, lv_color_hex(ui::theme::rail()), 0);
+  lv_obj_set_style_bg_color(out.info_box, lv_color_hex(ui::theme::scrollbar()),
+                            LV_PART_SCROLLBAR);
+  lv_obj_set_style_bg_opa(out.info_box, LV_OPA_COVER, LV_PART_SCROLLBAR);
+  lv_obj_set_style_width(out.info_box, 5, LV_PART_SCROLLBAR);
+  lv_obj_set_style_radius(out.info_box, 3, LV_PART_SCROLLBAR);
 
-    lv_obj_t* key = lv_label_create(row);
-    lv_label_set_text(key, kInfoKeys[i]);
-    lv_obj_set_style_text_color(key, lv_color_hex(ui::theme::muted()), 0);
-    lv_obj_set_style_text_font(key, font, 0);
+  // Two groups: this remote, then the machine. info_val indices stay aligned with
+  // update_stats_view's vals[] (0 our FW, 1 Runtime, 2..6 Micra DIS fields). The
+  // "Device" header disambiguates, so the firmware row is just "Firmware".
+  make_info_header(out.info_box, "Device", font);
+  out.info_val[0] = make_info_row(out.info_box, "Firmware", font, compact);
+  out.info_val[1] =
+      make_info_row(out.info_box, LV_SYMBOL_BATTERY_2 " Runtime", font, compact);
 
-    out.info_val[i] = lv_label_create(row);
-    lv_label_set_text(out.info_val[i], "-");
-    lv_obj_set_style_text_color(out.info_val[i], lv_color_hex(ui::theme::text()), 0);
-    lv_obj_set_style_text_font(out.info_val[i], font, 0);
-  }
+  make_info_header(out.info_box, "Micra", font);
+  static const char* kMicraKeys[5] = {"Manufacturer", "Model", "Serial", "Firmware",
+                                      "Software"};
+  for (int i = 0; i < 5; ++i)
+    out.info_val[2 + i] = make_info_row(out.info_box, kMicraKeys[i], font, compact);
 
   stats_select_section(out, kStatsBrew);
 }
