@@ -16,6 +16,10 @@ lv_obj_t* make_step_button(lv_obj_t* parent, const char* symbol, int size,
   lv_obj_set_size(btn, size, size);
   lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
   lv_obj_set_style_bg_color(btn, lv_color_hex(ui::theme::card()), 0);
+  // Outline so the circle reads even when the fill matches the surface behind it
+  // (e.g. on a card()-colored Home temperature card).
+  lv_obj_set_style_border_width(btn, 2, 0);
+  lv_obj_set_style_border_color(btn, lv_color_hex(ui::theme::scrollbar()), 0);
   lv_obj_set_style_opa(btn, LV_OPA_40, LV_STATE_DISABLED);  // greyed at a min/max limit
   lv_obj_t* l = lv_label_create(btn);
   lv_label_set_text(l, symbol);

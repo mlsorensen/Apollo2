@@ -112,14 +112,28 @@ constexpr ZoomLevel kZooms[] = {
 };
 constexpr int kZoomCount = static_cast<int>(sizeof(kZooms) / sizeof(kZooms[0]));
 
-// Brew +/- : short click steps 0.1; long-press (and repeat) steps 0.5 snapped.
+// Brew +/- : short click steps 0.1; holding steps 0.5 snapped, throttled to ~2/s
+// (LVGL's repeat fires ~10/s, which spun the value too fast).
 void on_brew_step(lv_event_t* e, int dir) {
   auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  static uint32_t last_repeat = 0;
+  constexpr uint32_t kRepeatMs = 500;
   switch (lv_event_get_code(e)) {
-    case LV_EVENT_SHORT_CLICKED: app->brew_adjust(dir, /*half=*/false); break;
-    case LV_EVENT_LONG_PRESSED:
-    case LV_EVENT_LONG_PRESSED_REPEAT: app->brew_adjust(dir, /*half=*/true); break;
-    default: break;
+    case LV_EVENT_SHORT_CLICKED:
+      app->brew_adjust(dir, /*half=*/false);
+      break;
+    case LV_EVENT_LONG_PRESSED:  // first coarse step when the hold begins
+      last_repeat = lv_tick_get();
+      app->brew_adjust(dir, /*half=*/true);
+      break;
+    case LV_EVENT_LONG_PRESSED_REPEAT:
+      if (lv_tick_get() - last_repeat >= kRepeatMs) {
+        last_repeat = lv_tick_get();
+        app->brew_adjust(dir, /*half=*/true);
+      }
+      break;
+    default:
+      break;
   }
 }
 void on_brew_minus(lv_event_t* e) { on_brew_step(e, -1); }
