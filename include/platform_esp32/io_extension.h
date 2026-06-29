@@ -14,7 +14,8 @@ class IoExtension {
  public:
   bool begin(uint8_t addr);          // Wire must already be begun
   void set(uint8_t pin, bool high);  // drive one output pin (0..7)
-  void set_pwm(uint8_t duty);        // backlight PWM register (vendor scale)
+  void set_pwm(uint8_t percent);     // backlight 0..100 (scaled to the 0..255 reg)
+  uint16_t read_adc();               // 16-bit ADC word (reg 0x06; e.g. battery)
   bool ok() const { return ok_; }
 
  private:

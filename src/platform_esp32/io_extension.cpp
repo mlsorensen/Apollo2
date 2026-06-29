@@ -9,6 +9,7 @@ namespace {
 constexpr uint8_t kRegMode = 0x02;
 constexpr uint8_t kRegOutput = 0x03;
 constexpr uint8_t kRegPwm = 0x05;
+constexpr uint8_t kRegAdc = 0x06;
 }  // namespace
 
 namespace platform {
@@ -45,6 +46,16 @@ void IoExtension::set_pwm(uint8_t percent) {
   // scaled to the register's 0-255 range. Higher = brighter (not inverted).
   if (percent > 97) percent = 97;
   write_reg(kRegPwm, static_cast<uint8_t>(percent * 255 / 100));
+}
+
+uint16_t IoExtension::read_adc() {
+  Wire.beginTransmission(addr_);
+  Wire.write(kRegAdc);
+  if (Wire.endTransmission(false) != 0) return 0;  // repeated-start read
+  if (Wire.requestFrom(addr_, static_cast<uint8_t>(2)) != 2) return 0;
+  const uint8_t lo = Wire.read();  // little-endian, per Waveshare DEV_I2C_Read_Word
+  const uint8_t hi = Wire.read();
+  return static_cast<uint16_t>(hi << 8 | lo);
 }
 
 IoExtension& io_extension() {

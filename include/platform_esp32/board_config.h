@@ -117,16 +117,20 @@ constexpr bool kTouchSwapXY = false; // GT911 reports in on-screen orientation
 constexpr bool kTouchMirrorX = false;
 constexpr bool kTouchMirrorY = false;
 
-// --- Battery: 7B path not characterized yet -> monitoring off for now ---
-constexpr int   kBatteryAdc = -1;
-constexpr float kBatteryDivider = 3.0f;
+// --- Battery: read via the IO-extension's ADC (reg 0x06), not a direct ESP pin.
+//     kBatteryIoExtScale is volts-per-count; CALIBRATE from the serial raw log
+//     ("battery: ioext ADC raw=N -> V") against a measured pack voltage. ---
+#define BOARD_BATTERY_VIA_IOEXT
+constexpr float kBatteryIoExtScale = 0.00242f;  // guess: 12-bit, 3.3V ref, /3 div
+constexpr int   kBatteryAdc = -1;               // no direct ESP32 ADC pin
+constexpr float kBatteryDivider = 1.0f;         // (unused; folded into the scale)
 constexpr int   kBatteryChargePin = -1;
 constexpr bool  kBatteryChargeActiveLow = true;
 constexpr float kBatteryFullVolts = 4.20f;
 constexpr float kBatteryEmptyVolts = 3.30f;
 constexpr float kBatteryChargingVolts = 4.15f;
 constexpr float kBatteryNoCellVolts = 4.35f;
-constexpr int   kVbusAdc = -1;             // VBUS sense ADC pin (see 2-inch notes)
+constexpr int   kVbusAdc = -1;
 constexpr float kVbusDivider = 2.0f;
 constexpr float kVbusPresentVolts = 4.0f;
 

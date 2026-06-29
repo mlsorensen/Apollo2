@@ -5,6 +5,9 @@
 #include <cmath>
 
 #include "platform_esp32/board_config.h"
+#if defined(BOARD_BATTERY_VIA_IOEXT)
+#include "platform_esp32/io_extension.h"
+#endif
 
 namespace platform {
 
@@ -15,8 +18,20 @@ void Battery::begin() {
 
 core::BatteryState Battery::battery() const {
   core::BatteryState s;
-  // No battery hardware on this board (e.g. the 7B) -> it's a mains/USB-powered
-  // device; report external power so the UI shows a plug rather than a blank.
+  float volts;
+
+#if defined(BOARD_BATTERY_VIA_IOEXT)
+  // 7B: the battery is read by the IO-extension's ADC, not an ESP32 pin.
+  const uint16_t raw = io_extension().read_adc();
+  volts = raw * board::kBatteryIoExtScale;
+  static uint32_t last_log = 0;  // periodic raw dump to calibrate kBatteryIoExtScale
+  if (millis() - last_log > 5000) {
+    last_log = millis();
+    Serial.printf("battery: ioext ADC raw=%u -> %.2fV\n", raw, volts);
+  }
+  s.usb = HWCDC::isPlugged();
+#else
+  // No battery hardware on this board -> external-power (plug) indicator only.
   if (board::kBatteryAdc < 0) {
     s.usb = true;
     return s;
@@ -39,8 +54,8 @@ core::BatteryState Battery::battery() const {
   constexpr int kSamples = 16;
   uint32_t mv_sum = 0;
   for (int i = 0; i < kSamples; ++i) mv_sum += analogReadMilliVolts(board::kBatteryAdc);
-  const float volts =
-      (mv_sum / static_cast<float>(kSamples)) / 1000.0f * board::kBatteryDivider;
+  volts = (mv_sum / static_cast<float>(kSamples)) / 1000.0f * board::kBatteryDivider;
+#endif
 
   // No cell: either no reading, or (on USB) the bare charge node floating above
   // any real battery. Either way -> not present (UI shows a plug if s.usb).
