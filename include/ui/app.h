@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include "core/battery.h"
 #include "core/clock.h"
 #include "core/display_settings.h"
@@ -66,6 +68,7 @@ class App {
   void update_stats_view();   // refill the chart / info from history
   void update_temp_panels(const core::MachineSnapshot& state);
   void sync_home_setpoints(bool connected);  // mirror set-points to the Home steppers
+  void update_battery_runtime(const core::BatteryState& b);  // track drain for the estimate
   void seed_time_steppers();  // load the clock into the Hour/Minute steppers
   void rebuild();             // tear down + rebuild the UI (e.g. after a theme change)
   void handle_pairing(core::Link link);
@@ -90,6 +93,20 @@ class App {
   HomeWidgets home_{};
   SettingsWidgets settings_{};
   StatsWidgets stats_{};
+
+  // Battery runtime estimate: a ~10-min sliding window of percent-over-time; the
+  // drain rate (oldest-in-window vs now) extrapolates the remaining runtime. The
+  // window is cleared while charging / on USB / no battery (no estimate).
+  core::BatteryState battery_state_{};  // latest read (for Stats > Info)
+  struct BattSample {
+    uint32_t t_ms;
+    int pct;
+  };
+  static constexpr int kBattHist = 12;  // ~11 min at 1 sample/min
+  BattSample batt_hist_[kBattHist] = {};
+  int batt_hist_count_ = 0;
+  int batt_hist_head_ = 0;
+  uint32_t batt_last_sample_ms_ = 0;
 };
 
 }  // namespace ui

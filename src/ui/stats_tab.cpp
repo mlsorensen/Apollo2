@@ -213,9 +213,9 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
   lv_obj_set_style_pad_right(out.info_box, 6, 0);  // gutter so rows clear the bar
   // "Remote FW" is THIS device (the ESP32 remote), kept first and distinct from
   // the machine's own Firmware/Software rows below it.
-  static const char* kInfoKeys[kStatsInfoRows] = {"Remote FW", "Manufacturer",
-                                                  "Model", "Serial",
-                                                  "Firmware", "Software"};
+  static const char* kInfoKeys[kStatsInfoRows] = {
+      "Remote FW", LV_SYMBOL_BATTERY_2 " Runtime", "Manufacturer", "Model",
+      "Serial", "Firmware", "Software"};
   for (int i = 0; i < kStatsInfoRows; ++i) {
     lv_obj_t* row = lv_obj_create(out.info_box);
     lv_obj_remove_style_all(row);

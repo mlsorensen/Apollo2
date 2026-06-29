@@ -355,8 +355,10 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     lv_obj_add_event_cb(home_.boiler_minus, on_boiler_minus, LV_EVENT_CLICKED, this);
     lv_obj_add_event_cb(home_.boiler_plus, on_boiler_plus, LV_EVENT_CLICKED, this);
   }
-  update_home(home_, machine_->snapshot(), battery_->battery(), clock_->now(),
+  battery_state_ = battery_->battery();
+  update_home(home_, machine_->snapshot(), battery_state_, clock_->now(),
               clock_->use_24h());
+  update_battery_runtime(battery_state_);
 
   build_settings_tab(settings, screen, settings_);
   for (int i = 0; i < kSectionCount; ++i) {
@@ -404,8 +406,11 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
 void App::refresh() {
   if (machine_ != nullptr) {
     const core::MachineSnapshot snap = machine_->snapshot();
-    if (battery_ != nullptr)
-      update_home(home_, snap, battery_->battery(), clock_->now(), clock_->use_24h());
+    if (battery_ != nullptr) {
+      battery_state_ = battery_->battery();
+      update_home(home_, snap, battery_state_, clock_->now(), clock_->use_24h());
+      update_battery_runtime(battery_state_);
+    }
     update_temp_panels(snap);
     handle_pairing(snap.link);
 
@@ -809,6 +814,24 @@ void App::zoom_step(int dir) {
   update_stats_view();
 }
 
+void App::update_battery_runtime(const core::BatteryState& b) {
+  // No estimate while charging / on USB / no battery — reset the window.
+  if (!b.present || b.charging) {
+    batt_hist_count_ = 0;
+    batt_hist_head_ = 0;
+    batt_last_sample_ms_ = 0;
+    return;
+  }
+  // Sample percent once a minute into a ring -> a ~10-min sliding window.
+  const uint32_t now = lv_tick_get();
+  if (batt_hist_count_ == 0 || now - batt_last_sample_ms_ >= 60000u) {
+    batt_hist_[batt_hist_head_] = {now, b.percent};
+    batt_hist_head_ = (batt_hist_head_ + 1) % kBattHist;
+    if (batt_hist_count_ < kBattHist) ++batt_hist_count_;
+    batt_last_sample_ms_ = now;
+  }
+}
+
 void App::update_stats_view() {
   if (history_ == nullptr || stats_.chart == nullptr) return;
 
@@ -824,8 +847,41 @@ void App::update_stats_view() {
       std::snprintf(rfw, sizeof(rfw), "v%s (%s)", fw::kVersion, fw::kGitRev);
     else
       std::snprintf(rfw, sizeof(rfw), "v%s", fw::kVersion);
-    const char* vals[kStatsInfoRows] = {rfw,          snap.manufacturer, snap.model,
-                                        snap.serial,  snap.firmware,     snap.software};
+
+    // Battery runtime: drain rate over the ~10-min window (oldest sample vs now)
+    // extrapolated to empty. ">24h" when essentially flat (the font has no ∞).
+    char rt[24];
+    if (!battery_state_.present) {
+      std::snprintf(rt, sizeof(rt), "-");
+    } else if (battery_state_.charging) {
+      std::snprintf(rt, sizeof(rt), "Charging");
+    } else if (batt_hist_count_ < 2) {
+      std::snprintf(rt, sizeof(rt), "Estimating...");
+    } else {
+      const int tail = (batt_hist_head_ - batt_hist_count_ + 2 * kBattHist) % kBattHist;
+      const uint32_t dt = lv_tick_get() - batt_hist_[tail].t_ms;        // window span (ms)
+      const int drop = batt_hist_[tail].pct - battery_state_.percent;   // % drained
+      if (dt < 3u * 60 * 1000) {
+        std::snprintf(rt, sizeof(rt), "Estimating...");
+      } else if (drop <= 0) {
+        std::snprintf(rt, sizeof(rt), ">24h");  // not dropping -> effectively infinite
+      } else {
+        const uint64_t rem_min =
+            static_cast<uint64_t>(battery_state_.percent) * dt /
+            (static_cast<uint32_t>(drop) * 60000u);
+        if (rem_min >= 24 * 60)
+          std::snprintf(rt, sizeof(rt), ">24h");
+        else if (rem_min >= 60)
+          std::snprintf(rt, sizeof(rt), "%uh %um", static_cast<unsigned>(rem_min / 60),
+                        static_cast<unsigned>(rem_min % 60));
+        else
+          std::snprintf(rt, sizeof(rt), "%um", static_cast<unsigned>(rem_min));
+      }
+    }
+
+    const char* vals[kStatsInfoRows] = {rfw,         rt,            snap.manufacturer,
+                                        snap.model,  snap.serial,   snap.firmware,
+                                        snap.software};
     for (int i = 0; i < kStatsInfoRows; ++i) {
       if (stats_.info_val[i] == nullptr) continue;
       const bool have = vals[i] != nullptr && vals[i][0] != '\0';
