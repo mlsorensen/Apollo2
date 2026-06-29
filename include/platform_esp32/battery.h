@@ -13,6 +13,11 @@ class Battery : public core::IBattery {
  public:
   void begin();
   core::BatteryState battery() const override;
+
+ private:
+  // Smoothing state (mutable: battery() is a const read but filters over time).
+  mutable float volts_filt_ = 0.0f;  // EMA of cell voltage; 0 = uninitialized
+  mutable int shown_pct_ = -1;       // last reported percent (hysteresis); -1 = none
 };
 
 }  // namespace platform
