@@ -122,6 +122,32 @@ void set_brightness_label(ui::SettingsWidgets& s) {
   lv_label_set_text(s.brightness_value, b);
 }
 
+void set_time_labels(ui::SettingsWidgets& s) {
+  char b[4];
+  std::snprintf(b, sizeof(b), "%02d", s.set_hour);
+  lv_label_set_text(s.hour_value, b);
+  std::snprintf(b, sizeof(b), "%02d", s.set_minute);
+  lv_label_set_text(s.minute_value, b);
+}
+
+// Hour/Minute steppers: tap = +/-1, hold = repeat (spin through values).
+bool is_step_event(lv_event_t* e) {
+  const lv_event_code_t c = lv_event_get_code(e);
+  return c == LV_EVENT_SHORT_CLICKED || c == LV_EVENT_LONG_PRESSED_REPEAT;
+}
+void on_hour_minus(lv_event_t* e) {
+  if (is_step_event(e)) static_cast<ui::App*>(lv_event_get_user_data(e))->hour_adjust(-1);
+}
+void on_hour_plus(lv_event_t* e) {
+  if (is_step_event(e)) static_cast<ui::App*>(lv_event_get_user_data(e))->hour_adjust(+1);
+}
+void on_minute_minus(lv_event_t* e) {
+  if (is_step_event(e)) static_cast<ui::App*>(lv_event_get_user_data(e))->minute_adjust(-1);
+}
+void on_minute_plus(lv_event_t* e) {
+  if (is_step_event(e)) static_cast<ui::App*>(lv_event_get_user_data(e))->minute_adjust(+1);
+}
+
 // Switching the main tab (e.g. leaving Settings) commits any pending temp edit.
 void on_tab_changed(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->commit_temp_edits();
@@ -195,11 +221,12 @@ App::~App() {
 
 void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                 core::IBattery& battery, core::IDisplaySettings& display,
-                const ScreenProfile& screen) {
+                core::IClock& clock, const ScreenProfile& screen) {
   machine_ = &machine;
   provisioner_ = &provisioner;
   battery_ = &battery;
   display_ = &display;
+  clock_ = &clock;
   const bool compact = is_compact(screen);
 
   lv_obj_t* scr = lv_screen_active();
@@ -238,7 +265,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
 
   build_home_tab(home, screen, home_);
   lv_obj_add_event_cb(home_.power_btn, on_power_clicked, LV_EVENT_CLICKED, this);
-  update_home(home_, machine_->snapshot(), battery_->battery());
+  update_home(home_, machine_->snapshot(), battery_->battery(), clock_->now());
 
   build_settings_tab(settings, screen, settings_);
   for (int i = 0; i < kSectionCount; ++i) {
@@ -254,6 +281,10 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(settings_.steam_switch, on_steam_switch, LV_EVENT_VALUE_CHANGED, this);
   lv_obj_add_event_cb(settings_.brightness_minus, on_brightness_minus, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.brightness_plus, on_brightness_plus, LV_EVENT_CLICKED, this);
+  lv_obj_add_event_cb(settings_.hour_minus, on_hour_minus, LV_EVENT_ALL, this);
+  lv_obj_add_event_cb(settings_.hour_plus, on_hour_plus, LV_EVENT_ALL, this);
+  lv_obj_add_event_cb(settings_.minute_minus, on_minute_minus, LV_EVENT_ALL, this);
+  lv_obj_add_event_cb(settings_.minute_plus, on_minute_plus, LV_EVENT_ALL, this);
 
   build_placeholder(stats, "Stats", tab_font);
 
@@ -262,12 +293,14 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
 
   settings_.brightness = display_->brightness();
   set_brightness_label(settings_);
+  seed_time_steppers();
 }
 
 void App::refresh() {
   if (machine_ != nullptr) {
     const core::MachineSnapshot snap = machine_->snapshot();
-    if (battery_ != nullptr) update_home(home_, snap, battery_->battery());
+    if (battery_ != nullptr)
+      update_home(home_, snap, battery_->battery(), clock_->now());
     update_temp_panels(snap);
     handle_pairing(snap.link);
   }
@@ -312,6 +345,26 @@ void App::brightness_adjust(int dir) {
   settings_.brightness = b;
   set_brightness_label(settings_);
   if (display_ != nullptr) display_->set_brightness(b);  // live + persisted
+}
+
+void App::seed_time_steppers() {
+  if (clock_ == nullptr) return;
+  const core::WallTime t = clock_->now();
+  settings_.set_hour = t.valid ? t.hour : 12;
+  settings_.set_minute = t.valid ? t.minute : 0;
+  set_time_labels(settings_);
+}
+
+void App::hour_adjust(int dir) {
+  settings_.set_hour = (settings_.set_hour + dir + 24) % 24;
+  set_time_labels(settings_);
+  if (clock_ != nullptr) clock_->set(settings_.set_hour, settings_.set_minute);
+}
+
+void App::minute_adjust(int dir) {
+  settings_.set_minute = (settings_.set_minute + dir + 60) % 60;
+  set_time_labels(settings_);
+  if (clock_ != nullptr) clock_->set(settings_.set_hour, settings_.set_minute);
 }
 
 void App::commit_temp_edits() {
@@ -523,6 +576,7 @@ void App::handle_pairing(core::Link link) {
 void App::select_settings_section(int section) {
   commit_temp_edits();  // write pending edits from the section we're leaving
   settings_select_section(settings_, section);
+  if (section == kSectionDevice) seed_time_steppers();  // show the current time
 }
 
 void App::update_settings_view() {

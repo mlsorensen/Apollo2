@@ -55,11 +55,20 @@ struct SettingsWidgets {
   bool steam_enabled = true;       // local on/off (tracks machine unless dirty)
   bool steam_enable_dirty = false; // toggled, awaiting machine confirmation
 
-  // Display section
+  // Device section: brightness + a clock setter (hour/minute steppers)
   lv_obj_t* brightness_minus = nullptr;
   lv_obj_t* brightness_plus = nullptr;
   lv_obj_t* brightness_value = nullptr;
   int brightness = 100;
+
+  lv_obj_t* hour_minus = nullptr;
+  lv_obj_t* hour_plus = nullptr;
+  lv_obj_t* hour_value = nullptr;
+  lv_obj_t* minute_minus = nullptr;
+  lv_obj_t* minute_plus = nullptr;
+  lv_obj_t* minute_value = nullptr;
+  int set_hour = 12;    // local edit buffer, seeded from the clock on section entry
+  int set_minute = 0;
 };
 
 void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,

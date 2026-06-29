@@ -178,14 +178,22 @@ void build_boiler_panel(lv_obj_t* panel, const lv_font_t* text_font,
                       &out.boiler_value, &out.boiler_plus, &out.boiler_sub);
 }
 
-// Display section: a "Brightness" stepper row.
+// Device section: Brightness + a clock setter (Hour / Minute steppers).
 void build_device_panel(lv_obj_t* panel, const lv_font_t* text_font,
                          const lv_font_t* symbol_font, int btn_size,
                          ui::SettingsWidgets& out) {
   make_settings_list(panel);
-  lv_obj_t* r = make_setting_row(panel, "Brightness", text_font);
-  make_inline_stepper(r, text_font, symbol_font, btn_size, &out.brightness_minus,
+  lv_obj_t* rb = make_setting_row(panel, "Brightness", text_font);
+  make_inline_stepper(rb, text_font, symbol_font, btn_size, &out.brightness_minus,
                       &out.brightness_value, &out.brightness_plus, nullptr);
+
+  lv_obj_t* rh = make_setting_row(panel, "Hour", text_font);
+  make_inline_stepper(rh, text_font, symbol_font, btn_size, &out.hour_minus,
+                      &out.hour_value, &out.hour_plus, nullptr);
+
+  lv_obj_t* rm = make_setting_row(panel, "Minute", text_font);
+  make_inline_stepper(rm, text_font, symbol_font, btn_size, &out.minute_minus,
+                      &out.minute_value, &out.minute_plus, nullptr);
 }
 
 }  // namespace

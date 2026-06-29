@@ -8,6 +8,7 @@
 #include <filesystem>
 
 #include "platform_host/fake_battery.h"
+#include "platform_host/fake_clock.h"
 #include "platform_host/fake_display_settings.h"
 #include "platform_host/fake_machine.h"
 #include "platform_host/fake_provisioner.h"
@@ -19,14 +20,14 @@ namespace {
 
 bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             core::IBattery& battery, core::IDisplaySettings& disp_settings,
-            ui::ScreenProfile screen, const char* out_path, int tab = 0,
-            int settings_section = -1, bool token_modal = false) {
+            core::IClock& clock, ui::ScreenProfile screen, const char* out_path,
+            int tab = 0, int settings_section = -1, bool token_modal = false) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
   host::PngDisplay display(screen.width, screen.height);
   ui::App app;
-  app.build(machine, provisioner, battery, disp_settings, screen);
+  app.build(machine, provisioner, battery, disp_settings, clock, screen);
   app.show_tab(tab);
   if (settings_section >= 0) app.select_settings_section(settings_section);
   if (token_modal) app.open_token_setup();
@@ -46,11 +47,12 @@ int main() {
   host::FakeProvisioner provisioner;
   host::FakeBattery battery;
   host::FakeDisplaySettings disp;
+  host::FakeClock clock;
 
   // One PNG per supported layout. Add a line here when a new form factor lands.
   auto r = [&](ui::ScreenProfile s, const char* path, int tab = 0, int sec = -1,
                bool modal = false) {
-    return render(machine, provisioner, battery, disp, s, path, tab, sec, modal);
+    return render(machine, provisioner, battery, disp, clock, s, path, tab, sec, modal);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");

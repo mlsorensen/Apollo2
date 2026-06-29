@@ -3,6 +3,7 @@
 #include <lvgl.h>
 
 #include "core/battery.h"
+#include "core/clock.h"
 #include "core/machine.h"
 #include "ui/screen.h"
 
@@ -16,6 +17,7 @@ struct HomeWidgets {
   lv_obj_t* status_dot = nullptr;     // top-left
   lv_obj_t* status_label = nullptr;
   lv_obj_t* battery_label = nullptr;  // top-right
+  lv_obj_t* clock_label = nullptr;    // top-right, farthest right (macOS-style)
   lv_obj_t* brew_value = nullptr;
   lv_obj_t* brew_set = nullptr;
   lv_obj_t* boiler_value = nullptr;
@@ -36,6 +38,6 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& 
 
 // Apply machine + battery state to the built widgets (live update, no rebuild).
 void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
-                 const core::BatteryState& battery);
+                 const core::BatteryState& battery, const core::WallTime& clock);
 
 }  // namespace ui

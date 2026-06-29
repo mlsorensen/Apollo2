@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/battery.h"
+#include "core/clock.h"
 #include "core/display_settings.h"
 #include "core/machine.h"
 #include "core/provisioner.h"
@@ -23,7 +24,7 @@ class App {
 
   void build(core::IMachine& machine, core::IProvisioner& provisioner,
              core::IBattery& battery, core::IDisplaySettings& display,
-             const ScreenProfile& screen);
+             core::IClock& clock, const ScreenProfile& screen);
 
   // Reflect the latest machine state and scan results in the UI (no I/O).
   void refresh();
@@ -48,11 +49,14 @@ class App {
   void boiler_adjust(int dir);           // Boiler level +/-
   void steam_set_enabled(bool on);       // steam boiler on/off switch
   void brightness_adjust(int dir);       // Display brightness +/-
+  void hour_adjust(int dir);             // Device clock hour +/- (wraps)
+  void minute_adjust(int dir);           // Device clock minute +/- (wraps)
   void commit_temp_edits();              // write pending temp edits (on exit)
 
  private:
   void update_settings_view();
   void update_temp_panels(const core::MachineSnapshot& state);
+  void seed_time_steppers();  // load the clock into the Hour/Minute steppers
   void handle_pairing(core::Link link);
   lv_obj_t* open_modal(const char* title, const char* body);  // returns the card
   void close_modal();
@@ -64,6 +68,7 @@ class App {
   core::IProvisioner* provisioner_ = nullptr;
   core::IBattery* battery_ = nullptr;
   core::IDisplaySettings* display_ = nullptr;
+  core::IClock* clock_ = nullptr;
   lv_obj_t* tabview_ = nullptr;
   lv_obj_t* modal_ = nullptr;       // current overlay modal, if open
   bool pairing_active_ = false;     // waiting on a pairing-read outcome

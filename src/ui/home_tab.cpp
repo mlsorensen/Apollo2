@@ -98,7 +98,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& 
                         LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_row(parent, gap, 0);
 
-  // --- Top bar: status (left) + battery (right) ---------------------------
+  // --- Top bar: status (left) + clock & battery (right) -------------------
   lv_obj_t* bar = lv_obj_create(parent);
   lv_obj_remove_style_all(bar);
   lv_obj_remove_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
@@ -126,12 +126,23 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& 
   lv_obj_set_style_text_color(out.status_label, lv_color_hex(ui::theme::text), 0);
   lv_obj_set_style_text_font(out.status_label, sub_font, 0);
 
-  out.battery_label = lv_label_create(bar);
-  // Right-anchored (flex space-between) with the battery glyph rendered LAST, so
-  // the icon always sits flush at the right edge and never moves; the percent /
-  // charge bolt sits to its left.
+  // Right group: battery then clock, so the clock sits farthest right like a
+  // macOS menu bar (battery just to its left).
+  lv_obj_t* right_group = lv_obj_create(bar);
+  lv_obj_remove_style_all(right_group);
+  lv_obj_set_size(right_group, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(right_group, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(right_group, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(right_group, 10, 0);
+
+  out.battery_label = lv_label_create(right_group);
   lv_obj_set_style_text_color(out.battery_label, lv_color_hex(ui::theme::muted), 0);
   lv_obj_set_style_text_font(out.battery_label, sub_font, 0);
+
+  out.clock_label = lv_label_create(right_group);
+  lv_obj_set_style_text_color(out.clock_label, lv_color_hex(ui::theme::text), 0);
+  lv_obj_set_style_text_font(out.clock_label, sub_font, 0);
   out.batt_timer = lv_timer_create(battery_anim_cb, 350, &out);  // drives charge anim
 
   // --- Two temperature panels, side by side -------------------------------
@@ -170,7 +181,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& 
 }
 
 void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
-                 const core::BatteryState& battery) {
+                 const core::BatteryState& battery, const core::WallTime& clock) {
   const bool connected = state.link == core::Link::Connected;
   const bool on = state.power == core::Power::On;
 
@@ -202,7 +213,7 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   uint32_t dot = ui::theme::muted;
   switch (state.link) {
     case core::Link::Unconfigured: status = "Set up in Settings"; dot = ui::theme::muted; break;
-    case core::Link::NeedsToken:   status = "Token needed - Settings"; dot = ui::theme::warn; break;
+    case core::Link::NeedsToken:   status = "Token needed"; dot = ui::theme::warn; break;
     case core::Link::Disconnected: status = "Disconnected"; dot = ui::theme::alert; break;
     case core::Link::Connecting:   status = "Connecting..."; dot = ui::theme::warn; break;
     case core::Link::Connected:
@@ -212,6 +223,15 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   }
   lv_label_set_text(w.status_label, status);
   lv_obj_set_style_bg_color(w.status_dot, lv_color_hex(dot), 0);
+
+  // Clock (top-right): "H:MM" once set, dashes until then.
+  if (clock.valid) {
+    char cb[8];
+    std::snprintf(cb, sizeof(cb), "%d:%02d", clock.hour, clock.minute);
+    lv_label_set_text(w.clock_label, cb);
+  } else {
+    lv_label_set_text(w.clock_label, "--:--");
+  }
 
   // Battery (top-right). Charging: bolt + a looping fill animation, NO percent
   // (terminal voltage is elevated under charge, so SoC is unknowable). Idle:
