@@ -27,6 +27,8 @@ class FakeHistory : public core::IHistory {
       boiler[i] = 123.0f - 103.0f * std::exp(-frac * 5.0f) + 0.5f * std::sin(frac * 24.0f);
     }
   }
+
+  uint32_t sample_interval_s() const override { return 30; }
 };
 
 }  // namespace host

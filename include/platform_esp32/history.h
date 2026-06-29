@@ -21,13 +21,11 @@ class History : public core::IHistory {
 
   void add(float brew_c, float boiler_c);  // append one sample, stamped "now"
   void series(uint32_t window_s, float* brew, float* boiler, int n) const override;
+  uint32_t sample_interval_s() const override { return kSampleIntervalS; }
 
  private:
   // ~24 h of headroom at the sample cadence (the widest chart window is 24 h).
   static constexpr int kCap = 24 * 60 * 60 / kSampleIntervalS + 16;  // ~2896
-  // Empty spans up to a few sample intervals are interpolated (sparse sampling on
-  // a short window); longer spans are real gaps (machine off / BLE dropped) -> NaN.
-  static constexpr uint32_t kGapThresholdS = kSampleIntervalS * 6;  // 3 min
   struct Sample {
     uint32_t t_s;
     float brew;

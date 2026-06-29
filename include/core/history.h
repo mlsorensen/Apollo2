@@ -20,6 +20,10 @@ class IHistory {
   // bucket, or NaN where no sample falls in it (the chart shows a gap). `brew`
   // and `boiler` must each hold `n` floats.
   virtual void series(uint32_t window_s, float* brew, float* boiler, int n) const = 0;
+
+  // Native sampling cadence (seconds). The chart sizes its bucket count from this
+  // so a bucket reliably holds a sample (no sparsity gaps to interpolate).
+  virtual uint32_t sample_interval_s() const = 0;
 };
 
 }  // namespace core

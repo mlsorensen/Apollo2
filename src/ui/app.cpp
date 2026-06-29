@@ -910,13 +910,23 @@ void App::update_stats_view() {
     stats_.target = (stats_.active == kStatsBoiler) ? snap.boiler_target_c : snap.brew_target_c;
   }
 
+  // Size the chart to ~one bucket per 2 sample intervals so a bucket reliably
+  // holds a sample — no sparsity gaps (hence no interpolation, which warped the
+  // line as samples shifted buckets). Empty buckets are then real disconnects.
+  const uint32_t interval = history_->sample_interval_s();
+  int n = (interval > 0) ? static_cast<int>(z.window_s / (interval * 2)) : kStatsPoints;
+  if (n < 8) n = 8;
+  if (n > kStatsPoints) n = kStatsPoints;
+  if (static_cast<int>(lv_chart_get_point_count(stats_.chart)) != n)
+    lv_chart_set_point_count(stats_.chart, n);
+
   float brew[kStatsPoints];
   float boiler[kStatsPoints];
-  history_->series(z.window_s, brew, boiler, kStatsPoints);
+  history_->series(z.window_s, brew, boiler, n);
   const float* data = (stats_.active == kStatsBoiler) ? boiler : brew;
 
   bool any = false;
-  for (int i = 0; i < kStatsPoints; ++i) {
+  for (int i = 0; i < n; ++i) {
     if (std::isnan(data[i])) {
       lv_chart_set_value_by_id(stats_.chart, stats_.series, i, LV_CHART_POINT_NONE);
     } else {

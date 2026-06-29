@@ -51,6 +51,9 @@ void History::series(uint32_t window_s, float* brew, float* boiler, int n) const
     ++cnt[b];
   }
 
+  // Mean per bucket, or NaN where empty. The caller sizes n so buckets reliably
+  // hold a sample (no sparsity gaps), so empty buckets here are real gaps
+  // (machine off / BLE dropped) and the chart breaks the line there.
   for (int i = 0; i < n; ++i) {
     if (cnt[i] > 0) {
       brew[i] /= cnt[i];
@@ -59,26 +62,6 @@ void History::series(uint32_t window_s, float* brew, float* boiler, int n) const
       brew[i] = NAN;
       boiler[i] = NAN;
     }
-  }
-
-  // Fill interior empty-bucket runs by linear interpolation when the run is short
-  // (sparse sampling on a short window). Leave long runs as NaN — those are real
-  // gaps (machine off / BLE dropped). Leading/trailing NaN (no data) also stay.
-  const uint32_t bucket_s = (window_s + n - 1) / n;  // seconds per bucket (ceil)
-  int prev = -1;
-  for (int i = 0; i < n; ++i) {
-    if (cnt[i] == 0) continue;
-    if (prev >= 0 && i - prev > 1) {
-      const uint32_t span = static_cast<uint32_t>(i - prev) * bucket_s;
-      if (span <= kGapThresholdS) {
-        for (int k = prev + 1; k < i; ++k) {
-          const float f = static_cast<float>(k - prev) / static_cast<float>(i - prev);
-          brew[k] = brew[prev] + f * (brew[i] - brew[prev]);
-          boiler[k] = boiler[prev] + f * (boiler[i] - boiler[prev]);
-        }
-      }
-    }
-    prev = i;
   }
 }
 
