@@ -80,6 +80,16 @@ void chart_overlay_cb(lv_event_t* e) {
     lv_draw_line(layer, &line);
   }
 
+  // LVGL's gridlines span the full object width (into the padding), so they run
+  // through the Y-label margin. Repaint the left margin with the card colour to
+  // clear them before drawing the labels.
+  lv_draw_rect_dsc_t maskd;
+  lv_draw_rect_dsc_init(&maskd);
+  maskd.bg_color = lv_color_hex(ui::theme::card());
+  maskd.bg_opa = LV_OPA_COVER;
+  lv_area_t mask = {obj.x1, obj.y1, static_cast<int32_t>(plot.x1 - 1), obj.y2};
+  lv_draw_rect(layer, &maskd, &mask);
+
   lv_draw_label_dsc_t lbl;
   lv_draw_label_dsc_init(&lbl);
   lbl.color = lv_color_hex(ui::theme::muted());

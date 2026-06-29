@@ -829,6 +829,9 @@ void App::update_stats_view() {
 
   const ZoomLevel& z = kZooms[stats_.zoom_idx];
   stats_.window_s = z.window_s;
+  // Grey the zoom buttons at the ends of the window range (+ = shorter window).
+  set_clickable(stats_.zoom_in, stats_.zoom_idx > 0);
+  set_clickable(stats_.zoom_out, stats_.zoom_idx < kZoomCount - 1);
   // Tight ranges (start near ambient, not 0) so the curve fills the plot and the
   // 5 drawn Y labels land on round numbers: brew 20/40/60/80/100, steam
   // 20/50/80/110/140.
