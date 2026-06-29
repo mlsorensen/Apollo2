@@ -13,10 +13,11 @@ std::vector<core::ScanResult> FakeProvisioner::scan_results() const {
     r.rssi = rssi;
     out.push_back(r);
   };
-  add("MICRA_MR000011", "30:c6:f7:00:00:13", -61);
-  add("MICRA_MR000012", "30:c6:f7:00:00:12", -78);
-  add("MICRA_MR000013", "30:c6:f7:00:00:14", -83);
-  add("MICRA_MR000014", "30:c6:f7:00:00:11", -90);
+  // Synthetic entries (not real devices).
+  add("MICRA_MR000001", "30:c6:f7:00:00:01", -61);
+  add("MICRA_MR000002", "30:c6:f7:00:00:02", -78);
+  add("MICRA_MR000003", "30:c6:f7:00:00:03", -83);
+  add("MICRA_MR000004", "30:c6:f7:00:00:04", -90);
   return out;
 }
 

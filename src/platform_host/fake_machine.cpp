@@ -7,7 +7,7 @@ core::MachineSnapshot FakeMachine::snapshot() const {
       .name = "Linea Micra",
       .manufacturer = "La Marzocco",
       .model = "Linea Micra",
-      .serial = "MR002018",
+      .serial = "MR000000",
       .firmware = "1.40",
       .software = "v5.0.9",
       .link = core::Link::Connected,  // the fake is always "connected"

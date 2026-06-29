@@ -45,7 +45,7 @@ TOKEN=$(./lmtoken)
 ```sh
 export LAMARZOCCO_USERNAME='you@example.com'
 export LAMARZOCCO_PASSWORD='…'
-./lmtoken -serial MR002018      # pick a device by serial, no prompt
+./lmtoken -serial MR000000      # pick a device by serial, no prompt
 ```
 
 Flags / env:
