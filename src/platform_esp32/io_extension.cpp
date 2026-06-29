@@ -42,10 +42,12 @@ void IoExtension::set(uint8_t pin, bool high) {
 }
 
 void IoExtension::set_pwm(uint8_t percent) {
-  // Matches Waveshare's IO_EXTENSION_Pwm_Output: input 0-100 (capped at 97),
-  // scaled to the register's 0-255 range. Higher = brighter (not inverted).
-  if (percent > 97) percent = 97;
-  write_reg(kRegPwm, static_cast<uint8_t>(percent * 255 / 100));
+  // Input 0-100 -> the register's 0-255 range. Observed on this board the PWM is
+  // INVERTED-duty (higher register value = dimmer), so write the complement:
+  // percent 100 -> 0 (brightest), percent 0 -> 255 (off).
+  if (percent > 100) percent = 100;
+  const uint8_t duty = static_cast<uint8_t>(percent * 255 / 100);
+  write_reg(kRegPwm, static_cast<uint8_t>(255 - duty));
 }
 
 uint16_t IoExtension::read_adc() {
