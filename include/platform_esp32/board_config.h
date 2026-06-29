@@ -118,10 +118,11 @@ constexpr bool kTouchMirrorX = false;
 constexpr bool kTouchMirrorY = false;
 
 // --- Battery: read via the IO-extension's ADC (reg 0x06), not a direct ESP pin.
-//     kBatteryIoExtScale is volts-per-count; CALIBRATE from the serial raw log
-//     ("battery: ioext ADC raw=N -> V") against a measured pack voltage. ---
+//     kBatteryIoExtScale is volts-per-count. Calibrated: 4.026 V measured at the
+//     terminals when raw ~418 -> 4.026/418. (The vendor's ESP32-ADC formula
+//     3.3/4096*3 does NOT apply — this chip's ADC has its own range.) ---
 #define BOARD_BATTERY_VIA_IOEXT
-constexpr float kBatteryIoExtScale = 0.00242f;  // guess: 12-bit, 3.3V ref, /3 div
+constexpr float kBatteryIoExtScale = 0.009632f;
 constexpr int   kBatteryAdc = -1;               // no direct ESP32 ADC pin
 constexpr float kBatteryDivider = 1.0f;         // (unused; folded into the scale)
 constexpr int   kBatteryChargePin = -1;

@@ -21,8 +21,12 @@ core::BatteryState Battery::battery() const {
   float volts;
 
 #if defined(BOARD_BATTERY_VIA_IOEXT)
-  // 7B: the battery is read by the IO-extension's ADC, not an ESP32 pin.
-  const uint16_t raw = io_extension().read_adc();
+  // 7B: the battery is read by the IO-extension's ADC, not an ESP32 pin. The ADC
+  // is noisy (~+/-35 counts), so oversample and average.
+  constexpr int kSamples = 16;
+  uint32_t raw_sum = 0;
+  for (int i = 0; i < kSamples; ++i) raw_sum += io_extension().read_adc();
+  const uint16_t raw = static_cast<uint16_t>(raw_sum / kSamples);
   volts = raw * board::kBatteryIoExtScale;
   static uint32_t last_log = 0;  // periodic raw dump to calibrate kBatteryIoExtScale
   if (millis() - last_log > 3000) {
