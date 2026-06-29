@@ -64,7 +64,9 @@ bool Display::begin() {
       board::kRgbB[0], board::kRgbB[1], board::kRgbB[2], board::kRgbB[3], board::kRgbB[4],
       /*hsync_polarity=*/0, board::kRgbHsyncFront, board::kRgbHsyncPulse, board::kRgbHsyncBack,
       /*vsync_polarity=*/0, board::kRgbVsyncFront, board::kRgbVsyncPulse, board::kRgbVsyncBack,
-      board::kRgbPclkActiveNeg, board::kRgbPclkHz);
+      board::kRgbPclkActiveNeg, board::kRgbPclkHz, /*useBigEndian=*/false,
+      /*de_idle_high=*/0, /*pclk_idle_high=*/0,
+      /*bounce_buffer_size_px=*/board::kRgbBouncePx);
   g_gfx = new Arduino_RGB_Display(board::kLcdNativeW, board::kLcdNativeH, rgbpanel,
                                   board::kLcdRotation, /*auto_flush=*/true);
   if (!g_gfx->begin()) {
@@ -72,7 +74,7 @@ bool Display::begin() {
     return false;
   }
   Serial.printf("7B: RGB panel up %dx%d\n", g_gfx->width(), g_gfx->height());
-  g_gfx->fillScreen(0xF800);  // bright red: a quick 'is the panel/timing alive' check
+  g_gfx->fillScreen(0x0000);
   io_extension().set(board::kIoExtBacklight, true);  // backlight on
 #else
   // SPI ST7789 panel (e.g. 2-inch).
@@ -94,9 +96,15 @@ bool Display::begin() {
   const size_t buf_px = static_cast<size_t>(w) * kBufferLines;
   const size_t buf_bytes = buf_px * sizeof(lv_color_t);
 #if defined(BOARD_DISPLAY_RGB)
-  // RGB draws by copying into the panel framebuffer (in PSRAM), so the LVGL
-  // scratch buffer is plain internal RAM, no DMA capability required.
-  g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_INTERNAL));
+  // RGB draws by copying into the panel framebuffer, so the LVGL scratch buffer
+  // needs no DMA. Prefer PSRAM (the 1024-wide buffer is big and internal RAM is
+  // scarce after the panel framebuffer); fall back to internal.
+  g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM));
+  if (g_draw_buf == nullptr) {
+    g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_INTERNAL));
+  }
+  Serial.printf("7B: LVGL draw buffer %s (%u bytes)\n",
+                g_draw_buf ? "ok" : "FAILED", static_cast<unsigned>(buf_bytes));
 #else
   // SPI pushes this buffer over the bus via DMA -> must be DMA-capable.
   g_draw_buf = static_cast<lv_color_t*>(

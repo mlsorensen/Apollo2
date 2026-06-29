@@ -10,6 +10,8 @@ namespace platform {
 
 class Config {
  public:
+  void begin();               // create the NVS namespace on first boot (quiets logs)
+
   std::string mac() const;    // saved MAC, or "" if none
   std::string name() const;   // saved display name, or "" if none
   std::string token() const;  // saved BLE auth token, or "" if none

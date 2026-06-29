@@ -101,7 +101,11 @@ constexpr int  kRgbB[5] = {14, 38, 18, 17, 10};      // B3..B7
 constexpr int  kRgbHsyncFront = 48,  kRgbHsyncPulse = 162, kRgbHsyncBack = 152;
 constexpr int  kRgbVsyncFront = 3,   kRgbVsyncPulse = 45,  kRgbVsyncBack = 13;
 constexpr int  kRgbPclkActiveNeg = 1;
-constexpr long kRgbPclkHz = 30000000;  // 30 MHz per the demo; raise if it flickers
+constexpr long kRgbPclkHz = 30000000;  // 30 MHz (matches the Waveshare demo)
+// Bounce buffer (in internal RAM): the LCD peripheral DMAs from here, refilled
+// from the PSRAM framebuffer — without it a PSRAM-backed RGB panel tears/flickers.
+// Waveshare's demo uses H_RES*10.
+constexpr int  kRgbBouncePx = kLcdNativeW * 10;
 
 // --- Touch: GT911 on the shared I2C bus (reset via the IO extension) ---
 constexpr int  kTouchSda = 8;        // == kI2cSda (Touch reads these names)

@@ -29,6 +29,17 @@ std::string read_key(const char* key) {
 }
 }  // namespace
 
+void Config::begin() {
+  // Opening read-write creates the namespace if absent, so later read-only
+  // begins (brightness/theme/etc.) don't log "nvs_open failed: NOT_FOUND" on a
+  // fresh device. The sentinel key guarantees the namespace persists.
+  Preferences p;
+  if (p.begin(kNamespace, /*readOnly=*/false)) {
+    if (!p.isKey("_init")) p.putBool("_init", true);
+    p.end();
+  }
+}
+
 std::string Config::mac() const { return read_key(kMacKey); }
 
 std::string Config::name() const { return read_key(kNameKey); }

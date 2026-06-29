@@ -44,6 +44,7 @@ void setup() {
   delay(300);  // let USB-CDC enumerate
   Serial.println();
   Serial.printf("Micra remote — %s\n", board::kName);
+  g_config.begin();  // create NVS namespace on first boot (quiets read errors)
 
   if (!g_display.begin()) {
     Serial.println("ERROR: display init failed");
