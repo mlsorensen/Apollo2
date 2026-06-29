@@ -14,6 +14,8 @@ namespace board {
 // Waveshare ESP32-S3-Touch-LCD-2 — 2.0", 240x320 ST7789T3 over 4-wire SPI,
 // CST816 capacitive touch over I2C. Values traced to Waveshare's demo source.
 constexpr char kName[] = "Waveshare ESP32-S3-Touch-LCD-2";
+#define BOARD_DISPLAY_SPI    // ST7789 over SPI
+#define BOARD_TOUCH_CST816   // CST816, 8-bit registers
 
 // --- Display: ST7789 on the FSPI bus ---
 constexpr int  kLcdSclk = 39;
@@ -55,8 +57,62 @@ constexpr float kBatteryFullVolts = 4.20f;
 constexpr float kBatteryEmptyVolts = 3.30f;
 constexpr float kBatteryChargingVolts = 4.15f;   // infer charging above this
 
+#elif defined(BOARD_WAVESHARE_S3_LCD_7B)
+
+// Waveshare ESP32-S3-Touch-LCD-7B — 7", 1024x600 RGB parallel panel, GT911
+// capacitive touch, and an I2C "IO extension" expander (addr 0x24) that drives
+// LCD reset / backlight / touch reset. Pins + timing traced to Waveshare's 7B
+// Arduino demo (examples/Arduino/examples/06_LCD + 08_TOUCH). UNVERIFIED on
+// hardware yet — tweak here if the panel is dark/garbled or touch is off.
+constexpr char kName[] = "Waveshare ESP32-S3-Touch-LCD-7B";
+#define BOARD_DISPLAY_RGB     // RGB parallel panel via Arduino_GFX
+#define BOARD_TOUCH_GT911     // GT911, 16-bit registers
+#define BOARD_HAS_IO_EXTENSION
+
+// --- Shared I2C bus (IO extension + GT911 touch) ---
+constexpr int kI2cSda = 8;
+constexpr int kI2cScl = 9;
+
+// --- IO extension (I2C expander @ 0x24): output-pin assignments ---
+constexpr int kIoExtAddr = 0x24;
+constexpr int kIoExtTouchReset = 1;  // IO_1
+constexpr int kIoExtBacklight = 2;   // IO_2
+constexpr int kIoExtLcdReset = 3;    // IO_3
+
+// --- Display: 16-bit RGB565 parallel panel ---
+constexpr int  kLcdNativeW = 1024;
+constexpr int  kLcdNativeH = 600;
+constexpr int  kLcdRotation = 0;     // panel is already landscape
+constexpr int  kRgbDe = 5, kRgbVsync = 3, kRgbHsync = 46, kRgbPclk = 7;
+constexpr int  kRgbR[5] = {1, 2, 42, 41, 40};        // R3..R7
+constexpr int  kRgbG[6] = {39, 0, 45, 48, 47, 21};   // G2..G7
+constexpr int  kRgbB[5] = {14, 38, 18, 17, 10};      // B3..B7
+constexpr int  kRgbHsyncFront = 48,  kRgbHsyncPulse = 162, kRgbHsyncBack = 152;
+constexpr int  kRgbVsyncFront = 3,   kRgbVsyncPulse = 45,  kRgbVsyncBack = 13;
+constexpr int  kRgbPclkActiveNeg = 1;
+constexpr long kRgbPclkHz = 30000000;  // 30 MHz per the demo; raise if it flickers
+
+// --- Touch: GT911 on the shared I2C bus (reset via the IO extension) ---
+constexpr int  kTouchSda = 8;        // == kI2cSda (Touch reads these names)
+constexpr int  kTouchScl = 9;
+constexpr int  kTouchAddr = 0x5D;    // 0x5D (INT low at boot) or 0x14
+constexpr int  kTouchInt = 4;        // GPIO4
+constexpr int  kTouchRst = -1;       // driven via kIoExtTouchReset, not a GPIO
+constexpr bool kTouchSwapXY = false; // GT911 reports in on-screen orientation
+constexpr bool kTouchMirrorX = false;
+constexpr bool kTouchMirrorY = false;
+
+// --- Battery: 7B path not characterized yet -> monitoring off for now ---
+constexpr int   kBatteryAdc = -1;
+constexpr float kBatteryDivider = 3.0f;
+constexpr int   kBatteryChargePin = -1;
+constexpr bool  kBatteryChargeActiveLow = true;
+constexpr float kBatteryFullVolts = 4.20f;
+constexpr float kBatteryEmptyVolts = 3.30f;
+constexpr float kBatteryChargingVolts = 4.15f;
+
 #else
-#error "No board selected. Add -DBOARD_WAVESHARE_S3_LCD_2 to build_flags in platformio.ini."
+#error "No board selected. Add -DBOARD_WAVESHARE_S3_LCD_2 (or _7B) to build_flags in platformio.ini."
 #endif
 
 }  // namespace board
