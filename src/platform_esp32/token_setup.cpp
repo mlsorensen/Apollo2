@@ -67,6 +67,9 @@ void TokenSetup::start() {
   const IPAddress ip(192, 168, 4, 1);
   WiFi.softAPConfig(ip, ip, IPAddress(255, 255, 255, 0));
   const bool ap_ok = WiFi.softAP(ssid());
+  // The phone is inches away, so run low TX power — smaller current spikes, which
+  // matters on a USB-powered 7" board where a WiFi burst can brown out the rail.
+  WiFi.setTxPower(WIFI_POWER_8_5dBm);
   server_.on("/", [this]() { handle_root(); });
   server_.on("/save", HTTP_POST, [this]() { handle_save(); });
   server_.begin();
