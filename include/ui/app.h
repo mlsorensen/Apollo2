@@ -55,7 +55,7 @@ class App {
   void handle_pairing(core::Link link);
   lv_obj_t* open_modal(const char* title, const char* body);  // returns the card
   void close_modal();
-  void show_token_modal();  // Retry pairing / WiFi / Cancel
+  void show_token_modal(bool fetch_failed);  // Retry pairing / WiFi / Cancel
   void show_wifi_modal();   // WiFi instructions + Cancel
 
   core::IMachine* machine_ = nullptr;

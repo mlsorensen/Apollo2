@@ -433,10 +433,18 @@ void App::close_modal() {
 }
 
 // Token-setup choice: try pairing mode again, or fall back to WiFi entry.
-void App::show_token_modal() {
-  lv_obj_t* card = open_modal(
-      "Set up token",
-      "Put the machine in pairing mode and Retry, or enter the token over WiFi.");
+// fetch_failed prepends a note when we got here after a failed pairing-mode read.
+void App::show_token_modal(bool fetch_failed) {
+  char body[200];
+  const char* base =
+      "Put the machine in pairing mode and Retry, or enter the token over WiFi.";
+  if (fetch_failed) {
+    std::snprintf(body, sizeof(body), "Unable to fetch token from the machine.\n\n%s",
+                  base);
+  } else {
+    std::snprintf(body, sizeof(body), "%s", base);
+  }
+  lv_obj_t* card = open_modal("Set up token", body);
   lv_obj_t* row = lv_obj_create(card);
   lv_obj_remove_style_all(row);
   lv_obj_set_width(row, lv_pct(100));
@@ -458,7 +466,7 @@ void App::show_wifi_modal() {
   wifi_setup_shown_ = true;
 }
 
-void App::open_token_setup() { show_token_modal(); }
+void App::open_token_setup() { show_token_modal(/*fetch_failed=*/false); }
 
 void App::retry_pairing() {
   close_modal();
@@ -488,7 +496,7 @@ void App::handle_pairing(core::Link link) {
     if (tabview_ != nullptr) lv_tabview_set_active(tabview_, 0, LV_ANIM_ON);  // Home
   } else if (link == core::Link::NeedsToken) {
     pairing_active_ = false;
-    show_token_modal();  // couldn't auto-read the token; let the user choose
+    show_token_modal(/*fetch_failed=*/true);  // pairing read failed; let the user choose
   }
 }
 
