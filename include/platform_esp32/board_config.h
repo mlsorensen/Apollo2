@@ -101,7 +101,8 @@ constexpr int  kRgbB[5] = {14, 38, 18, 17, 10};      // B3..B7
 constexpr int  kRgbHsyncFront = 48,  kRgbHsyncPulse = 162, kRgbHsyncBack = 152;
 constexpr int  kRgbVsyncFront = 3,   kRgbVsyncPulse = 45,  kRgbVsyncBack = 13;
 constexpr int  kRgbPclkActiveNeg = 1;
-constexpr long kRgbPclkHz = 30000000;  // 30 MHz (matches the Waveshare demo)
+constexpr long kRgbPclkHz = 24000000;  // 24 MHz (lower than the 30 MHz demo to
+                                       // reduce occasional tearing/PSRAM underrun)
 // Bounce buffer (in internal RAM): the LCD peripheral DMAs from here, refilled
 // from the PSRAM framebuffer — without it a PSRAM-backed RGB panel tears/flickers.
 // Waveshare's demo uses H_RES*10.
