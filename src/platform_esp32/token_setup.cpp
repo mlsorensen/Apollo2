@@ -61,14 +61,21 @@ TokenSetup::TokenSetup(Config& config, MicraLink& link)
 void TokenSetup::start() {
   if (active_) return;
   WiFi.mode(WIFI_AP);
-  WiFi.softAP(ssid());  // open network at 192.168.4.1
+  // Pin the AP IP + subnet (192.168.4.1/24) before bringing it up. Without this
+  // the built-in DHCP server sometimes doesn't hand out a lease (seen on the 7B,
+  // where the RGB panel leaves less internal RAM), so clients never get an IP.
+  const IPAddress ip(192, 168, 4, 1);
+  WiFi.softAPConfig(ip, ip, IPAddress(255, 255, 255, 0));
+  const bool ap_ok = WiFi.softAP(ssid());
   server_.on("/", [this]() { handle_root(); });
   server_.on("/save", HTTP_POST, [this]() { handle_save(); });
   server_.begin();
   active_ = true;
   stop_pending_ = true;                     // safety net: auto-close if unused, so the
   stop_at_ms_ = millis() + 5 * 60 * 1000;   // AP can't linger (the device closes it on connect)
-  Serial.printf("TokenSetup: AP '%s' up at %s\n", ssid(), url());
+  Serial.printf("TokenSetup: AP '%s' %s, IP=%s, free heap=%u\n", ssid(),
+                ap_ok ? "up" : "FAILED", WiFi.softAPIP().toString().c_str(),
+                static_cast<unsigned>(ESP.getFreeHeap()));
 }
 
 void TokenSetup::stop() {
