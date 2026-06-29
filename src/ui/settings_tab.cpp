@@ -93,6 +93,7 @@ lv_obj_t* make_setting_row(lv_obj_t* parent, const char* label,
                            const lv_font_t* font) {
   lv_obj_t* row = lv_obj_create(parent);
   lv_obj_remove_style_all(row);
+  lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);  // layout only — don't clip children
   lv_obj_set_width(row, lv_pct(100));
   lv_obj_set_height(row, LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
@@ -115,6 +116,7 @@ void make_inline_stepper(lv_obj_t* row, const lv_font_t* text_font,
                          lv_obj_t** out_plus, lv_obj_t** out_sub) {
   lv_obj_t* grp = lv_obj_create(row);
   lv_obj_remove_style_all(grp);
+  lv_obj_remove_flag(grp, LV_OBJ_FLAG_SCROLLABLE);  // else it clips the round buttons
   lv_obj_set_size(grp, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(grp, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(grp, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
@@ -125,6 +127,7 @@ void make_inline_stepper(lv_obj_t* row, const lv_font_t* text_font,
 
   lv_obj_t* stack = lv_obj_create(grp);
   lv_obj_remove_style_all(stack);
+  lv_obj_remove_flag(stack, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_size(stack, btn_size * 3 / 2, LV_SIZE_CONTENT);  // stable width
   lv_obj_set_flex_flow(stack, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(stack, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
