@@ -39,6 +39,7 @@ class App {
   void forget();               // Settings "Forget" button
   void open_token_setup();     // Settings "Setup" -> token-choice modal
   void retry_pairing();        // modal "Retry pairing"
+  void cancel_pairing();       // pairing-spinner "Cancel"
   void start_token_setup();    // modal "WiFi" -> WiFi portal + instructions
   void cancel_token_setup();   // WiFi-modal "Cancel"
   void dismiss_modal();        // token-modal "Cancel"
@@ -55,6 +56,7 @@ class App {
   void handle_pairing(core::Link link);
   lv_obj_t* open_modal(const char* title, const char* body);  // returns the card
   void close_modal();
+  void show_pairing_modal();  // spinner while the pairing read runs
   void show_token_modal(bool fetch_failed);  // Retry pairing / WiFi / Cancel
   void show_wifi_modal();   // WiFi instructions + Cancel
 

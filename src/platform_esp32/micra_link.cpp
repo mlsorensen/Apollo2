@@ -82,7 +82,10 @@ void MicraLink::set_name(std::string name) {
   name_ = name.empty() ? "Micra" : std::move(name);
 }
 
-void MicraLink::request_pairing_read() { try_pairing_.store(true); }
+void MicraLink::request_pairing_read() {
+  set_link(core::Link::Connecting);  // reflect "working" at once (avoids a brief
+  try_pairing_.store(true);          // NeedsToken flash before the task starts)
+}
 
 void MicraLink::set_token_persister(std::function<void(std::string)> persister) {
   token_persister_ = std::move(persister);

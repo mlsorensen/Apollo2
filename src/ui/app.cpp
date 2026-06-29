@@ -60,6 +60,9 @@ void on_token_wifi(lv_event_t* e) {
 void on_token_cancel(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->dismiss_modal();
 }
+void on_pairing_cancel(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cancel_pairing();
+}
 void on_wifi_cancel(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cancel_token_setup();
 }
@@ -380,7 +383,7 @@ void App::save_scanned(int index) {
 
   provisioner_->save_device(results[index]);  // saves + starts pairing-mode read
   pairing_active_ = true;                      // wait for the outcome (Connected / NeedsToken)
-  lv_label_set_text(settings_.status, "Pairing...");
+  show_pairing_modal();
 }
 
 void App::forget() {
@@ -432,6 +435,18 @@ void App::close_modal() {
   wifi_setup_shown_ = false;
 }
 
+// Spinner shown while the pairing-mode token read runs (gives "it's working"
+// feedback). Replaced by success (Home) or the token-choice modal on failure.
+void App::show_pairing_modal() {
+  lv_obj_t* card = open_modal("Pairing", "Reading the token from the machine...");
+  lv_obj_t* spinner = lv_spinner_create(card);
+  lv_obj_set_size(spinner, 44, 44);
+  lv_obj_set_style_arc_color(spinner, lv_color_hex(ui::theme::rail), LV_PART_MAIN);
+  lv_obj_set_style_arc_color(spinner, lv_color_hex(ui::theme::accent), LV_PART_INDICATOR);
+  lv_spinner_set_anim_params(spinner, 1000, 60);
+  modal_button(card, "Cancel", ui::theme::rail, on_pairing_cancel, this);
+}
+
 // Token-setup choice: try pairing mode again, or fall back to WiFi entry.
 // fetch_failed prepends a note when we got here after a failed pairing-mode read.
 void App::show_token_modal(bool fetch_failed) {
@@ -469,9 +484,14 @@ void App::show_wifi_modal() {
 void App::open_token_setup() { show_token_modal(/*fetch_failed=*/false); }
 
 void App::retry_pairing() {
-  close_modal();
   if (provisioner_ != nullptr) provisioner_->retry_pairing();
   pairing_active_ = true;
+  show_pairing_modal();  // (open_modal closes the previous one)
+}
+
+void App::cancel_pairing() {
+  pairing_active_ = false;  // ignore the in-flight outcome
+  close_modal();
 }
 
 void App::start_token_setup() {
