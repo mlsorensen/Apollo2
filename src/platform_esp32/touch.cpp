@@ -36,7 +36,7 @@ bool read_raw(int& native_x, int& native_y) {
   Wire.beginTransmission(g_addr);
   Wire.write(static_cast<uint8_t>(kGtStatus >> 8));
   Wire.write(static_cast<uint8_t>(kGtStatus & 0xFF));
-  if (Wire.endTransmission(false) != 0) return false;
+  if (Wire.endTransmission(true) != 0) return false;  // STOP, not repeated-start
   if (Wire.requestFrom(g_addr, static_cast<uint8_t>(1)) != 1) return false;
   const uint8_t status = Wire.read();
   if (!(status & 0x80)) return false;  // no fresh data
@@ -46,7 +46,7 @@ bool read_raw(int& native_x, int& native_y) {
     Wire.beginTransmission(g_addr);
     Wire.write(static_cast<uint8_t>(kGtPoint1 >> 8));
     Wire.write(static_cast<uint8_t>(kGtPoint1 & 0xFF));
-    if (Wire.endTransmission(false) == 0 &&
+    if (Wire.endTransmission(true) == 0 &&
         Wire.requestFrom(g_addr, static_cast<uint8_t>(4)) == 4) {
       const uint8_t xl = Wire.read(), xh = Wire.read();
       const uint8_t yl = Wire.read(), yh = Wire.read();

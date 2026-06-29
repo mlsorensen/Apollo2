@@ -49,9 +49,12 @@ void IoExtension::set_pwm(uint8_t percent) {
 }
 
 uint16_t IoExtension::read_adc() {
+  // NOTE: a STOP between the register write and the read (endTransmission(true))
+  // — the i2c-ng driver errors INVALID_STATE on the repeated-start (NonStop)
+  // combined read on this board, and a failed NonStop poisons the bus.
   Wire.beginTransmission(addr_);
   Wire.write(kRegAdc);
-  if (Wire.endTransmission(false) != 0) return 0;  // repeated-start read
+  if (Wire.endTransmission(true) != 0) return 0;
   if (Wire.requestFrom(addr_, static_cast<uint8_t>(2)) != 2) return 0;
   const uint8_t lo = Wire.read();  // little-endian, per Waveshare DEV_I2C_Read_Word
   const uint8_t hi = Wire.read();
