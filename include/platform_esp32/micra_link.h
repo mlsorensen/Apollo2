@@ -96,7 +96,9 @@ class MicraLink : public core::IMachine {
   std::atomic<int> pending_steam_whole_{-1};  // target C, -1 none
   std::atomic<int> pending_steam_enable_{-1}; // 0 off, 1 on, -1 none
   std::atomic<bool> reconnect_requested_{false};
-  std::atomic<bool> connect_enabled_{true};   // user gate; false => drop + don't reconnect
+  // Boot DISCONNECTED: don't auto-grab the Micra's single BLE link on startup (the
+  // user picks a device + taps Connect). Setting up a device (save/pair) enables it.
+  std::atomic<bool> connect_enabled_{false};  // user gate; false => drop + don't reconnect
   std::atomic<bool> try_pairing_{false};
   std::atomic<bool> token_bad_{false};  // authed but reads rejected -> needs re-entry
   std::atomic<bool> scan_requested_{false};
