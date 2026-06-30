@@ -8,11 +8,14 @@
 #include <filesystem>
 
 #include "platform_host/fake_battery.h"
+#include "platform_host/fake_brew_controller.h"
 #include "platform_host/fake_clock.h"
 #include "platform_host/fake_display_settings.h"
 #include "platform_host/fake_history.h"
 #include "platform_host/fake_machine.h"
 #include "platform_host/fake_provisioner.h"
+#include "platform_host/fake_scale.h"
+#include "platform_host/fake_scale_provisioner.h"
 #include "platform_host/png_display.h"
 #include "ui/app.h"
 #include "ui/screen.h"
@@ -22,16 +25,19 @@ namespace {
 
 bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             core::IBattery& battery, core::IDisplaySettings& disp_settings,
-            core::IClock& clock, core::IHistory& history, ui::ScreenProfile screen,
-            const char* out_path, int tab = 0, int settings_section = -1,
-            bool token_modal = false, int theme = 0, int stats_section = -1) {
+            core::IClock& clock, core::IHistory& history, core::IScale& scale,
+            core::IScaleProvisioner& scale_provisioner, core::IBrewController& brew,
+            ui::ScreenProfile screen, const char* out_path, int tab = 0,
+            int settings_section = -1, bool token_modal = false, int theme = 0,
+            int stats_section = -1) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
   disp_settings.set_theme(theme);  // build() reads this into ui::theme::set_active
   host::PngDisplay display(screen.width, screen.height);
   ui::App app;
-  app.build(machine, provisioner, battery, disp_settings, clock, history, screen);
+  app.build(machine, provisioner, battery, disp_settings, clock, history, scale,
+            scale_provisioner, brew, screen);
   app.show_tab(tab);
   if (settings_section >= 0) app.select_settings_section(settings_section);
   if (stats_section >= 0) app.select_stats_section(stats_section);
@@ -54,28 +60,39 @@ int main() {
   host::FakeDisplaySettings disp;
   host::FakeClock clock;
   host::FakeHistory history;
+  host::FakeScale scale;
+  host::FakeScaleProvisioner scale_provisioner;
+  host::FakeBrewController brew;
 
   // One PNG per supported layout. Add a line here when a new form factor lands.
   auto r = [&](ui::ScreenProfile s, const char* path, int tab = 0, int sec = -1,
                bool modal = false, int theme = 0, int stats = -1) {
-    return render(machine, provisioner, battery, disp, clock, history, s, path, tab, sec,
-                  modal, theme, stats);
+    return render(machine, provisioner, battery, disp, clock, history, scale,
+                  scale_provisioner, brew, s, path, tab, sec, modal, theme, stats);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
   ok &= r({320, 240}, "renders/home_320x240.png");
+  // No-scale Home (classic layout) — toggle the fake to "no scale saved".
+  scale_provisioner.set_saved(false);
+  ok &= r({320, 240}, "renders/home_noscale_320x240.png");
+  ok &= r({800, 480}, "renders/home_noscale_800x480.png");
+  scale_provisioner.set_saved(true);
   ok &= r({800, 480}, "renders/settings_800x480.png", 1);
   ok &= r({320, 240}, "renders/settings_320x240.png", 1);
-  ok &= r({320, 240}, "renders/brew_320x240.png", 1, ui::kSectionBrew);
-  ok &= r({320, 240}, "renders/boiler_320x240.png", 1, ui::kSectionBoiler);
-  ok &= r({800, 480}, "renders/brew_800x480.png", 1, ui::kSectionBrew);
-  ok &= r({800, 480}, "renders/boiler_800x480.png", 1, ui::kSectionBoiler);
+  ok &= r({320, 240}, "renders/micra_320x240.png", 1, ui::kSectionMicra);  // chooser
+  ok &= r({320, 240}, "renders/micra_bt_320x240.png", 1, ui::kSectionMicraBt);
+  ok &= r({320, 240}, "renders/micra_settings_320x240.png", 1, ui::kSectionMicraSettings);
+  ok &= r({320, 240}, "renders/scale_bt_320x240.png", 1, ui::kSectionScaleBt);
+  ok &= r({320, 240}, "renders/scale_settings_320x240.png", 1, ui::kSectionScaleSettings);
+  ok &= r({800, 480}, "renders/micra_bt_800x480.png", 1, ui::kSectionMicraBt);
   ok &= r({320, 240}, "renders/device_320x240.png", 1, ui::kSectionDevice);
 
   // 7" 1024x600 (ESP32-S3-Touch-LCD-7B): the XL tier.
   ok &= r({1024, 600}, "renders/home_1024x600.png");
   ok &= r({1024, 600}, "renders/settings_1024x600.png", 1);
-  ok &= r({1024, 600}, "renders/boiler_1024x600.png", 1, ui::kSectionBoiler);
+  ok &= r({1024, 600}, "renders/micra_bt_1024x600.png", 1, ui::kSectionMicraBt);
+  ok &= r({1024, 600}, "renders/scale_settings_1024x600.png", 1, ui::kSectionScaleSettings);
   ok &= r({1024, 600}, "renders/device_1024x600.png", 1, ui::kSectionDevice);
 
   // Stats tab (tab 2): graph sections + info.

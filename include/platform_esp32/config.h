@@ -20,6 +20,16 @@ class Config {
   void set_token(const std::string& token);
   void clear();               // forget the saved machine (incl. its token)
 
+  // Saved Bluetooth scale (separate from the machine; no token needed).
+  std::string scale_mac() const;
+  std::string scale_name() const;
+  void save_scale(const std::string& mac, const std::string& name);
+  void clear_scale();
+
+  // Brew-by-weight target (grams) — persisted so it survives reboots.
+  float target_weight_g() const;       // default 36
+  void set_target_weight_g(float grams);
+
   int brightness() const;     // screen brightness 0..100 (default 100)
   void set_brightness(int percent);
 

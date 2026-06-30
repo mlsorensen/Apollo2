@@ -4,11 +4,14 @@
 #include <functional>
 
 #include "core/battery.h"
+#include "core/brew.h"
 #include "core/clock.h"
 #include "core/display_settings.h"
 #include "core/history.h"
 #include "core/machine.h"
 #include "core/provisioner.h"
+#include "core/scale.h"
+#include "core/scale_provisioner.h"
 #include "ui/home_tab.h"
 #include "ui/screen.h"
 #include "ui/settings_tab.h"
@@ -29,11 +32,17 @@ class App {
 
   void build(core::IMachine& machine, core::IProvisioner& provisioner,
              core::IBattery& battery, core::IDisplaySettings& display,
-             core::IClock& clock, core::IHistory& history,
+             core::IClock& clock, core::IHistory& history, core::IScale& scale,
+             core::IScaleProvisioner& scale_provisioner, core::IBrewController& brew,
              const ScreenProfile& screen);
 
   // Reflect the latest machine state and scan results in the UI (no I/O).
   void refresh();
+
+  // Drain the scale's native flow-rate stream into the Home flow graph. Called
+  // every device-loop iteration (much faster than refresh()) so the line plots
+  // the scale's real sample rate smoothly. Cheap no-op when nothing is pending.
+  void pump_scale_chart();
 
   // Called (once, after a sustained reading) when the pack drops to/below
   // cutoff_volts on battery — the device wires this to deep sleep.
@@ -45,10 +54,16 @@ class App {
 
   // Bound to UI events:
   void toggle_power();         // power button
+  void tare_scale();           // Home "Tare" button
   void start_scan();           // Settings "Scan" button
   void save_scanned(int index);  // a result row in the Settings list
   void forget();               // Settings "Forget" button
   void toggle_connection();    // Settings "Connect"/"Disconnect" button
+  void start_scale_scan();        // Scale page "Scan" button
+  void save_scanned_scale(int index);  // a result row in the Scale scan list
+  void forget_scale();            // Scale page "Forget" button
+  void toggle_scale_connection(); // Scale page "Connect"/"Disconnect"
+  void target_adjust(int dir);    // Scale target weight +/- (grams)
   void open_token_setup();     // Settings "Setup" -> token-choice modal
   void retry_pairing();        // modal "Retry pairing"
   void cancel_pairing();       // pairing-spinner "Cancel"
@@ -66,18 +81,21 @@ class App {
   void set_use_fahrenheit(bool on);      // Device "Fahrenheit" switch
   void theme_select(int index);          // Device theme roller selection
   void apply_pending_theme();            // deferred rebuild (from lv_async_call)
+  void apply_layout_rebuild();           // deferred rebuild after scale pair/forget
   void select_stats_section(int section); // Stats segmented selector
   void zoom_step(int dir);                // Stats time-axis zoom: -1 in, +1 out
   void commit_temp_edits();              // write pending temp edits (on exit)
 
  private:
   void update_settings_view();
+  void update_scale_view();   // refresh the Scale page (connection + target)
   void update_stats_view();   // refill the chart / info from history
   void update_temp_panels(const core::MachineSnapshot& state);
   void sync_home_setpoints(bool connected);  // mirror set-points to the Home steppers
   void update_battery_runtime(const core::BatteryState& b);  // track drain for the estimate
   void seed_time_steppers();  // load the clock into the Hour/Minute steppers
   void rebuild();             // tear down + rebuild the UI (e.g. after a theme change)
+  void request_layout_rebuild(int section);  // defer a rebuild, returning to `section`
   void handle_pairing(core::Link link);
   lv_obj_t* open_modal(const char* title, const char* body);  // returns the card
   void close_modal();
@@ -91,12 +109,17 @@ class App {
   core::IDisplaySettings* display_ = nullptr;
   core::IClock* clock_ = nullptr;
   core::IHistory* history_ = nullptr;
+  core::IScale* scale_ = nullptr;
+  core::IScaleProvisioner* scale_provisioner_ = nullptr;
+  core::IBrewController* brew_ = nullptr;
   lv_obj_t* tabview_ = nullptr;
   ScreenProfile screen_{};          // stored so we can rebuild on a theme change
   lv_obj_t* modal_ = nullptr;       // current overlay modal, if open
   bool pairing_active_ = false;     // waiting on a pairing-read outcome
   bool wifi_setup_shown_ = false;   // WiFi instructions modal is open
   bool theme_rebuild_pending_ = false;  // coalesce rapid theme cycling into one rebuild
+  bool layout_rebuild_pending_ = false; // coalesce a scale pair/forget rebuild
+  int rebuild_section_ = kSectionDevice;  // Settings section to return to after rebuild()
   HomeWidgets home_{};
   SettingsWidgets settings_{};
   StatsWidgets stats_{};

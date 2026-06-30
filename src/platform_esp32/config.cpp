@@ -13,6 +13,9 @@ constexpr char kBrightnessKey[] = "bright";
 constexpr char kClock24Key[] = "clock24";
 constexpr char kThemeKey[] = "theme";
 constexpr char kFahrenheitKey[] = "fahr";
+constexpr char kScaleMacKey[] = "smac";
+constexpr char kScaleNameKey[] = "sname";
+constexpr char kTargetKey[] = "tgtg";
 }  // namespace
 
 namespace platform {
@@ -68,6 +71,41 @@ void Config::clear() {
   p.remove(kMacKey);
   p.remove(kNameKey);
   p.remove(kTokenKey);  // wipe the secret too
+  p.end();
+}
+
+std::string Config::scale_mac() const { return read_key(kScaleMacKey); }
+
+std::string Config::scale_name() const { return read_key(kScaleNameKey); }
+
+void Config::save_scale(const std::string& mac, const std::string& name) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putString(kScaleMacKey, mac.c_str());
+  p.putString(kScaleNameKey, name.c_str());
+  p.end();
+}
+
+void Config::clear_scale() {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.remove(kScaleMacKey);
+  p.remove(kScaleNameKey);
+  p.end();
+}
+
+float Config::target_weight_g() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 36.0f;
+  const float v = p.isKey(kTargetKey) ? p.getFloat(kTargetKey, 36.0f) : 36.0f;
+  p.end();
+  return v;
+}
+
+void Config::set_target_weight_g(float grams) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putFloat(kTargetKey, grams);
   p.end();
 }
 

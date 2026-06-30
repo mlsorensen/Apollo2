@@ -36,6 +36,10 @@
 // Quiet by default; flip to 1 with LV_LOG_LEVEL while debugging.
 #define LV_USE_LOG 0
 
+// Hierarchical settings menu (drill-in pages + automatic back button / history).
+// On by default in LVGL, but we set it explicitly since Settings depends on it.
+#define LV_USE_MENU 1
+
 // Fonts used by the UI. Enable more sizes here as the design grows.
 #define LV_FONT_MONTSERRAT_14 1
 #define LV_FONT_MONTSERRAT_20 1

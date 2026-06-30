@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <NimBLEDevice.h>
 #include <Wire.h>
 #include <driver/rtc_io.h>
 #include <esp_sleep.h>
@@ -6,6 +7,7 @@
 
 #include "platform_esp32/battery.h"
 #include "platform_esp32/board_config.h"
+#include "platform_esp32/brew_controller.h"
 #include "platform_esp32/clock.h"
 #include "platform_esp32/config.h"
 #include "platform_esp32/display.h"
@@ -14,6 +16,8 @@
 #include "platform_esp32/io_extension.h"
 #include "platform_esp32/micra_link.h"
 #include "platform_esp32/provisioner.h"
+#include "platform_esp32/scale_link.h"
+#include "platform_esp32/scale_provisioner.h"
 #include "platform_esp32/token_setup.h"
 #include "platform_esp32/touch.h"
 #include "ui/app.h"
@@ -36,6 +40,9 @@ platform::Battery g_battery;
 platform::DisplaySettings g_display_settings{g_display, g_config};
 platform::Clock g_clock{g_config};
 platform::History g_history;
+platform::ScaleLink g_scale;            // NimBLE Bluetooth scale (Bookoo Themis)
+platform::ScaleProvisioner g_scale_provisioner{g_scale, g_config};
+platform::BrewController g_brew;        // available() iff board has paddle pins; Phase 4 = logic
 ui::App g_app;
 
 constexpr uint32_t kUiRefreshMs = 500;
@@ -114,7 +121,7 @@ void setup() {
   // Build the UI bound to the machine + provisioner + battery + display.
   const ui::ScreenProfile screen{g_display.width(), g_display.height()};
   g_app.build(g_micra, g_provisioner, g_battery, g_display_settings, g_clock, g_history,
-              screen);
+              g_scale, g_scale_provisioner, g_brew, screen);
 
   // Critically-low battery -> deep sleep instead of brown-out thrashing. Kill the
   // backlight first (dominant load, can latch on in sleep), then park (~uA) until a
@@ -126,6 +133,10 @@ void setup() {
     enter_lowbatt_sleep();
   });
 
+  // Bring up NimBLE once here (single-threaded), so the Micra + scale link tasks
+  // — which each guard on isInitialized() — share one host without racing init.
+  NimBLEDevice::init("micra-remote");
+
   // Seed the link from saved config, then start the background BLE task. With
   // no MAC -> Unconfigured; MAC but no token -> NeedsToken (Settings "Setup").
   const std::string mac = g_config.mac();
@@ -135,9 +146,16 @@ void setup() {
   Serial.printf("Saved machine: mac=%s token=%s\n", mac.empty() ? "(none)" : mac.c_str(),
                 g_config.token().empty() ? "(none)" : "set");
   g_micra.begin(mac);
+
+  // Start the Bluetooth scale link from its saved MAC (empty -> idles).
+  const std::string scale_mac = g_config.scale_mac();
+  g_scale.set_name(g_config.scale_name());
+  Serial.printf("Saved scale: mac=%s\n", scale_mac.empty() ? "(none)" : scale_mac.c_str());
+  g_scale.begin(scale_mac);
 }
 
 void loop() {
+  g_app.pump_scale_chart();  // drain the scale's flow stream into the graph (fast)
   lv_timer_handler();        // LVGL render/input
   g_token_setup.handle();    // pump the WiFi setup web server when active
 

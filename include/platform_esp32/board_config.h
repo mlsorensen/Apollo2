@@ -72,6 +72,17 @@ constexpr int   kVbusAdc = -1;
 constexpr float kVbusDivider = 2.0f;       // vbus_volts = adc_volts * divider
 constexpr float kVbusPresentVolts = 4.0f;  // above this => USB present
 
+// --- Paddle control (brew-by-weight) ---
+// Drive line into the Micra's paddle circuit (a relay, or the 4.3B's opto-
+// isolated GPIO). The Micra just watches this line: we hold it to keep a shot
+// running and release it to stop. kPaddleSensePin reads the physical paddle.
+// -1 = no paddle hardware wired on this board -> auto-stop disabled, the scale
+// is display/timer/flow/alert-only. (This 2-inch is a portable battery remote;
+// wire a relay to spare GPIOs and set these if you want auto-stop here.)
+constexpr int  kPaddleDrivePin = -1;
+constexpr int  kPaddleSensePin = -1;
+constexpr bool kPaddleActiveHigh = true;   // drive level that "closes" the shot
+
 #elif defined(BOARD_WAVESHARE_S3_LCD_7B)
 
 // Waveshare ESP32-S3-Touch-LCD-7B — 7", 1024x600 RGB parallel panel, GT911
@@ -143,6 +154,13 @@ constexpr float kBatteryNoCellVolts = 4.35f;
 constexpr int   kVbusAdc = -1;
 constexpr float kVbusDivider = 2.0f;
 constexpr float kVbusPresentVolts = 4.0f;
+
+// --- Paddle control (brew-by-weight) ---
+// See the 2-inch block above. The 4.3B has opto-isolated GPIO suited to driving
+// the Micra's paddle line directly; set these to those pins when that port lands.
+constexpr int  kPaddleDrivePin = -1;
+constexpr int  kPaddleSensePin = -1;
+constexpr bool kPaddleActiveHigh = true;
 
 #else
 #error "No board selected. Add -DBOARD_WAVESHARE_S3_LCD_2 (or _7B) to build_flags in platformio.ini."

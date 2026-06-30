@@ -98,7 +98,7 @@ void MicraLink::set_link(core::Link link) {
 }
 
 void MicraLink::task_loop() {
-  NimBLEDevice::init("micra-remote");
+  if (!NimBLEDevice::isInitialized()) NimBLEDevice::init("micra-remote");
   NimBLEDevice::setMTU(247);  // machineCapabilities (~180B) exceeds default MTU
 
   bool connected = false;

@@ -81,6 +81,196 @@ void make_temp_card(lv_obj_t* parent, const char* caption,
   *out_set = set;
 }
 
+// A small "BREW 93.0°" temperature chip for the scale-aware layout, where the
+// temps shrink to make room for the scale. Returns the value label.
+lv_obj_t* make_temp_chip(lv_obj_t* parent, const char* caption,
+                         const lv_font_t* caption_font, const lv_font_t* value_font,
+                         int pad) {
+  lv_obj_t* chip = lv_obj_create(parent);
+  lv_obj_remove_style_all(chip);
+  lv_obj_remove_flag(chip, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_flex_grow(chip, 1);
+  lv_obj_set_height(chip, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(chip, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(chip, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(chip, 6, 0);
+  lv_obj_set_style_bg_color(chip, lv_color_hex(ui::theme::card()), 0);
+  lv_obj_set_style_bg_opa(chip, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(chip, 12, 0);
+  lv_obj_set_style_pad_all(chip, pad, 0);
+
+  lv_obj_t* cap = lv_label_create(chip);
+  lv_label_set_text(cap, caption);
+  lv_obj_set_style_text_color(cap, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(cap, caption_font, 0);
+
+  lv_obj_t* val = lv_label_create(chip);
+  lv_obj_set_style_text_color(val, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(val, value_font, 0);
+  return val;
+}
+
+// Flow graph constants: Y axis 0..6 g/s (stored x100 for integer chart points,
+// matching the Bookoo's centi-g/s resolution); a 60-point rolling window.
+constexpr int kFlowYMaxCgps = 600;   // 6.00 g/s
+constexpr int kFlowPoints = 300;     // ~native sample rate, drained every loop
+constexpr int kFlowWindowS = 30;     // nominal window (true span depends on rate)
+
+// Post-draw overlay: draw the X/Y axis labels into the chart's margins (lv_chart
+// has no built-in axes). Y = g/s (0,2,4,6); X = seconds ago across the window.
+void flow_chart_overlay_cb(lv_event_t* e) {
+  auto* chart = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  lv_layer_t* layer = lv_event_get_layer(e);
+  lv_area_t plot;
+  lv_obj_get_content_coords(chart, &plot);
+  lv_area_t obj;
+  lv_obj_get_coords(chart, &obj);
+  const int32_t w_px = plot.x2 - plot.x1;
+  const int32_t h_px = plot.y2 - plot.y1;
+
+  // Gridlines bleed into the padding; repaint the left + bottom margins so the
+  // labels sit on clean card colour.
+  lv_draw_rect_dsc_t maskd;
+  lv_draw_rect_dsc_init(&maskd);
+  maskd.bg_color = lv_color_hex(ui::theme::card());
+  maskd.bg_opa = LV_OPA_COVER;
+  lv_area_t lmask = {obj.x1, obj.y1, static_cast<int32_t>(plot.x1 - 1), obj.y2};
+  lv_draw_rect(layer, &maskd, &lmask);
+  lv_area_t bmask = {obj.x1, static_cast<int32_t>(plot.y2 + 1), obj.x2, obj.y2};
+  lv_draw_rect(layer, &maskd, &bmask);
+
+  lv_draw_label_dsc_t lbl;
+  lv_draw_label_dsc_init(&lbl);
+  lbl.color = lv_color_hex(ui::theme::muted());
+  lbl.font = &lv_font_montserrat_14;
+  char buf[8];
+
+  // Y labels: 6,4,2,0 g/s (top..bottom).
+  lbl.align = LV_TEXT_ALIGN_RIGHT;
+  for (int t = 0; t <= 3; ++t) {
+    lv_snprintf(buf, sizeof(buf), "%d", 6 - 2 * t);
+    lbl.text = buf;
+    const int32_t y = plot.y1 + h_px * t / 3;
+    lv_area_t la = {obj.x1, static_cast<int32_t>(y - 9),
+                    static_cast<int32_t>(plot.x1 - 4), static_cast<int32_t>(y + 9)};
+    lv_draw_label(layer, &lbl, &la);
+  }
+
+  // X labels: seconds ago across the window (left = -window .. right = now).
+  for (int t = 0; t <= 3; ++t) {
+    const int secs = kFlowWindowS * (3 - t) / 3;
+    if (secs == 0) lv_snprintf(buf, sizeof(buf), "now");
+    else lv_snprintf(buf, sizeof(buf), "%ds", secs);
+    lbl.text = buf;
+    const int32_t x = plot.x1 + w_px * t / 3;
+    lv_area_t la;
+    if (t == 0) {
+      lbl.align = LV_TEXT_ALIGN_LEFT;
+      la = {plot.x1, static_cast<int32_t>(plot.y2 + 4),
+            static_cast<int32_t>(plot.x1 + 50), static_cast<int32_t>(plot.y2 + 18)};
+    } else if (t == 3) {
+      lbl.align = LV_TEXT_ALIGN_RIGHT;
+      la = {static_cast<int32_t>(plot.x2 - 50), static_cast<int32_t>(plot.y2 + 4),
+            plot.x2, static_cast<int32_t>(plot.y2 + 18)};
+    } else {
+      lbl.align = LV_TEXT_ALIGN_CENTER;
+      la = {static_cast<int32_t>(x - 25), static_cast<int32_t>(plot.y2 + 4),
+            static_cast<int32_t>(x + 25), static_cast<int32_t>(plot.y2 + 18)};
+    }
+    lv_draw_label(layer, &lbl, &la);
+  }
+}
+
+// A compact vertical readout card: small caption on top, value below. Used for
+// the single brew/boiler/scale row on large screens (the graph is the hero, so
+// these stay short). Returns the value label; optionally hands back the card.
+lv_obj_t* make_readout_card(lv_obj_t* parent, const char* caption,
+                            const lv_font_t* caption_font, const lv_font_t* value_font,
+                            int pad, lv_obj_t** out_card) {
+  lv_obj_t* card = lv_obj_create(parent);
+  lv_obj_remove_style_all(card);
+  lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_flex_grow(card, 1);
+  lv_obj_set_height(card, lv_pct(100));
+  lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(card, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_all(card, pad, 0);
+  lv_obj_set_style_pad_row(card, 2, 0);
+  lv_obj_set_style_bg_color(card, lv_color_hex(ui::theme::card()), 0);
+  lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(card, 16, 0);
+
+  lv_obj_t* cap = lv_label_create(card);
+  lv_label_set_text(cap, caption);
+  lv_obj_set_style_text_color(cap, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(cap, caption_font, 0);
+
+  lv_obj_t* val = lv_label_create(card);
+  lv_obj_set_style_text_color(val, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(val, value_font, 0);
+  if (out_card != nullptr) *out_card = card;
+  return val;
+}
+
+// A flow-rate (g/s) line chart with drawn X/Y axes. Used as the hero on large
+// screens.
+void make_flow_chart(lv_obj_t* parent, lv_obj_t** out_chart,
+                     lv_chart_series_t** out_series) {
+  lv_obj_t* chart = lv_chart_create(parent);
+  lv_obj_remove_style_all(chart);
+  lv_obj_set_flex_grow(chart, 1);
+  lv_obj_set_height(chart, lv_pct(100));
+  lv_obj_set_style_bg_color(chart, lv_color_hex(ui::theme::card()), 0);
+  lv_obj_set_style_bg_opa(chart, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(chart, 16, 0);
+  // Margins for the axis labels (left = Y, bottom = X), plus a little top room.
+  lv_obj_set_style_pad_left(chart, 30, 0);
+  lv_obj_set_style_pad_bottom(chart, 22, 0);
+  lv_obj_set_style_pad_top(chart, 18, 0);
+  lv_obj_set_style_pad_right(chart, 12, 0);
+  lv_obj_set_style_line_width(chart, 3, LV_PART_ITEMS);  // the plotted line
+  lv_obj_set_style_size(chart, 0, 0, LV_PART_INDICATOR);  // no point markers
+  // Faint gridlines.
+  lv_obj_set_style_line_color(chart, lv_color_hex(ui::theme::scrollbar()), LV_PART_MAIN);
+  lv_obj_set_style_line_opa(chart, LV_OPA_40, LV_PART_MAIN);
+
+  lv_chart_set_type(chart, LV_CHART_TYPE_LINE);
+  lv_chart_set_div_line_count(chart, 4, 4);
+  lv_chart_set_point_count(chart, kFlowPoints);
+  lv_chart_set_range(chart, LV_CHART_AXIS_PRIMARY_Y, 0, kFlowYMaxCgps);
+  lv_chart_set_update_mode(chart, LV_CHART_UPDATE_MODE_SHIFT);
+  lv_obj_add_event_cb(chart, flow_chart_overlay_cb, LV_EVENT_DRAW_POST_END, nullptr);
+
+  // "g/s" axis caption, top-left.
+  lv_obj_t* unit = lv_label_create(chart);
+  lv_label_set_text(unit, "g/s");
+  lv_obj_set_style_text_color(unit, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(unit, &lv_font_montserrat_14, 0);
+  lv_obj_align(unit, LV_ALIGN_TOP_LEFT, -22, -14);
+
+  lv_chart_series_t* s =
+      lv_chart_add_series(chart, lv_color_hex(ui::theme::accent()), LV_CHART_AXIS_PRIMARY_Y);
+
+#ifndef ESP_PLATFORM
+  // Sim only: seed a representative espresso flow curve so the graph reads at a
+  // glance in the rendered PNGs. On hardware the series starts empty and real
+  // samples scroll in once a shot runs.
+  for (int i = 0; i < kFlowPoints; ++i) {
+    const float t = i / static_cast<float>(kFlowPoints - 1);
+    float f;  // g/s
+    if (t < 0.18f) f = 2.7f * (t / 0.18f);          // pre-infuse ramp
+    else if (t < 0.82f) f = 2.7f - 0.5f * ((t - 0.18f) / 0.64f);  // gentle decline
+    else f = 2.2f * (1.0f - (t - 0.82f) / 0.18f);   // taper to 0
+    lv_chart_set_value_by_id(chart, s, i, static_cast<int32_t>(f * 100.0f));
+  }
+#endif
+
+  *out_chart = chart;
+  *out_series = s;
+}
+
 const char* battery_icon(int pct) {
   if (pct >= 90) return LV_SYMBOL_BATTERY_FULL;
   if (pct >= 65) return LV_SYMBOL_BATTERY_3;
@@ -110,40 +300,8 @@ void battery_anim_cb(lv_timer_t* t) {
   lv_label_set_text(w->battery_label, buf);
 }
 
-}  // namespace
-
-namespace ui {
-
-void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& out) {
-  const bool compact = is_compact(screen);
-  const bool xl = is_xl(screen);
-
-  const int pad = compact ? 8 : xl ? 28 : 20;
-  const int gap = compact ? 6 : xl ? 22 : 16;
-  const int row_h = compact ? 96 : xl ? 300 : 210;
-  const int card_pad = compact ? 8 : xl ? 24 : 16;
-  const int btn_h = compact ? 40 : xl ? 92 : 64;
-  const lv_font_t* value_font = compact ? &lv_font_montserrat_28 : &lv_font_montserrat_48;
-  const lv_font_t* sub_font =
-      compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
-  const lv_font_t* btn_font =
-      compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
-  // Card caption ("BREW"/"BOILER"): scale up with the screen (the big panel has
-  // room). Set-point steppers exist on non-compact tiers only.
-  const lv_font_t* caption_font =
-      compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
-  const lv_font_t* step_font = compact ? &lv_font_montserrat_20 : &lv_font_montserrat_28;
-  const int step_btn = compact ? 36 : xl ? 64 : 50;
-  const bool steppers = !compact;
-
-  lv_obj_remove_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_pad_all(parent, pad, 0);
-  lv_obj_set_flex_flow(parent, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_flex_align(parent, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
-                        LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_row(parent, gap, 0);
-
-  // --- Top bar: status (left) + clock & battery (right) -------------------
+// Top bar: status (left) + clock & battery (right). Shared by both layouts.
+void build_top_bar(lv_obj_t* parent, const lv_font_t* sub_font, ui::HomeWidgets& out) {
   lv_obj_t* bar = lv_obj_create(parent);
   lv_obj_remove_style_all(bar);
   lv_obj_remove_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
@@ -171,8 +329,6 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& 
   lv_obj_set_style_text_color(out.status_label, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(out.status_label, sub_font, 0);
 
-  // Right group: battery then clock, so the clock sits farthest right like a
-  // macOS menu bar (battery just to its left).
   lv_obj_t* right_group = lv_obj_create(bar);
   lv_obj_remove_style_all(right_group);
   lv_obj_set_size(right_group, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -189,47 +345,251 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& 
   lv_obj_set_style_text_color(out.clock_label, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(out.clock_label, sub_font, 0);
   out.batt_timer = lv_timer_create(battery_anim_cb, 350, &out);  // drives charge anim
+}
 
-  // --- Two temperature panels, side by side -------------------------------
-  lv_obj_t* row = lv_obj_create(parent);
-  lv_obj_remove_style_all(row);
-  lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_width(row, lv_pct(100));
-  lv_obj_set_height(row, row_h);
-  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
-                        LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(row, gap, 0);
-
-  make_temp_card(row, "BREW", caption_font, value_font, sub_font, card_pad, steppers,
-                 step_btn, step_font, &out.brew_value, &out.brew_set, &out.brew_minus,
-                 &out.brew_plus);
-  make_temp_card(row, "BOILER", caption_font, value_font, sub_font, card_pad, steppers,
-                 step_btn, step_font, &out.boiler_value, &out.boiler_set,
-                 &out.boiler_minus, &out.boiler_plus);
-
-  // --- Spacer pushes the action button to the bottom ----------------------
-  lv_obj_t* spacer = lv_obj_create(parent);
-  lv_obj_remove_style_all(spacer);
-  lv_obj_set_width(spacer, lv_pct(100));
-  lv_obj_set_height(spacer, 0);
-  lv_obj_set_flex_grow(spacer, 1);
-
-  // --- Power toggle --------------------------------------------------------
+// The full-width power button at the bottom (both layouts).
+void build_power_button(lv_obj_t* parent, int btn_h, const lv_font_t* btn_font,
+                        ui::HomeWidgets& out) {
   out.power_btn = ui::make_button(parent);
   lv_obj_set_width(out.power_btn, lv_pct(100));
   lv_obj_set_height(out.power_btn, btn_h);
   lv_obj_set_style_radius(out.power_btn, 14, 0);
-
   out.power_label = lv_label_create(out.power_btn);
   lv_obj_set_style_text_color(out.power_label, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(out.power_label, btn_font, 0);
   lv_obj_center(out.power_label);
 }
 
+// Scale readout card: big live weight, "/ target g" sub, and a paddle-status
+// pill in the corner. Returns the card so the caller can size/place it.
+lv_obj_t* build_scale_card(lv_obj_t* parent, const lv_font_t* weight_font,
+                           const lv_font_t* sub_font, int pad, ui::HomeWidgets& out) {
+  lv_obj_t* card = lv_obj_create(parent);
+  lv_obj_remove_style_all(card);
+  lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_style_bg_color(card, lv_color_hex(ui::theme::card()), 0);
+  lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(card, 16, 0);
+  lv_obj_set_style_pad_all(card, pad, 0);
+
+  out.scale_weight = lv_label_create(card);
+  lv_obj_set_style_text_color(out.scale_weight, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(out.scale_weight, weight_font, 0);
+  lv_obj_align(out.scale_weight, LV_ALIGN_CENTER, 0, -6);
+
+  out.scale_target = lv_label_create(card);
+  lv_obj_set_style_text_color(out.scale_target, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(out.scale_target, sub_font, 0);
+  lv_obj_align(out.scale_target, LV_ALIGN_BOTTOM_MID, 0, 0);
+
+  out.paddle_pill = lv_obj_create(card);
+  lv_obj_remove_style_all(out.paddle_pill);
+  lv_obj_set_size(out.paddle_pill, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_style_radius(out.paddle_pill, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_opa(out.paddle_pill, LV_OPA_COVER, 0);
+  lv_obj_set_style_pad_hor(out.paddle_pill, 10, 0);
+  lv_obj_set_style_pad_ver(out.paddle_pill, 4, 0);
+  lv_obj_align(out.paddle_pill, LV_ALIGN_TOP_MID, 0, 0);
+  out.paddle_label = lv_label_create(out.paddle_pill);
+  lv_obj_set_style_text_color(out.paddle_label, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(out.paddle_label, sub_font, 0);
+  lv_obj_center(out.paddle_label);
+  return card;
+}
+
+// A Tare button (icon + label). Returns it (the caller sizes/places it).
+void build_tare_button(lv_obj_t* parent, const lv_font_t* font, ui::HomeWidgets& out) {
+  out.tare_btn = ui::make_button(parent);
+  lv_obj_set_style_bg_color(out.tare_btn, lv_color_hex(ui::theme::card()), 0);
+  lv_obj_set_style_radius(out.tare_btn, 14, 0);
+  out.tare_label = lv_label_create(out.tare_btn);
+  lv_label_set_text(out.tare_label, LV_SYMBOL_LOOP "  Tare");
+  lv_obj_set_style_text_color(out.tare_label, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(out.tare_label, font, 0);
+  lv_obj_center(out.tare_label);
+}
+
+}  // namespace
+
+namespace ui {
+
+void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_enabled,
+                    HomeWidgets& out) {
+  const bool compact = is_compact(screen);
+  const bool xl = is_xl(screen);
+  out.scale_enabled = scale_enabled;
+
+  // HomeWidgets is reused across rebuilds, and build() frees the old widgets. Null
+  // every optional pointer up front so the layout branch that runs leaves the rest
+  // null (not dangling) — update_home / pump_scale_chart null-check these. Without
+  // this, forgetting a scale (rebuild scale-aware -> no-scale) crashes on the stale
+  // flow_chart / scale_* pointers (LoadProhibited).
+  out.brew_minus = out.brew_plus = out.boiler_minus = out.boiler_plus = nullptr;
+  out.brew_set = out.boiler_set = nullptr;
+  out.scale_weight = out.scale_target = nullptr;
+  out.tare_btn = out.tare_label = nullptr;
+  out.paddle_pill = out.paddle_label = nullptr;
+  out.flow_chart = nullptr;
+  out.flow_series = nullptr;
+
+  const int pad = compact ? 8 : xl ? 28 : 20;
+  const int gap = compact ? 6 : xl ? 22 : 16;
+  const int card_pad = compact ? 8 : xl ? 24 : 16;
+  const int btn_h = compact ? 40 : xl ? 92 : 64;
+  const lv_font_t* value_font = compact ? &lv_font_montserrat_28 : &lv_font_montserrat_48;
+  const lv_font_t* sub_font =
+      compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
+  const lv_font_t* btn_font =
+      compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
+  const lv_font_t* caption_font =
+      compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
+  const lv_font_t* step_font = compact ? &lv_font_montserrat_20 : &lv_font_montserrat_28;
+  const int step_btn = compact ? 36 : xl ? 64 : 50;
+
+  lv_obj_remove_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_style_pad_all(parent, pad, 0);
+  lv_obj_set_flex_flow(parent, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(parent, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_row(parent, gap, 0);
+
+  build_top_bar(parent, sub_font, out);
+
+  if (!scale_enabled) {
+    // --- Classic Home: two big temperature cards + power button -------------
+    const int row_h = compact ? 96 : xl ? 300 : 210;
+    const bool steppers = !compact;
+    lv_obj_t* row = lv_obj_create(parent);
+    lv_obj_remove_style_all(row);
+    lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_width(row, lv_pct(100));
+    lv_obj_set_height(row, row_h);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(row, gap, 0);
+    make_temp_card(row, "BREW", caption_font, value_font, sub_font, card_pad, steppers,
+                   step_btn, step_font, &out.brew_value, &out.brew_set, &out.brew_minus,
+                   &out.brew_plus);
+    make_temp_card(row, "BOILER", caption_font, value_font, sub_font, card_pad, steppers,
+                   step_btn, step_font, &out.boiler_value, &out.boiler_set,
+                   &out.boiler_minus, &out.boiler_plus);
+
+    lv_obj_t* spacer = lv_obj_create(parent);
+    lv_obj_remove_style_all(spacer);
+    lv_obj_set_width(spacer, lv_pct(100));
+    lv_obj_set_height(spacer, 0);
+    lv_obj_set_flex_grow(spacer, 1);
+
+    build_power_button(parent, btn_h, btn_font, out);
+    return;
+  }
+
+  // --- Scale-aware Home -----------------------------------------------------
+  // Compact: a small temp strip, a big scale readout, then Tare + Power.
+  // Large:   shorter temp cards, then a scale readout beside a flow graph.
+  if (compact) {
+    lv_obj_t* strip = lv_obj_create(parent);
+    lv_obj_remove_style_all(strip);
+    lv_obj_remove_flag(strip, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_width(strip, lv_pct(100));
+    lv_obj_set_height(strip, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(strip, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(strip, gap, 0);
+    out.brew_value = make_temp_chip(strip, "BREW", caption_font, sub_font, 6);
+    out.boiler_value = make_temp_chip(strip, "STEAM", caption_font, sub_font, 6);
+    out.brew_set = nullptr;
+    out.boiler_set = nullptr;
+
+    lv_obj_t* card = build_scale_card(parent, &lv_font_montserrat_48, sub_font, card_pad, out);
+    lv_obj_set_width(card, lv_pct(100));
+    lv_obj_set_flex_grow(card, 1);
+
+    lv_obj_t* actions = lv_obj_create(parent);
+    lv_obj_remove_style_all(actions);
+    lv_obj_remove_flag(actions, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_width(actions, lv_pct(100));
+    lv_obj_set_height(actions, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(actions, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(actions, gap, 0);
+    build_tare_button(actions, btn_font, out);
+    lv_obj_set_flex_grow(out.tare_btn, 1);
+    lv_obj_set_height(out.tare_btn, btn_h);
+    build_power_button(actions, btn_h, btn_font, out);
+    lv_obj_set_width(out.power_btn, 0);
+    lv_obj_set_flex_grow(out.power_btn, 1);
+    return;
+  }
+
+  // Large screens: one short readout row (brew/boiler/scale), then the flow graph
+  // as the hero (majority of the screen, with X/Y axes), then Tare + Power.
+  const int read_h = xl ? 104 : 84;
+  const lv_font_t* read_cap = &lv_font_montserrat_14;
+  const lv_font_t* read_val = &lv_font_montserrat_28;
+
+  lv_obj_t* row = lv_obj_create(parent);
+  lv_obj_remove_style_all(row);
+  lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_width(row, lv_pct(100));
+  lv_obj_set_height(row, read_h);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_style_pad_column(row, gap, 0);
+  // Each card is caption / value / sub, where the sub is the set point (brew,
+  // boiler) or the target weight (scale).
+  auto add_sub = [&](lv_obj_t* card) {
+    lv_obj_t* l = lv_label_create(card);
+    lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::muted()), 0);
+    lv_obj_set_style_text_font(l, read_cap, 0);
+    return l;
+  };
+  lv_obj_t* bcard = nullptr;
+  lv_obj_t* ocard = nullptr;
+  lv_obj_t* scard = nullptr;
+  out.brew_value = make_readout_card(row, "BREW", read_cap, read_val, card_pad, &bcard);
+  out.brew_set = add_sub(bcard);
+  out.boiler_value = make_readout_card(row, "BOILER", read_cap, read_val, card_pad, &ocard);
+  out.boiler_set = add_sub(ocard);
+  out.scale_weight = make_readout_card(row, "SCALE", read_cap, read_val, card_pad, &scard);
+  out.scale_target = add_sub(scard);
+
+  // The flow graph fills the rest — the hero.
+  make_flow_chart(parent, &out.flow_chart, &out.flow_series);
+
+  // Paddle status pill overlaid on the chart's top-right corner.
+  out.paddle_pill = lv_obj_create(out.flow_chart);
+  lv_obj_remove_style_all(out.paddle_pill);
+  lv_obj_set_size(out.paddle_pill, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_style_radius(out.paddle_pill, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_opa(out.paddle_pill, LV_OPA_COVER, 0);
+  lv_obj_set_style_pad_hor(out.paddle_pill, 12, 0);
+  lv_obj_set_style_pad_ver(out.paddle_pill, 4, 0);
+  lv_obj_align(out.paddle_pill, LV_ALIGN_TOP_RIGHT, -6, 2);
+  out.paddle_label = lv_label_create(out.paddle_pill);
+  lv_obj_set_style_text_color(out.paddle_label, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(out.paddle_label, read_cap, 0);
+  lv_obj_center(out.paddle_label);
+
+  // Tare beside the power button at the bottom.
+  lv_obj_t* actions = lv_obj_create(parent);
+  lv_obj_remove_style_all(actions);
+  lv_obj_remove_flag(actions, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_width(actions, lv_pct(100));
+  lv_obj_set_height(actions, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(actions, LV_FLEX_FLOW_ROW);
+  lv_obj_set_style_pad_column(actions, gap, 0);
+  build_tare_button(actions, btn_font, out);
+  lv_obj_set_height(out.tare_btn, btn_h);
+  lv_obj_set_width(out.tare_btn, 0);
+  lv_obj_set_flex_grow(out.tare_btn, 1);  // equal halves with the power button
+  build_power_button(actions, btn_h, btn_font, out);
+  lv_obj_set_width(out.power_btn, 0);
+  lv_obj_set_flex_grow(out.power_btn, 1);
+}
+
 void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
                  const core::BatteryState& battery, const core::WallTime& clock,
-                 bool clock_24h, bool fahrenheit) {
+                 bool clock_24h, bool fahrenheit, const core::ScaleSnapshot& scale,
+                 const core::BrewSnapshot& brew) {
   const bool connected = state.link == core::Link::Connected;
   const bool on = state.power == core::Power::On;
 
@@ -238,22 +598,60 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   if (connected) {
     format_now(buf, sizeof(buf), state.brew_temp_c, fahrenheit);
     lv_label_set_text(w.brew_value, buf);
-    format_set(buf, sizeof(buf), state.brew_target_c, fahrenheit);
-    lv_label_set_text(w.brew_set, buf);
+    if (w.brew_set != nullptr) {
+      format_set(buf, sizeof(buf), state.brew_target_c, fahrenheit);
+      lv_label_set_text(w.brew_set, buf);
+    }
     if (state.steam_enabled) {
       format_now(buf, sizeof(buf), state.boiler_temp_c, fahrenheit);
       lv_label_set_text(w.boiler_value, buf);
-      format_set(buf, sizeof(buf), state.boiler_target_c, fahrenheit);
-      lv_label_set_text(w.boiler_set, buf);
+      if (w.boiler_set != nullptr) {
+        format_set(buf, sizeof(buf), state.boiler_target_c, fahrenheit);
+        lv_label_set_text(w.boiler_set, buf);
+      }
     } else {
       lv_label_set_text(w.boiler_value, "Off");
-      lv_label_set_text(w.boiler_set, "");
+      if (w.boiler_set != nullptr) lv_label_set_text(w.boiler_set, "");
     }
   } else {
     lv_label_set_text(w.brew_value, "--");
-    lv_label_set_text(w.brew_set, "Set  --");
+    if (w.brew_set != nullptr) lv_label_set_text(w.brew_set, "Set  --");
     lv_label_set_text(w.boiler_value, "--");
-    lv_label_set_text(w.boiler_set, "Set  --");
+    if (w.boiler_set != nullptr) lv_label_set_text(w.boiler_set, "Set  --");
+  }
+
+  // Scale readout (scale-aware layout only).
+  if (w.scale_weight != nullptr) {
+    char wb[16];
+    if (scale.connected) {
+      std::snprintf(wb, sizeof(wb), "%.1f g", static_cast<double>(scale.weight_g));
+    } else {
+      std::snprintf(wb, sizeof(wb), "-- g");
+    }
+    lv_label_set_text(w.scale_weight, wb);
+    char tb[16];
+    std::snprintf(tb, sizeof(tb), "/ %.0f g", static_cast<double>(brew.target_weight_g));
+    lv_label_set_text(w.scale_target, tb);
+
+    // Paddle/brew pill: only meaningful when paddle hardware is present.
+    if (w.paddle_pill != nullptr) {
+      if (!brew.available) {
+        lv_obj_add_flag(w.paddle_pill, LV_OBJ_FLAG_HIDDEN);
+      } else {
+        lv_obj_remove_flag(w.paddle_pill, LV_OBJ_FLAG_HIDDEN);
+        const char* txt = brew.brewing ? "Brewing"
+                          : brew.paddle_pressed ? "Paddle"
+                                                : "Ready";
+        uint32_t col = brew.brewing ? ui::theme::ok()
+                       : brew.paddle_pressed ? ui::theme::accent()
+                                             : ui::theme::rail();
+        lv_label_set_text(w.paddle_label, txt);
+        lv_obj_set_style_bg_color(w.paddle_pill, lv_color_hex(col), 0);
+      }
+    }
+
+    // The flow graph is fed separately by App::pump_scale_chart() at the scale's
+    // native rate (much faster than this 2 Hz update), so it's smooth.
   }
 
   // Status (top-left): text + dot color from link + power.
@@ -288,8 +686,7 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   }
 
   // Battery / power (top-right):
-  //   battery + USB  -> charging: bolt + looping fill animation (NO percent —
-  //                    terminal voltage under charge is charger-dependent)
+  //   battery + USB  -> charging: bolt + looping fill animation (NO percent)
   //   battery only   -> percent + level icon
   //   USB, no cell   -> plug symbol (external power)
   //   nothing        -> blank
@@ -297,8 +694,7 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   char bb[24];
   if (w.charging) {
     lv_obj_set_style_text_color(w.battery_label, lv_color_hex(ui::theme::ok()), 0);
-    std::snprintf(bb, sizeof(bb), LV_SYMBOL_CHARGE " %s",
-                  battery_fill_icon(w.charge_frame));  // timer animates the fill
+    std::snprintf(bb, sizeof(bb), LV_SYMBOL_CHARGE " %s", battery_fill_icon(w.charge_frame));
     lv_label_set_text(w.battery_label, bb);
   } else if (battery.present) {
     std::snprintf(bb, sizeof(bb), "%d%% %s", battery.percent, battery_icon(battery.percent));
@@ -307,7 +703,7 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
         w.battery_label,
         lv_color_hex(battery.percent < 15 ? ui::theme::alert() : ui::theme::muted()), 0);
   } else if (battery.usb) {
-    lv_label_set_text(w.battery_label, LV_SYMBOL_USB);  // external power, no battery
+    lv_label_set_text(w.battery_label, LV_SYMBOL_USB);
     lv_obj_set_style_text_color(w.battery_label, lv_color_hex(ui::theme::muted()), 0);
   } else {
     lv_label_set_text(w.battery_label, "");
@@ -319,11 +715,11 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     lv_obj_set_style_bg_color(
         w.power_btn, lv_color_hex(on ? ui::theme::card() : ui::theme::accent()), 0);
     lv_label_set_text(w.power_label,
-                      on ? LV_SYMBOL_POWER "  STANDBY" : LV_SYMBOL_POWER "  TURN ON");
+                      on ? LV_SYMBOL_POWER "  Standby" : LV_SYMBOL_POWER "  Turn On");
   } else {
     lv_obj_add_state(w.power_btn, LV_STATE_DISABLED);
     lv_obj_set_style_bg_color(w.power_btn, lv_color_hex(ui::theme::card()), 0);
-    lv_label_set_text(w.power_label, LV_SYMBOL_POWER "  OFFLINE");
+    lv_label_set_text(w.power_label, LV_SYMBOL_POWER "  Offline");
   }
 }
 

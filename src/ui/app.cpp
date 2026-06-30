@@ -33,6 +33,10 @@ void on_power_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->toggle_power();
 }
 
+void on_tare_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->tare_scale();
+}
+
 void on_scan_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->start_scan();
 }
@@ -82,10 +86,25 @@ lv_obj_t* modal_button(lv_obj_t* parent, const char* label, uint32_t color,
   return b;
 }
 
-void on_segment_clicked(lv_event_t* e) {
+void on_scale_scan_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->start_scale_scan();
+}
+void on_scale_result_clicked(lv_event_t* e) {
   auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
-  auto* btn = static_cast<lv_obj_t*>(lv_event_get_target(e));
-  app->select_settings_section(static_cast<int>(lv_obj_get_index(btn)));
+  auto* row = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  app->save_scanned_scale(static_cast<int>(lv_obj_get_index(row)));
+}
+void on_scale_forget_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->forget_scale();
+}
+void on_scale_connect_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->toggle_scale_connection();
+}
+void on_target_minus(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->target_adjust(-1);
+}
+void on_target_plus(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->target_adjust(+1);
 }
 
 void on_stats_segment(lv_event_t* e) {
@@ -210,6 +229,12 @@ void theme_rebuild_cb(void* app) {
   static_cast<ui::App*>(app)->apply_pending_theme();
 }
 
+// Deferred UI rebuild after a scale is paired/forgotten (Home swaps between the
+// classic and scale-aware layouts). Same lv_async_call safety as the theme path.
+void layout_rebuild_cb(void* app) {
+  static_cast<ui::App*>(app)->apply_layout_rebuild();
+}
+
 void set_theme_label(ui::SettingsWidgets& s) {
   if (s.theme_value != nullptr) lv_label_set_text(s.theme_value, ui::theme::name(s.theme_index));
 }
@@ -299,7 +324,8 @@ App::~App() {
 
 void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                 core::IBattery& battery, core::IDisplaySettings& display,
-                core::IClock& clock, core::IHistory& history,
+                core::IClock& clock, core::IHistory& history, core::IScale& scale,
+                core::IScaleProvisioner& scale_provisioner, core::IBrewController& brew,
                 const ScreenProfile& screen) {
   machine_ = &machine;
   provisioner_ = &provisioner;
@@ -307,6 +333,9 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   display_ = &display;
   clock_ = &clock;
   history_ = &history;
+  scale_ = &scale;
+  scale_provisioner_ = &scale_provisioner;
+  brew_ = &brew;
   screen_ = screen;
   const bool compact = is_compact(screen);
   const bool xl = is_xl(screen);
@@ -355,8 +384,12 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     style_tab_button(lv_tabview_get_tab_button(tv, i), tab_font);
   }
 
-  build_home_tab(home, screen, home_);
+  const bool scale_on =
+      scale_provisioner_ != nullptr && !scale_provisioner_->saved_name().empty();
+  build_home_tab(home, screen, scale_on, home_);
   lv_obj_add_event_cb(home_.power_btn, on_power_clicked, LV_EVENT_CLICKED, this);
+  if (home_.tare_btn != nullptr)
+    lv_obj_add_event_cb(home_.tare_btn, on_tare_clicked, LV_EVENT_CLICKED, this);
   // Inline set-point steppers (large screens): reuse the Settings handlers so Home
   // edits flow through the same brew_adjust/boiler_adjust + deferred-commit path.
   if (home_.brew_minus != nullptr) {
@@ -367,17 +400,23 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   }
   battery_state_ = battery_->battery();
   update_home(home_, machine_->snapshot(), battery_state_, clock_->now(),
-              clock_->use_24h(), display_->use_fahrenheit());
+              clock_->use_24h(), display_->use_fahrenheit(), scale_->snapshot(),
+              brew_->snapshot());
   update_battery_runtime(battery_state_);
 
   build_settings_tab(settings, screen, settings_);
-  for (int i = 0; i < kSectionCount; ++i) {
-    lv_obj_add_event_cb(settings_.seg[i], on_segment_clicked, LV_EVENT_CLICKED, this);
-  }
+  // lv_menu handles page navigation (root <-> Micra/Scale/Device) itself.
+  // Micra connection:
   lv_obj_add_event_cb(settings_.scan_btn, on_scan_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.setup_btn, on_setup_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.connect_btn, on_connect_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.forget_btn, on_forget_clicked, LV_EVENT_CLICKED, this);
+  // Scale connection + target:
+  lv_obj_add_event_cb(settings_.scale_scan_btn, on_scale_scan_clicked, LV_EVENT_CLICKED, this);
+  lv_obj_add_event_cb(settings_.scale_connect_btn, on_scale_connect_clicked, LV_EVENT_CLICKED, this);
+  lv_obj_add_event_cb(settings_.scale_forget_btn, on_scale_forget_clicked, LV_EVENT_CLICKED, this);
+  lv_obj_add_event_cb(settings_.target_minus, on_target_minus, LV_EVENT_CLICKED, this);
+  lv_obj_add_event_cb(settings_.target_plus, on_target_plus, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.brew_minus, on_brew_minus, LV_EVENT_ALL, this);
   lv_obj_add_event_cb(settings_.brew_plus, on_brew_plus, LV_EVENT_ALL, this);
   lv_obj_add_event_cb(settings_.boiler_minus, on_boiler_minus, LV_EVENT_CLICKED, this);
@@ -402,6 +441,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(stats_.zoom_in, on_zoom_in, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(stats_.zoom_out, on_zoom_out, LV_EVENT_CLICKED, this);
 
+  if (brew_ != nullptr) settings_.target_g = brew_->snapshot().target_weight_g;
   update_settings_view();
   update_temp_panels(machine_->snapshot());
 
@@ -422,7 +462,7 @@ void App::refresh() {
     if (battery_ != nullptr) {
       battery_state_ = battery_->battery();
       update_home(home_, snap, battery_state_, clock_->now(), clock_->use_24h(),
-                  display_->use_fahrenheit());
+                  display_->use_fahrenheit(), scale_->snapshot(), brew_->snapshot());
       update_battery_runtime(battery_state_);
 
       // Critically-low pack (on battery, sustained) -> hand off to deep sleep.
@@ -574,7 +614,8 @@ void App::set_use_fahrenheit(bool on) {
   if (machine_ != nullptr) {
     const core::MachineSnapshot snap = machine_->snapshot();
     update_temp_panels(snap);
-    update_home(home_, snap, battery_state_, clock_->now(), clock_->use_24h(), on);
+    update_home(home_, snap, battery_state_, clock_->now(), clock_->use_24h(), on,
+                scale_->snapshot(), brew_->snapshot());
     update_stats_view();
   }
 }
@@ -598,22 +639,37 @@ void App::apply_pending_theme() {
   rebuild();
 }
 
+void App::apply_layout_rebuild() {
+  layout_rebuild_pending_ = false;
+  rebuild();
+}
+
+void App::request_layout_rebuild(int section) {
+  rebuild_section_ = section;
+  if (!layout_rebuild_pending_) {
+    layout_rebuild_pending_ = true;
+    lv_async_call(layout_rebuild_cb, this);  // safe to rebuild after this handler
+  }
+}
+
 void App::rebuild() {
   if (machine_ == nullptr) return;  // never built yet
+  const int section = rebuild_section_;
+  rebuild_section_ = kSectionDevice;  // reset to the default for the next rebuild
   // Preserve the Device panel's scroll position (the theme button sits below the
   // fold, so a naive rebuild would bounce the user back to the top each cycle).
   int32_t scroll_y = 0;
-  if (settings_.panel[kSectionDevice] != nullptr)
-    scroll_y = lv_obj_get_scroll_y(settings_.panel[kSectionDevice]);
+  if (section == kSectionDevice && settings_.device_page != nullptr)
+    scroll_y = lv_obj_get_scroll_y(settings_.device_page);
 
-  build(*machine_, *provisioner_, *battery_, *display_, *clock_, *history_, screen_);
-  show_tab(1);                                   // back to Settings...
-  select_settings_section(kSectionDevice);       // ...on the Device section
+  build(*machine_, *provisioner_, *battery_, *display_, *clock_, *history_, *scale_,
+        *scale_provisioner_, *brew_, screen_);
+  show_tab(1);                       // back to Settings...
+  select_settings_section(section);  // ...on the section that triggered the rebuild
 
-  lv_obj_t* dev = settings_.panel[kSectionDevice];
-  if (dev != nullptr) {
-    lv_obj_update_layout(dev);                   // compute the scroll range first
-    lv_obj_scroll_to_y(dev, scroll_y, LV_ANIM_OFF);
+  if (section == kSectionDevice && settings_.device_page != nullptr) {
+    lv_obj_update_layout(settings_.device_page);  // compute the scroll range first
+    lv_obj_scroll_to_y(settings_.device_page, scroll_y, LV_ANIM_OFF);
   }
 }
 
@@ -678,6 +734,21 @@ void App::toggle_power() {
   const bool on = machine_->snapshot().power == core::Power::On;
   machine_->set_power(!on);
   refresh();
+}
+
+void App::tare_scale() {
+  if (scale_ != nullptr) scale_->tare();
+}
+
+void App::pump_scale_chart() {
+  if (scale_ == nullptr) return;
+  float buf[64];
+  const size_t n = scale_->drain_flow(buf, 64);  // also keeps the buffer drained
+  if (home_.flow_chart == nullptr || home_.flow_series == nullptr) return;
+  for (size_t i = 0; i < n; ++i) {
+    lv_chart_set_next_value(home_.flow_chart, home_.flow_series,
+                            static_cast<int32_t>(buf[i] * 100.0f));
+  }
 }
 
 void App::start_scan() {
@@ -1006,6 +1077,7 @@ void App::update_stats_view() {
 }
 
 void App::update_settings_view() {
+  update_scale_view();  // refresh the Scale page (independent change-detection)
   if (provisioner_ == nullptr) return;
 
   // Saved-machine row: name + Forget, plus one of: Setup (no token yet) or
@@ -1015,9 +1087,7 @@ void App::update_settings_view() {
     lv_obj_add_flag(settings_.saved_row, LV_OBJ_FLAG_HIDDEN);
   } else {
     lv_obj_remove_flag(settings_.saved_row, LV_OBJ_FLAG_HIDDEN);
-    char buf[48];
-    std::snprintf(buf, sizeof(buf), "Saved: %s", saved.c_str());
-    lv_label_set_text(settings_.saved_label, buf);
+    lv_label_set_text(settings_.saved_label, saved.c_str());
     const bool tokened = provisioner_->has_token();
     if (tokened) {
       lv_obj_add_flag(settings_.setup_btn, LV_OBJ_FLAG_HIDDEN);
@@ -1065,6 +1135,103 @@ void App::update_settings_view() {
     lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text()), 0);
     lv_obj_center(lbl);
   }
+}
+
+// --- Scale settings (Scale page: connection + target weight) ----------------
+
+namespace {
+void set_target_label(ui::SettingsWidgets& s) {
+  if (s.target_value == nullptr) return;
+  char b[16];
+  std::snprintf(b, sizeof(b), "%.0f g", static_cast<double>(s.target_g));
+  lv_label_set_text(s.target_value, b);
+}
+}  // namespace
+
+void App::update_scale_view() {
+  if (scale_provisioner_ == nullptr) return;
+
+  // Saved-scale row: name + Connect/Disconnect + Forget (no token for scales).
+  const std::string saved = scale_provisioner_->saved_name();
+  if (saved.empty()) {
+    lv_obj_add_flag(settings_.scale_saved_row, LV_OBJ_FLAG_HIDDEN);
+  } else {
+    lv_obj_remove_flag(settings_.scale_saved_row, LV_OBJ_FLAG_HIDDEN);
+    lv_label_set_text(settings_.scale_saved_label, saved.c_str());
+    lv_obj_remove_flag(settings_.scale_connect_btn, LV_OBJ_FLAG_HIDDEN);
+    const bool on = scale_provisioner_->connect_enabled();
+    lv_label_set_text(settings_.scale_connect_label, on ? "Disconnect" : "Connect");
+    lv_obj_set_style_bg_color(
+        settings_.scale_connect_btn,
+        lv_color_hex(on ? ui::theme::rail() : ui::theme::accent()), 0);
+  }
+
+  const bool scanning = scale_provisioner_->scanning();
+  const std::vector<core::ScanResult> results = scale_provisioner_->scan_results();
+  const int count = static_cast<int>(results.size());
+
+  if (scanning) {
+    lv_label_set_text(settings_.scale_status, "Scanning...");
+  } else if (count == 0) {
+    lv_label_set_text(settings_.scale_status, "Tap Scan to find your scale");
+  } else {
+    lv_label_set_text(settings_.scale_status, "Tap a scale to save it");
+  }
+
+  if (count == settings_.scale_last_count && scanning == settings_.scale_last_scanning)
+    return;
+  settings_.scale_last_count = count;
+  settings_.scale_last_scanning = scanning;
+
+  lv_obj_clean(settings_.scale_list);
+  for (int i = 0; i < count; ++i) {
+    lv_obj_t* row = ui::make_button(settings_.scale_list);
+    lv_obj_set_width(row, lv_pct(100));
+    lv_obj_set_style_bg_color(row, lv_color_hex(ui::theme::card()), 0);
+    lv_obj_add_event_cb(row, on_scale_result_clicked, LV_EVENT_CLICKED, this);
+
+    lv_obj_t* lbl = lv_label_create(row);
+    char buf[48];
+    std::snprintf(buf, sizeof(buf), "%s   %d dBm", results[i].name, results[i].rssi);
+    lv_label_set_text(lbl, buf);
+    lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_center(lbl);
+  }
+  set_target_label(settings_);
+}
+
+void App::start_scale_scan() {
+  if (scale_provisioner_ == nullptr) return;
+  scale_provisioner_->start_scan();
+  settings_.scale_last_count = -1;  // force the list to rebuild next refresh
+}
+
+void App::save_scanned_scale(int index) {
+  if (scale_provisioner_ == nullptr) return;
+  const std::vector<core::ScanResult> results = scale_provisioner_->scan_results();
+  if (index < 0 || index >= static_cast<int>(results.size())) return;
+  scale_provisioner_->save_scale(results[index]);
+  settings_.scale_last_count = -1;
+  request_layout_rebuild(kSectionScaleBt);  // Home swaps to the scale-aware layout
+}
+
+void App::forget_scale() {
+  if (scale_provisioner_ == nullptr) return;
+  scale_provisioner_->forget();
+  settings_.scale_last_count = -1;
+  request_layout_rebuild(kSectionScaleBt);  // Home reverts to the classic layout
+}
+
+void App::toggle_scale_connection() {
+  if (scale_provisioner_ == nullptr) return;
+  scale_provisioner_->set_connect_enabled(!scale_provisioner_->connect_enabled());
+  update_scale_view();
+}
+
+void App::target_adjust(int dir) {
+  settings_.target_g = clampf(settings_.target_g + dir, 5.0f, 120.0f);
+  set_target_label(settings_);
+  if (brew_ != nullptr) brew_->set_target_weight_g(settings_.target_g);
 }
 
 }  // namespace ui
