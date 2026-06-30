@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include <Wire.h>
+#include <driver/rtc_io.h>
 #include <esp_sleep.h>
 #include <lvgl.h>
 
@@ -9,6 +11,7 @@
 #include "platform_esp32/display.h"
 #include "platform_esp32/display_settings.h"
 #include "platform_esp32/history.h"
+#include "platform_esp32/io_extension.h"
 #include "platform_esp32/micra_link.h"
 #include "platform_esp32/provisioner.h"
 #include "platform_esp32/token_setup.h"
@@ -39,10 +42,55 @@ constexpr uint32_t kUiRefreshMs = 500;
 constexpr uint32_t kSampleMs =
     platform::History::kSampleIntervalS * 1000;  // temperature history cadence
 
+// Survives deep sleep (cleared only on a cold boot / power loss): set when we park
+// for low battery so the next wake does the dark battery check in setup() before
+// powering anything up.
+RTC_DATA_ATTR uint32_t g_lowbatt_sleep = 0;
+
+// Deep sleep until a screen touch (or external reset). True power-down (~uA) — no
+// timer poll. The touch controller's INT line (idles high, pulls low on touch) is
+// the wake source where it's on an RTC GPIO; the 2-inch has no INT wired
+// (kTouchInt < 0), so there it wakes only on reset.
+void enter_lowbatt_sleep() {
+  g_lowbatt_sleep = 1;
+  if (board::kTouchInt >= 0) {
+    const auto pin = static_cast<gpio_num_t>(board::kTouchInt);
+    rtc_gpio_pullup_en(pin);
+    rtc_gpio_pulldown_dis(pin);
+    esp_sleep_enable_ext0_wakeup(pin, 0);  // wake when INT goes low (a touch)
+  }
+  esp_deep_sleep_start();  // never returns
+}
+
+// Minimal init to read the pack WITHOUT lighting the screen (the dark check on a
+// low-battery wake). The 2-inch reads a direct ADC (no init); the 7B reads via the
+// I2C IO-extension, so bring that up but force the backlight off.
+void batt_only_init() {
+#if defined(BOARD_HAS_IO_EXTENSION)
+  Wire.begin(board::kI2cSda, board::kI2cScl);
+  platform::io_extension().begin(board::kIoExtAddr);
+  platform::io_extension().set(board::kIoExtBacklight, false);
+#endif
+}
+
 }  // namespace
 
 void setup() {
   Serial.begin(115200);
+
+  // Woke from a low-battery park (a touch or a reset)? Read the pack WITHOUT
+  // powering up the panel/LVGL/BLE and REFUSE to fully boot unless it has charged
+  // past the resume threshold (hysteresis above the cutoff, so the at-rest voltage
+  // rebound doesn't count) — otherwise go straight back to sleep. This avoids a
+  // half-up, backlight-off zombie that would only brown out again; the device
+  // stays dark until there's genuinely enough power to run.
+  if (g_lowbatt_sleep) {
+    batt_only_init();
+    const core::BatteryState b = g_battery.battery();
+    if (!(b.charging || b.volts >= board::kBatteryResumeVolts)) enter_lowbatt_sleep();
+    g_lowbatt_sleep = 0;  // charged enough -> fall through to a normal boot
+  }
+
   delay(300);  // let USB-CDC enumerate
   Serial.println();
   Serial.printf("Micra remote — %s\n", board::kName);
@@ -68,15 +116,14 @@ void setup() {
   g_app.build(g_micra, g_provisioner, g_battery, g_display_settings, g_clock, g_history,
               screen);
 
-  // Critically-low battery -> deep sleep instead of brown-out thrashing. Wakes on
-  // a timer; once plugged in the voltage recovers, so it stops re-sleeping. The
-  // backlight is killed first (the dominant load, and it can latch on in sleep).
+  // Critically-low battery -> deep sleep instead of brown-out thrashing. Kill the
+  // backlight first (dominant load, can latch on in sleep), then park (~uA) until a
+  // touch. The dark check above gates the next boot on actually being charged.
   g_app.set_low_battery_handler(board::kBatteryCutoffVolts, [] {
-    Serial.println("Battery critical -> deep sleep; plug in to wake");
+    Serial.println("Battery critical -> deep sleep; charge, then touch to wake");
     Serial.flush();
     g_display.set_brightness(0);
-    esp_sleep_enable_timer_wakeup(30ULL * 1000000);  // re-check in 30 s
-    esp_deep_sleep_start();
+    enter_lowbatt_sleep();
   });
 
   // Seed the link from saved config, then start the background BLE task. With
