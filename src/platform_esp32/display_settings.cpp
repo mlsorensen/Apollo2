@@ -19,4 +19,8 @@ int DisplaySettings::theme() const { return config_.theme(); }
 
 void DisplaySettings::set_theme(int index) { config_.set_theme(index); }  // UI applies it
 
+bool DisplaySettings::use_fahrenheit() const { return config_.use_fahrenheit(); }
+
+void DisplaySettings::set_use_fahrenheit(bool on) { config_.set_use_fahrenheit(on); }
+
 }  // namespace platform

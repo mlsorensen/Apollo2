@@ -17,6 +17,11 @@ class IDisplaySettings {
   // The port only persists the choice; the UI owns the palettes + applies them.
   virtual int theme() const = 0;
   virtual void set_theme(int index) = 0;
+
+  // Temperature display units: false = Celsius (default), true = Fahrenheit.
+  // Affects only how the UI shows temps; everything internal stays Celsius.
+  virtual bool use_fahrenheit() const = 0;
+  virtual void set_use_fahrenheit(bool on) = 0;
 };
 
 }  // namespace core

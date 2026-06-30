@@ -8,6 +8,7 @@
 
 #include "ui/stats_tab.h"
 #include "ui/theme.h"
+#include "ui/units.h"
 #include "ui/widgets.h"
 #include "version.h"
 
@@ -195,6 +196,11 @@ void on_clock_mode_switch(lv_event_t* e) {
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
   app->set_clock_24h(lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
+void on_units_switch(lv_event_t* e) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  app->set_use_fahrenheit(lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
 void on_theme_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->theme_select(/*next=*/-1);
 }
@@ -225,14 +231,14 @@ int nearest_steam_level(float c) {
   return best;
 }
 
-void set_brew_label(ui::SettingsWidgets& s, bool connected) {
+void set_brew_label(ui::SettingsWidgets& s, bool connected, bool f) {
   if (!connected) { lv_label_set_text(s.brew_value, "--"); return; }
   char b[16];
-  std::snprintf(b, sizeof(b), "%.1f C", s.brew_target);
+  std::snprintf(b, sizeof(b), "%.1f %s", ui::temp_disp(s.brew_target, f), ui::temp_unit(f));
   lv_label_set_text(s.brew_value, b);
 }
 
-void set_boiler_label(ui::SettingsWidgets& s, bool connected) {
+void set_boiler_label(ui::SettingsWidgets& s, bool connected, bool f) {
   if (!connected) {
     lv_label_set_text(s.boiler_value, "--");
     if (s.boiler_sub) lv_label_set_text(s.boiler_sub, "");
@@ -247,7 +253,8 @@ void set_boiler_label(ui::SettingsWidgets& s, bool connected) {
   std::snprintf(b, sizeof(b), "Level %d", s.boiler_level + 1);
   lv_label_set_text(s.boiler_value, b);
   char t[16];
-  std::snprintf(t, sizeof(t), "%.0f C", core::kSteamLevelsC[s.boiler_level]);
+  std::snprintf(t, sizeof(t), "%.0f %s",
+                ui::temp_disp(core::kSteamLevelsC[s.boiler_level], f), ui::temp_unit(f));
   if (s.boiler_sub) lv_label_set_text(s.boiler_sub, t);
 }
 
@@ -360,7 +367,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   }
   battery_state_ = battery_->battery();
   update_home(home_, machine_->snapshot(), battery_state_, clock_->now(),
-              clock_->use_24h());
+              clock_->use_24h(), display_->use_fahrenheit());
   update_battery_runtime(battery_state_);
 
   build_settings_tab(settings, screen, settings_);
@@ -384,6 +391,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(settings_.minute_plus, on_minute_plus, LV_EVENT_ALL, this);
   lv_obj_add_event_cb(settings_.clock_mode_switch, on_clock_mode_switch,
                       LV_EVENT_VALUE_CHANGED, this);
+  lv_obj_add_event_cb(settings_.units_switch, on_units_switch, LV_EVENT_VALUE_CHANGED, this);
   if (settings_.theme_btn != nullptr)
     lv_obj_add_event_cb(settings_.theme_btn, on_theme_clicked, LV_EVENT_CLICKED, this);
 
@@ -401,6 +409,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   set_brightness_label(settings_);
   settings_.clock_24h = clock_->use_24h();
   if (settings_.clock_24h) lv_obj_add_state(settings_.clock_mode_switch, LV_STATE_CHECKED);
+  if (display_->use_fahrenheit()) lv_obj_add_state(settings_.units_switch, LV_STATE_CHECKED);
   seed_time_steppers();
 
   settings_.theme_index = ui::theme::active_index();
@@ -412,7 +421,8 @@ void App::refresh() {
     const core::MachineSnapshot snap = machine_->snapshot();
     if (battery_ != nullptr) {
       battery_state_ = battery_->battery();
-      update_home(home_, snap, battery_state_, clock_->now(), clock_->use_24h());
+      update_home(home_, snap, battery_state_, clock_->now(), clock_->use_24h(),
+                  display_->use_fahrenheit());
       update_battery_runtime(battery_state_);
     }
     update_temp_panels(snap);
@@ -452,7 +462,7 @@ void App::brew_adjust(int dir, bool half) {
   }
   settings_.brew_target = clampf(v, core::kBrewTargetMinC, core::kBrewTargetMaxC);
   settings_.brew_dirty = true;
-  set_brew_label(settings_, true);
+  set_brew_label(settings_, true, display_->use_fahrenheit());
   set_temp_controls_enabled(settings_, true);  // re-grey at the new extreme
   sync_home_setpoints(true);
   if (machine_ != nullptr) machine_->set_brew_target(settings_.brew_target);
@@ -463,7 +473,7 @@ void App::boiler_adjust(int dir) {
   lvl = lvl < 0 ? 0 : (lvl > 2 ? 2 : lvl);
   settings_.boiler_level = lvl;
   settings_.boiler_dirty = true;
-  set_boiler_label(settings_, true);
+  set_boiler_label(settings_, true, display_->use_fahrenheit());
   set_temp_controls_enabled(settings_, true);  // re-grey at level 1/3
   sync_home_setpoints(true);
   if (machine_ != nullptr) machine_->set_steam_target(core::kSteamLevelsC[lvl]);
@@ -472,7 +482,7 @@ void App::boiler_adjust(int dir) {
 void App::steam_set_enabled(bool on) {
   settings_.steam_enabled = on;
   settings_.steam_enable_dirty = true;  // hold until the machine confirms
-  set_boiler_label(settings_, true);    // reflect Off / level
+  set_boiler_label(settings_, true, display_->use_fahrenheit());    // reflect Off / level
   set_temp_controls_enabled(settings_, true);
   sync_home_setpoints(true);
   if (machine_ != nullptr) machine_->set_steam_enabled(on);  // immediate (single toggle)
@@ -486,11 +496,13 @@ void App::sync_home_setpoints(bool connected) {
   if (home_.brew_minus == nullptr) return;  // compact: no Home steppers
   const bool steam = settings_.steam_enabled;
 
+  const bool f = display_->use_fahrenheit();
   char b[16];
   if (!connected) {
     lv_label_set_text(home_.brew_set, "--");
   } else {
-    std::snprintf(b, sizeof(b), "%.1f C", settings_.brew_target);
+    std::snprintf(b, sizeof(b), "%.1f %s", ui::temp_disp(settings_.brew_target, f),
+                  ui::temp_unit(f));
     lv_label_set_text(home_.brew_set, b);
   }
   if (!connected) {
@@ -498,7 +510,9 @@ void App::sync_home_setpoints(bool connected) {
   } else if (!steam) {
     lv_label_set_text(home_.boiler_set, "Off");
   } else {
-    std::snprintf(b, sizeof(b), "%.0f C", core::kSteamLevelsC[settings_.boiler_level]);
+    std::snprintf(b, sizeof(b), "%.0f %s",
+                  ui::temp_disp(core::kSteamLevelsC[settings_.boiler_level], f),
+                  ui::temp_unit(f));
     lv_label_set_text(home_.boiler_set, b);
   }
 
@@ -541,6 +555,17 @@ void App::set_clock_24h(bool on) {
   settings_.clock_24h = on;
   if (clock_ != nullptr) clock_->set_24h(on);
   set_time_labels(settings_);  // re-render the Hour stepper; Home updates on refresh
+}
+
+void App::set_use_fahrenheit(bool on) {
+  if (display_ != nullptr) display_->set_use_fahrenheit(on);  // persist
+  // Repaint temps now (Home, Settings, Stats) instead of waiting for the next tick.
+  if (machine_ != nullptr) {
+    const core::MachineSnapshot snap = machine_->snapshot();
+    update_temp_panels(snap);
+    update_home(home_, snap, battery_state_, clock_->now(), clock_->use_24h(), on);
+    update_stats_view();
+  }
 }
 
 void App::theme_select(int idx) {
@@ -612,22 +637,22 @@ void App::update_temp_panels(const core::MachineSnapshot& s) {
     } else if (std::fabs(s.brew_target_c - settings_.brew_target) < 0.05f) {
       settings_.brew_dirty = false;
     }
-    set_brew_label(settings_, true);
+    set_brew_label(settings_, true, display_->use_fahrenheit());
 
     if (!settings_.boiler_dirty) {
       settings_.boiler_level = nearest_steam_level(s.boiler_target_c);
     } else if (nearest_steam_level(s.boiler_target_c) == settings_.boiler_level) {
       settings_.boiler_dirty = false;
     }
-    set_boiler_label(settings_, true);  // reflects level + steam on/off
+    set_boiler_label(settings_, true, display_->use_fahrenheit());  // reflects level + steam on/off
     set_temp_controls_enabled(settings_, true);
     sync_home_setpoints(true);
   } else {
     settings_.brew_dirty = false;
     settings_.boiler_dirty = false;
     settings_.steam_enable_dirty = false;
-    set_brew_label(settings_, false);
-    set_boiler_label(settings_, false);
+    set_brew_label(settings_, false, display_->use_fahrenheit());
+    set_boiler_label(settings_, false, display_->use_fahrenheit());
     set_temp_controls_enabled(settings_, false);
     sync_home_setpoints(false);
   }
@@ -920,6 +945,7 @@ void App::update_stats_view() {
   // 20/50/80/110/140.
   stats_.y_min = 20;
   stats_.y_max = (stats_.active == kStatsBoiler) ? 140 : 100;
+  stats_.fahrenheit = display_->use_fahrenheit();  // chart stays C; labels convert
   lv_chart_set_range(stats_.chart, LV_CHART_AXIS_PRIMARY_Y, stats_.y_min, stats_.y_max);
 
   // Set-point reference line: the current target for this boiler (none when

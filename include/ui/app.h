@@ -58,6 +58,7 @@ class App {
   void hour_adjust(int dir);             // Device clock hour +/- (wraps)
   void minute_adjust(int dir);           // Device clock minute +/- (wraps)
   void set_clock_24h(bool on);           // Device "24-hour" switch
+  void set_use_fahrenheit(bool on);      // Device "Fahrenheit" switch
   void theme_select(int index);          // Device theme roller selection
   void apply_pending_theme();            // deferred rebuild (from lv_async_call)
   void select_stats_section(int section); // Stats segmented selector

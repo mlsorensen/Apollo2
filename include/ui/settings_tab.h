@@ -70,6 +70,7 @@ struct SettingsWidgets {
   lv_obj_t* minute_plus = nullptr;
   lv_obj_t* minute_value = nullptr;
   lv_obj_t* clock_mode_switch = nullptr;  // on = 24-hour, off = 12-hour
+  lv_obj_t* units_switch = nullptr;       // on = Fahrenheit, off = Celsius
   int set_hour = 12;    // local edit buffer, seeded from the clock on section entry
   int set_minute = 0;
   bool clock_24h = true;  // display pref; mirrors IClock::use_24h()

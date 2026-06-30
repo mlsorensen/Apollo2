@@ -40,6 +40,7 @@ struct StatsWidgets {
   int y_max = 100;
   uint32_t window_s = 1800;  // current time window (drives the bottom time scale)
   float target = 0.0f / 0.0f;  // set-point reference line (NaN = none)
+  bool fahrenheit = false;     // convert the drawn Y temperature labels
 
   // Info view: a key/value table (values filled from the device-info service).
   lv_obj_t* info_box = nullptr;

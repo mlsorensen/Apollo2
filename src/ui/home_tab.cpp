@@ -3,14 +3,17 @@
 #include <cstdio>
 
 #include "ui/theme.h"
+#include "ui/units.h"
 #include "ui/widgets.h"
 
 namespace {
 
-// NOTE: the built-in Montserrat fonts don't carry the degree glyph (U+00B0),
-// so we spell the unit plainly for now.
-void format_now(char* out, size_t n, float c) { std::snprintf(out, n, "%.1f C", c); }
-void format_set(char* out, size_t n, float c) { std::snprintf(out, n, "Set  %.1f C", c); }
+void format_now(char* out, size_t n, float c, bool f) {
+  std::snprintf(out, n, "%.1f %s", ui::temp_disp(c, f), ui::temp_unit(f));
+}
+void format_set(char* out, size_t n, float c, bool f) {
+  std::snprintf(out, n, "Set  %.1f %s", ui::temp_disp(c, f), ui::temp_unit(f));
+}
 
 // A temperature panel: caption (static) on top, big current value, set point
 // below. On large screens the set point is flanked by [-]/[+] steppers (returned
@@ -226,21 +229,21 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, HomeWidgets& 
 
 void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
                  const core::BatteryState& battery, const core::WallTime& clock,
-                 bool clock_24h) {
+                 bool clock_24h, bool fahrenheit) {
   const bool connected = state.link == core::Link::Connected;
   const bool on = state.power == core::Power::On;
 
   // Temperatures: real values when connected, placeholders otherwise.
   char buf[24];
   if (connected) {
-    format_now(buf, sizeof(buf), state.brew_temp_c);
+    format_now(buf, sizeof(buf), state.brew_temp_c, fahrenheit);
     lv_label_set_text(w.brew_value, buf);
-    format_set(buf, sizeof(buf), state.brew_target_c);
+    format_set(buf, sizeof(buf), state.brew_target_c, fahrenheit);
     lv_label_set_text(w.brew_set, buf);
     if (state.steam_enabled) {
-      format_now(buf, sizeof(buf), state.boiler_temp_c);
+      format_now(buf, sizeof(buf), state.boiler_temp_c, fahrenheit);
       lv_label_set_text(w.boiler_value, buf);
-      format_set(buf, sizeof(buf), state.boiler_target_c);
+      format_set(buf, sizeof(buf), state.boiler_target_c, fahrenheit);
       lv_label_set_text(w.boiler_set, buf);
     } else {
       lv_label_set_text(w.boiler_value, "Off");

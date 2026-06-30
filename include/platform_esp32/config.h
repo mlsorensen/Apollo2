@@ -28,6 +28,9 @@ class Config {
 
   int theme() const;          // color-scheme index (default 0)
   void set_theme(int index);
+
+  bool use_fahrenheit() const;  // temperature units (default false = Celsius)
+  void set_use_fahrenheit(bool on);
 };
 
 }  // namespace platform

@@ -215,6 +215,10 @@ void build_device_panel(lv_obj_t* panel, const lv_font_t* text_font,
   out.clock_mode_switch = lv_switch_create(rc);
   lv_obj_set_size(out.clock_mode_switch, btn_size + 8, btn_size / 2 + 6);
 
+  lv_obj_t* ru = make_setting_row(panel, "Fahrenheit", text_font);
+  out.units_switch = lv_switch_create(ru);
+  lv_obj_set_size(out.units_switch, btn_size + 8, btn_size / 2 + 6);
+
   // Theme: a button showing the current scheme; tapping it cycles to the next.
   lv_obj_t* rt = make_setting_row(panel, "Theme", text_font);
   out.theme_btn = ui::make_button(rt);

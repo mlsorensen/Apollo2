@@ -12,6 +12,7 @@ constexpr char kTokenKey[] = "token";
 constexpr char kBrightnessKey[] = "bright";
 constexpr char kClock24Key[] = "clock24";
 constexpr char kThemeKey[] = "theme";
+constexpr char kFahrenheitKey[] = "fahr";
 }  // namespace
 
 namespace platform {
@@ -112,6 +113,21 @@ void Config::set_theme(int index) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putInt(kThemeKey, index);
+  p.end();
+}
+
+bool Config::use_fahrenheit() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
+  const bool v = p.isKey(kFahrenheitKey) ? p.getBool(kFahrenheitKey, false) : false;
+  p.end();
+  return v;
+}
+
+void Config::set_use_fahrenheit(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kFahrenheitKey, on);
   p.end();
 }
 
