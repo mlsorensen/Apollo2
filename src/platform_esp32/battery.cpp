@@ -96,6 +96,7 @@ core::BatteryState Battery::battery() const {
   if (shown_pct_ < 0 || delta >= 2) shown_pct_ = pct;
 
   s.percent = shown_pct_;
+  s.volts = volts_filt_;  // smoothed pack voltage (for the low-battery cutoff)
   return s;
 }
 

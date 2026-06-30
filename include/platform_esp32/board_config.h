@@ -57,6 +57,7 @@ constexpr bool  kBatteryChargeActiveLow = true;  // (unused; no pin)
 // 4.20 cap, charge-current = 0), so cap there to read ~100% when full.
 constexpr float kBatteryFullVolts = 4.13f;
 constexpr float kBatteryEmptyVolts = 3.40f;  // 0% with margin above the brownout zone
+constexpr float kBatteryCutoffVolts = 3.40f; // deep-sleep at/below this (avoids brownout)
 constexpr float kBatteryChargingVolts = 4.15f;   // (legacy voltage-only charge guess)
 // On USB power with NO cell installed, the charge node floats above any real
 // battery; above this we report "no battery" (plug icon) rather than a percent.
@@ -134,6 +135,7 @@ constexpr bool  kBatteryChargeActiveLow = true;
 // the old 4.20 cap, charge-current = 0), so cap there to read ~100% when full.
 constexpr float kBatteryFullVolts = 4.07f;
 constexpr float kBatteryEmptyVolts = 3.40f;  // 0% with margin above the brownout zone
+constexpr float kBatteryCutoffVolts = 3.40f; // deep-sleep at/below this (avoids brownout)
 constexpr float kBatteryChargingVolts = 4.15f;
 constexpr float kBatteryNoCellVolts = 4.35f;
 constexpr int   kVbusAdc = -1;

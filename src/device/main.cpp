@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <esp_sleep.h>
 #include <lvgl.h>
 
 #include "platform_esp32/battery.h"
@@ -66,6 +67,17 @@ void setup() {
   const ui::ScreenProfile screen{g_display.width(), g_display.height()};
   g_app.build(g_micra, g_provisioner, g_battery, g_display_settings, g_clock, g_history,
               screen);
+
+  // Critically-low battery -> deep sleep instead of brown-out thrashing. Wakes on
+  // a timer; once plugged in the voltage recovers, so it stops re-sleeping. The
+  // backlight is killed first (the dominant load, and it can latch on in sleep).
+  g_app.set_low_battery_handler(board::kBatteryCutoffVolts, [] {
+    Serial.println("Battery critical -> deep sleep; plug in to wake");
+    Serial.flush();
+    g_display.set_brightness(0);
+    esp_sleep_enable_timer_wakeup(30ULL * 1000000);  // re-check in 30 s
+    esp_deep_sleep_start();
+  });
 
   // Seed the link from saved config, then start the background BLE task. With
   // no MAC -> Unconfigured; MAC but no token -> NeedsToken (Settings "Setup").

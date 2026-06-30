@@ -13,6 +13,7 @@ class FakeBattery : public core::IBattery {
     core::BatteryState s;
     s.present = true;
     s.percent = 82;
+    s.volts = 3.9f;
     return s;  // idle on battery (no USB) for the sim preview
   }
 };

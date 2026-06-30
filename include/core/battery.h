@@ -10,6 +10,7 @@ struct BatteryState {
   bool charging = false;  // present && on external power
   bool usb = false;       // external (USB) power connected
   int percent = 0;        // 0..100 (meaningful when present)
+  float volts = 0.0f;     // smoothed pack voltage (0 if unknown); drives low-batt cutoff
 };
 
 class IBattery {

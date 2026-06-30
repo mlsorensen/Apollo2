@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 
 #include "core/battery.h"
 #include "core/clock.h"
@@ -33,6 +34,10 @@ class App {
 
   // Reflect the latest machine state and scan results in the UI (no I/O).
   void refresh();
+
+  // Called (once, after a sustained reading) when the pack drops to/below
+  // cutoff_volts on battery — the device wires this to deep sleep.
+  void set_low_battery_handler(float cutoff_volts, std::function<void()> on_critical);
 
   // Switch the active tab by index (0=Home, 1=Settings, 2=Stats). Mainly for
   // the simulator to render a specific tab.
@@ -111,6 +116,11 @@ class App {
   uint32_t batt_last_sample_ms_ = 0;
   char batt_runtime_text_[24] = "-";  // cached estimate, recomputed every ~5 s
   uint32_t batt_runtime_calc_ms_ = 0;
+
+  // Low-battery cutoff -> deep sleep (handler provided by the device).
+  std::function<void()> batt_low_handler_;
+  float batt_cutoff_volts_ = 0.0f;
+  int batt_low_count_ = 0;  // consecutive sub-cutoff reads (debounce)
 };
 
 }  // namespace ui

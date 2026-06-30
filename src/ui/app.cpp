@@ -424,6 +424,17 @@ void App::refresh() {
       update_home(home_, snap, battery_state_, clock_->now(), clock_->use_24h(),
                   display_->use_fahrenheit());
       update_battery_runtime(battery_state_);
+
+      // Critically-low pack (on battery, sustained) -> hand off to deep sleep.
+      if (batt_low_handler_ && battery_state_.present && !battery_state_.charging &&
+          battery_state_.volts > 0.0f && battery_state_.volts <= batt_cutoff_volts_) {
+        if (++batt_low_count_ >= 6) {  // ~3 s at the 500 ms refresh -> not a transient sag
+          batt_low_count_ = 0;
+          batt_low_handler_();
+        }
+      } else {
+        batt_low_count_ = 0;
+      }
     }
     update_temp_panels(snap);
     handle_pairing(snap.link);
@@ -847,6 +858,11 @@ void App::zoom_step(int dir) {
   if (i >= kZoomCount) i = kZoomCount - 1;  // clamp (no wrap)
   stats_.zoom_idx = i;
   update_stats_view();
+}
+
+void App::set_low_battery_handler(float cutoff_volts, std::function<void()> on_critical) {
+  batt_cutoff_volts_ = cutoff_volts;
+  batt_low_handler_ = std::move(on_critical);
 }
 
 void App::update_battery_runtime(const core::BatteryState& b) {
