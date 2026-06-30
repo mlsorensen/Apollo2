@@ -1,6 +1,7 @@
 #include "ui/stats_tab.h"
 
 #include "ui/theme.h"
+#include "ui/units.h"
 #include "ui/widgets.h"
 
 namespace ui {
@@ -96,10 +97,12 @@ void chart_overlay_cb(lv_event_t* e) {
   lbl.font = &lv_font_montserrat_14;
   char buf[8];
 
-  // Y labels (left margin): 5 ticks, top = y_max .. bottom = y_min
+  // Y labels (left margin): 5 ticks, top = y_max .. bottom = y_min. The chart math
+  // stays Celsius; only the label text converts to the display unit.
   lbl.align = LV_TEXT_ALIGN_RIGHT;
   for (int t = 0; t <= 4; ++t) {
-    lv_snprintf(buf, sizeof(buf), "%d", w->y_max - range * t / 4);
+    const float v = ui::temp_disp(static_cast<float>(w->y_max - range * t / 4), w->fahrenheit);
+    lv_snprintf(buf, sizeof(buf), "%d", static_cast<int>(v + (v < 0 ? -0.5f : 0.5f)));
     lbl.text = buf;
     const int32_t y = plot.y1 + h_px * t / 4;
     lv_area_t la = {obj.x1 + 2, static_cast<int32_t>(y - 9), plot.x1 - 4,
@@ -223,7 +226,10 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
   lv_obj_set_style_pad_top(out.chart, 10, 0);
   out.series = lv_chart_add_series(out.chart, lv_color_hex(ui::theme::accent()),
                                    LV_CHART_AXIS_PRIMARY_Y);
-  lv_obj_add_event_cb(out.chart, chart_overlay_cb, LV_EVENT_DRAW_POST_END, &out);
+  // MAIN_END (not POST): draw the overlay over the series but UNDER the chart's
+  // children (zoom buttons / "No data yet"), so the grey no-data shading doesn't
+  // cover the buttons.
+  lv_obj_add_event_cb(out.chart, chart_overlay_cb, LV_EVENT_DRAW_MAIN_END, &out);
 
   // Overlaid +/- to zoom the time (X) axis, tucked in the chart's top-right.
   const int zsz = compact ? 30 : 42;
