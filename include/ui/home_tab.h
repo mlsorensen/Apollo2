@@ -21,10 +21,19 @@
 namespace ui {
 
 struct HomeWidgets {
-  lv_obj_t* status_dot = nullptr;     // top-left
+  lv_obj_t* status_dot = nullptr;     // top-left (compact / no-scale top bar)
   lv_obj_t* status_label = nullptr;
-  lv_obj_t* battery_label = nullptr;  // top-right
-  lv_obj_t* clock_label = nullptr;    // top-right, farthest right (macOS-style)
+  lv_obj_t* battery_label = nullptr;  // top-right, or rail tray on large scale layout
+  lv_obj_t* clock_label = nullptr;    // top-right, or rail tray on large scale layout
+  // Per-device status shown in the panel headers of the large scale-aware layout
+  // (null on compact / no-scale, where the single top-bar status is used instead).
+  lv_obj_t* micra_status_dot = nullptr;
+  lv_obj_t* micra_status_label = nullptr;
+  lv_obj_t* scale_status_dot = nullptr;
+  lv_obj_t* scale_status_label = nullptr;
+  lv_obj_t* shot_timer_label = nullptr;  // scale panel: shot timer (scale.timer_ms)
+  lv_obj_t* target_minus = nullptr;      // scale panel: target-weight steppers
+  lv_obj_t* target_plus = nullptr;
   lv_obj_t* brew_value = nullptr;
   lv_obj_t* brew_set = nullptr;
   lv_obj_t* boiler_value = nullptr;
@@ -100,6 +109,17 @@ struct HomeWidgets {
 // selects the scale-aware layout. Values are set by a following update_home call.
 void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_enabled,
                     HomeWidgets& out);
+
+// Build the clock/battery system tray at the bottom of the side rail (the tab
+// bar). Only the large scale-aware Home drops the top bar, so this is called just
+// for that case; the labels live in `out` and are updated by update_home every
+// refresh, so they stay live on every tab. The tray + its spacer are plain
+// objects, so the tabview (which counts/indexes tabs by button class) ignores them.
+void build_rail_tray(lv_obj_t* rail, const lv_font_t* font, HomeWidgets& out);
+
+// Compact counterpart: clock + battery pushed to the right of the bottom tab bar
+// (the compact tab bar is horizontal). Same "no top bar" treatment as build_rail_tray.
+void build_bottom_tray(lv_obj_t* bar, const lv_font_t* font, HomeWidgets& out);
 
 // Apply machine + battery + scale state to the built widgets (live, no rebuild).
 void update_home(HomeWidgets& w, const core::MachineSnapshot& state,

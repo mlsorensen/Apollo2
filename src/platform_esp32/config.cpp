@@ -15,6 +15,7 @@ constexpr char kThemeKey[] = "theme";
 constexpr char kFahrenheitKey[] = "fahr";
 constexpr char kDropNegFlowKey[] = "dropnegf";
 constexpr char kScopeGraphKey[] = "scopegraph";
+constexpr char kPerfOverlayKey[] = "perfovl";
 constexpr char kScaleMacKey[] = "smac";
 constexpr char kScaleNameKey[] = "sname";
 constexpr char kTargetKey[] = "tgtg";
@@ -198,6 +199,21 @@ void Config::set_scope_graph(bool on) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putBool(kScopeGraphKey, on);
+  p.end();
+}
+
+bool Config::perf_overlay() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
+  const bool v = p.isKey(kPerfOverlayKey) ? p.getBool(kPerfOverlayKey, false) : false;
+  p.end();
+  return v;
+}
+
+void Config::set_perf_overlay(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kPerfOverlayKey, on);
   p.end();
 }
 

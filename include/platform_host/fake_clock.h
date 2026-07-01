@@ -16,9 +16,9 @@ class FakeClock : public core::IClock {
   void set_24h(bool on) override { use_24h_ = on; }
 
  private:
-  int hour_ = 14;
-  int minute_ = 30;
-  bool use_24h_ = true;
+  int hour_ = 12;
+  int minute_ = 55;
+  bool use_24h_ = false;
 };
 
 }  // namespace host

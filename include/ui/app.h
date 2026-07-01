@@ -72,6 +72,7 @@ class App {
   void cancel_token_setup();   // WiFi-modal "Cancel"
   void dismiss_modal();        // token-modal "Cancel"
   void select_settings_section(int section);  // Settings segmented selector
+  void on_settings_page_shown();  // lv_menu navigated; re-seed time on the Device page
   void brew_adjust(int dir, bool half);  // Brew +/- (half: 0.5 snap, long-press)
   void boiler_adjust(int dir);           // Boiler level +/-
   void steam_set_enabled(bool on);       // steam boiler on/off switch
@@ -82,6 +83,7 @@ class App {
   void set_use_fahrenheit(bool on);      // Device "Fahrenheit" switch
   void set_drop_negative_flow(bool on);  // Scale "Drop negative g/s" switch
   void set_scope_graph(bool on);         // Scale "Oscilloscope graph" switch
+  void set_perf_overlay(bool on);        // Device "Performance overlay" switch
   void theme_select(int index);          // Device theme roller selection
   void apply_pending_theme();            // deferred rebuild (from lv_async_call)
   void apply_layout_rebuild();           // deferred rebuild after scale pair/forget

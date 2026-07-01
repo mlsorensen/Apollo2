@@ -47,6 +47,9 @@ class Config {
 
   bool scope_graph() const;  // oscilloscope-style flow graph (default false = scroll)
   void set_scope_graph(bool on);
+
+  bool perf_overlay() const;  // LVGL FPS/CPU overlay (default false)
+  void set_perf_overlay(bool on);
 };
 
 }  // namespace platform

@@ -71,6 +71,7 @@ struct SettingsWidgets {
   float target_g = 36.0f;
   lv_obj_t* drop_neg_flow_switch = nullptr;  // on = clamp negative g/s on the graph
   lv_obj_t* scope_graph_switch = nullptr;    // on = oscilloscope sweep, off = scroll
+  lv_obj_t* perf_overlay_switch = nullptr;   // on = show LVGL FPS/CPU overlay
 
   // --- Brew temp stepper (continuous, tenths) ------------------------------
   lv_obj_t* brew_minus = nullptr;

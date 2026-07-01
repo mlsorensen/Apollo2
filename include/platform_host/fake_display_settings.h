@@ -19,6 +19,8 @@ class FakeDisplaySettings : public core::IDisplaySettings {
   void set_drop_negative_flow(bool on) override { drop_negative_flow_ = on; }
   bool scope_graph() const override { return scope_graph_; }
   void set_scope_graph(bool on) override { scope_graph_ = on; }
+  bool perf_overlay() const override { return perf_overlay_; }
+  void set_perf_overlay(bool on) override { perf_overlay_ = on; }
 
  private:
   int brightness_ = 80;
@@ -26,6 +28,7 @@ class FakeDisplaySettings : public core::IDisplaySettings {
   bool fahrenheit_ = false;
   bool drop_negative_flow_ = true;
   bool scope_graph_ = false;
+  bool perf_overlay_ = false;
 };
 
 }  // namespace host

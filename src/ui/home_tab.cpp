@@ -15,105 +15,6 @@ using ui::HomeWidgets;  // used by the flow-graph paint helpers below
 void format_now(char* out, size_t n, float c, bool f) {
   std::snprintf(out, n, "%.1f %s", ui::temp_disp(c, f), ui::temp_unit(f));
 }
-void format_set(char* out, size_t n, float c, bool f) {
-  std::snprintf(out, n, "Set  %.1f %s", ui::temp_disp(c, f), ui::temp_unit(f));
-}
-
-// A temperature panel: caption (static) on top, big current value, set point
-// below. On large screens the set point is flanked by [-]/[+] steppers (returned
-// for wiring); on compact it's a plain label. The value/set labels are returned
-// for live updates.
-void make_temp_card(lv_obj_t* parent, const char* caption,
-                    const lv_font_t* caption_font, const lv_font_t* value_font,
-                    const lv_font_t* sub_font, int pad, bool with_steppers,
-                    int btn_size, const lv_font_t* symbol_font,
-                    lv_obj_t** out_value, lv_obj_t** out_set,
-                    lv_obj_t** out_minus, lv_obj_t** out_plus) {
-  lv_obj_t* card = lv_obj_create(parent);
-  lv_obj_remove_style_all(card);
-  lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_height(card, lv_pct(100));
-  lv_obj_set_flex_grow(card, 1);
-  lv_obj_set_style_bg_color(card, lv_color_hex(ui::theme::card()), 0);
-  lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(card, 16, 0);
-  lv_obj_set_style_pad_all(card, pad, 0);
-
-  lv_obj_t* cap = lv_label_create(card);
-  lv_label_set_text(cap, caption);
-  lv_obj_set_style_text_color(cap, lv_color_hex(ui::theme::muted()), 0);
-  lv_obj_set_style_text_font(cap, caption_font, 0);
-  lv_obj_align(cap, LV_ALIGN_TOP_MID, 0, 0);
-
-  lv_obj_t* val = lv_label_create(card);
-  lv_obj_set_style_text_color(val, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(val, value_font, 0);
-  lv_obj_align(val, LV_ALIGN_CENTER, 0, 0);
-
-  lv_obj_t* set;
-  if (with_steppers) {
-    // [-]  set  [+] row pinned to the bottom of the card.
-    lv_obj_t* setrow = lv_obj_create(card);
-    lv_obj_remove_style_all(setrow);
-    lv_obj_remove_flag(setrow, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_size(setrow, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(setrow, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(setrow, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(setrow, 12, 0);
-    lv_obj_align(setrow, LV_ALIGN_BOTTOM_MID, 0, 0);
-
-    *out_minus = ui::make_step_button(setrow, LV_SYMBOL_MINUS, btn_size, symbol_font);
-
-    set = lv_label_create(setrow);
-    lv_obj_set_width(set, btn_size * 2);  // stable width so the buttons don't shift
-    lv_obj_set_style_text_align(set, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(set, lv_color_hex(ui::theme::text()), 0);
-    lv_obj_set_style_text_font(set, sub_font, 0);
-
-    *out_plus = ui::make_step_button(setrow, LV_SYMBOL_PLUS, btn_size, symbol_font);
-  } else {
-    set = lv_label_create(card);
-    lv_obj_set_style_text_color(set, lv_color_hex(ui::theme::muted()), 0);
-    lv_obj_set_style_text_font(set, sub_font, 0);
-    lv_obj_align(set, LV_ALIGN_BOTTOM_MID, 0, 0);
-    *out_minus = nullptr;
-    *out_plus = nullptr;
-  }
-
-  *out_value = val;
-  *out_set = set;
-}
-
-// A small "BREW 93.0°" temperature chip for the scale-aware layout, where the
-// temps shrink to make room for the scale. Returns the value label.
-lv_obj_t* make_temp_chip(lv_obj_t* parent, const char* caption,
-                         const lv_font_t* caption_font, const lv_font_t* value_font,
-                         int pad) {
-  lv_obj_t* chip = lv_obj_create(parent);
-  lv_obj_remove_style_all(chip);
-  lv_obj_remove_flag(chip, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_flex_grow(chip, 1);
-  lv_obj_set_height(chip, LV_SIZE_CONTENT);
-  lv_obj_set_flex_flow(chip, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(chip, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
-                        LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(chip, 6, 0);
-  lv_obj_set_style_bg_color(chip, lv_color_hex(ui::theme::card()), 0);
-  lv_obj_set_style_bg_opa(chip, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(chip, 12, 0);
-  lv_obj_set_style_pad_all(chip, pad, 0);
-
-  lv_obj_t* cap = lv_label_create(chip);
-  lv_label_set_text(cap, caption);
-  lv_obj_set_style_text_color(cap, lv_color_hex(ui::theme::muted()), 0);
-  lv_obj_set_style_text_font(cap, caption_font, 0);
-
-  lv_obj_t* val = lv_label_create(chip);
-  lv_obj_set_style_text_color(val, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(val, value_font, 0);
-  return val;
-}
 
 // Flow strip chart. The plot scrolls right->left by wall-clock time (see
 // flow_graph_tick) over kFlowWindowS seconds. The Y axis auto-ranges (per-mode
@@ -257,38 +158,6 @@ void invalidate_flow_span(HomeWidgets& w, int c0, int n) {
     c0 = start + run;
     n -= run;
   }
-}
-
-// A compact vertical readout card: small caption on top, value below. Used for
-// the single brew/boiler/scale row on large screens (the graph is the hero, so
-// these stay short). Returns the value label; optionally hands back the card.
-lv_obj_t* make_readout_card(lv_obj_t* parent, const char* caption,
-                            const lv_font_t* caption_font, const lv_font_t* value_font,
-                            int pad, lv_obj_t** out_card) {
-  lv_obj_t* card = lv_obj_create(parent);
-  lv_obj_remove_style_all(card);
-  lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_flex_grow(card, 1);
-  lv_obj_set_height(card, lv_pct(100));
-  lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_flex_align(card, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
-                        LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_all(card, pad, 0);
-  lv_obj_set_style_pad_row(card, 2, 0);
-  lv_obj_set_style_bg_color(card, lv_color_hex(ui::theme::card()), 0);
-  lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(card, 16, 0);
-
-  lv_obj_t* cap = lv_label_create(card);
-  lv_label_set_text(cap, caption);
-  lv_obj_set_style_text_color(cap, lv_color_hex(ui::theme::muted()), 0);
-  lv_obj_set_style_text_font(cap, caption_font, 0);
-
-  lv_obj_t* val = lv_label_create(card);
-  lv_obj_set_style_text_color(val, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(val, value_font, 0);
-  if (out_card != nullptr) *out_card = card;
-  return val;
 }
 
 // The styled (empty) flow-graph card. The canvas that fills it is created later
@@ -453,53 +322,6 @@ void battery_anim_cb(lv_timer_t* t) {
   lv_label_set_text(w->battery_label, buf);
 }
 
-// Top bar: status (left) + clock & battery (right). Shared by both layouts.
-void build_top_bar(lv_obj_t* parent, const lv_font_t* sub_font, ui::HomeWidgets& out) {
-  lv_obj_t* bar = lv_obj_create(parent);
-  lv_obj_remove_style_all(bar);
-  lv_obj_remove_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_width(bar, lv_pct(100));
-  lv_obj_set_height(bar, LV_SIZE_CONTENT);
-  lv_obj_set_flex_flow(bar, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(bar, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
-                        LV_FLEX_ALIGN_CENTER);
-
-  lv_obj_t* status_group = lv_obj_create(bar);
-  lv_obj_remove_style_all(status_group);
-  lv_obj_set_size(status_group, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-  lv_obj_set_flex_flow(status_group, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(status_group, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
-                        LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(status_group, 8, 0);
-
-  out.status_dot = lv_obj_create(status_group);
-  lv_obj_remove_style_all(out.status_dot);
-  lv_obj_set_size(out.status_dot, 12, 12);
-  lv_obj_set_style_radius(out.status_dot, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_bg_opa(out.status_dot, LV_OPA_COVER, 0);
-
-  out.status_label = lv_label_create(status_group);
-  lv_obj_set_style_text_color(out.status_label, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(out.status_label, sub_font, 0);
-
-  lv_obj_t* right_group = lv_obj_create(bar);
-  lv_obj_remove_style_all(right_group);
-  lv_obj_set_size(right_group, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-  lv_obj_set_flex_flow(right_group, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(right_group, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER,
-                        LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(right_group, 10, 0);
-
-  out.battery_label = lv_label_create(right_group);
-  lv_obj_set_style_text_color(out.battery_label, lv_color_hex(ui::theme::muted()), 0);
-  lv_obj_set_style_text_font(out.battery_label, sub_font, 0);
-
-  out.clock_label = lv_label_create(right_group);
-  lv_obj_set_style_text_color(out.clock_label, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(out.clock_label, sub_font, 0);
-  out.batt_timer = lv_timer_create(battery_anim_cb, 350, &out);  // drives charge anim
-}
-
 // The full-width power button at the bottom (both layouts).
 void build_power_button(lv_obj_t* parent, int btn_h, const lv_font_t* btn_font,
                         ui::HomeWidgets& out) {
@@ -511,30 +333,6 @@ void build_power_button(lv_obj_t* parent, int btn_h, const lv_font_t* btn_font,
   lv_obj_set_style_text_color(out.power_label, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(out.power_label, btn_font, 0);
   lv_obj_center(out.power_label);
-}
-
-// Scale readout card: big live weight, "/ target g" sub, and a paddle-status
-// pill in the corner. Returns the card so the caller can size/place it.
-lv_obj_t* build_scale_card(lv_obj_t* parent, const lv_font_t* weight_font,
-                           const lv_font_t* sub_font, int pad, ui::HomeWidgets& out) {
-  lv_obj_t* card = lv_obj_create(parent);
-  lv_obj_remove_style_all(card);
-  lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_bg_color(card, lv_color_hex(ui::theme::card()), 0);
-  lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(card, 16, 0);
-  lv_obj_set_style_pad_all(card, pad, 0);
-
-  out.scale_weight = lv_label_create(card);
-  lv_obj_set_style_text_color(out.scale_weight, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(out.scale_weight, weight_font, 0);
-  lv_obj_align(out.scale_weight, LV_ALIGN_CENTER, 0, -6);
-
-  out.scale_target = lv_label_create(card);
-  lv_obj_set_style_text_color(out.scale_target, lv_color_hex(ui::theme::muted()), 0);
-  lv_obj_set_style_text_font(out.scale_target, sub_font, 0);
-  lv_obj_align(out.scale_target, LV_ALIGN_BOTTOM_MID, 0, 0);
-  return card;
 }
 
 // A Tare button (icon + label). Returns it (the caller sizes/places it).
@@ -549,9 +347,289 @@ void build_tare_button(lv_obj_t* parent, const lv_font_t* font, ui::HomeWidgets&
   lv_obj_center(out.tare_label);
 }
 
+// ---- Large scale-aware layout: MICRA / SCALE device panels -----------------
+// Two side-by-side cards replace the old top bar + brew/boiler/scale readout row.
+// Each carries its OWN status line (so "Disconnected" is unambiguous), and the
+// clock/battery move to the rail tray (see build_rail_tray). This whole section
+// is large-screen + scale-enabled only; compact and the no-scale classic layout
+// are untouched.
+
+// A flex-column card that fills its share of the panel row.
+lv_obj_t* make_panel_card(lv_obj_t* parent, int pad) {
+  lv_obj_t* card = lv_obj_create(parent);
+  lv_obj_remove_style_all(card);
+  lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_height(card, lv_pct(100));
+  lv_obj_set_flex_grow(card, 1);
+  lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(card, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START,
+                        LV_FLEX_ALIGN_START);
+  lv_obj_set_style_pad_all(card, pad, 0);
+  lv_obj_set_style_pad_row(card, pad, 0);
+  lv_obj_set_style_bg_color(card, lv_color_hex(ui::theme::card()), 0);
+  lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(card, 16, 0);
+  return card;
+}
+
+// Panel header: caption on the left, a status dot on the right, with status text
+// beside the dot unless out_status is null (compact cards are too narrow for it —
+// the dot color carries the state there).
+void make_panel_header(lv_obj_t* card, const char* caption, const lv_font_t* cap_font,
+                       const lv_font_t* status_font, lv_obj_t** out_dot,
+                       lv_obj_t** out_status) {
+  lv_obj_t* hdr = lv_obj_create(card);
+  lv_obj_remove_style_all(hdr);
+  lv_obj_remove_flag(hdr, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_width(hdr, lv_pct(100));
+  lv_obj_set_height(hdr, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(hdr, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(hdr, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+
+  lv_obj_t* cap = lv_label_create(hdr);
+  lv_label_set_text(cap, caption);
+  lv_obj_set_style_text_color(cap, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(cap, cap_font, 0);
+
+  lv_obj_t* sg = lv_obj_create(hdr);
+  lv_obj_remove_style_all(sg);
+  lv_obj_remove_flag(sg, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_size(sg, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(sg, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(sg, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(sg, 8, 0);
+
+  lv_obj_t* dot = lv_obj_create(sg);
+  lv_obj_remove_style_all(dot);
+  lv_obj_set_size(dot, 12, 12);
+  lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+  *out_dot = dot;
+
+  if (out_status != nullptr) {
+    lv_obj_t* st = lv_label_create(sg);
+    lv_obj_set_style_text_color(st, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(st, status_font, 0);
+    *out_status = st;
+  }
+}
+
+// A [-] value [+] stepper group: the two buttons flank a centered value label
+// (the set point / target). Returns the label + buttons for updates + wiring.
+void make_stepper_group(lv_obj_t* parent, int btn_size, const lv_font_t* symbol_font,
+                        const lv_font_t* label_font, lv_obj_t** out_label,
+                        lv_obj_t** out_minus, lv_obj_t** out_plus) {
+  lv_obj_t* g = lv_obj_create(parent);
+  lv_obj_remove_style_all(g);
+  lv_obj_remove_flag(g, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_size(g, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(g, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(g, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(g, 3, 0);
+  *out_minus = ui::make_step_button(g, LV_SYMBOL_MINUS, btn_size, symbol_font);
+  lv_obj_t* lbl = lv_label_create(g);
+  // Fixed (not btn-relative) so the buttons hug the value at 14pt instead of
+  // floating out; wide enough for the widest set value ("120 g" / "93.0°").
+  lv_obj_set_width(lbl, 46);  // stable width so the buttons don't shift on digit changes
+  lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(lbl, label_font, 0);
+  *out_plus = ui::make_step_button(g, LV_SYMBOL_PLUS, btn_size, symbol_font);
+  *out_label = lbl;
+}
+
+// The two-column body of a device panel: columns fill it equally, packed to the
+// top (so captions across both panels align) and centered horizontally.
+lv_obj_t* make_panel_body(lv_obj_t* card) {
+  lv_obj_t* row = lv_obj_create(card);
+  lv_obj_remove_style_all(row);
+  lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_width(row, lv_pct(100));
+  lv_obj_set_flex_grow(row, 1);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START,
+                        LV_FLEX_ALIGN_START);
+  return row;
+}
+
+// One centered column (caption over value, then optional steppers below). Fills
+// half the body. Returns the column so the caller can drop steppers into it.
+lv_obj_t* make_panel_column(lv_obj_t* body, const char* caption, const lv_font_t* cap_font,
+                            const lv_font_t* val_font, lv_obj_t** out_val) {
+  lv_obj_t* col = lv_obj_create(body);
+  lv_obj_remove_style_all(col);
+  lv_obj_remove_flag(col, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_flex_grow(col, 1);
+  lv_obj_set_height(col, lv_pct(100));
+  lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_row(col, 6, 0);
+  lv_obj_t* cap = lv_label_create(col);
+  lv_label_set_text(cap, caption);
+  lv_obj_set_style_text_color(cap, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(cap, cap_font, 0);
+  lv_obj_t* val = lv_label_create(col);
+  lv_obj_set_style_text_color(val, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(val, val_font, 0);
+  *out_val = val;
+  return col;
+}
+
+// A small, muted sub-label (set point / target shown under a value). Returns it.
+lv_obj_t* add_sub_label(lv_obj_t* parent, const lv_font_t* font) {
+  lv_obj_t* l = lv_label_create(parent);
+  lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(l, font, 0);
+  return l;
+}
+
+// A compact stat block: a "CAPTION ....... value" line (caption + value aligned on
+// the same baseline), with a small grey sub-value (set point / target) right-
+// aligned just beneath the value when out_sub is non-null. Blocks flex-grow so the
+// card distributes them evenly. Returns the value label.
+lv_obj_t* add_stat_row(lv_obj_t* card, const char* caption, const lv_font_t* cap_font,
+                       const lv_font_t* val_font, lv_obj_t** out_sub) {
+  lv_obj_t* outer = lv_obj_create(card);
+  lv_obj_remove_style_all(outer);
+  lv_obj_remove_flag(outer, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_width(outer, lv_pct(100));
+  lv_obj_set_flex_grow(outer, 1);
+  lv_obj_set_flex_flow(outer, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(outer, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END,
+                        LV_FLEX_ALIGN_CENTER);  // block centered vertically; sub right-aligned
+
+  lv_obj_t* line = lv_obj_create(outer);
+  lv_obj_remove_style_all(line);
+  lv_obj_remove_flag(line, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_width(line, lv_pct(100));
+  lv_obj_set_height(line, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(line, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(line, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);  // caption + value share one line
+  lv_obj_t* cap = lv_label_create(line);
+  lv_label_set_text(cap, caption);
+  lv_obj_set_style_text_color(cap, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(cap, cap_font, 0);
+  lv_obj_t* val = lv_label_create(line);
+  lv_obj_set_style_text_color(val, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(val, val_font, 0);
+
+  if (out_sub != nullptr) *out_sub = add_sub_label(outer, cap_font);
+  return val;
+}
+
+// Compact MICRA card: dot-only header + stacked BREW / STEAM rows, each with the
+// set point in small grey beneath the live value (no steppers — adjust in Settings).
+void build_compact_micra_card(lv_obj_t* parent, int pad, const lv_font_t* cap_font,
+                              const lv_font_t* val_font, ui::HomeWidgets& out) {
+  lv_obj_t* card = make_panel_card(parent, pad);
+  make_panel_header(card, "MICRA", cap_font, cap_font, &out.micra_status_dot, nullptr);
+  out.brew_value = add_stat_row(card, "BREW", cap_font, val_font, &out.brew_set);
+  out.boiler_value = add_stat_row(card, "STEAM", cap_font, val_font, &out.boiler_set);
+}
+
+// Compact SCALE card: dot-only header + WEIGHT (with the target in small grey
+// beneath, read-only — adjust in Scale settings) and TIMER.
+void build_compact_scale_card(lv_obj_t* parent, int pad, const lv_font_t* cap_font,
+                              const lv_font_t* val_font, ui::HomeWidgets& out) {
+  lv_obj_t* card = make_panel_card(parent, pad);
+  make_panel_header(card, "SCALE", cap_font, cap_font, &out.scale_status_dot, nullptr);
+  out.scale_weight = add_stat_row(card, "WEIGHT", cap_font, val_font, &out.scale_target);
+  out.shot_timer_label = add_stat_row(card, "TIMER", cap_font, val_font, nullptr);
+}
+
+// MICRA panel: two centered temperature columns (BREW / STEAM), each caption ->
+// live value -> [-] set [+].
+void build_micra_panel(lv_obj_t* parent, const lv_font_t* cap_font,
+                       const lv_font_t* status_font, const lv_font_t* val_font,
+                       const lv_font_t* set_font, int btn_size,
+                       const lv_font_t* symbol_font, int pad, ui::HomeWidgets& out) {
+  lv_obj_t* card = make_panel_card(parent, pad);
+  make_panel_header(card, "MICRA", cap_font, status_font, &out.micra_status_dot,
+                    &out.micra_status_label);
+  lv_obj_t* body = make_panel_body(card);
+  lv_obj_t* bcol = make_panel_column(body, "BREW", cap_font, val_font, &out.brew_value);
+  make_stepper_group(bcol, btn_size, symbol_font, set_font, &out.brew_set,
+                     &out.brew_minus, &out.brew_plus);
+  lv_obj_t* scol = make_panel_column(body, "STEAM", cap_font, val_font, &out.boiler_value);
+  make_stepper_group(scol, btn_size, symbol_font, set_font, &out.boiler_set,
+                     &out.boiler_minus, &out.boiler_plus);
+}
+
+// SCALE panel: centered WEIGHT + TIMER columns, with the target stepper tucked
+// under the weight column (same caption/value/stepper pattern as MICRA).
+void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
+                       const lv_font_t* status_font, const lv_font_t* big_font,
+                       const lv_font_t* set_font, int btn_size,
+                       const lv_font_t* symbol_font, int pad, ui::HomeWidgets& out) {
+  lv_obj_t* card = make_panel_card(parent, pad);
+  make_panel_header(card, "SCALE", cap_font, status_font, &out.scale_status_dot,
+                    &out.scale_status_label);
+  lv_obj_t* body = make_panel_body(card);
+  lv_obj_t* wcol = make_panel_column(body, "WEIGHT", cap_font, big_font, &out.scale_weight);
+  make_stepper_group(wcol, btn_size, symbol_font, set_font, &out.scale_target,
+                     &out.target_minus, &out.target_plus);
+  make_panel_column(body, "TIMER", cap_font, big_font, &out.shot_timer_label);
+}
+
 }  // namespace
 
 namespace ui {
+
+void build_rail_tray(lv_obj_t* rail, const lv_font_t* font, HomeWidgets& out) {
+  // The caller switches the rail to SPACE_BETWEEN, so the three tab buttons spread
+  // down the rail and this tray anchors the bottom — the previously-dead middle
+  // space is reclaimed as tab spacing instead of a void. The tray is a plain object
+  // (not lv_button), so the tabview — which counts/indexes tabs by button class —
+  // ignores it entirely.
+  lv_obj_t* tray = lv_obj_create(rail);
+  lv_obj_remove_style_all(tray);
+  lv_obj_remove_flag(tray, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_width(tray, lv_pct(100));
+  lv_obj_set_height(tray, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(tray, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(tray, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_row(tray, 4, 0);
+
+  out.clock_label = lv_label_create(tray);
+  lv_obj_set_style_text_color(out.clock_label, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(out.clock_label, font, 0);
+
+  out.battery_label = lv_label_create(tray);
+  lv_obj_set_style_text_color(out.battery_label, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(out.battery_label, font, 0);
+
+  out.batt_timer = lv_timer_create(battery_anim_cb, 350, &out);  // drives charge anim
+}
+
+void build_bottom_tray(lv_obj_t* bar, const lv_font_t* font, HomeWidgets& out) {
+  // Compact tray: the tab bar runs along the bottom. The tab buttons flex-grow to
+  // fill the bar (App sizes them), so this tray — a plain, non-grow object the
+  // tabview ignores for tab counting — gets pushed to the right. Clock over battery,
+  // stacked, right-aligned (fits the ~44px bar at this font).
+  lv_obj_t* tray = lv_obj_create(bar);
+  lv_obj_remove_style_all(tray);
+  lv_obj_remove_flag(tray, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_size(tray, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(tray, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(tray, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END,
+                        LV_FLEX_ALIGN_END);
+
+  out.clock_label = lv_label_create(tray);
+  lv_obj_set_style_text_color(out.clock_label, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(out.clock_label, font, 0);
+
+  out.battery_label = lv_label_create(tray);
+  lv_obj_set_style_text_color(out.battery_label, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(out.battery_label, font, 0);
+
+  out.batt_timer = lv_timer_create(battery_anim_cb, 350, &out);  // drives charge anim
+}
 
 void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_enabled,
                     HomeWidgets& out) {
@@ -569,21 +647,20 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   out.scale_weight = out.scale_target = nullptr;
   out.tare_btn = out.tare_label = nullptr;
   out.paddle_pill = out.paddle_label = nullptr;
+  out.status_dot = out.status_label = nullptr;
+  out.micra_status_dot = out.micra_status_label = nullptr;
+  out.scale_status_dot = out.scale_status_label = nullptr;
+  out.shot_timer_label = out.target_minus = out.target_plus = nullptr;
   out.flow_canvas = nullptr;  // flow_buf is freed by App before each rebuild
 
   const int pad = compact ? 8 : xl ? 28 : 20;
   const int gap = compact ? 6 : xl ? 22 : 16;
   const int card_pad = compact ? 8 : xl ? 24 : 16;
   const int btn_h = compact ? 40 : xl ? 92 : 64;
-  const lv_font_t* value_font = compact ? &lv_font_montserrat_28 : &lv_font_montserrat_48;
   const lv_font_t* sub_font =
       compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
   const lv_font_t* btn_font =
       compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
-  const lv_font_t* caption_font =
-      compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
-  const lv_font_t* step_font = compact ? &lv_font_montserrat_20 : &lv_font_montserrat_28;
-  const int step_btn = compact ? 36 : xl ? 64 : 50;
 
   lv_obj_remove_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_pad_all(parent, pad, 0);
@@ -592,27 +669,86 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
                         LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_row(parent, gap, 0);
 
-  build_top_bar(parent, sub_font, out);
+  // No top bar in any layout now: status lives in card headers, clock/battery in a
+  // tray (built by App — bottom bar on compact, side rail on large).
+
+  // --- Compact Home: MICRA (+ SCALE) card(s) + actions; clock/battery live in the
+  // bottom-bar tray. No on-Home steppers — temp/target adjust stay in Settings. ---
+  if (compact) {
+    const lv_font_t* c_cap = &lv_font_montserrat_14;
+    lv_obj_t* cards = lv_obj_create(parent);
+    lv_obj_remove_style_all(cards);
+    lv_obj_remove_flag(cards, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_width(cards, lv_pct(100));
+    lv_obj_set_flex_grow(cards, 1);
+    lv_obj_set_flex_flow(cards, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(cards, gap, 0);
+
+    if (scale_enabled) {
+      // Two half-width cards with stacked readout rows (narrow -> smaller value).
+      build_compact_micra_card(cards, card_pad, c_cap, &lv_font_montserrat_20, out);
+      build_compact_scale_card(cards, card_pad, c_cap, &lv_font_montserrat_20, out);
+    } else {
+      // One full-width MICRA card: BREW / STEAM columns, each with the set point in
+      // small grey beneath the value (room for a bigger value at full width).
+      lv_obj_t* card = make_panel_card(cards, card_pad);
+      make_panel_header(card, "MICRA", c_cap, sub_font, &out.micra_status_dot,
+                        &out.micra_status_label);
+      lv_obj_t* body = make_panel_body(card);
+      lv_obj_t* bcol = make_panel_column(body, "BREW", c_cap, &lv_font_montserrat_28,
+                                         &out.brew_value);
+      lv_obj_set_flex_align(bcol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                            LV_FLEX_ALIGN_CENTER);  // center the cluster vertically
+      out.brew_set = add_sub_label(bcol, c_cap);
+      lv_obj_t* scol = make_panel_column(body, "STEAM", c_cap, &lv_font_montserrat_28,
+                                         &out.boiler_value);
+      lv_obj_set_flex_align(scol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                            LV_FLEX_ALIGN_CENTER);
+      out.boiler_set = add_sub_label(scol, c_cap);
+    }
+
+    // Actions: Power (under MICRA, left) then Tare (under SCALE, right); just Power
+    // when there's no scale.
+    lv_obj_t* actions = lv_obj_create(parent);
+    lv_obj_remove_style_all(actions);
+    lv_obj_remove_flag(actions, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_width(actions, lv_pct(100));
+    lv_obj_set_height(actions, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(actions, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(actions, gap, 0);
+    build_power_button(actions, btn_h, btn_font, out);
+    lv_obj_set_width(out.power_btn, 0);
+    lv_obj_set_flex_grow(out.power_btn, 1);
+    if (scale_enabled) {
+      build_tare_button(actions, btn_font, out);
+      lv_obj_set_flex_grow(out.tare_btn, 1);
+      lv_obj_set_height(out.tare_btn, btn_h);
+    }
+    return;
+  }
+
+  // Shared large-screen panel sizing (the MICRA / SCALE cards + their steppers).
+  const int panel_h = xl ? 210 : 168;
+  const lv_font_t* panel_cap = &lv_font_montserrat_14;
+  const lv_font_t* panel_status = sub_font;                       // 20 wide / 28 xl
+  // One value size for BOTH panels so the value rows + steppers line up across
+  // MICRA and SCALE (weight/timer are not a bigger "hero" — they match the temps).
+  const lv_font_t* panel_val = xl ? &lv_font_montserrat_28 : &lv_font_montserrat_24;
+  const lv_font_t* panel_set = &lv_font_montserrat_14;
+  const int panel_btn = xl ? 48 : 36;
+  const lv_font_t* panel_sym = xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
 
   if (!scale_enabled) {
-    // --- Classic Home: two big temperature cards + power button -------------
-    const int row_h = compact ? 96 : xl ? 300 : 210;
-    const bool steppers = !compact;
+    // --- Large no-scale Home: one MICRA card (BREW / STEAM + steppers) + power;
+    // clock/battery in the rail tray, same as the scale-aware layout. ---
     lv_obj_t* row = lv_obj_create(parent);
     lv_obj_remove_style_all(row);
     lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_width(row, lv_pct(100));
-    lv_obj_set_height(row, row_h);
+    lv_obj_set_height(row, xl ? 300 : 220);
     lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(row, gap, 0);
-    make_temp_card(row, "BREW", caption_font, value_font, sub_font, card_pad, steppers,
-                   step_btn, step_font, &out.brew_value, &out.brew_set, &out.brew_minus,
-                   &out.brew_plus);
-    make_temp_card(row, "BOILER", caption_font, value_font, sub_font, card_pad, steppers,
-                   step_btn, step_font, &out.boiler_value, &out.boiler_set,
-                   &out.boiler_minus, &out.boiler_plus);
+    build_micra_panel(row, panel_cap, panel_status, panel_val, panel_set, panel_btn,
+                      panel_sym, card_pad, out);
 
     lv_obj_t* spacer = lv_obj_create(parent);
     lv_obj_remove_style_all(spacer);
@@ -624,80 +760,28 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
     return;
   }
 
-  // --- Scale-aware Home -----------------------------------------------------
-  // Compact: a small temp strip, a big scale readout, then Tare + Power.
-  // Large:   shorter temp cards, then a scale readout beside a flow graph.
-  if (compact) {
-    lv_obj_t* strip = lv_obj_create(parent);
-    lv_obj_remove_style_all(strip);
-    lv_obj_remove_flag(strip, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_width(strip, lv_pct(100));
-    lv_obj_set_height(strip, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(strip, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_column(strip, gap, 0);
-    out.brew_value = make_temp_chip(strip, "BREW", caption_font, sub_font, 6);
-    out.boiler_value = make_temp_chip(strip, "STEAM", caption_font, sub_font, 6);
-    out.brew_set = nullptr;
-    out.boiler_set = nullptr;
+  // Large scale-aware screens: two device panels (MICRA / SCALE) with their own
+  // status + steppers, weight and shot timer; then the flow graph as the hero;
+  // then Tare + Power. Clock/battery live in the rail tray (build_rail_tray).
+  lv_obj_t* panels = lv_obj_create(parent);
+  lv_obj_remove_style_all(panels);
+  lv_obj_remove_flag(panels, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_width(panels, lv_pct(100));
+  lv_obj_set_height(panels, panel_h);
+  lv_obj_set_flex_flow(panels, LV_FLEX_FLOW_ROW);
+  lv_obj_set_style_pad_column(panels, gap, 0);
+  build_micra_panel(panels, panel_cap, panel_status, panel_val, panel_set, panel_btn,
+                    panel_sym, card_pad, out);
+  build_scale_panel(panels, panel_cap, panel_status, panel_val, panel_set, panel_btn,
+                    panel_sym, card_pad, out);
 
-    lv_obj_t* card = build_scale_card(parent, &lv_font_montserrat_48, sub_font, card_pad, out);
-    lv_obj_set_width(card, lv_pct(100));
-    lv_obj_set_flex_grow(card, 1);
-
-    lv_obj_t* actions = lv_obj_create(parent);
-    lv_obj_remove_style_all(actions);
-    lv_obj_remove_flag(actions, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_width(actions, lv_pct(100));
-    lv_obj_set_height(actions, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(actions, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_column(actions, gap, 0);
-    build_tare_button(actions, btn_font, out);
-    lv_obj_set_flex_grow(out.tare_btn, 1);
-    lv_obj_set_height(out.tare_btn, btn_h);
-    build_power_button(actions, btn_h, btn_font, out);
-    lv_obj_set_width(out.power_btn, 0);
-    lv_obj_set_flex_grow(out.power_btn, 1);
-    return;
-  }
-
-  // Large screens: one short readout row (brew/boiler/scale), then the flow graph
-  // as the hero (majority of the screen, with X/Y axes), then Tare + Power.
-  const int read_h = xl ? 104 : 84;
-  const lv_font_t* read_cap = &lv_font_montserrat_14;
-  const lv_font_t* read_val = &lv_font_montserrat_28;
-
-  lv_obj_t* row = lv_obj_create(parent);
-  lv_obj_remove_style_all(row);
-  lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_width(row, lv_pct(100));
-  lv_obj_set_height(row, read_h);
-  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-  lv_obj_set_style_pad_column(row, gap, 0);
-  // Each card is caption / value / sub, where the sub is the set point (brew,
-  // boiler) or the target weight (scale).
-  auto add_sub = [&](lv_obj_t* card) {
-    lv_obj_t* l = lv_label_create(card);
-    lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::muted()), 0);
-    lv_obj_set_style_text_font(l, read_cap, 0);
-    return l;
-  };
-  lv_obj_t* bcard = nullptr;
-  lv_obj_t* ocard = nullptr;
-  lv_obj_t* scard = nullptr;
-  out.brew_value = make_readout_card(row, "BREW", read_cap, read_val, card_pad, &bcard);
-  out.brew_set = add_sub(bcard);
-  out.boiler_value = make_readout_card(row, "BOILER", read_cap, read_val, card_pad, &ocard);
-  out.boiler_set = add_sub(ocard);
-  out.scale_weight = make_readout_card(row, "SCALE", read_cap, read_val, card_pad, &scard);
-  out.scale_target = add_sub(scard);
-
-  // The flow graph fills the rest — the hero. (Paddle status pill removed; it
-  // returns in Phase 4 when there's real paddle hardware/state to show.) The card
-  // is created here for correct flex order, but its canvas is sized only after the
-  // actions row exists and the layout is final (populate_flow_graph below).
+  // The flow graph fills the rest — the hero. The card is created here for correct
+  // flex order, but its canvas is sized only after the actions row exists and the
+  // layout is final (populate_flow_graph below).
   lv_obj_t* graph_card = make_flow_graph_card(parent);
 
-  // Tare beside the power button at the bottom.
+  // Power (under MICRA, left) beside Tare (under SCALE, right) — each action sits
+  // below the card it belongs to.
   lv_obj_t* actions = lv_obj_create(parent);
   lv_obj_remove_style_all(actions);
   lv_obj_remove_flag(actions, LV_OBJ_FLAG_SCROLLABLE);
@@ -705,13 +789,13 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   lv_obj_set_height(actions, LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(actions, LV_FLEX_FLOW_ROW);
   lv_obj_set_style_pad_column(actions, gap, 0);
+  build_power_button(actions, btn_h, btn_font, out);
+  lv_obj_set_width(out.power_btn, 0);
+  lv_obj_set_flex_grow(out.power_btn, 1);  // equal halves with the tare button
   build_tare_button(actions, btn_font, out);
   lv_obj_set_height(out.tare_btn, btn_h);
   lv_obj_set_width(out.tare_btn, 0);
-  lv_obj_set_flex_grow(out.tare_btn, 1);  // equal halves with the power button
-  build_power_button(actions, btn_h, btn_font, out);
-  lv_obj_set_width(out.power_btn, 0);
-  lv_obj_set_flex_grow(out.power_btn, 1);
+  lv_obj_set_flex_grow(out.tare_btn, 1);
 
   // Everything's in place: resolve the final layout, then size + paint the graph
   // to the card's real content box.
@@ -726,20 +810,24 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   const bool connected = state.link == core::Link::Connected;
   const bool on = state.power == core::Power::On;
 
-  // Temperatures: real values when connected, placeholders otherwise.
+  // Temperatures: real values when connected, placeholders otherwise. The set point
+  // is always compact ("93.0°" — the live value above/beside it carries the unit),
+  // whether it's a stepper's value (large) or a grey sub-value (compact).
   char buf[24];
   if (connected) {
     format_now(buf, sizeof(buf), state.brew_temp_c, fahrenheit);
     lv_label_set_text(w.brew_value, buf);
     if (w.brew_set != nullptr) {
-      format_set(buf, sizeof(buf), state.brew_target_c, fahrenheit);
+      std::snprintf(buf, sizeof(buf), "%.1f°",
+                    static_cast<double>(ui::temp_disp(state.brew_target_c, fahrenheit)));
       lv_label_set_text(w.brew_set, buf);
     }
     if (state.steam_enabled) {
       format_now(buf, sizeof(buf), state.boiler_temp_c, fahrenheit);
       lv_label_set_text(w.boiler_value, buf);
       if (w.boiler_set != nullptr) {
-        format_set(buf, sizeof(buf), state.boiler_target_c, fahrenheit);
+        std::snprintf(buf, sizeof(buf), "%.0f°",
+                      static_cast<double>(ui::temp_disp(state.boiler_target_c, fahrenheit)));
         lv_label_set_text(w.boiler_set, buf);
       }
     } else {
@@ -748,9 +836,9 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     }
   } else {
     lv_label_set_text(w.brew_value, "--");
-    if (w.brew_set != nullptr) lv_label_set_text(w.brew_set, "Set  --");
+    if (w.brew_set != nullptr) lv_label_set_text(w.brew_set, "--");
     lv_label_set_text(w.boiler_value, "--");
-    if (w.boiler_set != nullptr) lv_label_set_text(w.boiler_set, "Set  --");
+    if (w.boiler_set != nullptr) lv_label_set_text(w.boiler_set, "--");
   }
 
   // Scale readout (scale-aware layout only).
@@ -763,8 +851,22 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     }
     lv_label_set_text(w.scale_weight, wb);
     char tb[16];
-    std::snprintf(tb, sizeof(tb), "/ %.0f g", static_cast<double>(brew.target_weight_g));
+    // Every layout now labels this "TARGET" (a stepper's value on large screens, a
+    // read-only row on compact), so it's just the number of grams.
+    std::snprintf(tb, sizeof(tb), "%.0f g", static_cast<double>(brew.target_weight_g));
     lv_label_set_text(w.scale_target, tb);
+
+    // Shot timer (scale panel): the scale's built-in timer, mm:ss-free seconds.
+    if (w.shot_timer_label != nullptr) {
+      char sb[16];
+      if (scale.connected) {
+        std::snprintf(sb, sizeof(sb), "%.1f s",
+                      static_cast<double>(scale.timer_ms) / 1000.0);
+      } else {
+        std::snprintf(sb, sizeof(sb), "-- s");
+      }
+      lv_label_set_text(w.shot_timer_label, sb);
+    }
 
     // Paddle/brew pill: only meaningful when paddle hardware is present.
     if (w.paddle_pill != nullptr) {
@@ -787,7 +889,8 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     // native rate (much faster than this 2 Hz update), so it's smooth.
   }
 
-  // Status (top-left): text + dot color from link + power.
+  // Micra status: text + dot color from link + power. Shown in the top-bar status
+  // (compact / no-scale) or the MICRA panel header (large scale-aware).
   const char* status = "Disconnected";
   uint32_t dot = ui::theme::muted();
   switch (state.link) {
@@ -800,8 +903,24 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
       dot = on ? ui::theme::ok() : ui::theme::warn();
       break;
   }
-  lv_label_set_text(w.status_label, status);
-  lv_obj_set_style_bg_color(w.status_dot, lv_color_hex(dot), 0);
+  if (w.status_label != nullptr) {
+    lv_label_set_text(w.status_label, status);
+    lv_obj_set_style_bg_color(w.status_dot, lv_color_hex(dot), 0);
+  }
+  // Panel/card dots + optional status text. Compact card headers are dot-only
+  // (label null), so the dot is set independently of the label.
+  if (w.micra_status_dot != nullptr)
+    lv_obj_set_style_bg_color(w.micra_status_dot, lv_color_hex(dot), 0);
+  if (w.micra_status_label != nullptr) {
+    // Header caption is already "MICRA", so drop the wordy Unconfigured hint.
+    const char* mtxt = state.link == core::Link::Unconfigured ? "Not set up" : status;
+    lv_label_set_text(w.micra_status_label, mtxt);
+  }
+  const uint32_t scale_dot = scale.connected ? ui::theme::ok() : ui::theme::alert();
+  if (w.scale_status_dot != nullptr)
+    lv_obj_set_style_bg_color(w.scale_status_dot, lv_color_hex(scale_dot), 0);
+  if (w.scale_status_label != nullptr)
+    lv_label_set_text(w.scale_status_label, scale.connected ? "Connected" : "Disconnected");
 
   // Clock (top-right): "14:30" (24h) or "2:30 PM" (12h); dashes until set.
   if (clock.valid) {

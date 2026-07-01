@@ -235,6 +235,26 @@ void on_scope_graph_switch(lv_event_t* e) {
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
   app->set_scope_graph(lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
+void on_perf_overlay_switch(lv_event_t* e) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  app->set_perf_overlay(lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
+// Show/hide LVGL's performance monitor (FPS/CPU) on the default display. Compiled
+// out when the sysmon isn't built, so the toggle just persists a no-op preference.
+void apply_perf_overlay(bool on) {
+#if LV_USE_PERF_MONITOR
+  if (on) lv_sysmon_show_performance(nullptr);
+  else lv_sysmon_hide_performance(nullptr);
+#else
+  (void)on;
+#endif
+}
+// lv_menu fires VALUE_CHANGED on every page navigation; re-seed the clock steppers
+// when the Device page comes into view so Hour/Minute show the current time.
+void on_menu_page_changed(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->on_settings_page_shown();
+}
 void on_theme_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->theme_select(/*next=*/-1);
 }
@@ -385,14 +405,14 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_set_style_bg_color(scr, lv_color_hex(ui::theme::bg()), 0);
   lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
-  const lv_font_t* tab_font = compact ? &lv_font_montserrat_20 : &lv_font_montserrat_28;
+  const lv_font_t* tab_font = &lv_font_montserrat_28;  // bigger icons on every tier
   const int rail_pad = compact ? 4 : xl ? 12 : 8;
 
   lv_obj_t* tv = lv_tabview_create(scr);
   tabview_ = tv;
   lv_obj_add_event_cb(tv, on_tab_changed, LV_EVENT_VALUE_CHANGED, this);  // commit on tab exit
   lv_tabview_set_tab_bar_position(tv, compact ? LV_DIR_BOTTOM : LV_DIR_LEFT);
-  lv_tabview_set_tab_bar_size(tv, compact ? 44 : xl ? 120 : 88);
+  lv_tabview_set_tab_bar_size(tv, compact ? 44 : xl ? 120 : 96);
   lv_obj_set_style_bg_opa(tv, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(tv, 0, 0);
 
@@ -412,12 +432,31 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_t* stats = lv_tabview_add_tab(tv, LV_SYMBOL_LIST);
 
   for (uint32_t i = 0; i < lv_tabview_get_tab_count(tv); ++i) {
-    style_tab_button(lv_tabview_get_tab_button(tv, i), tab_font);
+    lv_obj_t* tb = lv_tabview_get_tab_button(tv, i);
+    style_tab_button(tb, tab_font);
+    // Compact: the tab bar is horizontal and shares the row with the clock/battery
+    // tray. Grow the buttons so they fill the bar (big touch targets) instead of
+    // sitting small with dead space; the non-grow tray labels stay at the right.
+    if (compact) lv_obj_set_flex_grow(tb, 1);
   }
 
   const bool scale_on =
       scale_provisioner_ != nullptr && !scale_provisioner_->saved_name().empty();
   build_home_tab(home, screen, scale_on, home_);
+  // Every layout except large-no-scale drops the top bar and moves clock/battery to
+  // a tray (visible on every tab). Compact -> a horizontal tray on the bottom tab
+  // bar; large scale-aware -> the side rail (tabs spread via SPACE_BETWEEN so the
+  // tray anchors the bottom, not a void). Must precede update_home, which populates
+  // home_.clock_label / battery_label.
+  if (compact) {
+    ui::build_bottom_tray(rail, &lv_font_montserrat_14, home_);
+  } else {
+    lv_obj_set_flex_align(rail, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    // Font 16 (not 20) so a 2-digit 12h clock ("12:55 PM") + "100%" battery fit the
+    // narrow rail without clipping (font metrics differ on-device vs sim).
+    ui::build_rail_tray(rail, &lv_font_montserrat_16, home_);
+  }
   lv_obj_add_event_cb(home_.power_btn, on_power_clicked, LV_EVENT_CLICKED, this);
   if (home_.tare_btn != nullptr)
     lv_obj_add_event_cb(home_.tare_btn, on_tare_clicked, LV_EVENT_CLICKED, this);
@@ -430,6 +469,11 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     lv_obj_add_event_cb(home_.brew_plus, on_brew_plus, LV_EVENT_ALL, this);
     lv_obj_add_event_cb(home_.boiler_minus, on_boiler_minus, LV_EVENT_CLICKED, this);
     lv_obj_add_event_cb(home_.boiler_plus, on_boiler_plus, LV_EVENT_CLICKED, this);
+  }
+  // Home weight-target steppers (scale panel) reuse the Settings target handlers.
+  if (home_.target_minus != nullptr) {
+    lv_obj_add_event_cb(home_.target_minus, on_target_minus, LV_EVENT_CLICKED, this);
+    lv_obj_add_event_cb(home_.target_plus, on_target_plus, LV_EVENT_CLICKED, this);
   }
   battery_state_ = battery_->battery();
   update_home(home_, machine_->snapshot(), battery_state_, clock_->now(),
@@ -470,8 +514,11 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                       LV_EVENT_VALUE_CHANGED, this);
   lv_obj_add_event_cb(settings_.scope_graph_switch, on_scope_graph_switch,
                       LV_EVENT_VALUE_CHANGED, this);
+  lv_obj_add_event_cb(settings_.perf_overlay_switch, on_perf_overlay_switch,
+                      LV_EVENT_VALUE_CHANGED, this);
   if (settings_.theme_btn != nullptr)
     lv_obj_add_event_cb(settings_.theme_btn, on_theme_clicked, LV_EVENT_CLICKED, this);
+  lv_obj_add_event_cb(settings_.menu, on_menu_page_changed, LV_EVENT_VALUE_CHANGED, this);
 
   build_stats_tab(stats, screen, stats_);
   for (int i = 0; i < kStatsCount; ++i) {
@@ -495,6 +542,9 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   const bool scope = display_->scope_graph();
   if (scope) lv_obj_add_state(settings_.scope_graph_switch, LV_STATE_CHECKED);
   home_.flow_scope_mode = scope;
+  const bool perf = display_->perf_overlay();
+  if (perf) lv_obj_add_state(settings_.perf_overlay_switch, LV_STATE_CHECKED);
+  apply_perf_overlay(perf);  // match the saved preference (LVGL auto-shows it at init)
   ui::apply_flow_xaxis_labels(home_);  // initial x-axis label set (no plot reset)
   seed_time_steppers();
 
@@ -594,9 +644,15 @@ void App::sync_home_setpoints(bool connected) {
   const bool steam = settings_.steam_enabled;
 
   const bool f = display_->use_fahrenheit();
+  // The large scale-aware panels sit the set point between [-]/[+], so they drop
+  // the unit ("93.0°") to fit; the no-scale layout has room for "93.0 °C".
+  const bool panel = home_.micra_status_label != nullptr;
   char b[16];
   if (!connected) {
     lv_label_set_text(home_.brew_set, "--");
+  } else if (panel) {
+    std::snprintf(b, sizeof(b), "%.1f°", ui::temp_disp(settings_.brew_target, f));
+    lv_label_set_text(home_.brew_set, b);
   } else {
     std::snprintf(b, sizeof(b), "%.1f %s", ui::temp_disp(settings_.brew_target, f),
                   ui::temp_unit(f));
@@ -607,7 +663,7 @@ void App::sync_home_setpoints(bool connected) {
   } else if (!steam) {
     lv_label_set_text(home_.boiler_set, "Off");
   } else {
-    std::snprintf(b, sizeof(b), "%.0f %s",
+    std::snprintf(b, sizeof(b), panel ? "%.0f°" : "%.0f %s",
                   ui::temp_disp(core::kSteamLevelsC[settings_.boiler_level], f),
                   ui::temp_unit(f));
     lv_label_set_text(home_.boiler_set, b);
@@ -634,6 +690,15 @@ void App::seed_time_steppers() {
   settings_.set_hour = t.valid ? t.hour : 12;
   settings_.set_minute = t.valid ? t.minute : 0;
   set_time_labels(settings_);
+}
+
+void App::on_settings_page_shown() {
+  // Re-seed the Hour/Minute steppers from the live clock whenever the Device page is
+  // opened, so they reflect the current time instead of the boot-time seed.
+  if (settings_.menu != nullptr &&
+      lv_menu_get_cur_main_page(settings_.menu) == settings_.device_page) {
+    seed_time_steppers();
+  }
 }
 
 void App::hour_adjust(int dir) {
@@ -674,6 +739,11 @@ void App::set_drop_negative_flow(bool on) {
 void App::set_scope_graph(bool on) {
   if (display_ != nullptr) display_->set_scope_graph(on);  // persist
   ui::set_flow_scope_mode(home_, on);  // apply + reset the plot to the new style
+}
+
+void App::set_perf_overlay(bool on) {
+  if (display_ != nullptr) display_->set_perf_overlay(on);  // persist
+  apply_perf_overlay(on);  // show/hide the LVGL sysmon label now
 }
 
 void App::theme_select(int idx) {
@@ -1301,6 +1371,12 @@ void App::toggle_scale_connection() {
 void App::target_adjust(int dir) {
   settings_.target_g = clampf(settings_.target_g + dir, 5.0f, 120.0f);
   set_target_label(settings_);
+  // Reflect on the Home scale panel immediately (don't wait for the next refresh).
+  if (home_.scale_target != nullptr && home_.target_minus != nullptr) {
+    char tb[16];
+    std::snprintf(tb, sizeof(tb), "%.0f g", static_cast<double>(settings_.target_g));
+    lv_label_set_text(home_.scale_target, tb);
+  }
   if (brew_ != nullptr) brew_->set_target_weight_g(settings_.target_g);
 }
 

@@ -195,6 +195,10 @@ void build_device_rows(lv_obj_t* page, const lv_font_t* text_font,
   lv_obj_set_style_text_color(out.theme_value, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(out.theme_value, text_font, 0);
   lv_obj_center(out.theme_value);
+
+  lv_obj_t* rp = make_setting_row(page, "Performance overlay", text_font);
+  out.perf_overlay_switch = lv_switch_create(rp);
+  lv_obj_set_size(out.perf_overlay_switch, btn_size + 8, btn_size / 2 + 6);
 }
 
 // A root-page navigation entry: a card row "<label>  ›" that drills into `target`.

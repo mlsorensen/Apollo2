@@ -34,4 +34,8 @@ bool DisplaySettings::scope_graph() const { return config_.scope_graph(); }
 
 void DisplaySettings::set_scope_graph(bool on) { config_.set_scope_graph(on); }
 
+bool DisplaySettings::perf_overlay() const { return config_.perf_overlay(); }
+
+void DisplaySettings::set_perf_overlay(bool on) { config_.set_perf_overlay(on); }
+
 }  // namespace platform

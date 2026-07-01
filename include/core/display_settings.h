@@ -37,6 +37,12 @@ class IDisplaySettings {
   // per step, so it's far cheaper and tears less on the RGB panel.
   virtual bool scope_graph() const = 0;
   virtual void set_scope_graph(bool on) = 0;
+
+  // Performance overlay: LVGL's on-screen FPS / CPU / render-time monitor. Off by
+  // default (it's a diagnostic and covers a screen corner); the UI shows/hides the
+  // sysmon label at runtime to match this.
+  virtual bool perf_overlay() const = 0;
+  virtual void set_perf_overlay(bool on) = 0;
 };
 
 }  // namespace core
