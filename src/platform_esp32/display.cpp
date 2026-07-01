@@ -99,11 +99,23 @@ bool Display::begin() {
   const size_t buf_bytes = buf_px * sizeof(lv_color_t);
 #if defined(BOARD_DISPLAY_RGB)
   // Keep this scratch buffer in PSRAM. An internal-RAM scratch renders faster (no
-  // contention with the panel's PSRAM framebuffer scan), BUT the ~64-80 KB it
-  // takes is exactly what the WiFi stack needs to init for the token portal —
-  // internal buffer + BLE + WiFi = esp_wifi_init NO_MEM. The real render-speed +
-  // tearing fix is the esp_lcd double-framebuffer (renders into the FBs directly,
-  // no internal scratch); see the esp-lcd-rgb-plan memory. Until then: PSRAM here.
+  // contention with the panel's continuous framebuffer scan), BUT the ~64-80 KB it
+  // takes is exactly what the WiFi stack needs to init for the token portal
+  // (internal buffer + BLE + WiFi = esp_wifi_init NO_MEM), so PSRAM it is.
+  //
+  // TEARING (why we accept it): the flow graph tears slightly because this is a
+  // SINGLE framebuffer. A direct-ESP-IDF esp_lcd double-framebuffer + vsync swap
+  // was built and tested on the 4.3B (preserved in a git stash on
+  // feat/scale-integration). It works and is genuinely tear-free, BUT this panel
+  // has no RAM of its own — the framebuffer lives in PSRAM and the panel scans it
+  // continuously. Keeping BOTH framebuffers consistent for the *scrolling* graph
+  // forces LVGL to re-render the whole screen every frame (DIRECT mode's cheap
+  // partial-sync corrupts on a moving source -> out-of-order frames; FULL mode is
+  // correct but full-screen), which on this PSRAM-bound panel is ~5 fps — worse
+  // than this single-FB path's ~13 fps with cosmetic tearing. Verdict: not worth
+  // it here. Viable tear-free routes if revisited: scroll the graph directly
+  // inside both framebuffers (cheap: memmove the strip in each), or use an SPI
+  // panel that has its own GRAM and self-refreshes.
   g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM));
   if (g_draw_buf == nullptr) {
     g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_INTERNAL));
