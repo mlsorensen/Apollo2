@@ -381,19 +381,6 @@ lv_obj_t* build_scale_card(lv_obj_t* parent, const lv_font_t* weight_font,
   lv_obj_set_style_text_color(out.scale_target, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(out.scale_target, sub_font, 0);
   lv_obj_align(out.scale_target, LV_ALIGN_BOTTOM_MID, 0, 0);
-
-  out.paddle_pill = lv_obj_create(card);
-  lv_obj_remove_style_all(out.paddle_pill);
-  lv_obj_set_size(out.paddle_pill, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-  lv_obj_set_style_radius(out.paddle_pill, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_bg_opa(out.paddle_pill, LV_OPA_COVER, 0);
-  lv_obj_set_style_pad_hor(out.paddle_pill, 10, 0);
-  lv_obj_set_style_pad_ver(out.paddle_pill, 4, 0);
-  lv_obj_align(out.paddle_pill, LV_ALIGN_TOP_MID, 0, 0);
-  out.paddle_label = lv_label_create(out.paddle_pill);
-  lv_obj_set_style_text_color(out.paddle_label, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(out.paddle_label, sub_font, 0);
-  lv_obj_center(out.paddle_label);
   return card;
 }
 
@@ -552,22 +539,9 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   out.scale_weight = make_readout_card(row, "SCALE", read_cap, read_val, card_pad, &scard);
   out.scale_target = add_sub(scard);
 
-  // The flow graph fills the rest — the hero.
+  // The flow graph fills the rest — the hero. (Paddle status pill removed; it
+  // returns in Phase 4 when there's real paddle hardware/state to show.)
   make_flow_chart(parent, &out.flow_chart, &out.flow_series);
-
-  // Paddle status pill overlaid on the chart's top-right corner.
-  out.paddle_pill = lv_obj_create(out.flow_chart);
-  lv_obj_remove_style_all(out.paddle_pill);
-  lv_obj_set_size(out.paddle_pill, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-  lv_obj_set_style_radius(out.paddle_pill, LV_RADIUS_CIRCLE, 0);
-  lv_obj_set_style_bg_opa(out.paddle_pill, LV_OPA_COVER, 0);
-  lv_obj_set_style_pad_hor(out.paddle_pill, 12, 0);
-  lv_obj_set_style_pad_ver(out.paddle_pill, 4, 0);
-  lv_obj_align(out.paddle_pill, LV_ALIGN_TOP_RIGHT, -6, 2);
-  out.paddle_label = lv_label_create(out.paddle_pill);
-  lv_obj_set_style_text_color(out.paddle_label, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(out.paddle_label, read_cap, 0);
-  lv_obj_center(out.paddle_label);
 
   // Tare beside the power button at the bottom.
   lv_obj_t* actions = lv_obj_create(parent);
