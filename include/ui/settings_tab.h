@@ -112,7 +112,7 @@ struct SettingsWidgets {
 };
 
 void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
-                        SettingsWidgets& out);
+                        bool with_brightness, SettingsWidgets& out);
 
 // Navigate to a section's page (kSectionMicra / kSectionScale / kSectionDevice).
 void settings_select_section(SettingsWidgets& w, int section);

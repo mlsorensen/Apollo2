@@ -16,6 +16,7 @@ namespace board {
 constexpr char kName[] = "Waveshare ESP32-S3-Touch-LCD-2";
 #define BOARD_DISPLAY_SPI    // ST7789 over SPI
 #define BOARD_TOUCH_CST816   // CST816, 8-bit registers
+constexpr bool kSupportsBrightness = true;  // LEDC PWM backlight (dimmable)
 
 // --- Display: ST7789 on the FSPI bus ---
 constexpr int  kLcdSclk = 39;
@@ -94,6 +95,7 @@ constexpr char kName[] = "Waveshare ESP32-S3-Touch-LCD-7B";
 #define BOARD_DISPLAY_RGB     // RGB parallel panel via Arduino_GFX
 #define BOARD_TOUCH_GT911     // GT911, 16-bit registers
 #define BOARD_HAS_IO_EXTENSION
+constexpr bool kSupportsBrightness = true;  // IO-extension PWM backlight (dimmable)
 
 // --- Shared I2C bus (IO extension + GT911 touch) ---
 constexpr int kI2cSda = 8;
@@ -162,8 +164,84 @@ constexpr int  kPaddleDrivePin = -1;
 constexpr int  kPaddleSensePin = -1;
 constexpr bool kPaddleActiveHigh = true;
 
+#elif defined(BOARD_WAVESHARE_S3_LCD_43B)
+
+// Waveshare ESP32-S3-Touch-LCD-4.3B — 4.3", 800x480 RGB parallel panel, GT911
+// touch, I2C IO-expander. Per the schematic this is the 7B board shrunk to
+// 800x480: same RGB pin mapping, same GT911, same expander @0x24 — only the panel
+// resolution + RGB timing differ (values from Waveshare's 4.3B config). We reuse
+// the 7B's io_extension/touch/backlight/battery paths unchanged. UNVERIFIED on HW.
+constexpr char kName[] = "Waveshare ESP32-S3-Touch-LCD-4.3B";
+#define BOARD_DISPLAY_RGB
+#define BOARD_TOUCH_GT911
+#define BOARD_HAS_IO_EXTENSION
+// The 4.3B's expander is a real CH422G — driven by single-byte writes to distinct
+// command addresses (0x24 cfg / 0x38 IO / 0x23 OC), NOT the 7B's reg+value scheme.
+// Same pin roles though: EXIO1 touch reset, EXIO2 backlight, EXIO3 LCD reset.
+#define BOARD_IO_EXPANDER_CH422G
+// PCF85063A RTC (I2C 0x51) backed by a coin cell -> wall-clock survives power-off.
+#define BOARD_HAS_PCF85063_RTC
+constexpr bool kSupportsBrightness = false;  // CH422G backlight is on/off only
+
+// --- Shared I2C bus (IO expander + GT911 touch) ---
+constexpr int kI2cSda = 8;
+constexpr int kI2cScl = 9;
+
+// --- IO expander @ 0x24: output-pin assignments (same roles as the 7B) ---
+constexpr int kIoExtAddr = 0x24;
+constexpr int kIoExtTouchReset = 1;  // IO_1
+constexpr int kIoExtBacklight = 2;   // IO_2
+constexpr int kIoExtLcdReset = 3;    // IO_3
+
+// --- Display: 16-bit RGB565 parallel panel, 800x480 ---
+constexpr int  kLcdNativeW = 800;
+constexpr int  kLcdNativeH = 480;
+constexpr int  kLcdRotation = 0;     // panel is already landscape
+constexpr int  kRgbDe = 5, kRgbVsync = 3, kRgbHsync = 46, kRgbPclk = 7;
+constexpr int  kRgbR[5] = {1, 2, 42, 41, 40};        // R3..R7 (same as 7B)
+constexpr int  kRgbG[6] = {39, 0, 45, 48, 47, 21};   // G2..G7
+constexpr int  kRgbB[5] = {14, 38, 18, 17, 10};      // B3..B7
+constexpr int  kRgbHsyncFront = 40,  kRgbHsyncPulse = 48, kRgbHsyncBack = 88;
+constexpr int  kRgbVsyncFront = 13,  kRgbVsyncPulse = 3,  kRgbVsyncBack = 32;
+constexpr int  kRgbPclkActiveNeg = 1;
+constexpr long kRgbPclkHz = 16000000;  // 16 MHz (Waveshare 4.3B value)
+constexpr int  kRgbBouncePx = kLcdNativeW * 10;
+
+// --- Touch: GT911 on the shared I2C bus (same as the 7B) ---
+constexpr int  kTouchSda = 8;
+constexpr int  kTouchScl = 9;
+constexpr int  kTouchAddr = 0x5D;
+constexpr int  kTouchInt = 4;
+constexpr int  kTouchRst = -1;
+constexpr bool kTouchSwapXY = false;
+constexpr bool kTouchMirrorX = false;
+constexpr bool kTouchMirrorY = false;
+
+// --- Battery: the CH422G has NO ADC, so no battery reading for now -> the board
+//     reports USB-powered (plug icon). A direct-ESP-ADC path can be added later
+//     once the divider pin is known. (kBatteryAdc < 0 + no IOEXT -> usb=true.) ---
+constexpr float kBatteryIoExtScale = 0.009632f;  // unused (kept for symmetry)
+constexpr int   kBatteryAdc = -1;
+constexpr float kBatteryDivider = 1.0f;
+constexpr int   kBatteryChargePin = -1;
+constexpr bool  kBatteryChargeActiveLow = true;
+constexpr float kBatteryFullVolts = 4.07f;
+constexpr float kBatteryEmptyVolts = 3.40f;
+constexpr float kBatteryCutoffVolts = 3.40f;
+constexpr float kBatteryResumeVolts = 3.70f;
+constexpr float kBatteryChargingVolts = 4.15f;
+constexpr float kBatteryNoCellVolts = 4.35f;
+constexpr int   kVbusAdc = -1;
+constexpr float kVbusDivider = 2.0f;
+constexpr float kVbusPresentVolts = 4.0f;
+
+// --- Paddle control (brew-by-weight): the intended target; pins TBD ---
+constexpr int  kPaddleDrivePin = -1;
+constexpr int  kPaddleSensePin = -1;
+constexpr bool kPaddleActiveHigh = true;
+
 #else
-#error "No board selected. Add -DBOARD_WAVESHARE_S3_LCD_2 (or _7B) to build_flags in platformio.ini."
+#error "No board selected. Add -DBOARD_WAVESHARE_S3_LCD_2 (or _7B / _43B) to build_flags in platformio.ini."
 #endif
 
 }  // namespace board

@@ -1,5 +1,6 @@
 #include "platform_esp32/display_settings.h"
 
+#include "platform_esp32/board_config.h"
 #include "platform_esp32/config.h"
 #include "platform_esp32/display.h"
 
@@ -14,6 +15,8 @@ void DisplaySettings::set_brightness(int percent) {
   display_.set_brightness(percent);  // live
   config_.set_brightness(percent);   // persist
 }
+
+bool DisplaySettings::supports_brightness() const { return board::kSupportsBrightness; }
 
 int DisplaySettings::theme() const { return config_.theme(); }
 

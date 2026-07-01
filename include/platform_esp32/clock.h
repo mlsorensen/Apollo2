@@ -14,6 +14,11 @@ class Clock : public core::IClock {
  public:
   explicit Clock(Config& config) : config_(config) {}
 
+  // Seed the system clock from a persistent RTC (PCF85063) if the board has one,
+  // so the time survives a full power-off. Call once after I2C (Wire) is up.
+  // No-op on boards without an external RTC.
+  void begin();
+
   core::WallTime now() const override;
   void set(int hour, int minute) override;
   bool use_24h() const override { return config_.clock_24h(); }

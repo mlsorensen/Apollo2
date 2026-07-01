@@ -12,6 +12,9 @@ class IDisplaySettings {
 
   virtual int brightness() const = 0;          // 0..100
   virtual void set_brightness(int percent) = 0;  // apply + persist
+  // Whether the backlight can actually be dimmed (PWM). When false the UI hides
+  // the brightness control and the board just holds the backlight at full.
+  virtual bool supports_brightness() const = 0;
 
   // Selected color scheme, as an index into the UI's palette list (ui::theme).
   // The port only persists the choice; the UI owns the palettes + applies them.

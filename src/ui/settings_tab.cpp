@@ -157,10 +157,16 @@ void make_inline_stepper(lv_obj_t* row, const lv_font_t* text_font,
 // Device rows: Brightness + clock (Hour/Minute) + 24-hour + Fahrenheit + Theme.
 void build_device_rows(lv_obj_t* page, const lv_font_t* text_font,
                        const lv_font_t* symbol_font, int btn_size,
-                       ui::SettingsWidgets& out) {
-  lv_obj_t* rb = make_setting_row(page, "Brightness", text_font);
-  make_inline_stepper(rb, text_font, symbol_font, btn_size, &out.brightness_minus,
-                      &out.brightness_value, &out.brightness_plus, nullptr);
+                       bool with_brightness, ui::SettingsWidgets& out) {
+  // Brightness only where the backlight can dim; else the row is omitted and the
+  // pointers stay null (App guards on them).
+  if (with_brightness) {
+    lv_obj_t* rb = make_setting_row(page, "Brightness", text_font);
+    make_inline_stepper(rb, text_font, symbol_font, btn_size, &out.brightness_minus,
+                        &out.brightness_value, &out.brightness_plus, nullptr);
+  } else {
+    out.brightness_minus = out.brightness_plus = out.brightness_value = nullptr;
+  }
 
   lv_obj_t* rh = make_setting_row(page, "Hour", text_font);
   make_inline_stepper(rh, text_font, symbol_font, btn_size, &out.hour_minus,
@@ -215,7 +221,7 @@ void root_entry(lv_obj_t* menu, lv_obj_t* root_page, lv_obj_t* target,
 namespace ui {
 
 void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
-                        SettingsWidgets& out) {
+                        bool with_brightness, SettingsWidgets& out) {
   const bool compact = is_compact(screen);
   const bool xl = is_xl(screen);
   const lv_font_t* font =
@@ -320,7 +326,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   }
 
   // Device (leaf)
-  build_device_rows(out.device_page, font, symbol_font, btn_size, out);
+  build_device_rows(out.device_page, font, symbol_font, btn_size, with_brightness, out);
 
   // --- Chooser pages: Bluetooth | Settings under each device ---------------
   out.micra_page = lv_menu_page_create(menu, "Micra");

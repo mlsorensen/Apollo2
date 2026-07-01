@@ -175,6 +175,7 @@ void on_brightness_plus(lv_event_t* e) {
 }
 
 void set_brightness_label(ui::SettingsWidgets& s) {
+  if (s.brightness_value == nullptr) return;  // no brightness row on this board
   char b[12];
   std::snprintf(b, sizeof(b), "%d %%", s.brightness);
   lv_label_set_text(s.brightness_value, b);
@@ -404,7 +405,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
               brew_->snapshot());
   update_battery_runtime(battery_state_);
 
-  build_settings_tab(settings, screen, settings_);
+  build_settings_tab(settings, screen, display_->supports_brightness(), settings_);
   // lv_menu handles page navigation (root <-> Micra/Scale/Device) itself.
   // Micra connection:
   lv_obj_add_event_cb(settings_.scan_btn, on_scan_clicked, LV_EVENT_CLICKED, this);
@@ -422,8 +423,10 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(settings_.boiler_minus, on_boiler_minus, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.boiler_plus, on_boiler_plus, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.steam_switch, on_steam_switch, LV_EVENT_VALUE_CHANGED, this);
-  lv_obj_add_event_cb(settings_.brightness_minus, on_brightness_minus, LV_EVENT_CLICKED, this);
-  lv_obj_add_event_cb(settings_.brightness_plus, on_brightness_plus, LV_EVENT_CLICKED, this);
+  if (settings_.brightness_minus != nullptr) {  // absent on boards that can't dim
+    lv_obj_add_event_cb(settings_.brightness_minus, on_brightness_minus, LV_EVENT_CLICKED, this);
+    lv_obj_add_event_cb(settings_.brightness_plus, on_brightness_plus, LV_EVENT_CLICKED, this);
+  }
   lv_obj_add_event_cb(settings_.hour_minus, on_hour_minus, LV_EVENT_ALL, this);
   lv_obj_add_event_cb(settings_.hour_plus, on_hour_plus, LV_EVENT_ALL, this);
   lv_obj_add_event_cb(settings_.minute_minus, on_minute_minus, LV_EVENT_ALL, this);

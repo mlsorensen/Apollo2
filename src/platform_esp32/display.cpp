@@ -47,7 +47,7 @@ bool Display::begin() {
   Wire.begin(board::kI2cSda, board::kI2cScl);
   Wire.setClock(400000);
   const bool io_ok = io_extension().begin(board::kIoExtAddr);
-  Serial.printf("7B: IO extension @0x%02X on I2C(SDA=%d,SCL=%d): %s\n",
+  Serial.printf("RGB: IO extension @0x%02X on I2C(SDA=%d,SCL=%d): %s\n",
                 board::kIoExtAddr, board::kI2cSda, board::kI2cScl,
                 io_ok ? "ACK" : "NO ACK (backlight/reset won't work!)");
   io_extension().set(board::kIoExtLcdReset, false);
@@ -70,10 +70,10 @@ bool Display::begin() {
   g_gfx = new Arduino_RGB_Display(board::kLcdNativeW, board::kLcdNativeH, rgbpanel,
                                   board::kLcdRotation, /*auto_flush=*/true);
   if (!g_gfx->begin()) {
-    Serial.println("7B: RGB panel begin() FAILED (framebuffer alloc? PSRAM?)");
+    Serial.println("RGB: RGB panel begin() FAILED (framebuffer alloc? PSRAM?)");
     return false;
   }
-  Serial.printf("7B: RGB panel up %dx%d\n", g_gfx->width(), g_gfx->height());
+  Serial.printf("RGB: RGB panel up %dx%d\n", g_gfx->width(), g_gfx->height());
   g_gfx->fillScreen(0x0000);
   io_extension().set(board::kIoExtBacklight, true);  // backlight on
 #else
@@ -96,15 +96,20 @@ bool Display::begin() {
   const size_t buf_px = static_cast<size_t>(w) * kBufferLines;
   const size_t buf_bytes = buf_px * sizeof(lv_color_t);
 #if defined(BOARD_DISPLAY_RGB)
-  // RGB draws by copying into the panel framebuffer, so the LVGL scratch buffer
-  // needs no DMA. Prefer PSRAM (the 1024-wide buffer is big and internal RAM is
-  // scarce after the panel framebuffer); fall back to internal.
-  g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM));
+  // Keep the LVGL scratch buffer in INTERNAL RAM. LVGL renders into it pixel by
+  // pixel (CPU), and the RGB panel's framebuffer scan already saturates PSRAM
+  // bandwidth — a PSRAM scratch buffer fights that scan and makes rendering (and
+  // thus input handling) crawl. It's only a few lines (~64-80 KB), which fits.
+  // Fall back to PSRAM only if internal is exhausted.
+  g_draw_buf = static_cast<lv_color_t*>(
+      heap_caps_malloc(buf_bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+  const bool internal = g_draw_buf != nullptr;
   if (g_draw_buf == nullptr) {
-    g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_INTERNAL));
+    g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM));
   }
-  Serial.printf("7B: LVGL draw buffer %s (%u bytes)\n",
-                g_draw_buf ? "ok" : "FAILED", static_cast<unsigned>(buf_bytes));
+  Serial.printf("RGB: LVGL draw buffer %s in %s (%u bytes)\n",
+                g_draw_buf ? "ok" : "FAILED", internal ? "internal" : "PSRAM",
+                static_cast<unsigned>(buf_bytes));
 #else
   // SPI pushes this buffer over the bus via DMA -> must be DMA-capable.
   g_draw_buf = static_cast<lv_color_t*>(

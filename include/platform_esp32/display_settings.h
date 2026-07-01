@@ -15,6 +15,7 @@ class DisplaySettings : public core::IDisplaySettings {
 
   int brightness() const override;
   void set_brightness(int percent) override;
+  bool supports_brightness() const override;
   int theme() const override;
   void set_theme(int index) override;
   bool use_fahrenheit() const override;

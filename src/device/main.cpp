@@ -84,6 +84,11 @@ void batt_only_init() {
 
 void setup() {
   Serial.begin(115200);
+  // Native USB-CDC: with no serial host attached, writes otherwise BLOCK on a TX
+  // timeout until the buffer drains — which stalls the main loop (and thus touch/
+  // rendering) whenever anything logs. 0 = never block (drop if no reader). This
+  // is why the UI felt sluggish until a serial monitor was connected.
+  Serial.setTxTimeoutMs(0);
 
   // Woke from a low-battery park (a touch or a reset)? Read the pack WITHOUT
   // powering up the panel/LVGL/BLE and REFUSE to fully boot unless it has charged
@@ -116,7 +121,10 @@ void setup() {
   }
 
   g_battery.begin();
-  g_display.set_brightness(g_config.brightness());  // restore saved brightness
+  g_clock.begin();  // seed wall-clock from the RTC (if any); I2C is up via Display
+  // Restore saved brightness where dimmable; otherwise hold the backlight at max
+  // (an on/off-only board has no brightness control in the UI).
+  g_display.set_brightness(board::kSupportsBrightness ? g_config.brightness() : 100);
 
   // Build the UI bound to the machine + provisioner + battery + display.
   const ui::ScreenProfile screen{g_display.width(), g_display.height()};

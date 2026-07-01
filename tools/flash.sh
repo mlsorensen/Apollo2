@@ -2,7 +2,7 @@
 # Build + flash the firmware for a connected board.
 #
 # Board selection (which PlatformIO env to flash):
-#   1. explicit:  tools/flash.sh 7b      (or 2inch / an env name) / BOARD=7b
+#   1. explicit:  tools/flash.sh 7b      (or 2inch / 4-3b / an env name) / BOARD=7b
 #   2. auto:      if our firmware is already running, read its boot banner over
 #                 serial and match the board; otherwise fall back to the default.
 # The two boards share the same ESP32-S3, so they can't be told apart over USB
@@ -14,6 +14,7 @@ board_to_env() {
   case "$1" in
     2|2inch|lcd2|s3-lcd-2|esp32-s3-micra)        echo "esp32-s3-micra" ;;
     7|7b|lcd7|s3-lcd-7|7inch|esp32-s3-micra-7b)  echo "esp32-s3-micra-7b" ;;
+    4|43|4-3b|4.3b|43b|lcd43|esp32-s3-micra-4-3b) echo "esp32-s3-micra-4-3b" ;;
     *) echo "" ;;
   esac
 }
@@ -45,8 +46,9 @@ deadline = time.time() + 3.0
 buf = b""
 while time.time() < deadline:
     buf += s.read(256)
-    if b"LCD-7" in buf:   print("esp32-s3-micra-7b"); break
-    if b"LCD-2" in buf:   print("esp32-s3-micra");    break
+    if b"LCD-7" in buf:   print("esp32-s3-micra-7b");   break
+    if b"LCD-4" in buf:   print("esp32-s3-micra-4-3b"); break
+    if b"LCD-2" in buf:   print("esp32-s3-micra");      break
 s.close()
 PY
 }
@@ -70,6 +72,7 @@ if [ -z "$ENV" ]; then
   echo "       running Micra firmware was detected to read its banner)." >&2
   echo "       Re-run with the board so we don't flash the wrong build:" >&2
   echo "         make flash-7b        (7\" 1024x600)" >&2
+  echo "         make flash-4-3b      (4.3\" 800x480)" >&2
   echo "         make flash-2inch     (2\" 320x240)" >&2
   exit 2
 fi
