@@ -30,7 +30,6 @@ struct ScaleSnapshot {
   const char* name;          // connected scale name (stable pointer), "" if none
   bool        connected;
   float       weight_g;      // current weight in grams (may be negative)
-  float       flow_gps;      // flow rate, grams/second (0 if !features.flow)
   uint32_t    timer_ms;      // built-in shot timer, ms (0 if !features.timer)
   bool        battery_valid;
   int         battery_pct;   // 0..100 when battery_valid
@@ -53,12 +52,6 @@ class IScale {
   // Command: zero the scale. No-op if unsupported or disconnected. May block
   // briefly on a transport write.
   virtual void tare() = 0;
-
-  // Drain up to `max` flow-rate samples (g/s) accumulated since the last call
-  // into out[]; returns the count. The scale streams faster than the UI refresh,
-  // so the flow graph drains this every loop to plot the native rate smoothly
-  // rather than the coarse 2 Hz snapshot. Returns 0 when nothing has arrived.
-  virtual size_t drain_flow(float* out, size_t max) = 0;
 };
 
 }  // namespace core

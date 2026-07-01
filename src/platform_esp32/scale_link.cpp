@@ -34,7 +34,8 @@ bool name_has_prefix(const std::string& name, const char* prefix) {
 
 // Decode a 20-byte Bookoo Themis notification (per goscale themis/comms):
 //   [2..4] ms timer (24-bit BE); [6] sign ('-'=neg); [7..9] weight 24-bit BE /100;
-//   [11..12] flow 16-bit BE /100; [13] battery %.
+//   [13] battery %. (The UI derives flow rate from the weight stream, so we don't
+//   decode any flow field here.)
 void decode_and_publish(platform::ScaleLink* link, const uint8_t* d, size_t len) {
   if (d == nullptr || len < 20) return;
   const uint32_t ms =
@@ -43,10 +44,8 @@ void decode_and_publish(platform::ScaleLink* link, const uint8_t* d, size_t len)
   const uint32_t raw_w =
       (static_cast<uint32_t>(d[7]) << 16) | (static_cast<uint32_t>(d[8]) << 8) | d[9];
   const float weight = sign * static_cast<float>(raw_w) / 100.0f;
-  const uint16_t raw_f = (static_cast<uint16_t>(d[11]) << 8) | d[12];
-  const float flow = static_cast<float>(raw_f) / 100.0f;
   const int batt = d[13];
-  link->publish_sample(weight, flow, ms, batt);
+  link->publish_sample(weight, ms, batt);
 }
 
 }  // namespace
@@ -80,32 +79,15 @@ void ScaleLink::set_connect_enabled(bool enabled) {
 void ScaleLink::set_connected(bool c) {
   std::lock_guard<std::mutex> lk(mutex_);
   connected_ = c;
-  if (!c) {
-    weight_g_ = 0.0f;
-    flow_gps_ = 0.0f;
-    pending_flow_.clear();  // don't plot stale samples after a drop
-  }
+  if (!c) weight_g_ = 0.0f;
 }
 
-void ScaleLink::publish_sample(float weight_g, float flow_gps, uint32_t timer_ms,
-                               int battery_pct) {
+void ScaleLink::publish_sample(float weight_g, uint32_t timer_ms, int battery_pct) {
   std::lock_guard<std::mutex> lk(mutex_);
   weight_g_ = weight_g;
-  flow_gps_ = flow_gps;
   timer_ms_ = timer_ms;
   battery_pct_ = battery_pct;
   battery_valid_ = true;
-  // Buffer every notification's flow value for the chart (the UI drains it each
-  // loop). Cap so it can't grow unbounded if nothing is draining.
-  if (pending_flow_.size() < 512) pending_flow_.push_back(flow_gps);
-}
-
-size_t ScaleLink::drain_flow(float* out, size_t max) {
-  std::lock_guard<std::mutex> lk(mutex_);
-  const size_t n = std::min(max, pending_flow_.size());
-  for (size_t i = 0; i < n; ++i) out[i] = pending_flow_[i];
-  pending_flow_.erase(pending_flow_.begin(), pending_flow_.begin() + n);
-  return n;
 }
 
 void ScaleLink::task_entry(void* arg) { static_cast<ScaleLink*>(arg)->task_loop(); }
@@ -209,7 +191,6 @@ core::ScaleSnapshot ScaleLink::snapshot() const {
       .name = name_.c_str(),
       .connected = connected_,
       .weight_g = weight_g_,
-      .flow_gps = flow_gps_,
       .timer_ms = timer_ms_,
       .battery_valid = battery_valid_,
       .battery_pct = battery_pct_,

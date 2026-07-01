@@ -15,11 +15,17 @@ class FakeDisplaySettings : public core::IDisplaySettings {
   void set_theme(int index) override { theme_ = index; }
   bool use_fahrenheit() const override { return fahrenheit_; }
   void set_use_fahrenheit(bool on) override { fahrenheit_ = on; }
+  bool drop_negative_flow() const override { return drop_negative_flow_; }
+  void set_drop_negative_flow(bool on) override { drop_negative_flow_ = on; }
+  bool scope_graph() const override { return scope_graph_; }
+  void set_scope_graph(bool on) override { scope_graph_ = on; }
 
  private:
   int brightness_ = 80;
   int theme_ = 0;
   bool fahrenheit_ = false;
+  bool drop_negative_flow_ = true;
+  bool scope_graph_ = false;
 };
 
 }  // namespace host

@@ -73,6 +73,10 @@ int main() {
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
   ok &= r({320, 240}, "renders/home_320x240.png");
+  // Oscilloscope-style graph: age ticks hidden, single window caption instead.
+  disp.set_scope_graph(true);
+  ok &= r({800, 480}, "renders/home_scope_800x480.png");
+  disp.set_scope_graph(false);
   // No-scale Home (classic layout) — toggle the fake to "no scale saved".
   scale_provisioner.set_saved(false);
   ok &= r({320, 240}, "renders/home_noscale_320x240.png");

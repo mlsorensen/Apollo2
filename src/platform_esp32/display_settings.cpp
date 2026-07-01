@@ -26,4 +26,12 @@ bool DisplaySettings::use_fahrenheit() const { return config_.use_fahrenheit(); 
 
 void DisplaySettings::set_use_fahrenheit(bool on) { config_.set_use_fahrenheit(on); }
 
+bool DisplaySettings::drop_negative_flow() const { return config_.drop_negative_flow(); }
+
+void DisplaySettings::set_drop_negative_flow(bool on) { config_.set_drop_negative_flow(on); }
+
+bool DisplaySettings::scope_graph() const { return config_.scope_graph(); }
+
+void DisplaySettings::set_scope_graph(bool on) { config_.set_scope_graph(on); }
+
 }  // namespace platform

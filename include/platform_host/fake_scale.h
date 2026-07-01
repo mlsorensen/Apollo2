@@ -16,7 +16,6 @@ class FakeScale : public core::IScale {
         .name = "BOOKOO_THEMIS",
         .connected = connected_,
         .weight_g = 36.4f,
-        .flow_gps = 2.1f,
         .timer_ms = 27000,
         .battery_valid = true,
         .battery_pct = 78,
@@ -27,7 +26,6 @@ class FakeScale : public core::IScale {
         .tare = true, .flow = true, .timer = true, .battery = true, .beep = true};
   }
   void tare() override {}
-  size_t drain_flow(float* /*out*/, size_t /*max*/) override { return 0; }
 
   void set_connected(bool c) { connected_ = c; }
 

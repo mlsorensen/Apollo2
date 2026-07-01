@@ -20,6 +20,10 @@ class DisplaySettings : public core::IDisplaySettings {
   void set_theme(int index) override;
   bool use_fahrenheit() const override;
   void set_use_fahrenheit(bool on) override;
+  bool drop_negative_flow() const override;
+  void set_drop_negative_flow(bool on) override;
+  bool scope_graph() const override;
+  void set_scope_graph(bool on) override;
 
  private:
   Display& display_;

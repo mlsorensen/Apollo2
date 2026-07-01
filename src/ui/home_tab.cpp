@@ -123,15 +123,18 @@ constexpr int kFlowWindowS = 60;       // seconds spanned by the full plot width
 // at 1/N the cadence keeps the same average speed for ~1/N the CPU (chunkier
 // motion). 1 = smoothest/most expensive; bump to trade smoothness for CPU.
 constexpr int kFlowStepPx = 1;
+// We derive flow ourselves as the rate of weight gain (scales reliably stream
+// weight, not flow). Measure it over this window of the weight history so per-
+// sample jitter averages out instead of producing a spiky line.
+constexpr uint32_t kFlowRateWindowMs = 700;
+// Oscilloscope mode: blank columns kept just ahead of the write head so the sweep
+// point reads clearly (fresh trace behind it, gap in front).
+constexpr int kFlowScopeGapPx = 4;
 
 // Modes: 0 = flow rate (g/s), 1 = weight (g). Each has a unit + a default axis
 // full-scale, which is also the floor the axis shrinks back to.
 const char* flow_unit(int mode) { return mode == 1 ? "g" : "g/s"; }
 float flow_default_max(int mode) { return mode == 1 ? 30.0f : 6.0f; }
-float flow_sample(int mode, const core::ScaleSnapshot& s) {
-  if (!s.connected) return 0.0f;
-  return mode == 1 ? s.weight_g : s.flow_gps;
-}
 
 // Smallest "nice" axis >= v for the mode (even / multiple of 10 so the labels
 // 0, max/2, max stay clean), floored at the mode default.
@@ -167,16 +170,27 @@ void clear_flow_column(HomeWidgets& w, int x) {
   }
 }
 
-// Draw the flow line into column x: a vertical run joining the previous pen row
-// to the new one, so consecutive samples connect into a continuous line.
-void draw_flow_segment(HomeWidgets& w, int x, int y) {
-  const uint16_t accent = lv_color_to_u16(lv_color_hex(ui::theme::accent()));
+// Trace colors. Bright = the accent; dim = the accent faded toward the plot
+// background, used for the aged (previous-sweep) trace in oscilloscope mode so the
+// fresh sweep edge stands out against it.
+uint16_t flow_bright_color() {
+  return lv_color_to_u16(lv_color_hex(ui::theme::accent()));
+}
+uint16_t flow_dim_color() {
+  const lv_color_t a = lv_color_hex(ui::theme::accent());
+  const lv_color_t bg = lv_color_hex(ui::theme::card());
+  return lv_color_to_u16(lv_color_mix(a, bg, 100));  // ~40% accent over the bg
+}
+
+// Draw the flow line into column x in `color`: a vertical run joining the previous
+// pen row to the new one, so consecutive samples connect into a continuous line.
+void draw_flow_segment(HomeWidgets& w, int x, int y, uint16_t color) {
   const int y0 = (w.flow_prev_y < 0) ? y : w.flow_prev_y;
   const int lo = y0 < y ? y0 : y;
   const int hi = y0 < y ? y : y0;
   uint16_t* col = w.flow_buf + x;
   for (int yy = lo; yy <= hi; ++yy) {
-    if (yy >= 0 && yy < w.flow_h) col[yy * w.flow_stride] = accent;
+    if (yy >= 0 && yy < w.flow_h) col[yy * w.flow_stride] = color;
   }
 }
 
@@ -199,15 +213,49 @@ void set_flow_ylabels(HomeWidgets& w) {
   }
 }
 
-// Redraw the whole plot from the value ring at the current ymax — used when the
-// axis rescales (the pixels already drawn are at the old scale).
+// The value ring for the current mode (weight in g, or flow rate in g/s).
+float* flow_active_ring(HomeWidgets& w) {
+  return (w.flow_mode == 1) ? w.flow_weights : w.flow_flows;
+}
+
+// Redraw the whole plot from the active value ring at the current ymax — used when
+// the axis rescales or the unit toggles (the pixels already drawn are at the old
+// scale / other unit). Column x maps to screen-x in both styles; in scope mode the
+// oldest sample sits just after the cursor, so we lift the pen there to avoid a
+// false vertical line across the newest/oldest seam.
 void redraw_flow_from_ring(HomeWidgets& w) {
+  const float* ring = flow_active_ring(w);
+  const uint16_t bright = flow_bright_color();
+  const uint16_t dim = flow_dim_color();
+  const int seam = w.flow_scope_mode ? (w.flow_cursor + 1) % w.flow_w : -1;
   w.flow_prev_y = -1;
   for (int x = 0; x < w.flow_w; ++x) {
-    const int y = flow_row(w.flow_values[x], w.flow_h, w.flow_ymax);
+    if (x == seam) w.flow_prev_y = -1;  // pen up: don't connect across the sweep seam
+    const int y = flow_row(ring[x], w.flow_h, w.flow_ymax);
     clear_flow_column(w, x);
-    draw_flow_segment(w, x, y);
+    // Scope mode: columns past the cursor belong to the previous sweep -> dim them.
+    const uint16_t color = (w.flow_scope_mode && x > w.flow_cursor) ? dim : bright;
+    draw_flow_segment(w, x, y, color);
     w.flow_prev_y = y;
+  }
+}
+
+// Invalidate `n` plot columns starting at screen-column c0 (wrapping past the right
+// edge), mapped to the canvas's absolute box. In scope mode n is tiny, so LVGL
+// renders + flushes only that band instead of the whole plot.
+void invalidate_flow_span(HomeWidgets& w, int c0, int n) {
+  if (w.flow_canvas == nullptr || n <= 0) return;
+  if (n > w.flow_w) n = w.flow_w;
+  lv_area_t box;
+  lv_obj_get_coords(w.flow_canvas, &box);
+  while (n > 0) {
+    const int start = ((c0 % w.flow_w) + w.flow_w) % w.flow_w;
+    int run = w.flow_w - start;  // stop at the right edge; the loop handles the wrap
+    if (run > n) run = n;
+    lv_area_t a = {box.x1 + start, box.y1, box.x1 + start + run - 1, box.y2};
+    lv_obj_invalidate_area(w.flow_canvas, &a);
+    c0 = start + run;
+    n -= run;
   }
 }
 
@@ -288,14 +336,21 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   out.flow_accum_ms = 0;
   out.flow_mode = 0;
   out.flow_ymax = flow_default_max(out.flow_mode);
-  out.flow_values = static_cast<float*>(lv_malloc(static_cast<size_t>(pw) * sizeof(float)));
-  if (out.flow_values == nullptr) return;  // OOM: tick no-ops without the ring
-  for (int x = 0; x < pw; ++x) out.flow_values[x] = 0.0f;
+  out.flow_weights = static_cast<float*>(lv_malloc(static_cast<size_t>(pw) * sizeof(float)));
+  out.flow_flows = static_cast<float*>(lv_malloc(static_cast<size_t>(pw) * sizeof(float)));
+  if (out.flow_weights == nullptr || out.flow_flows == nullptr) {  // OOM: tick no-ops
+    if (out.flow_weights != nullptr) lv_free(out.flow_weights);
+    if (out.flow_flows != nullptr) lv_free(out.flow_flows);
+    out.flow_weights = out.flow_flows = nullptr;
+    return;
+  }
+  for (int x = 0; x < pw; ++x) out.flow_weights[x] = out.flow_flows[x] = 0.0f;
 
   for (int x = 0; x < pw; ++x) clear_flow_column(out, x);  // background + gridlines
 
   // Unit toggle button in the plot's top-left corner (clear of the Y-label column,
-  // which sits in the left margin). Tap flips g/s <-> g and resets the plot.
+  // which sits in the left margin). Tap flips g/s <-> g, re-scaling and redrawing
+  // the existing trace in the new unit.
   lv_obj_t* btn = lv_button_create(card);
   lv_obj_remove_style_all(btn);
   lv_obj_set_style_bg_color(btn, lv_color_hex(ui::theme::bg()), 0);
@@ -324,7 +379,8 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   lv_label_set_text(make_ylabel(ph), "0");                                     // bottom, static
   set_flow_ylabels(out);
 
-  // Static X labels (window..now) below the plot, in the bottom margin.
+  // Static X age labels (window..now) below the plot — meaningful only in scroll
+  // mode, where screen-x maps to a fixed age (right edge = now).
   for (int t = 0; t <= 3; ++t) {
     lv_obj_t* xl = lv_label_create(card);
     const int secs = kFlowWindowS * (3 - t) / 3;
@@ -336,18 +392,33 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
     if (t == 3) x -= 24;
     else if (t > 0) x -= 12;
     lv_obj_align(xl, LV_ALIGN_TOP_LEFT, x, ph + 4);
+    out.flow_xlabels[t] = xl;
   }
 
+  // Scope-mode alternative: a single centered "<window> s" caption (x no longer maps
+  // to age there — the sweep gap marks "now"). Hidden until scope mode is active.
+  out.flow_xspan_label = lv_label_create(card);
+  lv_label_set_text_fmt(out.flow_xspan_label, "%d s window", kFlowWindowS);
+  lv_obj_set_style_text_color(out.flow_xspan_label, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(out.flow_xspan_label, &lv_font_montserrat_14, 0);
+  lv_obj_align(out.flow_xspan_label, LV_ALIGN_TOP_LEFT, pw / 2 - 44, ph + 4);
+  lv_obj_add_flag(out.flow_xspan_label, LV_OBJ_FLAG_HIDDEN);
+
 #ifndef ESP_PLATFORM
-  // Sim only: seed a representative espresso flow curve into the ring so the graph
-  // reads at a glance in the rendered PNGs. On hardware the plot starts empty.
+  // Sim only: seed a representative espresso flow curve into the rings so the graph
+  // reads at a glance in the rendered PNGs. On hardware the plot starts empty. Weight
+  // is the running integral of the flow rate, so a toggle to g renders coherently.
+  const float dt = static_cast<float>(kFlowWindowS) / static_cast<float>(pw);  // s/column
+  float wsum = 0.0f;  // accumulated weight (g)
   for (int x = 0; x < pw; ++x) {
     const float t = x / static_cast<float>(pw - 1);
     float f;  // g/s
     if (t < 0.18f) f = 2.7f * (t / 0.18f);          // pre-infuse ramp
     else if (t < 0.82f) f = 2.7f - 0.5f * ((t - 0.18f) / 0.64f);  // gentle decline
     else f = 2.2f * (1.0f - (t - 0.82f) / 0.18f);   // taper to 0
-    out.flow_values[x] = f;
+    wsum += f * dt;
+    out.flow_flows[x] = f;
+    out.flow_weights[x] = wsum;
   }
   redraw_flow_from_ring(out);
 #endif
@@ -786,9 +857,31 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
 }
 
 void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
-  if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_values == nullptr ||
-      w.flow_w <= 0)
+  if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_weights == nullptr ||
+      w.flow_flows == nullptr || w.flow_w <= 0)
     return;
+
+  // Scale disconnected: blank the plot instead of scrolling a fake zero line in.
+  // Clear once on the transition to an empty grid, then idle until it reconnects.
+  if (!scale.connected) {
+    if (!w.flow_blanked) {
+      for (int x = 0; x < w.flow_w; ++x) {
+        w.flow_weights[x] = 0.0f;
+        w.flow_flows[x] = 0.0f;
+        clear_flow_column(w, x);
+      }
+      w.flow_prev_y = -1;
+      w.flow_tick = 0;      // restart the scroll clock cleanly on reconnect
+      w.flow_accum_ms = 0;
+      w.flow_ymax = flow_default_max(w.flow_mode);
+      set_flow_ylabels(w);
+      w.flow_blanked = true;
+      lv_obj_invalidate(w.flow_canvas);
+    }
+    return;
+  }
+  w.flow_blanked = false;
+
   const uint32_t now = lv_tick_get();
   if (w.flow_tick == 0) {  // first call: start the clock, nothing to advance yet
     w.flow_tick = now;
@@ -803,23 +896,75 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
                                static_cast<uint32_t>(w.flow_w);
   if (ms_per_step == 0) return;
 
-  // For each elapsed step, scroll left and drop the current value (flow or weight,
-  // per mode) in at the right edge — both the pixels and the shadow value ring.
-  const float raw = flow_sample(w.flow_mode, scale);
-  const int rx = w.flow_w - 1;
+  // Flow = signed rate of weight gain, measured over kFlowRateWindowMs of weight
+  // history (rw vs the weight that many steps back). A rising weight is real flow; a
+  // falling weight (cup removed) is negative. drop-negative floors that to zero so it
+  // never shows as an upswing; with it off we show the magnitude (the raw activity).
+  // The most-recent stored sample is at the right edge (scroll) or the cursor (scope).
+  const float rw = scale.weight_g;   // g (signed; the scale streams weight, not flow)
+  const int last_idx = w.flow_scope_mode ? w.flow_cursor : (w.flow_w - 1);
+  int back = static_cast<int>(kFlowRateWindowMs / ms_per_step);
+  if (back < 1) back = 1;
+  if (back > w.flow_w - 1) back = w.flow_w - 1;
+  int back_idx = last_idx - back;
+  if (back_idx < 0) back_idx += w.flow_w;  // wraps in scope mode; a no-op in scroll
+  const float win_s = back * static_cast<float>(ms_per_step) / 1000.0f;
+  float rf = (win_s > 0.0f) ? (rw - w.flow_weights[back_idx]) / win_s : 0.0f;
+  if (w.flow_drop_negative) { if (rf < 0.0f) rf = 0.0f; }
+  else if (rf < 0.0f) rf = -rf;   // show outflow as positive activity when not dropping
+  const float raw = (w.flow_mode == 1) ? rw : rf;
+
+  const uint16_t bright = flow_bright_color();
+  const int scope_start = w.flow_cursor;  // for the scope-mode partial invalidation
+  bool scope_wrapped = false;             // a wrap forces a full re-blit (dim redraw)
   int steps = 0;
-  while (w.flow_accum_ms >= ms_per_step && steps < w.flow_w) {
-    w.flow_accum_ms -= ms_per_step;
-    ++steps;
-    for (int i = 0; i < kFlowStepPx; ++i) {
-      shift_flow_left(w);
-      std::memmove(w.flow_values, w.flow_values + 1,
-                   static_cast<size_t>(w.flow_w - 1) * sizeof(float));
-      w.flow_values[rx] = raw;
-      const int y = flow_row(raw, w.flow_h, w.flow_ymax);
-      clear_flow_column(w, rx);
-      draw_flow_segment(w, rx, y);
-      w.flow_prev_y = y;
+  if (!w.flow_scope_mode) {
+    // Scroll: memmove the whole plot + both rings one step left, newest at the right.
+    const int rx = w.flow_w - 1;
+    while (w.flow_accum_ms >= ms_per_step && steps < w.flow_w) {
+      w.flow_accum_ms -= ms_per_step;
+      ++steps;
+      for (int i = 0; i < kFlowStepPx; ++i) {
+        shift_flow_left(w);
+        std::memmove(w.flow_weights, w.flow_weights + 1,
+                     static_cast<size_t>(w.flow_w - 1) * sizeof(float));
+        std::memmove(w.flow_flows, w.flow_flows + 1,
+                     static_cast<size_t>(w.flow_w - 1) * sizeof(float));
+        w.flow_weights[rx] = rw;
+        w.flow_flows[rx] = rf;
+        const int y = flow_row(raw, w.flow_h, w.flow_ymax);
+        clear_flow_column(w, rx);
+        draw_flow_segment(w, rx, y, bright);
+        w.flow_prev_y = y;
+      }
+    }
+  } else {
+    // Scope: advance a wrapping write head, paint only its column bright + a blank gap
+    // ahead. On wrap, re-draw the finished sweep dim so the fresh edge stands out.
+    while (w.flow_accum_ms >= ms_per_step && steps < w.flow_w) {
+      w.flow_accum_ms -= ms_per_step;
+      ++steps;
+      for (int i = 0; i < kFlowStepPx; ++i) {
+        int c = w.flow_cursor + 1;
+        if (c >= w.flow_w) c = 0;
+        w.flow_cursor = c;
+        w.flow_weights[c] = rw;
+        w.flow_flows[c] = rf;
+        if (c == 0) {  // wrapped: age the just-finished sweep to dim, pen up for the new
+          redraw_flow_from_ring(w);
+          scope_wrapped = true;
+          w.flow_prev_y = -1;
+        }
+        const int y = flow_row(raw, w.flow_h, w.flow_ymax);
+        clear_flow_column(w, c);
+        draw_flow_segment(w, c, y, bright);
+        w.flow_prev_y = y;
+        for (int g = 1; g <= kFlowScopeGapPx; ++g) {  // blank gap just ahead of the head
+          int gc = c + g;
+          if (gc >= w.flow_w) gc -= w.flow_w;
+          clear_flow_column(w, gc);
+        }
+      }
     }
   }
   if (steps == 0) return;
@@ -829,35 +974,100 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
   // so it settles instead of flip-flopping at a threshold). On a change, redraw the
   // whole plot from the ring (existing pixels are at the old scale).
   float wmax = 0.0f;
+  const float* ring = flow_active_ring(w);
   for (int x = 0; x < w.flow_w; ++x)
-    if (w.flow_values[x] > wmax) wmax = w.flow_values[x];
+    if (ring[x] > wmax) wmax = ring[x];
   const float want = flow_nice_max(w.flow_mode, wmax);
   const bool grow = want > w.flow_ymax;
   const bool shrink = want < w.flow_ymax && wmax < w.flow_ymax * 0.5f;
+  bool rescaled = false;
   if (grow || shrink) {
     w.flow_ymax = want;
     redraw_flow_from_ring(w);
     set_flow_ylabels(w);
+    rescaled = true;
   }
 
-  // The whole plot shifted (or rescaled), so re-blit it. A straight bitmap copy.
-  lv_obj_invalidate(w.flow_canvas);
+  if (!w.flow_scope_mode || rescaled || scope_wrapped) {
+    // Scroll shifts everything; a rescale/wrap redrew everything: re-blit the whole plot.
+    lv_obj_invalidate(w.flow_canvas);
+  } else {
+    // Scope: only the columns written this tick (+ the gap ahead) changed.
+    invalidate_flow_span(w, scope_start + 1, steps * kFlowStepPx + kFlowScopeGapPx);
+  }
 }
 
 void toggle_flow_mode(HomeWidgets& w) {
-  if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_values == nullptr) return;
+  if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_weights == nullptr ||
+      w.flow_flows == nullptr)
+    return;
   w.flow_mode ^= 1;
-  w.flow_ymax = flow_default_max(w.flow_mode);
+  // Both rings are kept live by flow_graph_tick, so the existing trace survives the
+  // switch: re-scale the axis to the now-active quantity's window peak and redraw in
+  // the new unit (unless blanked — leave the empty grid until the scale reconnects).
+  if (w.flow_unit_label != nullptr) lv_label_set_text(w.flow_unit_label, flow_unit(w.flow_mode));
+  if (w.flow_blanked) {
+    w.flow_ymax = flow_default_max(w.flow_mode);
+    set_flow_ylabels(w);
+    lv_obj_invalidate(w.flow_canvas);
+    return;
+  }
+  const float* ring = flow_active_ring(w);
+  float wmax = 0.0f;
+  for (int x = 0; x < w.flow_w; ++x)
+    if (ring[x] > wmax) wmax = ring[x];
+  w.flow_ymax = flow_nice_max(w.flow_mode, wmax);
+  set_flow_ylabels(w);
+  redraw_flow_from_ring(w);
+  lv_obj_invalidate(w.flow_canvas);
+}
+
+void set_flow_drop_negative(HomeWidgets& w, bool on) {
+  w.flow_drop_negative = on;
+  if (w.flow_flows == nullptr) return;
+  // The g/s ring was recorded under the old policy — clear it so the trace doesn't
+  // mix clamped and unclamped history. The weight ring is unaffected.
+  for (int x = 0; x < w.flow_w; ++x) w.flow_flows[x] = 0.0f;
+  if (w.flow_mode == 0 && !w.flow_blanked) {  // g/s shown -> redraw the now-empty plot
+    w.flow_ymax = flow_default_max(0);
+    set_flow_ylabels(w);
+    redraw_flow_from_ring(w);
+    lv_obj_invalidate(w.flow_canvas);
+  }
+}
+
+void apply_flow_xaxis_labels(HomeWidgets& w) {
+  const bool scope = w.flow_scope_mode;
+  for (lv_obj_t* xl : w.flow_xlabels) {
+    if (xl == nullptr) continue;
+    if (scope) lv_obj_add_flag(xl, LV_OBJ_FLAG_HIDDEN);   // age ticks lie in scope mode
+    else lv_obj_remove_flag(xl, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (w.flow_xspan_label != nullptr) {
+    if (scope) lv_obj_remove_flag(w.flow_xspan_label, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(w.flow_xspan_label, LV_OBJ_FLAG_HIDDEN);
+  }
+}
+
+void set_flow_scope_mode(HomeWidgets& w, bool on) {
+  w.flow_scope_mode = on;
+  apply_flow_xaxis_labels(w);
+  if (w.flow_weights == nullptr || w.flow_flows == nullptr) return;
+  // Scroll and scope index the ring/pixels differently, so the existing trace can't
+  // carry over — reset to an empty grid and let the tick refill it in the new style.
+  w.flow_cursor = 0;
   w.flow_prev_y = -1;
   w.flow_tick = 0;
   w.flow_accum_ms = 0;
-  for (int x = 0; x < w.flow_w; ++x) {  // reset: clear the plot + the ring
-    w.flow_values[x] = 0.0f;
+  w.flow_blanked = false;
+  w.flow_ymax = flow_default_max(w.flow_mode);
+  for (int x = 0; x < w.flow_w; ++x) {
+    w.flow_weights[x] = 0.0f;
+    w.flow_flows[x] = 0.0f;
     clear_flow_column(w, x);
   }
-  if (w.flow_unit_label != nullptr) lv_label_set_text(w.flow_unit_label, flow_unit(w.flow_mode));
   set_flow_ylabels(w);
-  lv_obj_invalidate(w.flow_canvas);
+  if (w.flow_canvas != nullptr) lv_obj_invalidate(w.flow_canvas);
 }
 
 }  // namespace ui

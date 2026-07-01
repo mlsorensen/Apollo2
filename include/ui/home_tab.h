@@ -61,16 +61,33 @@ struct HomeWidgets {
   int flow_prev_y = -1;      // previous sample's row (continuous line; -1 = pen up)
   uint32_t flow_tick = 0;    // last advance timestamp (ms); 0 = uninitialized
   uint32_t flow_accum_ms = 0;  // fractional-pixel time bank
+  bool flow_blanked = false;   // true while the plot is cleared (scale disconnected)
+  bool flow_drop_negative = true;  // clamp outflow (weight-decreasing) g/s to zero
+  // Graph style. false = scroll (whole plot memmoves left each step, newest at the
+  // right edge). true = oscilloscope: the trace is stationary and flow_cursor is a
+  // write head that advances left->right and wraps, repainting only its own column
+  // (+ a small gap ahead) — far cheaper and lower-tearing. In scope mode the rings
+  // and pixels are indexed by screen-x with the seam just after flow_cursor.
+  bool flow_scope_mode = false;
+  int flow_cursor = 0;         // scope write head (screen column); unused in scroll
   // Mode toggle (top-left button) + auto-ranging Y axis. flow_mode 0 = flow (g/s),
-  // 1 = weight (g). flow_values shadows the pixels with the raw plotted value per
-  // column so we can re-scale (redraw the whole plot at a new flow_ymax) when the
-  // window's max crosses a "nice" threshold. flow_y* labels are updated on rescale.
+  // 1 = weight (g). We shadow the pixels with BOTH raw quantities per column (the
+  // scale gives us both every update) so toggling the unit just re-scales and
+  // redraws the existing trace instead of discarding it; the active ring also lets
+  // us re-scale (redraw at a new flow_ymax) when the window's max crosses a "nice"
+  // threshold. flow_y* labels are updated on rescale.
   int flow_mode = 0;
-  float* flow_values = nullptr;       // ring of raw values (freed by App)
+  float* flow_weights = nullptr;      // per-column weight (g) ring (freed by App)
+  float* flow_flows = nullptr;        // per-column flow rate (g/s) ring (freed by App)
   float flow_ymax = 6.0f;             // current axis full-scale
   lv_obj_t* flow_unit_btn = nullptr;  // the g/s <-> g toggle button
   lv_obj_t* flow_unit_label = nullptr;
   lv_obj_t* flow_ylabels[3] = {nullptr, nullptr, nullptr};  // Y = max, 2max/3, max/3
+  // X-axis labels. flow_xlabels are the "60s..now" age ticks (scroll only — in scope
+  // mode x maps to sweep position, not age, so they'd lie). flow_xspan_label is a
+  // single "60 s window" caption shown in scope mode instead.
+  lv_obj_t* flow_xlabels[4] = {nullptr, nullptr, nullptr, nullptr};
+  lv_obj_t* flow_xspan_label = nullptr;
 
   // Charging animation: a looping battery-fill icon (no percent — terminal
   // voltage under charge is charger-dependent). The timer advances the frame.
@@ -97,9 +114,21 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
 // (not per-sample) scrolling keeps it smooth regardless of the sample rate.
 void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale);
 
-// Flip the graph between flow rate (g/s) and weight (g), clearing the plot and
-// resetting the auto-ranging axis to the new mode's default. Bound to the unit
-// button in the graph's top-left corner.
+// Flip the graph between flow rate (g/s) and weight (g). Both quantities are kept
+// per column, so the existing trace is re-scaled and redrawn in the new unit rather
+// than discarded. Bound to the unit button in the graph's top-left corner.
 void toggle_flow_mode(HomeWidgets& w);
+
+// Set whether negative (outflow) g/s is clamped to zero. Clears the g/s ring, since
+// its history was recorded under the previous policy; the weight ring is untouched.
+void set_flow_drop_negative(HomeWidgets& w, bool on);
+
+// Switch between scroll and oscilloscope (sweep) graph styles. The two index the
+// ring/pixels differently, so this resets the plot to an empty grid and starts fresh.
+void set_flow_scope_mode(HomeWidgets& w, bool on);
+
+// Show the X-axis labels appropriate to the current style: age ticks in scroll mode,
+// a single window-span caption in scope mode. Call after setting flow_scope_mode.
+void apply_flow_xaxis_labels(HomeWidgets& w);
 
 }  // namespace ui

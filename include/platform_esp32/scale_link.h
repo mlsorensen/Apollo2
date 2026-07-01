@@ -41,7 +41,6 @@ class ScaleLink : public core::IScale {
   core::ScaleSnapshot snapshot() const override;
   core::ScaleFeatures features() const override;
   void tare() override;
-  size_t drain_flow(float* out, size_t max) override;
 
   // Discovery, run on the BLE task (used by the device ScaleProvisioner).
   void request_scan();
@@ -49,8 +48,8 @@ class ScaleLink : public core::IScale {
   std::vector<core::ScanResult> scan_results() const;
 
   // Called from the NimBLE notify callback (BLE host task) with a decoded frame.
-  void publish_sample(float weight_g, float flow_gps, uint32_t timer_ms,
-                      int battery_pct);
+  // Flow is derived from the weight stream by the UI, so only weight is published.
+  void publish_sample(float weight_g, uint32_t timer_ms, int battery_pct);
 
  private:
   static void task_entry(void* arg);
@@ -65,11 +64,9 @@ class ScaleLink : public core::IScale {
   mutable std::mutex mutex_;   // guards the cached fields below
   bool connected_ = false;
   float weight_g_ = 0.0f;
-  float flow_gps_ = 0.0f;
   uint32_t timer_ms_ = 0;
   int battery_pct_ = 0;
   bool battery_valid_ = false;
-  std::vector<float> pending_flow_;  // notify samples awaiting the chart (mutex_)
   std::vector<core::ScanResult> scan_results_;
 
   std::atomic<bool> connect_enabled_{true};   // scales auto-connect when saved

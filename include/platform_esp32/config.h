@@ -41,6 +41,12 @@ class Config {
 
   bool use_fahrenheit() const;  // temperature units (default false = Celsius)
   void set_use_fahrenheit(bool on);
+
+  bool drop_negative_flow() const;  // clamp negative g/s on the flow graph (default true)
+  void set_drop_negative_flow(bool on);
+
+  bool scope_graph() const;  // oscilloscope-style flow graph (default false = scroll)
+  void set_scope_graph(bool on);
 };
 
 }  // namespace platform

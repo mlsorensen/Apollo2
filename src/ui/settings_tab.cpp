@@ -24,7 +24,7 @@ void page_column(lv_obj_t* page, bool compact) {
 // Connection panel (saved row + Scan + status + results list), shared by Micra
 // and Scale. `out_setup` is the Micra-only token "Setup" button — pass nullptr to
 // omit it (scales need no token). The list sizes to content so the page scrolls.
-void build_connection_panel(lv_obj_t* panel, const lv_font_t* font,
+void build_connection_panel(lv_obj_t* panel, const lv_font_t* font, int btn_h,
                             lv_obj_t** out_saved_row, lv_obj_t** out_saved_label,
                             lv_obj_t** out_setup, lv_obj_t** out_connect,
                             lv_obj_t** out_connect_label, lv_obj_t** out_forget,
@@ -49,6 +49,7 @@ void build_connection_panel(lv_obj_t* panel, const lv_font_t* font,
 
   if (out_setup != nullptr) {
     *out_setup = ui::make_button(*out_saved_row);
+    lv_obj_set_height(*out_setup, btn_h);
     lv_obj_set_style_bg_color(*out_setup, lv_color_hex(ui::theme::accent()), 0);
     lv_obj_t* setup_lbl = lv_label_create(*out_setup);
     lv_label_set_text(setup_lbl, "Setup");
@@ -58,6 +59,7 @@ void build_connection_panel(lv_obj_t* panel, const lv_font_t* font,
   }
 
   *out_connect = ui::make_button(*out_saved_row);
+  lv_obj_set_height(*out_connect, btn_h);
   lv_obj_set_style_bg_color(*out_connect, lv_color_hex(ui::theme::accent()), 0);
   *out_connect_label = lv_label_create(*out_connect);
   lv_label_set_text(*out_connect_label, "Disconnect");
@@ -67,6 +69,7 @@ void build_connection_panel(lv_obj_t* panel, const lv_font_t* font,
   lv_obj_add_flag(*out_connect, LV_OBJ_FLAG_HIDDEN);
 
   *out_forget = ui::make_button(*out_saved_row);
+  lv_obj_set_height(*out_forget, btn_h);
   lv_obj_set_style_bg_color(*out_forget, lv_color_hex(ui::theme::alert()), 0);
   lv_obj_t* forget_lbl = lv_label_create(*out_forget);
   lv_label_set_text(forget_lbl, "Forget");
@@ -76,6 +79,7 @@ void build_connection_panel(lv_obj_t* panel, const lv_font_t* font,
 
   *out_scan = ui::make_button(panel);
   lv_obj_set_width(*out_scan, lv_pct(100));
+  lv_obj_set_height(*out_scan, btn_h);
   lv_obj_set_style_bg_color(*out_scan, lv_color_hex(ui::theme::accent()), 0);
   lv_obj_t* btn_lbl = lv_label_create(*out_scan);
   lv_label_set_text(btn_lbl, LV_SYMBOL_REFRESH "  Scan");
@@ -195,12 +199,13 @@ void build_device_rows(lv_obj_t* page, const lv_font_t* text_font,
 
 // A root-page navigation entry: a card row "<label>  ›" that drills into `target`.
 void root_entry(lv_obj_t* menu, lv_obj_t* root_page, lv_obj_t* target,
-                const char* label, const lv_font_t* font) {
+                const char* label, const lv_font_t* font, int btn_h) {
   lv_obj_t* cont = lv_menu_cont_create(root_page);
   lv_obj_set_style_bg_color(cont, lv_color_hex(ui::theme::card()), 0);
   lv_obj_set_style_bg_opa(cont, LV_OPA_COVER, 0);
   lv_obj_set_style_radius(cont, 8, 0);
   lv_obj_set_style_pad_all(cont, 10, 0);
+  lv_obj_set_height(cont, btn_h);
 
   lv_obj_t* lbl = lv_label_create(cont);
   lv_label_set_text(lbl, label);
@@ -228,6 +233,9 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
       compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
   const lv_font_t* symbol_font = compact ? &lv_font_montserrat_20 : &lv_font_montserrat_28;
   const int btn_size = compact ? 36 : xl ? 64 : 50;
+  // Match Home's action-button height so nav rows and connection buttons don't
+  // read as cramped on the wider boards.
+  const int btn_h = compact ? 40 : xl ? 92 : 64;
 
   lv_obj_remove_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_pad_all(parent, 0, 0);
@@ -248,6 +256,10 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_set_style_border_width(hdr, 0, 0);
     lv_obj_set_style_text_color(hdr, lv_color_hex(ui::theme::text()), 0);
     lv_obj_set_style_text_font(hdr, font, 0);
+    // The back button is pulled out of the header's layout (IGNORE_LAYOUT below),
+    // so it can't grow the header itself — give the header room for a btn_h-tall
+    // button plus a little breathing space.
+    lv_obj_set_style_min_height(hdr, btn_h + 16, 0);
     // The page title is the header's 2nd child ([0]=back button). Center it
     // across the full header (the back button floats over the left, below).
     if (lv_obj_get_child_count(hdr) >= 2) {
@@ -260,12 +272,19 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     // Pull the back button out of the header's flex flow and pin it left, so the
     // centered title isn't pushed off-center by it.
     lv_obj_add_flag(back, LV_OBJ_FLAG_IGNORE_LAYOUT);
+    lv_obj_set_height(back, btn_h);
     lv_obj_align(back, LV_ALIGN_LEFT_MID, 0, 0);
     lv_obj_set_style_bg_color(back, lv_color_hex(ui::theme::accent()), 0);
     lv_obj_set_style_bg_opa(back, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(back, 8, 0);
     lv_obj_set_style_pad_hor(back, 12, 0);
     lv_obj_set_style_pad_ver(back, 8, 0);
+    // Center the arrow + "Back" label as a row (the button is btn_h tall now, so
+    // without this its children sit at the top-left corner).
+    lv_obj_set_flex_flow(back, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(back, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(back, 4, 0);
     // The arrow is an image child; recolor it bright. Add a "Back" label too.
     for (uint32_t i = 0; i < lv_obj_get_child_count(back); ++i) {
       lv_obj_t* ch = lv_obj_get_child(back, i);
@@ -291,10 +310,10 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   page_column(out.device_page, compact);
 
   // Micra > Bluetooth: connection
-  build_connection_panel(out.micra_bt_page, font, &out.saved_row, &out.saved_label,
-                         &out.setup_btn, &out.connect_btn, &out.connect_label,
-                         &out.forget_btn, &out.scan_btn, &out.status, &out.list,
-                         "Tap Scan to find your machine");
+  build_connection_panel(out.micra_bt_page, font, btn_h, &out.saved_row,
+                         &out.saved_label, &out.setup_btn, &out.connect_btn,
+                         &out.connect_label, &out.forget_btn, &out.scan_btn,
+                         &out.status, &out.list, "Tap Scan to find your machine");
   // Micra > Settings: brew + steam boiler
   section_label(out.micra_settings_page, "Brew", font);
   {
@@ -313,16 +332,22 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   }
 
   // Scale > Bluetooth: connection
-  build_connection_panel(out.scale_bt_page, font, &out.scale_saved_row,
+  build_connection_panel(out.scale_bt_page, font, btn_h, &out.scale_saved_row,
                          &out.scale_saved_label, nullptr, &out.scale_connect_btn,
                          &out.scale_connect_label, &out.scale_forget_btn,
                          &out.scale_scan_btn, &out.scale_status, &out.scale_list,
                          "Tap Scan to find your scale");
-  // Scale > Settings: target weight
+  // Scale > Settings: target weight + flow-graph options
   {
     lv_obj_t* r = make_setting_row(out.scale_settings_page, "Target", font);
     make_inline_stepper(r, font, symbol_font, btn_size, &out.target_minus,
                         &out.target_value, &out.target_plus, nullptr);
+    lv_obj_t* rn = make_setting_row(out.scale_settings_page, "Drop negative g/s", font);
+    out.drop_neg_flow_switch = lv_switch_create(rn);
+    lv_obj_set_size(out.drop_neg_flow_switch, btn_size + 8, btn_size / 2 + 6);
+    lv_obj_t* rs = make_setting_row(out.scale_settings_page, "Oscilloscope graph", font);
+    out.scope_graph_switch = lv_switch_create(rs);
+    lv_obj_set_size(out.scope_graph_switch, btn_size + 8, btn_size / 2 + 6);
   }
 
   // Device (leaf)
@@ -333,17 +358,17 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   out.scale_page = lv_menu_page_create(menu, "Scale");
   page_column(out.micra_page, compact);
   page_column(out.scale_page, compact);
-  root_entry(menu, out.micra_page, out.micra_bt_page, "Bluetooth", font);
-  root_entry(menu, out.micra_page, out.micra_settings_page, "Settings", font);
-  root_entry(menu, out.scale_page, out.scale_bt_page, "Bluetooth", font);
-  root_entry(menu, out.scale_page, out.scale_settings_page, "Settings", font);
+  root_entry(menu, out.micra_page, out.micra_bt_page, "Bluetooth", font, btn_h);
+  root_entry(menu, out.micra_page, out.micra_settings_page, "Settings", font, btn_h);
+  root_entry(menu, out.scale_page, out.scale_bt_page, "Bluetooth", font, btn_h);
+  root_entry(menu, out.scale_page, out.scale_settings_page, "Settings", font, btn_h);
 
   // --- Root page: Micra / Scale / Device -----------------------------------
   out.root_page = lv_menu_page_create(menu, "Settings");
   page_column(out.root_page, compact);
-  root_entry(menu, out.root_page, out.micra_page, "Micra", font);
-  root_entry(menu, out.root_page, out.scale_page, "Scale", font);
-  root_entry(menu, out.root_page, out.device_page, "Device", font);
+  root_entry(menu, out.root_page, out.micra_page, "Micra", font, btn_h);
+  root_entry(menu, out.root_page, out.scale_page, "Scale", font, btn_h);
+  root_entry(menu, out.root_page, out.device_page, "Device", font, btn_h);
 
   lv_menu_set_page(menu, out.root_page);
 }

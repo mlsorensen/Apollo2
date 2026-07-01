@@ -80,6 +80,8 @@ class App {
   void minute_adjust(int dir);           // Device clock minute +/- (wraps)
   void set_clock_24h(bool on);           // Device "24-hour" switch
   void set_use_fahrenheit(bool on);      // Device "Fahrenheit" switch
+  void set_drop_negative_flow(bool on);  // Scale "Drop negative g/s" switch
+  void set_scope_graph(bool on);         // Scale "Oscilloscope graph" switch
   void theme_select(int index);          // Device theme roller selection
   void apply_pending_theme();            // deferred rebuild (from lv_async_call)
   void apply_layout_rebuild();           // deferred rebuild after scale pair/forget

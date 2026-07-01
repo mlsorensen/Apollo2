@@ -13,6 +13,8 @@ constexpr char kBrightnessKey[] = "bright";
 constexpr char kClock24Key[] = "clock24";
 constexpr char kThemeKey[] = "theme";
 constexpr char kFahrenheitKey[] = "fahr";
+constexpr char kDropNegFlowKey[] = "dropnegf";
+constexpr char kScopeGraphKey[] = "scopegraph";
 constexpr char kScaleMacKey[] = "smac";
 constexpr char kScaleNameKey[] = "sname";
 constexpr char kTargetKey[] = "tgtg";
@@ -166,6 +168,36 @@ void Config::set_use_fahrenheit(bool on) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putBool(kFahrenheitKey, on);
+  p.end();
+}
+
+bool Config::drop_negative_flow() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return true;
+  const bool v = p.isKey(kDropNegFlowKey) ? p.getBool(kDropNegFlowKey, true) : true;
+  p.end();
+  return v;
+}
+
+void Config::set_drop_negative_flow(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kDropNegFlowKey, on);
+  p.end();
+}
+
+bool Config::scope_graph() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
+  const bool v = p.isKey(kScopeGraphKey) ? p.getBool(kScopeGraphKey, false) : false;
+  p.end();
+  return v;
+}
+
+void Config::set_scope_graph(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kScopeGraphKey, on);
   p.end();
 }
 

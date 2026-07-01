@@ -225,6 +225,16 @@ void on_units_switch(lv_event_t* e) {
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
   app->set_use_fahrenheit(lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
+void on_drop_neg_flow_switch(lv_event_t* e) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  app->set_drop_negative_flow(lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
+void on_scope_graph_switch(lv_event_t* e) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  app->set_scope_graph(lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
 void on_theme_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->theme_select(/*next=*/-1);
 }
@@ -326,7 +336,8 @@ namespace ui {
 App::~App() {
   if (home_.batt_timer != nullptr) lv_timer_delete(home_.batt_timer);
   if (home_.flow_buf != nullptr) lv_free(home_.flow_buf);
-  if (home_.flow_values != nullptr) lv_free(home_.flow_values);
+  if (home_.flow_weights != nullptr) lv_free(home_.flow_weights);
+  if (home_.flow_flows != nullptr) lv_free(home_.flow_flows);
 }
 
 void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
@@ -360,9 +371,13 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     lv_free(home_.flow_buf);
     home_.flow_buf = nullptr;
   }
-  if (home_.flow_values != nullptr) {
-    lv_free(home_.flow_values);
-    home_.flow_values = nullptr;
+  if (home_.flow_weights != nullptr) {
+    lv_free(home_.flow_weights);
+    home_.flow_weights = nullptr;
+  }
+  if (home_.flow_flows != nullptr) {
+    lv_free(home_.flow_flows);
+    home_.flow_flows = nullptr;
   }
 
   lv_obj_t* scr = lv_screen_active();
@@ -451,6 +466,10 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(settings_.clock_mode_switch, on_clock_mode_switch,
                       LV_EVENT_VALUE_CHANGED, this);
   lv_obj_add_event_cb(settings_.units_switch, on_units_switch, LV_EVENT_VALUE_CHANGED, this);
+  lv_obj_add_event_cb(settings_.drop_neg_flow_switch, on_drop_neg_flow_switch,
+                      LV_EVENT_VALUE_CHANGED, this);
+  lv_obj_add_event_cb(settings_.scope_graph_switch, on_scope_graph_switch,
+                      LV_EVENT_VALUE_CHANGED, this);
   if (settings_.theme_btn != nullptr)
     lv_obj_add_event_cb(settings_.theme_btn, on_theme_clicked, LV_EVENT_CLICKED, this);
 
@@ -470,6 +489,13 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   settings_.clock_24h = clock_->use_24h();
   if (settings_.clock_24h) lv_obj_add_state(settings_.clock_mode_switch, LV_STATE_CHECKED);
   if (display_->use_fahrenheit()) lv_obj_add_state(settings_.units_switch, LV_STATE_CHECKED);
+  const bool drop_neg = display_->drop_negative_flow();
+  if (drop_neg) lv_obj_add_state(settings_.drop_neg_flow_switch, LV_STATE_CHECKED);
+  home_.flow_drop_negative = drop_neg;
+  const bool scope = display_->scope_graph();
+  if (scope) lv_obj_add_state(settings_.scope_graph_switch, LV_STATE_CHECKED);
+  home_.flow_scope_mode = scope;
+  ui::apply_flow_xaxis_labels(home_);  // initial x-axis label set (no plot reset)
   seed_time_steppers();
 
   settings_.theme_index = ui::theme::active_index();
@@ -640,6 +666,16 @@ void App::set_use_fahrenheit(bool on) {
   }
 }
 
+void App::set_drop_negative_flow(bool on) {
+  if (display_ != nullptr) display_->set_drop_negative_flow(on);  // persist
+  ui::set_flow_drop_negative(home_, on);  // apply + clear the g/s ring
+}
+
+void App::set_scope_graph(bool on) {
+  if (display_ != nullptr) display_->set_scope_graph(on);  // persist
+  ui::set_flow_scope_mode(home_, on);  // apply + reset the plot to the new style
+}
+
 void App::theme_select(int idx) {
   const int n = ui::theme::count();
   if (idx < 0) idx = settings_.theme_index + 1;  // tap cycles to the next scheme
@@ -764,11 +800,9 @@ void App::toggle_flow_units() { ui::toggle_flow_mode(home_); }
 
 void App::pump_scale_chart() {
   if (scale_ == nullptr) return;
-  float buf[64];
-  scale_->drain_flow(buf, 64);  // keep the ScaleLink flow buffer bounded
 
   // Sweep the flow graph left->right by wall-clock time (smooth regardless of the
-  // sample rate); plots the scale's current flow. Cheap no-op without a graph.
+  // sample rate); flow is derived from the streamed weight. Cheap no-op without a graph.
   const core::ScaleSnapshot snap = scale_->snapshot();
   ui::flow_graph_tick(home_, snap);
 

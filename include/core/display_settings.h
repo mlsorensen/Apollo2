@@ -25,6 +25,18 @@ class IDisplaySettings {
   // Affects only how the UI shows temps; everything internal stays Celsius.
   virtual bool use_fahrenheit() const = 0;
   virtual void set_use_fahrenheit(bool on) = 0;
+
+  // Flow graph: whether to drop negative g/s (default true). Flow is derived from
+  // the weight stream; a falling weight (cup removed) is negative, which this floors
+  // to zero so it never shows as a spurious upswing.
+  virtual bool drop_negative_flow() const = 0;
+  virtual void set_drop_negative_flow(bool on) = 0;
+
+  // Flow graph style: false = scrolling strip chart (default), true = oscilloscope
+  // sweep (a stationary trace a cursor wipes across). Sweep repaints only one column
+  // per step, so it's far cheaper and tears less on the RGB panel.
+  virtual bool scope_graph() const = 0;
+  virtual void set_scope_graph(bool on) = 0;
 };
 
 }  // namespace core
