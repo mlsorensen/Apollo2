@@ -55,6 +55,7 @@ class App {
   // Bound to UI events:
   void toggle_power();         // power button
   void tare_scale();           // Home "Tare" button
+  void toggle_flow_units();    // Home graph unit button (g/s <-> g)
   void start_scan();           // Settings "Scan" button
   void save_scanned(int index);  // a result row in the Settings list
   void forget();               // Settings "Forget" button

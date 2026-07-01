@@ -61,6 +61,16 @@ struct HomeWidgets {
   int flow_prev_y = -1;      // previous sample's row (continuous line; -1 = pen up)
   uint32_t flow_tick = 0;    // last advance timestamp (ms); 0 = uninitialized
   uint32_t flow_accum_ms = 0;  // fractional-pixel time bank
+  // Mode toggle (top-left button) + auto-ranging Y axis. flow_mode 0 = flow (g/s),
+  // 1 = weight (g). flow_values shadows the pixels with the raw plotted value per
+  // column so we can re-scale (redraw the whole plot at a new flow_ymax) when the
+  // window's max crosses a "nice" threshold. flow_y* labels are updated on rescale.
+  int flow_mode = 0;
+  float* flow_values = nullptr;       // ring of raw values (freed by App)
+  float flow_ymax = 6.0f;             // current axis full-scale
+  lv_obj_t* flow_unit_btn = nullptr;  // the g/s <-> g toggle button
+  lv_obj_t* flow_unit_label = nullptr;
+  lv_obj_t* flow_ylabels[3] = {nullptr, nullptr, nullptr};  // Y = max, 2max/3, max/3
 
   // Charging animation: a looping battery-fill icon (no percent — terminal
   // voltage under charge is charger-dependent). The timer advances the frame.
@@ -86,5 +96,10 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
 // when there's no graph or not enough time has passed for a pixel step. Time-based
 // (not per-sample) scrolling keeps it smooth regardless of the sample rate.
 void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale);
+
+// Flip the graph between flow rate (g/s) and weight (g), clearing the plot and
+// resetting the auto-ranging axis to the new mode's default. Bound to the unit
+// button in the graph's top-left corner.
+void toggle_flow_mode(HomeWidgets& w);
 
 }  // namespace ui

@@ -37,6 +37,10 @@ void on_tare_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->tare_scale();
 }
 
+void on_flow_unit_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->toggle_flow_units();
+}
+
 void on_scan_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->start_scan();
 }
@@ -322,6 +326,7 @@ namespace ui {
 App::~App() {
   if (home_.batt_timer != nullptr) lv_timer_delete(home_.batt_timer);
   if (home_.flow_buf != nullptr) lv_free(home_.flow_buf);
+  if (home_.flow_values != nullptr) lv_free(home_.flow_values);
 }
 
 void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
@@ -354,6 +359,10 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   if (home_.flow_buf != nullptr) {
     lv_free(home_.flow_buf);
     home_.flow_buf = nullptr;
+  }
+  if (home_.flow_values != nullptr) {
+    lv_free(home_.flow_values);
+    home_.flow_values = nullptr;
   }
 
   lv_obj_t* scr = lv_screen_active();
@@ -397,6 +406,8 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(home_.power_btn, on_power_clicked, LV_EVENT_CLICKED, this);
   if (home_.tare_btn != nullptr)
     lv_obj_add_event_cb(home_.tare_btn, on_tare_clicked, LV_EVENT_CLICKED, this);
+  if (home_.flow_unit_btn != nullptr)
+    lv_obj_add_event_cb(home_.flow_unit_btn, on_flow_unit_clicked, LV_EVENT_CLICKED, this);
   // Inline set-point steppers (large screens): reuse the Settings handlers so Home
   // edits flow through the same brew_adjust/boiler_adjust + deferred-commit path.
   if (home_.brew_minus != nullptr) {
@@ -748,6 +759,8 @@ void App::toggle_power() {
 void App::tare_scale() {
   if (scale_ != nullptr) scale_->tare();
 }
+
+void App::toggle_flow_units() { ui::toggle_flow_mode(home_); }
 
 void App::pump_scale_chart() {
   if (scale_ == nullptr) return;

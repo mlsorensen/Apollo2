@@ -1,5 +1,6 @@
 #include "ui/home_tab.h"
 
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 
@@ -114,21 +115,37 @@ lv_obj_t* make_temp_chip(lv_obj_t* parent, const char* caption,
   return val;
 }
 
-// Flow graph: Y axis 0..6 g/s, swept left->right over a fixed time window. The
-// pen advances by wall-clock time (see flow_graph_tick), so the sweep speed is
-// constant regardless of the scale's sample rate. kFlowWindowS is the only knob —
-// wire it to a setting (like the Stats zoom) to make the window adjustable.
-constexpr float kFlowYMaxGps = 6.0f;   // full-scale flow (top of the plot)
+// Flow strip chart. The plot scrolls right->left by wall-clock time (see
+// flow_graph_tick) over kFlowWindowS seconds. The Y axis auto-ranges (per-mode
+// default/floor, grows to the window peak, shrinks back with hysteresis).
 constexpr int kFlowWindowS = 60;       // seconds spanned by the full plot width
 // Pixels scrolled per re-blit. The whole-plot copy is the cost, so scrolling N px
 // at 1/N the cadence keeps the same average speed for ~1/N the CPU (chunkier
 // motion). 1 = smoothest/most expensive; bump to trade smoothness for CPU.
 constexpr int kFlowStepPx = 1;
 
-// Map a flow rate (g/s) to a canvas row: 0 = top = full-scale, h-1 = bottom = 0.
-int flow_row(float gps, int h) {
-  if (gps < 0.0f) gps = 0.0f;
-  float frac = gps / kFlowYMaxGps;
+// Modes: 0 = flow rate (g/s), 1 = weight (g). Each has a unit + a default axis
+// full-scale, which is also the floor the axis shrinks back to.
+const char* flow_unit(int mode) { return mode == 1 ? "g" : "g/s"; }
+float flow_default_max(int mode) { return mode == 1 ? 30.0f : 6.0f; }
+float flow_sample(int mode, const core::ScaleSnapshot& s) {
+  if (!s.connected) return 0.0f;
+  return mode == 1 ? s.weight_g : s.flow_gps;
+}
+
+// Smallest "nice" axis >= v for the mode (even / multiple of 10 so the labels
+// 0, max/2, max stay clean), floored at the mode default.
+float flow_nice_max(int mode, float v) {
+  const float floor = flow_default_max(mode);
+  if (v <= floor) return floor;
+  const float step = (mode == 1) ? 15.0f : 3.0f;  // multiples of 3 -> clean thirds
+  return step * std::ceil(v / step);
+}
+
+// Map a value to a canvas row against the current axis: 0 = top = ymax, h-1 = 0.
+int flow_row(float v, int h, float ymax) {
+  if (v < 0.0f) v = 0.0f;
+  float frac = (ymax > 0.0f) ? v / ymax : 0.0f;
   if (frac > 1.0f) frac = 1.0f;
   int y = static_cast<int>((1.0f - frac) * (h - 1) + 0.5f);
   if (y < 0) y = 0;
@@ -136,15 +153,15 @@ int flow_row(float gps, int h) {
   return y;
 }
 
-// Repaint one canvas column to the background, restoring the faint horizontal
-// gridlines (at 2 and 4 g/s) so the sweep leaves a clean grid behind it. Writes
-// the RGB565 buffer directly (lv_canvas_set_px is far too slow per-pixel).
+// Repaint one canvas column to the background + a mid gridline (half scale) so the
+// sweep leaves a clean grid behind it. Writes the RGB565 buffer directly
+// (lv_canvas_set_px is far too slow per-pixel).
 void clear_flow_column(HomeWidgets& w, int x) {
   const uint16_t bg = lv_color_to_u16(lv_color_hex(ui::theme::card()));
   const uint16_t grid = lv_color_to_u16(lv_color_hex(ui::theme::scrollbar()));
   uint16_t* col = w.flow_buf + x;
   for (int y = 0; y < w.flow_h; ++y) col[y * w.flow_stride] = bg;
-  for (int t = 1; t <= 2; ++t) {  // thirds -> 4 g/s and 2 g/s
+  for (int t = 1; t <= 2; ++t) {  // gridlines at 1/3 and 2/3 of full scale
     const int gy = w.flow_h * t / 3;
     if (gy >= 0 && gy < w.flow_h) col[gy * w.flow_stride] = grid;
   }
@@ -170,6 +187,27 @@ void shift_flow_left(HomeWidgets& w) {
   for (int y = 0; y < w.flow_h; ++y) {
     uint16_t* row = w.flow_buf + static_cast<size_t>(y) * w.flow_stride;
     std::memmove(row, row + 1, static_cast<size_t>(w.flow_w - 1) * sizeof(uint16_t));
+  }
+}
+
+// Update the three dynamic Y labels (max, 2max/3, max/3, top->down) on a rescale.
+void set_flow_ylabels(HomeWidgets& w) {
+  for (int i = 0; i < 3; ++i) {
+    if (w.flow_ylabels[i] == nullptr) continue;
+    const float v = w.flow_ymax * static_cast<float>(3 - i) / 3.0f;
+    lv_label_set_text_fmt(w.flow_ylabels[i], "%d", static_cast<int>(v + 0.5f));
+  }
+}
+
+// Redraw the whole plot from the value ring at the current ymax — used when the
+// axis rescales (the pixels already drawn are at the old scale).
+void redraw_flow_from_ring(HomeWidgets& w) {
+  w.flow_prev_y = -1;
+  for (int x = 0; x < w.flow_w; ++x) {
+    const int y = flow_row(w.flow_values[x], w.flow_h, w.flow_ymax);
+    clear_flow_column(w, x);
+    draw_flow_segment(w, x, y);
+    w.flow_prev_y = y;
   }
 }
 
@@ -248,23 +286,43 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   out.flow_prev_y = -1;
   out.flow_tick = 0;
   out.flow_accum_ms = 0;
+  out.flow_mode = 0;
+  out.flow_ymax = flow_default_max(out.flow_mode);
+  out.flow_values = static_cast<float*>(lv_malloc(static_cast<size_t>(pw) * sizeof(float)));
+  if (out.flow_values == nullptr) return;  // OOM: tick no-ops without the ring
+  for (int x = 0; x < pw; ++x) out.flow_values[x] = 0.0f;
 
   for (int x = 0; x < pw; ++x) clear_flow_column(out, x);  // background + gridlines
 
-  // Static Y labels (6,4,2,0 g/s, top..bottom) + "g/s" caption. Negative x offsets
-  // sit them in the left margin (padding), aligned with the plot rows.
-  lv_obj_t* unit = lv_label_create(card);
-  lv_label_set_text(unit, "g/s");
-  lv_obj_set_style_text_color(unit, lv_color_hex(ui::theme::muted()), 0);
-  lv_obj_set_style_text_font(unit, &lv_font_montserrat_14, 0);
-  lv_obj_align(unit, LV_ALIGN_TOP_LEFT, -26, -16);
-  for (int t = 0; t <= 3; ++t) {
-    lv_obj_t* yl = lv_label_create(card);
-    lv_label_set_text_fmt(yl, "%d", 6 - 2 * t);
-    lv_obj_set_style_text_color(yl, lv_color_hex(ui::theme::muted()), 0);
-    lv_obj_set_style_text_font(yl, &lv_font_montserrat_14, 0);
-    lv_obj_align(yl, LV_ALIGN_TOP_LEFT, -26, ph * t / 3 - 8);
-  }
+  // Unit toggle button in the plot's top-left corner (clear of the Y-label column,
+  // which sits in the left margin). Tap flips g/s <-> g and resets the plot.
+  lv_obj_t* btn = lv_button_create(card);
+  lv_obj_remove_style_all(btn);
+  lv_obj_set_style_bg_color(btn, lv_color_hex(ui::theme::bg()), 0);
+  lv_obj_set_style_bg_opa(btn, LV_OPA_70, 0);
+  lv_obj_set_style_radius(btn, 8, 0);
+  lv_obj_set_style_pad_hor(btn, 12, 0);
+  lv_obj_set_style_pad_ver(btn, 7, 0);
+  lv_obj_align(btn, LV_ALIGN_TOP_LEFT, 6, 6);
+  lv_obj_t* blab = lv_label_create(btn);
+  lv_label_set_text(blab, flow_unit(out.flow_mode));
+  lv_obj_set_style_text_color(blab, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(blab, &lv_font_montserrat_20, 0);
+  out.flow_unit_btn = btn;
+  out.flow_unit_label = blab;
+
+  // Four Y labels (0, max/3, 2max/3, max) in the left margin, aligned to the plot
+  // rows. The top three are dynamic (updated on rescale); the bottom "0" is static.
+  auto make_ylabel = [&](int y) {
+    lv_obj_t* l = lv_label_create(card);
+    lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::muted()), 0);
+    lv_obj_set_style_text_font(l, &lv_font_montserrat_14, 0);
+    lv_obj_align(l, LV_ALIGN_TOP_LEFT, -26, y - 8);
+    return l;
+  };
+  for (int t = 0; t < 3; ++t) out.flow_ylabels[t] = make_ylabel(ph * t / 3);  // max..max/3
+  lv_label_set_text(make_ylabel(ph), "0");                                     // bottom, static
+  set_flow_ylabels(out);
 
   // Static X labels (window..now) below the plot, in the bottom margin.
   for (int t = 0; t <= 3; ++t) {
@@ -281,21 +339,17 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   }
 
 #ifndef ESP_PLATFORM
-  // Sim only: seed a representative espresso flow curve so the graph reads at a
-  // glance in the rendered PNGs. On hardware the plot starts empty and sweeps in.
-  int prev = -1;
+  // Sim only: seed a representative espresso flow curve into the ring so the graph
+  // reads at a glance in the rendered PNGs. On hardware the plot starts empty.
   for (int x = 0; x < pw; ++x) {
     const float t = x / static_cast<float>(pw - 1);
     float f;  // g/s
     if (t < 0.18f) f = 2.7f * (t / 0.18f);          // pre-infuse ramp
     else if (t < 0.82f) f = 2.7f - 0.5f * ((t - 0.18f) / 0.64f);  // gentle decline
     else f = 2.2f * (1.0f - (t - 0.82f) / 0.18f);   // taper to 0
-    const int y = flow_row(f, ph);
-    out.flow_prev_y = prev;
-    draw_flow_segment(out, x, y);
-    prev = y;
+    out.flow_values[x] = f;
   }
-  out.flow_prev_y = -1;
+  redraw_flow_from_ring(out);
 #endif
 }
 
@@ -732,7 +786,9 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
 }
 
 void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
-  if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_w <= 0) return;
+  if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_values == nullptr ||
+      w.flow_w <= 0)
+    return;
   const uint32_t now = lv_tick_get();
   if (w.flow_tick == 0) {  // first call: start the clock, nothing to advance yet
     w.flow_tick = now;
@@ -747,17 +803,20 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
                                static_cast<uint32_t>(w.flow_w);
   if (ms_per_step == 0) return;
 
-  // For each elapsed step, scroll left and drop the scale's current flow in at the
-  // right edge. Time-based, so the scroll speed is constant no matter how fast (or
-  // slowly) samples arrive. Usually 0 or 1 steps per call.
-  const int y = flow_row(scale.connected ? scale.flow_gps : 0.0f, w.flow_h);
+  // For each elapsed step, scroll left and drop the current value (flow or weight,
+  // per mode) in at the right edge — both the pixels and the shadow value ring.
+  const float raw = flow_sample(w.flow_mode, scale);
   const int rx = w.flow_w - 1;
   int steps = 0;
   while (w.flow_accum_ms >= ms_per_step && steps < w.flow_w) {
     w.flow_accum_ms -= ms_per_step;
     ++steps;
-    for (int i = 0; i < kFlowStepPx; ++i) {  // kFlowStepPx px, then one invalidate
+    for (int i = 0; i < kFlowStepPx; ++i) {
       shift_flow_left(w);
+      std::memmove(w.flow_values, w.flow_values + 1,
+                   static_cast<size_t>(w.flow_w - 1) * sizeof(float));
+      w.flow_values[rx] = raw;
+      const int y = flow_row(raw, w.flow_h, w.flow_ymax);
       clear_flow_column(w, rx);
       draw_flow_segment(w, rx, y);
       w.flow_prev_y = y;
@@ -765,8 +824,39 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
   }
   if (steps == 0) return;
 
-  // The whole plot shifted, so re-blit it all. This is a straight bitmap copy
-  // (memmove already did the work) — no polyline re-rasterization like lv_chart.
+  // Auto-range the Y axis: grow immediately to fit the window's peak; shrink back
+  // toward the mode default only once the peak drops below half scale (hysteresis,
+  // so it settles instead of flip-flopping at a threshold). On a change, redraw the
+  // whole plot from the ring (existing pixels are at the old scale).
+  float wmax = 0.0f;
+  for (int x = 0; x < w.flow_w; ++x)
+    if (w.flow_values[x] > wmax) wmax = w.flow_values[x];
+  const float want = flow_nice_max(w.flow_mode, wmax);
+  const bool grow = want > w.flow_ymax;
+  const bool shrink = want < w.flow_ymax && wmax < w.flow_ymax * 0.5f;
+  if (grow || shrink) {
+    w.flow_ymax = want;
+    redraw_flow_from_ring(w);
+    set_flow_ylabels(w);
+  }
+
+  // The whole plot shifted (or rescaled), so re-blit it. A straight bitmap copy.
+  lv_obj_invalidate(w.flow_canvas);
+}
+
+void toggle_flow_mode(HomeWidgets& w) {
+  if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_values == nullptr) return;
+  w.flow_mode ^= 1;
+  w.flow_ymax = flow_default_max(w.flow_mode);
+  w.flow_prev_y = -1;
+  w.flow_tick = 0;
+  w.flow_accum_ms = 0;
+  for (int x = 0; x < w.flow_w; ++x) {  // reset: clear the plot + the ring
+    w.flow_values[x] = 0.0f;
+    clear_flow_column(w, x);
+  }
+  if (w.flow_unit_label != nullptr) lv_label_set_text(w.flow_unit_label, flow_unit(w.flow_mode));
+  set_flow_ylabels(w);
   lv_obj_invalidate(w.flow_canvas);
 }
 
