@@ -165,8 +165,15 @@ void ScaleLink::task_loop() {
 bool ScaleLink::do_connect(const std::string& address) {
   if (g_client == nullptr) g_client = NimBLEDevice::createClient();
 
-  if (!g_client->connect(NimBLEAddress(address, BLE_ADDR_PUBLIC)) &&
-      !g_client->connect(NimBLEAddress(address, BLE_ADDR_RANDOM))) {
+  // We connect by MAC and don't persist the address type, so we try both. NimBLE's
+  // default connect timeout is 30 s, so a wrong-type attempt would hang that long
+  // before the fallback — cap it low so the fallback is quick. And try RANDOM
+  // first: the Bookoo (and most scales) advertise a random address, so the saved-
+  // MAC reconnect after reboot then succeeds on the first try (was ~30 s: the old
+  // PUBLIC-first attempt timed out fully before falling back to RANDOM).
+  g_client->setConnectTimeout(5000);  // ms
+  if (!g_client->connect(NimBLEAddress(address, BLE_ADDR_RANDOM)) &&
+      !g_client->connect(NimBLEAddress(address, BLE_ADDR_PUBLIC))) {
     Serial.println("ScaleLink: connect failed");
     return false;
   }
