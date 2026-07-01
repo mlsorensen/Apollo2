@@ -1,12 +1,15 @@
 #include "ui/home_tab.h"
 
 #include <cstdio>
+#include <cstring>
 
 #include "ui/theme.h"
 #include "ui/units.h"
 #include "ui/widgets.h"
 
 namespace {
+
+using ui::HomeWidgets;  // used by the flow-graph paint helpers below
 
 void format_now(char* out, size_t n, float c, bool f) {
   std::snprintf(out, n, "%.1f %s", ui::temp_disp(c, f), ui::temp_unit(f));
@@ -111,74 +114,62 @@ lv_obj_t* make_temp_chip(lv_obj_t* parent, const char* caption,
   return val;
 }
 
-// Flow graph constants: Y axis 0..6 g/s (stored x100 for integer chart points,
-// matching the Bookoo's centi-g/s resolution); a 60-point rolling window.
-constexpr int kFlowYMaxCgps = 600;   // 6.00 g/s
-constexpr int kFlowPoints = 300;     // ~native sample rate, drained every loop
-constexpr int kFlowWindowS = 30;     // nominal window (true span depends on rate)
+// Flow graph: Y axis 0..6 g/s, swept left->right over a fixed time window. The
+// pen advances by wall-clock time (see flow_graph_tick), so the sweep speed is
+// constant regardless of the scale's sample rate. kFlowWindowS is the only knob —
+// wire it to a setting (like the Stats zoom) to make the window adjustable.
+constexpr float kFlowYMaxGps = 6.0f;   // full-scale flow (top of the plot)
+constexpr int kFlowWindowS = 60;       // seconds spanned by the full plot width
+// Pixels scrolled per re-blit. The whole-plot copy is the cost, so scrolling N px
+// at 1/N the cadence keeps the same average speed for ~1/N the CPU (chunkier
+// motion). 1 = smoothest/most expensive; bump to trade smoothness for CPU.
+constexpr int kFlowStepPx = 1;
 
-// Post-draw overlay: draw the X/Y axis labels into the chart's margins (lv_chart
-// has no built-in axes). Y = g/s (0,2,4,6); X = seconds ago across the window.
-void flow_chart_overlay_cb(lv_event_t* e) {
-  auto* chart = static_cast<lv_obj_t*>(lv_event_get_target(e));
-  lv_layer_t* layer = lv_event_get_layer(e);
-  lv_area_t plot;
-  lv_obj_get_content_coords(chart, &plot);
-  lv_area_t obj;
-  lv_obj_get_coords(chart, &obj);
-  const int32_t w_px = plot.x2 - plot.x1;
-  const int32_t h_px = plot.y2 - plot.y1;
+// Map a flow rate (g/s) to a canvas row: 0 = top = full-scale, h-1 = bottom = 0.
+int flow_row(float gps, int h) {
+  if (gps < 0.0f) gps = 0.0f;
+  float frac = gps / kFlowYMaxGps;
+  if (frac > 1.0f) frac = 1.0f;
+  int y = static_cast<int>((1.0f - frac) * (h - 1) + 0.5f);
+  if (y < 0) y = 0;
+  if (y >= h) y = h - 1;
+  return y;
+}
 
-  // Gridlines bleed into the padding; repaint the left + bottom margins so the
-  // labels sit on clean card colour.
-  lv_draw_rect_dsc_t maskd;
-  lv_draw_rect_dsc_init(&maskd);
-  maskd.bg_color = lv_color_hex(ui::theme::card());
-  maskd.bg_opa = LV_OPA_COVER;
-  lv_area_t lmask = {obj.x1, obj.y1, static_cast<int32_t>(plot.x1 - 1), obj.y2};
-  lv_draw_rect(layer, &maskd, &lmask);
-  lv_area_t bmask = {obj.x1, static_cast<int32_t>(plot.y2 + 1), obj.x2, obj.y2};
-  lv_draw_rect(layer, &maskd, &bmask);
-
-  lv_draw_label_dsc_t lbl;
-  lv_draw_label_dsc_init(&lbl);
-  lbl.color = lv_color_hex(ui::theme::muted());
-  lbl.font = &lv_font_montserrat_14;
-  char buf[8];
-
-  // Y labels: 6,4,2,0 g/s (top..bottom).
-  lbl.align = LV_TEXT_ALIGN_RIGHT;
-  for (int t = 0; t <= 3; ++t) {
-    lv_snprintf(buf, sizeof(buf), "%d", 6 - 2 * t);
-    lbl.text = buf;
-    const int32_t y = plot.y1 + h_px * t / 3;
-    lv_area_t la = {obj.x1, static_cast<int32_t>(y - 9),
-                    static_cast<int32_t>(plot.x1 - 4), static_cast<int32_t>(y + 9)};
-    lv_draw_label(layer, &lbl, &la);
+// Repaint one canvas column to the background, restoring the faint horizontal
+// gridlines (at 2 and 4 g/s) so the sweep leaves a clean grid behind it. Writes
+// the RGB565 buffer directly (lv_canvas_set_px is far too slow per-pixel).
+void clear_flow_column(HomeWidgets& w, int x) {
+  const uint16_t bg = lv_color_to_u16(lv_color_hex(ui::theme::card()));
+  const uint16_t grid = lv_color_to_u16(lv_color_hex(ui::theme::scrollbar()));
+  uint16_t* col = w.flow_buf + x;
+  for (int y = 0; y < w.flow_h; ++y) col[y * w.flow_stride] = bg;
+  for (int t = 1; t <= 2; ++t) {  // thirds -> 4 g/s and 2 g/s
+    const int gy = w.flow_h * t / 3;
+    if (gy >= 0 && gy < w.flow_h) col[gy * w.flow_stride] = grid;
   }
+}
 
-  // X labels: seconds ago across the window (left = -window .. right = now).
-  for (int t = 0; t <= 3; ++t) {
-    const int secs = kFlowWindowS * (3 - t) / 3;
-    if (secs == 0) lv_snprintf(buf, sizeof(buf), "now");
-    else lv_snprintf(buf, sizeof(buf), "%ds", secs);
-    lbl.text = buf;
-    const int32_t x = plot.x1 + w_px * t / 3;
-    lv_area_t la;
-    if (t == 0) {
-      lbl.align = LV_TEXT_ALIGN_LEFT;
-      la = {plot.x1, static_cast<int32_t>(plot.y2 + 4),
-            static_cast<int32_t>(plot.x1 + 50), static_cast<int32_t>(plot.y2 + 18)};
-    } else if (t == 3) {
-      lbl.align = LV_TEXT_ALIGN_RIGHT;
-      la = {static_cast<int32_t>(plot.x2 - 50), static_cast<int32_t>(plot.y2 + 4),
-            plot.x2, static_cast<int32_t>(plot.y2 + 18)};
-    } else {
-      lbl.align = LV_TEXT_ALIGN_CENTER;
-      la = {static_cast<int32_t>(x - 25), static_cast<int32_t>(plot.y2 + 4),
-            static_cast<int32_t>(x + 25), static_cast<int32_t>(plot.y2 + 18)};
-    }
-    lv_draw_label(layer, &lbl, &la);
+// Draw the flow line into column x: a vertical run joining the previous pen row
+// to the new one, so consecutive samples connect into a continuous line.
+void draw_flow_segment(HomeWidgets& w, int x, int y) {
+  const uint16_t accent = lv_color_to_u16(lv_color_hex(ui::theme::accent()));
+  const int y0 = (w.flow_prev_y < 0) ? y : w.flow_prev_y;
+  const int lo = y0 < y ? y0 : y;
+  const int hi = y0 < y ? y : y0;
+  uint16_t* col = w.flow_buf + x;
+  for (int yy = lo; yy <= hi; ++yy) {
+    if (yy >= 0 && yy < w.flow_h) col[yy * w.flow_stride] = accent;
+  }
+}
+
+// Scroll the whole plot one pixel left (memmove per row) — the cheap half of the
+// strip chart. Horizontal gridlines are invariant under a horizontal shift, so
+// they survive; the vacated right column is repainted by the caller.
+void shift_flow_left(HomeWidgets& w) {
+  for (int y = 0; y < w.flow_h; ++y) {
+    uint16_t* row = w.flow_buf + static_cast<size_t>(y) * w.flow_stride;
+    std::memmove(row, row + 1, static_cast<size_t>(w.flow_w - 1) * sizeof(uint16_t));
   }
 }
 
@@ -214,61 +205,98 @@ lv_obj_t* make_readout_card(lv_obj_t* parent, const char* caption,
   return val;
 }
 
-// A flow-rate (g/s) line chart with drawn X/Y axes. Used as the hero on large
-// screens.
-void make_flow_chart(lv_obj_t* parent, lv_obj_t** out_chart,
-                     lv_chart_series_t** out_series) {
-  lv_obj_t* chart = lv_chart_create(parent);
-  lv_obj_remove_style_all(chart);
-  lv_obj_set_flex_grow(chart, 1);
-  lv_obj_set_height(chart, lv_pct(100));
-  lv_obj_set_style_bg_color(chart, lv_color_hex(ui::theme::card()), 0);
-  lv_obj_set_style_bg_opa(chart, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(chart, 16, 0);
-  // Margins for the axis labels (left = Y, bottom = X), plus a little top room.
-  lv_obj_set_style_pad_left(chart, 30, 0);
-  lv_obj_set_style_pad_bottom(chart, 22, 0);
-  lv_obj_set_style_pad_top(chart, 18, 0);
-  lv_obj_set_style_pad_right(chart, 12, 0);
-  lv_obj_set_style_line_width(chart, 3, LV_PART_ITEMS);  // the plotted line
-  lv_obj_set_style_size(chart, 0, 0, LV_PART_INDICATOR);  // no point markers
-  // Faint gridlines.
-  lv_obj_set_style_line_color(chart, lv_color_hex(ui::theme::scrollbar()), LV_PART_MAIN);
-  lv_obj_set_style_line_opa(chart, LV_OPA_40, LV_PART_MAIN);
+// The styled (empty) flow-graph card. The canvas that fills it is created later
+// by populate_flow_graph — only once every sibling exists and the layout is
+// final, so the content box we measure is the real one. Returns the card.
+lv_obj_t* make_flow_graph_card(lv_obj_t* parent) {
+  lv_obj_t* card = lv_obj_create(parent);
+  lv_obj_remove_style_all(card);
+  lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_width(card, lv_pct(100));
+  lv_obj_set_flex_grow(card, 1);  // hero: take the vertical space left over
+  lv_obj_set_style_bg_color(card, lv_color_hex(ui::theme::card()), 0);
+  lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(card, 16, 0);
+  lv_obj_set_style_pad_left(card, 30, 0);    // Y labels
+  lv_obj_set_style_pad_bottom(card, 22, 0);  // X labels
+  lv_obj_set_style_pad_top(card, 18, 0);
+  lv_obj_set_style_pad_right(card, 12, 0);
+  return card;
+}
 
-  lv_chart_set_type(chart, LV_CHART_TYPE_LINE);
-  lv_chart_set_div_line_count(chart, 4, 4);
-  lv_chart_set_point_count(chart, kFlowPoints);
-  lv_chart_set_range(chart, LV_CHART_AXIS_PRIMARY_Y, 0, kFlowYMaxCgps);
-  lv_chart_set_update_mode(chart, LV_CHART_UPDATE_MODE_SHIFT);
-  lv_obj_add_event_cb(chart, flow_chart_overlay_cb, LV_EVENT_DRAW_POST_END, nullptr);
+// A flow-rate (g/s) sweep graph: a canvas we paint one column at a time as time
+// passes (see flow_graph_tick), with static X/Y axis labels drawn once. Cheap to
+// animate — only the new column is repainted per step, not the whole plot. Must
+// be called after the tab's layout is final (see make_flow_graph_card).
+void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
+  int pw = lv_obj_get_content_width(card);
+  int ph = lv_obj_get_content_height(card);
+  if (pw < 16) pw = 16;
+  if (ph < 16) ph = 16;
 
-  // "g/s" axis caption, top-left.
-  lv_obj_t* unit = lv_label_create(chart);
+  const uint32_t stride_bytes = lv_draw_buf_width_to_stride(pw, LV_COLOR_FORMAT_RGB565);
+  out.flow_buf = static_cast<uint16_t*>(lv_malloc(stride_bytes * static_cast<size_t>(ph)));
+  if (out.flow_buf == nullptr) return;  // OOM: no graph (flow_canvas stays null)
+
+  lv_obj_t* canvas = lv_canvas_create(card);
+  lv_canvas_set_buffer(canvas, out.flow_buf, pw, ph, LV_COLOR_FORMAT_RGB565);
+  lv_obj_align(canvas, LV_ALIGN_TOP_LEFT, 0, 0);  // fills the content box
+  out.flow_canvas = canvas;
+  out.flow_w = pw;
+  out.flow_h = ph;
+  out.flow_stride = static_cast<int>(stride_bytes / sizeof(uint16_t));
+  out.flow_prev_y = -1;
+  out.flow_tick = 0;
+  out.flow_accum_ms = 0;
+
+  for (int x = 0; x < pw; ++x) clear_flow_column(out, x);  // background + gridlines
+
+  // Static Y labels (6,4,2,0 g/s, top..bottom) + "g/s" caption. Negative x offsets
+  // sit them in the left margin (padding), aligned with the plot rows.
+  lv_obj_t* unit = lv_label_create(card);
   lv_label_set_text(unit, "g/s");
   lv_obj_set_style_text_color(unit, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(unit, &lv_font_montserrat_14, 0);
-  lv_obj_align(unit, LV_ALIGN_TOP_LEFT, -22, -14);
+  lv_obj_align(unit, LV_ALIGN_TOP_LEFT, -26, -16);
+  for (int t = 0; t <= 3; ++t) {
+    lv_obj_t* yl = lv_label_create(card);
+    lv_label_set_text_fmt(yl, "%d", 6 - 2 * t);
+    lv_obj_set_style_text_color(yl, lv_color_hex(ui::theme::muted()), 0);
+    lv_obj_set_style_text_font(yl, &lv_font_montserrat_14, 0);
+    lv_obj_align(yl, LV_ALIGN_TOP_LEFT, -26, ph * t / 3 - 8);
+  }
 
-  lv_chart_series_t* s =
-      lv_chart_add_series(chart, lv_color_hex(ui::theme::accent()), LV_CHART_AXIS_PRIMARY_Y);
+  // Static X labels (window..now) below the plot, in the bottom margin.
+  for (int t = 0; t <= 3; ++t) {
+    lv_obj_t* xl = lv_label_create(card);
+    const int secs = kFlowWindowS * (3 - t) / 3;
+    if (secs == 0) lv_label_set_text(xl, "now");
+    else lv_label_set_text_fmt(xl, "%ds", secs);
+    lv_obj_set_style_text_color(xl, lv_color_hex(ui::theme::muted()), 0);
+    lv_obj_set_style_text_font(xl, &lv_font_montserrat_14, 0);
+    int x = pw * t / 3;
+    if (t == 3) x -= 24;
+    else if (t > 0) x -= 12;
+    lv_obj_align(xl, LV_ALIGN_TOP_LEFT, x, ph + 4);
+  }
 
 #ifndef ESP_PLATFORM
   // Sim only: seed a representative espresso flow curve so the graph reads at a
-  // glance in the rendered PNGs. On hardware the series starts empty and real
-  // samples scroll in once a shot runs.
-  for (int i = 0; i < kFlowPoints; ++i) {
-    const float t = i / static_cast<float>(kFlowPoints - 1);
+  // glance in the rendered PNGs. On hardware the plot starts empty and sweeps in.
+  int prev = -1;
+  for (int x = 0; x < pw; ++x) {
+    const float t = x / static_cast<float>(pw - 1);
     float f;  // g/s
     if (t < 0.18f) f = 2.7f * (t / 0.18f);          // pre-infuse ramp
     else if (t < 0.82f) f = 2.7f - 0.5f * ((t - 0.18f) / 0.64f);  // gentle decline
     else f = 2.2f * (1.0f - (t - 0.82f) / 0.18f);   // taper to 0
-    lv_chart_set_value_by_id(chart, s, i, static_cast<int32_t>(f * 100.0f));
+    const int y = flow_row(f, ph);
+    out.flow_prev_y = prev;
+    draw_flow_segment(out, x, y);
+    prev = y;
   }
+  out.flow_prev_y = -1;
 #endif
-
-  *out_chart = chart;
-  *out_series = s;
 }
 
 const char* battery_icon(int pct) {
@@ -416,8 +444,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   out.scale_weight = out.scale_target = nullptr;
   out.tare_btn = out.tare_label = nullptr;
   out.paddle_pill = out.paddle_label = nullptr;
-  out.flow_chart = nullptr;
-  out.flow_series = nullptr;
+  out.flow_canvas = nullptr;  // flow_buf is freed by App before each rebuild
 
   const int pad = compact ? 8 : xl ? 28 : 20;
   const int gap = compact ? 6 : xl ? 22 : 16;
@@ -540,8 +567,10 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   out.scale_target = add_sub(scard);
 
   // The flow graph fills the rest — the hero. (Paddle status pill removed; it
-  // returns in Phase 4 when there's real paddle hardware/state to show.)
-  make_flow_chart(parent, &out.flow_chart, &out.flow_series);
+  // returns in Phase 4 when there's real paddle hardware/state to show.) The card
+  // is created here for correct flex order, but its canvas is sized only after the
+  // actions row exists and the layout is final (populate_flow_graph below).
+  lv_obj_t* graph_card = make_flow_graph_card(parent);
 
   // Tare beside the power button at the bottom.
   lv_obj_t* actions = lv_obj_create(parent);
@@ -558,6 +587,11 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   build_power_button(actions, btn_h, btn_font, out);
   lv_obj_set_width(out.power_btn, 0);
   lv_obj_set_flex_grow(out.power_btn, 1);
+
+  // Everything's in place: resolve the final layout, then size + paint the graph
+  // to the card's real content box.
+  lv_obj_update_layout(parent);
+  populate_flow_graph(graph_card, out);
 }
 
 void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
@@ -695,6 +729,45 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     lv_obj_set_style_bg_color(w.power_btn, lv_color_hex(ui::theme::card()), 0);
     lv_label_set_text(w.power_label, LV_SYMBOL_POWER "  Offline");
   }
+}
+
+void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
+  if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_w <= 0) return;
+  const uint32_t now = lv_tick_get();
+  if (w.flow_tick == 0) {  // first call: start the clock, nothing to advance yet
+    w.flow_tick = now;
+    return;
+  }
+  w.flow_accum_ms += now - w.flow_tick;
+  w.flow_tick = now;
+  // One "step" scrolls kFlowStepPx pixels and triggers one whole-plot re-blit, so
+  // its time budget is kFlowStepPx pixels' worth (same average speed, fewer blits).
+  const uint32_t ms_per_step = static_cast<uint32_t>(kFlowStepPx) *
+                               static_cast<uint32_t>(kFlowWindowS) * 1000u /
+                               static_cast<uint32_t>(w.flow_w);
+  if (ms_per_step == 0) return;
+
+  // For each elapsed step, scroll left and drop the scale's current flow in at the
+  // right edge. Time-based, so the scroll speed is constant no matter how fast (or
+  // slowly) samples arrive. Usually 0 or 1 steps per call.
+  const int y = flow_row(scale.connected ? scale.flow_gps : 0.0f, w.flow_h);
+  const int rx = w.flow_w - 1;
+  int steps = 0;
+  while (w.flow_accum_ms >= ms_per_step && steps < w.flow_w) {
+    w.flow_accum_ms -= ms_per_step;
+    ++steps;
+    for (int i = 0; i < kFlowStepPx; ++i) {  // kFlowStepPx px, then one invalidate
+      shift_flow_left(w);
+      clear_flow_column(w, rx);
+      draw_flow_segment(w, rx, y);
+      w.flow_prev_y = y;
+    }
+  }
+  if (steps == 0) return;
+
+  // The whole plot shifted, so re-blit it all. This is a straight bitmap copy
+  // (memmove already did the work) — no polyline re-rasterization like lv_chart.
+  lv_obj_invalidate(w.flow_canvas);
 }
 
 }  // namespace ui

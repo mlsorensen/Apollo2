@@ -24,7 +24,10 @@
 // internal SRAM. A big internal pool starved NimBLE — its mutex alloc failed and
 // it asserted in npl_freertos_mutex_pend on connect. PSRAM keeps internal RAM for
 // the BLE/WiFi stacks while giving the UI plenty of headroom.
-#define LV_MEM_SIZE (192 * 1024)
+// 1 MB: the widget pool plus the flow-graph canvas buffer (a full-plot RGB565
+// bitmap, ~300-550 KB depending on screen). All PSRAM, so it doesn't touch the
+// internal RAM the BLE/WiFi stacks need.
+#define LV_MEM_SIZE (1024 * 1024)
 #define LV_MEM_ADR 0
 #define LV_MEM_POOL_INCLUDE "esp_heap_caps.h"
 #define LV_MEM_POOL_ALLOC(size) heap_caps_malloc(size, MALLOC_CAP_SPIRAM)
@@ -39,6 +42,11 @@
 // Hierarchical settings menu (drill-in pages + automatic back button / history).
 // On by default in LVGL, but we set it explicitly since Settings depends on it.
 #define LV_USE_MENU 1
+
+// Live FPS + CPU% overlay (bottom-right) for measuring on-device render perf.
+// Flip both to 0 for production once the RGB pipeline is dialed in.
+#define LV_USE_SYSMON 1
+#define LV_USE_PERF_MONITOR 1
 
 // Fonts used by the UI. Enable more sizes here as the design grows.
 #define LV_FONT_MONTSERRAT_14 1

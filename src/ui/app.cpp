@@ -321,6 +321,7 @@ namespace ui {
 
 App::~App() {
   if (home_.batt_timer != nullptr) lv_timer_delete(home_.batt_timer);
+  if (home_.flow_buf != nullptr) lv_free(home_.flow_buf);
 }
 
 void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
@@ -343,11 +344,16 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
 
   ui::theme::set_active(display_->theme());  // pick the palette before any widget is colored
 
-  // A rebuild (theme change) recreates everything; drop the old charge timer
-  // first so we don't leak it across rebuilds.
+  // A rebuild (theme change) recreates everything; drop the old charge timer and
+  // flow-graph canvas buffer first so we don't leak them across rebuilds
+  // (lv_obj_clean deletes the widgets, but these are heap allocations we own).
   if (home_.batt_timer != nullptr) {
     lv_timer_delete(home_.batt_timer);
     home_.batt_timer = nullptr;
+  }
+  if (home_.flow_buf != nullptr) {
+    lv_free(home_.flow_buf);
+    home_.flow_buf = nullptr;
   }
 
   lv_obj_t* scr = lv_screen_active();
@@ -746,11 +752,25 @@ void App::tare_scale() {
 void App::pump_scale_chart() {
   if (scale_ == nullptr) return;
   float buf[64];
-  const size_t n = scale_->drain_flow(buf, 64);  // also keeps the buffer drained
-  if (home_.flow_chart == nullptr || home_.flow_series == nullptr) return;
-  for (size_t i = 0; i < n; ++i) {
-    lv_chart_set_next_value(home_.flow_chart, home_.flow_series,
-                            static_cast<int32_t>(buf[i] * 100.0f));
+  scale_->drain_flow(buf, 64);  // keep the ScaleLink flow buffer bounded
+
+  // Sweep the flow graph left->right by wall-clock time (smooth regardless of the
+  // sample rate); plots the scale's current flow. Cheap no-op without a graph.
+  const core::ScaleSnapshot snap = scale_->snapshot();
+  ui::flow_graph_tick(home_, snap);
+
+  // Update the weight readout faster than the 2 Hz UI refresh (watching a shot),
+  // throttled to ~10 Hz so it isn't wasteful. lv_label_set_text no-ops if the
+  // text is unchanged, so a settled scale costs nothing.
+  if (home_.scale_weight != nullptr) {
+    const uint32_t t = lv_tick_get();
+    if (t - scale_readout_tick_ >= 100) {
+      scale_readout_tick_ = t;
+      char wb[16];
+      if (snap.connected) std::snprintf(wb, sizeof(wb), "%.1f g", static_cast<double>(snap.weight_g));
+      else std::snprintf(wb, sizeof(wb), "-- g");
+      lv_label_set_text(home_.scale_weight, wb);
+    }
   }
 }
 

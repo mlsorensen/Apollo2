@@ -46,8 +46,21 @@ struct HomeWidgets {
   lv_obj_t* tare_label = nullptr;
   lv_obj_t* paddle_pill = nullptr;    // paddle/brew status chip (bg = state color)
   lv_obj_t* paddle_label = nullptr;
-  lv_obj_t* flow_chart = nullptr;     // flow-rate graph (large screens only)
-  lv_chart_series_t* flow_series = nullptr;
+  // Flow-rate strip chart (large screens only). A self-managed lv_canvas: newest
+  // sample at the right, the plot scrolls right->left by wall-clock time (see
+  // flow_graph_tick) so older data trails off the left. Each step memmoves the
+  // buffer left and paints one new column — cheap vs re-rendering the whole
+  // polyline. We write flow_buf (an lv_malloc'd RGB565 bitmap, freed by App on
+  // rebuild/teardown) DIRECTLY, not via lv_canvas_set_px (far too slow per-pixel).
+  // flow_stride is the buffer's row pitch in uint16 units.
+  lv_obj_t* flow_canvas = nullptr;
+  uint16_t* flow_buf = nullptr;
+  int flow_w = 0;             // plot width/height in px (canvas size)
+  int flow_h = 0;
+  int flow_stride = 0;        // buffer row pitch in pixels (>= flow_w)
+  int flow_prev_y = -1;      // previous sample's row (continuous line; -1 = pen up)
+  uint32_t flow_tick = 0;    // last advance timestamp (ms); 0 = uninitialized
+  uint32_t flow_accum_ms = 0;  // fractional-pixel time bank
 
   // Charging animation: a looping battery-fill icon (no percent — terminal
   // voltage under charge is charger-dependent). The timer advances the frame.
@@ -66,5 +79,12 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
                  const core::BatteryState& battery, const core::WallTime& clock,
                  bool clock_24h, bool fahrenheit, const core::ScaleSnapshot& scale,
                  const core::BrewSnapshot& brew);
+
+// Scroll the flow strip chart left by however many pixels elapsed wall-clock time
+// calls for, painting the new right-edge column(s) with the scale's current flow.
+// Called every device-loop iteration (see App::pump_scale_chart); a cheap no-op
+// when there's no graph or not enough time has passed for a pixel step. Time-based
+// (not per-sample) scrolling keeps it smooth regardless of the sample rate.
+void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale);
 
 }  // namespace ui

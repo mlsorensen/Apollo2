@@ -117,6 +117,7 @@ class App {
   lv_obj_t* modal_ = nullptr;       // current overlay modal, if open
   bool pairing_active_ = false;     // waiting on a pairing-read outcome
   bool wifi_setup_shown_ = false;   // WiFi instructions modal is open
+  uint32_t scale_readout_tick_ = 0;     // throttles the fast (~10 Hz) weight readout
   bool theme_rebuild_pending_ = false;  // coalesce rapid theme cycling into one rebuild
   bool layout_rebuild_pending_ = false; // coalesce a scale pair/forget rebuild
   int rebuild_section_ = kSectionDevice;  // Settings section to return to after rebuild()

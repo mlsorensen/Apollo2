@@ -21,8 +21,10 @@ namespace {
 Arduino_GFX* g_gfx = nullptr;
 lv_color_t* g_draw_buf = nullptr;
 
-// Number of screen rows LVGL renders per flush in partial mode.
-constexpr int kBufferLines = 40;
+// Number of screen rows LVGL renders per flush in partial mode. Larger = fewer
+// bands/flushes per refresh (the flow graph's ~200px plot renders in ~1 band).
+// PSRAM on RGB boards, so the size is cheap. (Probe: was 40.)
+constexpr int kBufferLines = 200;
 
 uint32_t tick_cb() { return millis(); }
 
@@ -96,20 +98,18 @@ bool Display::begin() {
   const size_t buf_px = static_cast<size_t>(w) * kBufferLines;
   const size_t buf_bytes = buf_px * sizeof(lv_color_t);
 #if defined(BOARD_DISPLAY_RGB)
-  // Keep the LVGL scratch buffer in INTERNAL RAM. LVGL renders into it pixel by
-  // pixel (CPU), and the RGB panel's framebuffer scan already saturates PSRAM
-  // bandwidth — a PSRAM scratch buffer fights that scan and makes rendering (and
-  // thus input handling) crawl. It's only a few lines (~64-80 KB), which fits.
-  // Fall back to PSRAM only if internal is exhausted.
-  g_draw_buf = static_cast<lv_color_t*>(
-      heap_caps_malloc(buf_bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
-  const bool internal = g_draw_buf != nullptr;
+  // Keep this scratch buffer in PSRAM. An internal-RAM scratch renders faster (no
+  // contention with the panel's PSRAM framebuffer scan), BUT the ~64-80 KB it
+  // takes is exactly what the WiFi stack needs to init for the token portal —
+  // internal buffer + BLE + WiFi = esp_wifi_init NO_MEM. The real render-speed +
+  // tearing fix is the esp_lcd double-framebuffer (renders into the FBs directly,
+  // no internal scratch); see the esp-lcd-rgb-plan memory. Until then: PSRAM here.
+  g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM));
   if (g_draw_buf == nullptr) {
-    g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM));
+    g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_INTERNAL));
   }
-  Serial.printf("RGB: LVGL draw buffer %s in %s (%u bytes)\n",
-                g_draw_buf ? "ok" : "FAILED", internal ? "internal" : "PSRAM",
-                static_cast<unsigned>(buf_bytes));
+  Serial.printf("RGB: LVGL draw buffer %s (%u bytes)\n",
+                g_draw_buf ? "ok" : "FAILED", static_cast<unsigned>(buf_bytes));
 #else
   // SPI pushes this buffer over the bus via DMA -> must be DMA-capable.
   g_draw_buf = static_cast<lv_color_t*>(
