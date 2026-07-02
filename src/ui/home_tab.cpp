@@ -1031,17 +1031,38 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     }
   }
 
-  // Power button: only actionable when connected.
-  if (connected) {
-    lv_obj_remove_state(w.power_btn, LV_STATE_DISABLED);
-    lv_obj_set_style_bg_color(
-        w.power_btn, lv_color_hex(on ? ui::theme::card() : ui::theme::accent()), 0);
-    lv_label_set_text(w.power_label,
-                      on ? LV_SYMBOL_POWER "  Standby" : LV_SYMBOL_POWER "  Turn On");
-  } else {
-    lv_obj_add_state(w.power_btn, LV_STATE_DISABLED);
-    lv_obj_set_style_bg_color(w.power_btn, lv_color_hex(ui::theme::card()), 0);
-    lv_label_set_text(w.power_label, LV_SYMBOL_POWER "  Offline");
+  // Action button: Power when connected; otherwise it doubles as a connect /
+  // setup affordance so the old dead "Offline" button does something. Disabled in
+  // states where a tap can't help (mid-connect, or needs setup/token first).
+  switch (state.link) {
+    case core::Link::Connected:
+      lv_obj_remove_state(w.power_btn, LV_STATE_DISABLED);
+      lv_obj_set_style_bg_color(
+          w.power_btn, lv_color_hex(on ? ui::theme::card() : ui::theme::accent()), 0);
+      lv_label_set_text(w.power_label,
+                        on ? LV_SYMBOL_POWER "  Standby" : LV_SYMBOL_POWER "  Turn On");
+      break;
+    case core::Link::Disconnected:  // configured + tokened, just not connected -> connect
+      lv_obj_remove_state(w.power_btn, LV_STATE_DISABLED);
+      lv_obj_set_style_bg_color(w.power_btn, lv_color_hex(ui::theme::accent()), 0);
+      lv_label_set_text(w.power_label, LV_SYMBOL_REFRESH "  Connect");
+      break;
+    case core::Link::Connecting:
+      lv_obj_add_state(w.power_btn, LV_STATE_DISABLED);
+      lv_obj_set_style_bg_color(w.power_btn, lv_color_hex(ui::theme::card()), 0);
+      lv_label_set_text(w.power_label, LV_SYMBOL_REFRESH "  Connecting...");
+      break;
+    case core::Link::NeedsToken:
+      lv_obj_add_state(w.power_btn, LV_STATE_DISABLED);
+      lv_obj_set_style_bg_color(w.power_btn, lv_color_hex(ui::theme::card()), 0);
+      lv_label_set_text(w.power_label, LV_SYMBOL_WARNING "  Token needed");
+      break;
+    case core::Link::Unconfigured:
+    default:
+      lv_obj_add_state(w.power_btn, LV_STATE_DISABLED);
+      lv_obj_set_style_bg_color(w.power_btn, lv_color_hex(ui::theme::card()), 0);
+      lv_label_set_text(w.power_label, LV_SYMBOL_SETTINGS "  Set up in Settings");
+      break;
   }
 }
 

@@ -918,9 +918,20 @@ void App::show_tab(int index) {
 
 void App::toggle_power() {
   if (machine_ == nullptr) return;
-  const bool on = machine_->snapshot().power == core::Power::On;
-  machine_->set_power(!on);
-  refresh();
+  const core::Link link = machine_->snapshot().link;
+  if (link == core::Link::Connected) {
+    const bool on = machine_->snapshot().power == core::Power::On;
+    machine_->set_power(!on);
+    refresh();
+    return;
+  }
+  // Repurposed "Offline" button: when configured but disconnected, a tap starts the
+  // BLE connection (mirrors the Settings Connect button). Other states show the
+  // button disabled, so this is a defensive no-op for them.
+  if (link == core::Link::Disconnected && provisioner_ != nullptr) {
+    provisioner_->set_connect_enabled(true);
+    refresh();  // reflect Connecting on Home + the Settings Connect/Disconnect button
+  }
 }
 
 void App::tare_scale() {
