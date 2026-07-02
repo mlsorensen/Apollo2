@@ -15,6 +15,7 @@
 #include "platform_esp32/history.h"
 #include "platform_esp32/io_extension.h"
 #include "platform_esp32/micra_link.h"
+#include "platform_esp32/network.h"
 #include "platform_esp32/provisioner.h"
 #include "platform_esp32/scale_link.h"
 #include "platform_esp32/scale_provisioner.h"
@@ -39,6 +40,7 @@ platform::Provisioner g_provisioner{g_micra, g_config, g_token_setup};
 platform::Battery g_battery;
 platform::DisplaySettings g_display_settings{g_display, g_config};
 platform::Clock g_clock{g_config};
+platform::Network g_network{g_config, g_clock, g_token_setup};  // WiFi station + NTP
 platform::History g_history;
 platform::ScaleLink g_scale;            // NimBLE Bluetooth scale (Bookoo Themis)
 platform::ScaleProvisioner g_scale_provisioner{g_scale, g_config};
@@ -129,7 +131,7 @@ void setup() {
   // Build the UI bound to the machine + provisioner + battery + display.
   const ui::ScreenProfile screen{g_display.width(), g_display.height()};
   g_app.build(g_micra, g_provisioner, g_battery, g_display_settings, g_clock, g_history,
-              g_scale, g_scale_provisioner, g_brew, screen);
+              g_scale, g_scale_provisioner, g_brew, g_network, screen);
 
   // Critically-low battery -> deep sleep instead of brown-out thrashing. Kill the
   // backlight first (dominant load, can latch on in sleep), then park (~uA) until a
@@ -160,12 +162,17 @@ void setup() {
   g_scale.set_name(g_config.scale_name());
   Serial.printf("Saved scale: mac=%s\n", scale_mac.empty() ? "(none)" : scale_mac.c_str());
   g_scale.begin(scale_mac);
+
+  // Join home WiFi (if enabled) for NTP time; idles otherwise. WiFi coexists with
+  // NimBLE on the S3, so this is safe alongside the BLE links.
+  g_network.begin();
 }
 
 void loop() {
   g_app.pump_scale_chart();  // drain the scale's flow stream into the graph (fast)
   lv_timer_handler();        // LVGL render/input
   g_token_setup.handle();    // pump the WiFi setup web server when active
+  g_network.poll();          // drive the WiFi station state machine + NTP->RTC
 
   // Reflect the latest cached machine state in the UI (cheap; no BLE here).
   static uint32_t last = 0;

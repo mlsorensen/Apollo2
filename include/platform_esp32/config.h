@@ -50,6 +50,21 @@ class Config {
 
   bool perf_overlay() const;  // LVGL FPS/CPU overlay (default false)
   void set_perf_overlay(bool on);
+
+  // WiFi station (home network join + NTP time sync). Credentials are entered via
+  // the setup portal; timezone/NTP server via Settings.
+  bool wifi_enabled() const;  // master WiFi on/off (default false)
+  void set_wifi_enabled(bool on);
+  std::string wifi_ssid() const;      // saved home SSID, or "" if none
+  std::string wifi_password() const;  // saved PSK (plaintext in NVS), or ""
+  void save_wifi(const std::string& ssid, const std::string& password);
+  void clear_wifi();          // forget the saved network (incl. password)
+  std::string timezone() const;    // POSIX TZ string (default "UTC0")
+  void set_timezone(const std::string& tz);
+  std::string ntp_server() const;  // NTP host (default "pool.ntp.org")
+  void set_ntp_server(const std::string& host);
+  bool ntp_enabled() const;        // sync time from NTP when connected (default true)
+  void set_ntp_enabled(bool on);
 };
 
 }  // namespace platform

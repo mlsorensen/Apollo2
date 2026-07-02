@@ -1,6 +1,9 @@
 #include "ui/settings_tab.h"
 
+#include <string>
+
 #include "ui/theme.h"
+#include "ui/timezones.h"
 #include "ui/widgets.h"
 
 namespace {
@@ -199,6 +202,63 @@ void build_device_rows(lv_obj_t* page, const lv_font_t* text_font,
   lv_obj_t* rp = make_setting_row(page, "Performance overlay", text_font);
   out.perf_overlay_switch = lv_switch_create(rp);
   lv_obj_set_size(out.perf_overlay_switch, btn_size + 8, btn_size / 2 + 6);
+
+  // --- WiFi: enable + status + setup/forget + timezone --------------------
+  section_label(page, "WiFi", text_font);
+
+  lv_obj_t* rw = make_setting_row(page, "Enable", text_font);
+  out.wifi_switch = lv_switch_create(rw);
+  lv_obj_set_size(out.wifi_switch, btn_size + 8, btn_size / 2 + 6);
+
+  lv_obj_t* rst = make_setting_row(page, "Status", text_font);
+  out.wifi_status = lv_label_create(rst);
+  lv_obj_set_style_text_color(out.wifi_status, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(out.wifi_status, text_font, 0);
+  lv_label_set_text(out.wifi_status, "Off");
+
+  // Set up / Forget buttons share a row (mirrors the connection panel's actions).
+  lv_obj_t* rb = lv_obj_create(page);
+  lv_obj_remove_style_all(rb);
+  lv_obj_remove_flag(rb, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_width(rb, lv_pct(100));
+  lv_obj_set_height(rb, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(rb, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(rb, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(rb, 6, 0);
+
+  out.wifi_setup_btn = ui::make_button(rb);
+  lv_obj_set_flex_grow(out.wifi_setup_btn, 1);
+  lv_obj_set_height(out.wifi_setup_btn, btn_size);
+  lv_obj_set_style_bg_color(out.wifi_setup_btn, lv_color_hex(ui::theme::accent()), 0);
+  lv_obj_t* su = lv_label_create(out.wifi_setup_btn);
+  lv_label_set_text(su, "Set up WiFi");
+  lv_obj_set_style_text_color(su, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(su, text_font, 0);
+  lv_obj_center(su);
+
+  out.wifi_forget_btn = ui::make_button(rb);
+  lv_obj_set_height(out.wifi_forget_btn, btn_size);
+  lv_obj_set_style_bg_color(out.wifi_forget_btn, lv_color_hex(ui::theme::alert()), 0);
+  lv_obj_t* fg = lv_label_create(out.wifi_forget_btn);
+  lv_label_set_text(fg, "Forget");
+  lv_obj_set_style_text_color(fg, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(fg, text_font, 0);
+  lv_obj_center(fg);
+
+  lv_obj_t* rtz = make_setting_row(page, "Timezone", text_font);
+  out.tz_dropdown = lv_dropdown_create(rtz);
+  std::string opts;
+  for (int i = 0; i < ui::kTimezoneCount; ++i) {
+    if (i) opts += '\n';
+    opts += ui::kTimezones[i].label;
+  }
+  lv_dropdown_set_options(out.tz_dropdown, opts.c_str());
+  lv_obj_set_style_text_font(out.tz_dropdown, text_font, 0);
+
+  lv_obj_t* rnt = make_setting_row(page, "Auto time (NTP)", text_font);
+  out.ntp_switch = lv_switch_create(rnt);
+  lv_obj_set_size(out.ntp_switch, btn_size + 8, btn_size / 2 + 6);
 }
 
 // A root-page navigation entry: a card row "<label>  ›" that drills into `target`.

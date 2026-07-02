@@ -40,6 +40,38 @@ const char kForm[] =
     ".catch(function(){m.style.color='#c00';"
     "m.textContent='Could not reach the device \\u2014 try again.';});"
     "return false;}</script>"
+    // WiFi (optional): join a home network for automatic time (NTP). On save the
+    // device leaves this AP and connects to that network, so this page closes —
+    // the device screen then shows the connection status + its local IP.
+    "<hr style='margin:2em 0'>"
+    "<h3>WiFi (optional)</h3>"
+    "<p style='font-size:.9em'>Join your home WiFi for automatic time. The device "
+    "will leave this setup network and connect \\u2014 watch its screen for the "
+    "result and its local IP.</p>"
+    "<form onsubmit='return submitWifi()'>"
+    "<input id=ssid name='ssid' placeholder='Network name' autocomplete='off' "
+    "autocapitalize='off' spellcheck='false' "
+    "style='width:100%;padding:10px;box-sizing:border-box;margin-bottom:8px'>"
+    "<input id=pass name='pass' type='password' placeholder='Password' "
+    "autocomplete='off' style='width:100%;padding:10px;box-sizing:border-box'>"
+    "<p id=wmsg style='font-size:.9em'></p>"
+    "<p><button style='padding:10px 24px;font-size:1em'>Save WiFi</button></p>"
+    "</form>"
+    "<script>function submitWifi(){"
+    "var s=document.getElementById('ssid').value.trim();"
+    "var p=document.getElementById('pass').value;"
+    "var m=document.getElementById('wmsg');"
+    "if(!s){m.style.color='#c00';m.textContent='Enter a network name.';return false;}"
+    "m.style.color='#888';m.textContent='Saving\\u2026';"
+    "fetch('/wifi',{method:'POST',headers:{'Content-Type':"
+    "'application/x-www-form-urlencoded'},body:'ssid='+encodeURIComponent(s)+"
+    "'&pass='+encodeURIComponent(p)})"
+    ".then(function(r){return r.text();})"
+    ".then(function(t){m.style.color='#0a0';m.textContent=t;})"
+    ".catch(function(){m.style.color='#c00';"
+    "m.textContent='Saved \\u2014 the device is leaving this network. Watch its "
+    "screen.';});"
+    "return false;}</script>"
     "</body></html>";
 
 // The token is a 32-byte value rendered as exactly 64 hex characters.
@@ -72,6 +104,7 @@ void TokenSetup::start() {
   WiFi.setTxPower(WIFI_POWER_8_5dBm);
   server_.on("/", [this]() { handle_root(); });
   server_.on("/save", HTTP_POST, [this]() { handle_save(); });
+  server_.on("/wifi", HTTP_POST, [this]() { handle_wifi(); });
   server_.begin();
   active_ = true;
   stop_pending_ = true;                     // safety net: auto-close if unused, so the
@@ -117,6 +150,24 @@ void TokenSetup::handle_save() {
   server_.send(200, "text/plain",
                "Saved. The device is connecting -- this page stays open in case "
                "the token is wrong; you can paste a new one and Save again.");
+}
+
+void TokenSetup::handle_wifi() {
+  String ssid = server_.arg("ssid");
+  String pass = server_.arg("pass");
+  ssid.trim();
+  if (ssid.length() == 0) {
+    server_.send(200, "text/plain", "Enter a network name.");
+    return;
+  }
+  config_.save_wifi(std::string(ssid.c_str()), std::string(pass.c_str()));
+  config_.set_wifi_enabled(true);
+  wifi_saved_ = true;  // Network tears down the AP + connects from loop() context
+  Serial.printf("TokenSetup: WiFi credentials saved for '%s'\n", ssid.c_str());
+  // Reply before the AP is torn down (next loop) so the phone gets this message.
+  server_.send(200, "text/plain",
+               "Saved. The device is leaving this setup network to connect to your "
+               "WiFi -- watch the device screen for the status and its local IP.");
 }
 
 }  // namespace platform

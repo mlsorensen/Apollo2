@@ -19,6 +19,12 @@ constexpr char kPerfOverlayKey[] = "perfovl";
 constexpr char kScaleMacKey[] = "smac";
 constexpr char kScaleNameKey[] = "sname";
 constexpr char kTargetKey[] = "tgtg";
+constexpr char kWifiEnKey[] = "wifi_en";
+constexpr char kWifiSsidKey[] = "ssid";
+constexpr char kWifiPassKey[] = "wifipass";
+constexpr char kTzKey[] = "tz";
+constexpr char kNtpKey[] = "ntp";
+constexpr char kNtpEnKey[] = "ntp_en";
 }  // namespace
 
 namespace platform {
@@ -214,6 +220,80 @@ void Config::set_perf_overlay(bool on) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putBool(kPerfOverlayKey, on);
+  p.end();
+}
+
+bool Config::wifi_enabled() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
+  const bool v = p.isKey(kWifiEnKey) ? p.getBool(kWifiEnKey, false) : false;
+  p.end();
+  return v;
+}
+
+void Config::set_wifi_enabled(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kWifiEnKey, on);
+  p.end();
+}
+
+std::string Config::wifi_ssid() const { return read_key(kWifiSsidKey); }
+
+std::string Config::wifi_password() const { return read_key(kWifiPassKey); }
+
+void Config::save_wifi(const std::string& ssid, const std::string& password) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putString(kWifiSsidKey, ssid.c_str());
+  p.putString(kWifiPassKey, password.c_str());  // plaintext, as ESP-IDF's own wifi store
+  p.end();
+}
+
+void Config::clear_wifi() {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.remove(kWifiSsidKey);
+  p.remove(kWifiPassKey);
+  p.end();
+}
+
+std::string Config::timezone() const {
+  const std::string tz = read_key(kTzKey);
+  return tz.empty() ? "UTC0" : tz;
+}
+
+void Config::set_timezone(const std::string& tz) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putString(kTzKey, tz.c_str());
+  p.end();
+}
+
+std::string Config::ntp_server() const {
+  const std::string host = read_key(kNtpKey);
+  return host.empty() ? "pool.ntp.org" : host;
+}
+
+void Config::set_ntp_server(const std::string& host) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putString(kNtpKey, host.c_str());
+  p.end();
+}
+
+bool Config::ntp_enabled() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return true;
+  const bool v = p.isKey(kNtpEnKey) ? p.getBool(kNtpEnKey, true) : true;
+  p.end();
+  return v;
+}
+
+void Config::set_ntp_enabled(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kNtpEnKey, on);
   p.end();
 }
 

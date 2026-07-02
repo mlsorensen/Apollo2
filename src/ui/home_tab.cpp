@@ -604,6 +604,10 @@ void build_rail_tray(lv_obj_t* rail, const lv_font_t* font, HomeWidgets& out) {
   lv_obj_set_style_text_color(out.battery_label, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(out.battery_label, font, 0);
 
+  out.wifi_label = lv_label_create(tray);  // WiFi glyph; update_home shows/hides + colors it
+  lv_obj_set_style_text_font(out.wifi_label, font, 0);
+  lv_obj_add_flag(out.wifi_label, LV_OBJ_FLAG_HIDDEN);
+
   out.batt_timer = lv_timer_create(battery_anim_cb, 350, &out);  // drives charge anim
 }
 
@@ -624,7 +628,23 @@ void build_bottom_tray(lv_obj_t* bar, const lv_font_t* font, HomeWidgets& out) {
   lv_obj_set_style_text_color(out.clock_label, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(out.clock_label, font, 0);
 
-  out.battery_label = lv_label_create(tray);
+  // Space is tight on the compact bottom bar, so WiFi + battery share one row below
+  // the clock. The battery shows just its level icon (no %) — the icon shape plus
+  // the green (charging) / red (low) coloring reads well enough at this size.
+  lv_obj_t* icons = lv_obj_create(tray);
+  lv_obj_remove_style_all(icons);
+  lv_obj_remove_flag(icons, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_size(icons, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(icons, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(icons, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(icons, 6, 0);
+
+  out.wifi_label = lv_label_create(icons);  // WiFi glyph; update_home shows/hides + colors it
+  lv_obj_set_style_text_font(out.wifi_label, font, 0);
+  lv_obj_add_flag(out.wifi_label, LV_OBJ_FLAG_HIDDEN);
+
+  out.battery_label = lv_label_create(icons);
   lv_obj_set_style_text_color(out.battery_label, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(out.battery_label, font, 0);
 
@@ -636,6 +656,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   const bool compact = is_compact(screen);
   const bool xl = is_xl(screen);
   out.scale_enabled = scale_enabled;
+  out.compact = compact;
 
   // HomeWidgets is reused across rebuilds, and build() frees the old widgets. Null
   // every optional pointer up front so the layout branch that runs leaves the rest
@@ -651,7 +672,15 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   out.micra_status_dot = out.micra_status_label = nullptr;
   out.scale_status_dot = out.scale_status_label = nullptr;
   out.shot_timer_label = out.target_minus = out.target_plus = nullptr;
+  // All flow-graph widgets: only the large scale-aware layout builds them, so null
+  // every one here. Otherwise a scale-aware -> no-scale rebuild leaves these pointing
+  // at objects lv_obj_clean already freed, and apply_flow_xaxis_labels / update_home
+  // dereference them (LoadProhibited on forget-scale).
   out.flow_canvas = nullptr;  // flow_buf is freed by App before each rebuild
+  out.flow_unit_btn = out.flow_unit_label = nullptr;
+  out.flow_xspan_label = nullptr;
+  for (lv_obj_t*& yl : out.flow_ylabels) yl = nullptr;
+  for (lv_obj_t*& xl : out.flow_xlabels) xl = nullptr;
 
   const int pad = compact ? 8 : xl ? 28 : 20;
   const int gap = compact ? 6 : xl ? 22 : 16;
@@ -739,22 +768,43 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   const lv_font_t* panel_sym = xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
 
   if (!scale_enabled) {
-    // --- Large no-scale Home: one MICRA card (BREW / STEAM + steppers) + power;
-    // clock/battery in the rail tray, same as the scale-aware layout. ---
+    // --- Large no-scale Home: one MICRA card as the hero, filling the whole space
+    // (no second card to share it), then Power. Bigger value + steppers than the
+    // scale-aware panels, and the BREW/STEAM clusters are centered vertically so the
+    // card doesn't read as a small strip floating in dead space. ---
+    const lv_font_t* hero_val = xl ? &lv_font_montserrat_48 : &lv_font_montserrat_40;
+    const lv_font_t* hero_cap = xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
+    const lv_font_t* hero_set = xl ? &lv_font_montserrat_24 : &lv_font_montserrat_20;
+    const int hero_btn = xl ? 64 : 54;
+    const lv_font_t* hero_sym = &lv_font_montserrat_28;
+
     lv_obj_t* row = lv_obj_create(parent);
     lv_obj_remove_style_all(row);
     lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_width(row, lv_pct(100));
-    lv_obj_set_height(row, xl ? 300 : 220);
+    lv_obj_set_flex_grow(row, 1);  // fill the vertical space (no dead spacer)
     lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-    build_micra_panel(row, panel_cap, panel_status, panel_val, panel_set, panel_btn,
-                      panel_sym, card_pad, out);
 
-    lv_obj_t* spacer = lv_obj_create(parent);
-    lv_obj_remove_style_all(spacer);
-    lv_obj_set_width(spacer, lv_pct(100));
-    lv_obj_set_height(spacer, 0);
-    lv_obj_set_flex_grow(spacer, 1);
+    lv_obj_t* card = make_panel_card(row, card_pad);
+    make_panel_header(card, "MICRA", hero_cap, panel_status, &out.micra_status_dot,
+                      &out.micra_status_label);
+    lv_obj_t* body = make_panel_body(card);
+    // BREW / STEAM, each: caption -> big live value -> [-] set [+], centered in the
+    // tall card. The set label is widened for the larger set font.
+    lv_obj_t* bcol = make_panel_column(body, "BREW", hero_cap, hero_val, &out.brew_value);
+    lv_obj_set_flex_align(bcol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(bcol, xl ? 18 : 12, 0);
+    make_stepper_group(bcol, hero_btn, hero_sym, hero_set, &out.brew_set,
+                       &out.brew_minus, &out.brew_plus);
+    lv_obj_set_width(out.brew_set, xl ? 96 : 78);
+    lv_obj_t* scol = make_panel_column(body, "STEAM", hero_cap, hero_val, &out.boiler_value);
+    lv_obj_set_flex_align(scol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(scol, xl ? 18 : 12, 0);
+    make_stepper_group(scol, hero_btn, hero_sym, hero_set, &out.boiler_set,
+                       &out.boiler_minus, &out.boiler_plus);
+    lv_obj_set_width(out.boiler_set, xl ? 96 : 78);
 
     build_power_button(parent, btn_h, btn_font, out);
     return;
@@ -806,7 +856,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
 void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
                  const core::BatteryState& battery, const core::WallTime& clock,
                  bool clock_24h, bool fahrenheit, const core::ScaleSnapshot& scale,
-                 const core::BrewSnapshot& brew) {
+                 const core::BrewSnapshot& brew, core::NetState net) {
   const bool connected = state.link == core::Link::Connected;
   const bool on = state.power == core::Power::On;
 
@@ -949,7 +999,12 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     std::snprintf(bb, sizeof(bb), LV_SYMBOL_CHARGE " %s", battery_fill_icon(w.charge_frame));
     lv_label_set_text(w.battery_label, bb);
   } else if (battery.present) {
-    std::snprintf(bb, sizeof(bb), "%d%% %s", battery.percent, battery_icon(battery.percent));
+    // Compact: icon only (space is tight); larger screens also show the percent.
+    if (w.compact) {
+      std::snprintf(bb, sizeof(bb), "%s", battery_icon(battery.percent));
+    } else {
+      std::snprintf(bb, sizeof(bb), "%d%% %s", battery.percent, battery_icon(battery.percent));
+    }
     lv_label_set_text(w.battery_label, bb);
     lv_obj_set_style_text_color(
         w.battery_label,
@@ -959,6 +1014,21 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     lv_obj_set_style_text_color(w.battery_label, lv_color_hex(ui::theme::muted()), 0);
   } else {
     lv_label_set_text(w.battery_label, "");
+  }
+
+  // WiFi glyph: hidden when WiFi is off; muted while connecting, normal when
+  // connected, alert-colored on a failed attempt. (Only present in the trays.)
+  if (w.wifi_label != nullptr) {
+    if (net == core::NetState::Disabled) {
+      lv_obj_add_flag(w.wifi_label, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_remove_flag(w.wifi_label, LV_OBJ_FLAG_HIDDEN);
+      lv_label_set_text(w.wifi_label, LV_SYMBOL_WIFI);
+      uint32_t color = ui::theme::muted();       // Connecting
+      if (net == core::NetState::Connected) color = ui::theme::text();
+      else if (net == core::NetState::Failed) color = ui::theme::alert();
+      lv_obj_set_style_text_color(w.wifi_label, lv_color_hex(color), 0);
+    }
   }
 
   // Power button: only actionable when connected.

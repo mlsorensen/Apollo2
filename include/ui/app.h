@@ -9,6 +9,7 @@
 #include "core/display_settings.h"
 #include "core/history.h"
 #include "core/machine.h"
+#include "core/network.h"
 #include "core/provisioner.h"
 #include "core/scale.h"
 #include "core/scale_provisioner.h"
@@ -34,7 +35,7 @@ class App {
              core::IBattery& battery, core::IDisplaySettings& display,
              core::IClock& clock, core::IHistory& history, core::IScale& scale,
              core::IScaleProvisioner& scale_provisioner, core::IBrewController& brew,
-             const ScreenProfile& screen);
+             core::INetwork& network, const ScreenProfile& screen);
 
   // Reflect the latest machine state and scan results in the UI (no I/O).
   void refresh();
@@ -70,6 +71,12 @@ class App {
   void cancel_pairing();       // pairing-spinner "Cancel"
   void start_token_setup();    // modal "WiFi" -> WiFi portal + instructions
   void cancel_token_setup();   // WiFi-modal "Cancel"
+  void set_wifi_enabled(bool on);  // Device "WiFi" enable switch
+  void start_wifi_setup();     // Device "Set up WiFi" -> AP portal + instructions
+  void cancel_wifi_setup();    // WiFi-setup-modal "Cancel"
+  void forget_wifi();          // Device "Forget" (WiFi) button
+  void timezone_select(int index);  // Device timezone dropdown
+  void set_ntp_enabled(bool on);    // Device "Auto time (NTP)" switch
   void dismiss_modal();        // token-modal "Cancel"
   void select_settings_section(int section);  // Settings segmented selector
   void on_settings_page_shown();  // lv_menu navigated; re-seed time on the Device page
@@ -107,6 +114,10 @@ class App {
   void show_pairing_modal();  // spinner while the pairing read runs
   void show_token_modal(bool fetch_failed);  // Retry pairing / WiFi / Cancel
   void show_wifi_modal();   // WiFi instructions + Cancel
+  void show_wifi_setup_modal();  // WiFi-credential portal instructions + Cancel
+  core::NetState net_status() const {
+    return network_ != nullptr ? network_->status() : core::NetState::Disabled;
+  }
 
   core::IMachine* machine_ = nullptr;
   core::IProvisioner* provisioner_ = nullptr;
@@ -117,11 +128,13 @@ class App {
   core::IScale* scale_ = nullptr;
   core::IScaleProvisioner* scale_provisioner_ = nullptr;
   core::IBrewController* brew_ = nullptr;
+  core::INetwork* network_ = nullptr;
   lv_obj_t* tabview_ = nullptr;
   ScreenProfile screen_{};          // stored so we can rebuild on a theme change
   lv_obj_t* modal_ = nullptr;       // current overlay modal, if open
   bool pairing_active_ = false;     // waiting on a pairing-read outcome
-  bool wifi_setup_shown_ = false;   // WiFi instructions modal is open
+  bool wifi_setup_shown_ = false;   // token-over-WiFi instructions modal is open
+  bool wifi_portal_shown_ = false;  // WiFi-credential setup modal is open
   uint32_t scale_readout_tick_ = 0;     // throttles the fast (~10 Hz) weight readout
   bool theme_rebuild_pending_ = false;  // coalesce rapid theme cycling into one rebuild
   bool layout_rebuild_pending_ = false; // coalesce a scale pair/forget rebuild

@@ -6,6 +6,7 @@
 #include "core/brew.h"
 #include "core/clock.h"
 #include "core/machine.h"
+#include "core/network.h"
 #include "core/scale.h"
 #include "ui/screen.h"
 
@@ -25,6 +26,8 @@ struct HomeWidgets {
   lv_obj_t* status_label = nullptr;
   lv_obj_t* battery_label = nullptr;  // top-right, or rail tray on large scale layout
   lv_obj_t* clock_label = nullptr;    // top-right, or rail tray on large scale layout
+  lv_obj_t* wifi_label = nullptr;     // WiFi glyph in the tray (hidden when WiFi is off)
+  bool compact = false;               // compact tray: battery shows icon only (no %), wifi inline
   // Per-device status shown in the panel headers of the large scale-aware layout
   // (null on compact / no-scale, where the single top-bar status is used instead).
   lv_obj_t* micra_status_dot = nullptr;
@@ -125,7 +128,7 @@ void build_bottom_tray(lv_obj_t* bar, const lv_font_t* font, HomeWidgets& out);
 void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
                  const core::BatteryState& battery, const core::WallTime& clock,
                  bool clock_24h, bool fahrenheit, const core::ScaleSnapshot& scale,
-                 const core::BrewSnapshot& brew);
+                 const core::BrewSnapshot& brew, core::NetState net);
 
 // Scroll the flow strip chart left by however many pixels elapsed wall-clock time
 // calls for, painting the new right-edge column(s) with the scale's current flow.

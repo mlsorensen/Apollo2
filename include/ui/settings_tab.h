@@ -112,6 +112,14 @@ struct SettingsWidgets {
   lv_obj_t* theme_btn = nullptr;
   lv_obj_t* theme_value = nullptr;
   int theme_index = 0;
+
+  // --- WiFi (station + NTP time) ---
+  lv_obj_t* wifi_switch = nullptr;      // enable/disable joining home WiFi
+  lv_obj_t* wifi_status = nullptr;      // "Connected  192.168.1.42" / "Not connected"
+  lv_obj_t* wifi_setup_btn = nullptr;   // "Set up" -> AP credential portal
+  lv_obj_t* wifi_forget_btn = nullptr;  // clear saved credentials
+  lv_obj_t* tz_dropdown = nullptr;      // timezone picker (POSIX TZ under the hood)
+  lv_obj_t* ntp_switch = nullptr;       // sync clock from NTP while connected (default on)
 };
 
 void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,

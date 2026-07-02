@@ -12,6 +12,7 @@ class FakeClock : public core::IClock {
     hour_ = hour;
     minute_ = minute;
   }
+  void set_unix(std::time_t) override {}  // sim has no real clock to seed
   bool use_24h() const override { return use_24h_; }
   void set_24h(bool on) override { use_24h_ = on; }
 

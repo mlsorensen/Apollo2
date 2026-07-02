@@ -13,6 +13,7 @@
 #include "platform_host/fake_display_settings.h"
 #include "platform_host/fake_history.h"
 #include "platform_host/fake_machine.h"
+#include "platform_host/fake_network.h"
 #include "platform_host/fake_provisioner.h"
 #include "platform_host/fake_scale.h"
 #include "platform_host/fake_scale_provisioner.h"
@@ -27,9 +28,9 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             core::IBattery& battery, core::IDisplaySettings& disp_settings,
             core::IClock& clock, core::IHistory& history, core::IScale& scale,
             core::IScaleProvisioner& scale_provisioner, core::IBrewController& brew,
-            ui::ScreenProfile screen, const char* out_path, int tab = 0,
-            int settings_section = -1, bool token_modal = false, int theme = 0,
-            int stats_section = -1) {
+            core::INetwork& network, ui::ScreenProfile screen, const char* out_path,
+            int tab = 0, int settings_section = -1, bool token_modal = false,
+            int theme = 0, int stats_section = -1) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
@@ -37,7 +38,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   host::PngDisplay display(screen.width, screen.height);
   ui::App app;
   app.build(machine, provisioner, battery, disp_settings, clock, history, scale,
-            scale_provisioner, brew, screen);
+            scale_provisioner, brew, network, screen);
   app.show_tab(tab);
   if (settings_section >= 0) app.select_settings_section(settings_section);
   if (stats_section >= 0) app.select_stats_section(stats_section);
@@ -63,12 +64,13 @@ int main() {
   host::FakeScale scale;
   host::FakeScaleProvisioner scale_provisioner;
   host::FakeBrewController brew;
+  host::FakeNetwork network;
 
   // One PNG per supported layout. Add a line here when a new form factor lands.
   auto r = [&](ui::ScreenProfile s, const char* path, int tab = 0, int sec = -1,
                bool modal = false, int theme = 0, int stats = -1) {
     return render(machine, provisioner, battery, disp, clock, history, scale,
-                  scale_provisioner, brew, s, path, tab, sec, modal, theme, stats);
+                  scale_provisioner, brew, network, s, path, tab, sec, modal, theme, stats);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
@@ -81,6 +83,7 @@ int main() {
   scale_provisioner.set_saved(false);
   ok &= r({320, 240}, "renders/home_noscale_320x240.png");
   ok &= r({800, 480}, "renders/home_noscale_800x480.png");
+  ok &= r({1024, 600}, "renders/home_noscale_1024x600.png");
   scale_provisioner.set_saved(true);
   ok &= r({800, 480}, "renders/settings_800x480.png", 1);
   ok &= r({320, 240}, "renders/settings_320x240.png", 1);

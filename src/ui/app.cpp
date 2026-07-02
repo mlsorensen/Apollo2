@@ -2,12 +2,14 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <string>
 
 #include <lvgl.h>
 
 #include "ui/stats_tab.h"
 #include "ui/theme.h"
+#include "ui/timezones.h"
 #include "ui/units.h"
 #include "ui/widgets.h"
 #include "version.h"
@@ -240,6 +242,30 @@ void on_perf_overlay_switch(lv_event_t* e) {
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
   app->set_perf_overlay(lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
+void on_wifi_switch(lv_event_t* e) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  app->set_wifi_enabled(lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
+void on_wifi_setup_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->start_wifi_setup();
+}
+void on_wifi_forget_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->forget_wifi();
+}
+void on_tz_dropdown(lv_event_t* e) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  auto* dd = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  app->timezone_select(lv_dropdown_get_selected(dd));
+}
+void on_ntp_switch(lv_event_t* e) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  app->set_ntp_enabled(lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
+void on_wifi_setup_cancel(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cancel_wifi_setup();
+}
 // Show/hide LVGL's performance monitor (FPS/CPU) on the default display. Compiled
 // out when the sysmon isn't built, so the toggle just persists a no-op preference.
 void apply_perf_overlay(bool on) {
@@ -364,7 +390,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                 core::IBattery& battery, core::IDisplaySettings& display,
                 core::IClock& clock, core::IHistory& history, core::IScale& scale,
                 core::IScaleProvisioner& scale_provisioner, core::IBrewController& brew,
-                const ScreenProfile& screen) {
+                core::INetwork& network, const ScreenProfile& screen) {
   machine_ = &machine;
   provisioner_ = &provisioner;
   battery_ = &battery;
@@ -374,6 +400,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   scale_ = &scale;
   scale_provisioner_ = &scale_provisioner;
   brew_ = &brew;
+  network_ = &network;
   screen_ = screen;
   const bool compact = is_compact(screen);
   const bool xl = is_xl(screen);
@@ -419,6 +446,11 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_t* content = lv_tabview_get_content(tv);
   lv_obj_set_style_bg_color(content, lv_color_hex(ui::theme::bg()), 0);
   lv_obj_set_style_bg_opa(content, LV_OPA_COVER, 0);
+  // Don't switch tabs on a content swipe: it fights with scrolling a long Settings
+  // page (a vertical drag would flip tabs instead of scrolling). Tabs change via the
+  // rail buttons only. (Removing SCROLLABLE from the tabview content disables the
+  // swipe gesture; the pages inside each tab keep their own scrolling.)
+  lv_obj_remove_flag(content, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t* rail = lv_tabview_get_tab_bar(tv);
   lv_obj_set_style_bg_color(rail, lv_color_hex(ui::theme::rail()), 0);
@@ -478,7 +510,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   battery_state_ = battery_->battery();
   update_home(home_, machine_->snapshot(), battery_state_, clock_->now(),
               clock_->use_24h(), display_->use_fahrenheit(), scale_->snapshot(),
-              brew_->snapshot());
+              brew_->snapshot(), net_status());
   update_battery_runtime(battery_state_);
 
   build_settings_tab(settings, screen, display_->supports_brightness(), settings_);
@@ -518,6 +550,12 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                       LV_EVENT_VALUE_CHANGED, this);
   if (settings_.theme_btn != nullptr)
     lv_obj_add_event_cb(settings_.theme_btn, on_theme_clicked, LV_EVENT_CLICKED, this);
+  // WiFi (Device section):
+  lv_obj_add_event_cb(settings_.wifi_switch, on_wifi_switch, LV_EVENT_VALUE_CHANGED, this);
+  lv_obj_add_event_cb(settings_.wifi_setup_btn, on_wifi_setup_clicked, LV_EVENT_CLICKED, this);
+  lv_obj_add_event_cb(settings_.wifi_forget_btn, on_wifi_forget_clicked, LV_EVENT_CLICKED, this);
+  lv_obj_add_event_cb(settings_.tz_dropdown, on_tz_dropdown, LV_EVENT_VALUE_CHANGED, this);
+  lv_obj_add_event_cb(settings_.ntp_switch, on_ntp_switch, LV_EVENT_VALUE_CHANGED, this);
   lv_obj_add_event_cb(settings_.menu, on_menu_page_changed, LV_EVENT_VALUE_CHANGED, this);
 
   build_stats_tab(stats, screen, stats_);
@@ -545,6 +583,18 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   const bool perf = display_->perf_overlay();
   if (perf) lv_obj_add_state(settings_.perf_overlay_switch, LV_STATE_CHECKED);
   apply_perf_overlay(perf);  // match the saved preference (LVGL auto-shows it at init)
+  if (network_ != nullptr) {
+    if (network_->enabled()) lv_obj_add_state(settings_.wifi_switch, LV_STATE_CHECKED);
+    if (network_->ntp_enabled()) lv_obj_add_state(settings_.ntp_switch, LV_STATE_CHECKED);
+    // Select the dropdown row whose POSIX string matches the saved timezone.
+    const char* tz = network_->timezone();
+    for (int i = 0; i < ui::kTimezoneCount; ++i) {
+      if (std::strcmp(tz, ui::kTimezones[i].posix) == 0) {
+        lv_dropdown_set_selected(settings_.tz_dropdown, i);
+        break;
+      }
+    }
+  }
   ui::apply_flow_xaxis_labels(home_);  // initial x-axis label set (no plot reset)
   seed_time_steppers();
 
@@ -558,7 +608,8 @@ void App::refresh() {
     if (battery_ != nullptr) {
       battery_state_ = battery_->battery();
       update_home(home_, snap, battery_state_, clock_->now(), clock_->use_24h(),
-                  display_->use_fahrenheit(), scale_->snapshot(), brew_->snapshot());
+                  display_->use_fahrenheit(), scale_->snapshot(), brew_->snapshot(),
+                  net_status());
       update_battery_runtime(battery_state_);
 
       // Critically-low pack (on battery, sustained) -> hand off to deep sleep.
@@ -587,6 +638,16 @@ void App::refresh() {
       } else if (provisioner_ != nullptr && !provisioner_->token_setup_active()) {
         close_modal();  // portal ended on its own (safety timeout)
       }
+    }
+
+    // WiFi credential portal: once the station connects with the entered network,
+    // close the instructions modal and return to Home. A failed attempt reopens
+    // the AP (Network handles that), so the modal stays up for a retry.
+    if (wifi_portal_shown_ && network_ != nullptr &&
+        network_->status() == core::NetState::Connected) {
+      wifi_portal_shown_ = false;
+      close_modal();
+      if (tabview_ != nullptr) lv_tabview_set_active(tabview_, 0, LV_ANIM_ON);  // Home
     }
   }
   update_settings_view();
@@ -726,7 +787,7 @@ void App::set_use_fahrenheit(bool on) {
     const core::MachineSnapshot snap = machine_->snapshot();
     update_temp_panels(snap);
     update_home(home_, snap, battery_state_, clock_->now(), clock_->use_24h(), on,
-                scale_->snapshot(), brew_->snapshot());
+                scale_->snapshot(), brew_->snapshot(), net_status());
     update_stats_view();
   }
 }
@@ -789,7 +850,7 @@ void App::rebuild() {
     scroll_y = lv_obj_get_scroll_y(settings_.device_page);
 
   build(*machine_, *provisioner_, *battery_, *display_, *clock_, *history_, *scale_,
-        *scale_provisioner_, *brew_, screen_);
+        *scale_provisioner_, *brew_, *network_, screen_);
   show_tab(1);                       // back to Settings...
   select_settings_section(section);  // ...on the section that triggered the rebuild
 
@@ -1038,6 +1099,50 @@ void App::cancel_token_setup() {
   close_modal();
 }
 
+void App::set_wifi_enabled(bool on) {
+  if (network_ != nullptr) network_->set_enabled(on);
+  update_settings_view();  // refresh the status line right away
+}
+
+void App::show_wifi_setup_modal() {
+  if (network_ == nullptr) return;
+  char body[192];
+  std::snprintf(body, sizeof(body),
+                "Join WiFi: %s\nOpen: %s\nenter your home network name + password",
+                network_->setup_ssid(), network_->setup_url());
+  lv_obj_t* card = open_modal("Set up WiFi", body);
+  modal_button(card, "Cancel", ui::theme::rail(), on_wifi_setup_cancel, this);
+  wifi_portal_shown_ = true;
+}
+
+void App::start_wifi_setup() {
+  if (network_ == nullptr) return;
+  close_modal();
+  network_->begin_setup_portal();
+  show_wifi_setup_modal();
+}
+
+void App::cancel_wifi_setup() {
+  if (network_ != nullptr) network_->stop_setup_portal();
+  wifi_portal_shown_ = false;
+  close_modal();
+}
+
+void App::forget_wifi() {
+  if (network_ != nullptr) network_->forget();
+  lv_obj_remove_state(settings_.wifi_switch, LV_STATE_CHECKED);
+  update_settings_view();
+}
+
+void App::timezone_select(int index) {
+  if (network_ == nullptr || index < 0 || index >= ui::kTimezoneCount) return;
+  network_->set_timezone(ui::kTimezones[index].posix);
+}
+
+void App::set_ntp_enabled(bool on) {
+  if (network_ != nullptr) network_->set_ntp_enabled(on);
+}
+
 void App::dismiss_modal() { close_modal(); }
 
 void App::handle_pairing(core::Link link) {
@@ -1218,6 +1323,31 @@ void App::update_stats_view() {
 
 void App::update_settings_view() {
   update_scale_view();  // refresh the Scale page (independent change-detection)
+
+  // WiFi status line (Device page): reflect the live connection state.
+  if (network_ != nullptr && settings_.wifi_status != nullptr) {
+    char buf[64];
+    uint32_t color = ui::theme::muted();
+    switch (network_->status()) {
+      case core::NetState::Disabled:
+        std::snprintf(buf, sizeof(buf), "Off");
+        break;
+      case core::NetState::Connecting:
+        std::snprintf(buf, sizeof(buf), "Connecting" LV_SYMBOL_WIFI);
+        break;
+      case core::NetState::Connected:
+        std::snprintf(buf, sizeof(buf), "%s  %s", network_->ssid(), network_->ip());
+        color = ui::theme::ok();
+        break;
+      case core::NetState::Failed:
+        std::snprintf(buf, sizeof(buf), "Connection failed");
+        color = ui::theme::alert();
+        break;
+    }
+    lv_label_set_text(settings_.wifi_status, buf);
+    lv_obj_set_style_text_color(settings_.wifi_status, lv_color_hex(color), 0);
+  }
+
   if (provisioner_ == nullptr) return;
 
   // Saved-machine row: name + Forget, plus one of: Setup (no token yet) or
