@@ -11,9 +11,7 @@ to the machine instead of a phone app.
 
 ![Micra Remote — Home with a paired scale](docs/img/home-scale.png)
 
-> Only the initial pairing needs the internet (to fetch your machine's local
-> Bluetooth token from your La Marzocco account, once). After that everything is
-> local Bluetooth.
+> The focus is on local control via bluetooth. Currently internet is only used for optional NTP.
 
 ---
 
