@@ -10,13 +10,14 @@
 #   make sim              build + run the host simulator (writes renders/*.png)
 #   make lmtoken          build the cloud token tool (tools/lmtoken)
 #   make lmtoken-release  cross-compile + zip lmtoken for all OSes (tools/lmtoken/dist/)
+#   make lmtoken-publish VERSION=1.0.0   tag lmtoken-v1.0.0 + push it -> CI builds the release
 #   make clean
 
 PIO ?= pio
 BOARD ?=
 
 .DEFAULT_GOAL := build
-.PHONY: flash flash-2inch flash-7b flash-4-3b build build-7b build-4-3b monitor sim lmtoken lmtoken-release clean
+.PHONY: flash flash-2inch flash-7b flash-4-3b build build-7b build-4-3b monitor sim lmtoken lmtoken-release lmtoken-publish clean
 
 flash:
 	@tools/flash.sh $(BOARD)
@@ -50,6 +51,15 @@ lmtoken:
 
 lmtoken-release:
 	$(MAKE) -C tools/lmtoken package  # writes tools/lmtoken/dist/*.zip
+
+# Cut an lmtoken release: tag the current commit `lmtoken-v$(VERSION)` and push
+# just that tag, which triggers the lmtoken-release workflow (it builds + publishes
+# the binaries). The tag points at the whole repo commit; the `lmtoken-` prefix is
+# what scopes it to this tool — firmware releases will use a different prefix.
+lmtoken-publish:
+	@test -n "$(VERSION)" || { echo "usage: make lmtoken-publish VERSION=1.0.0"; exit 1; }
+	git tag lmtoken-v$(VERSION)
+	git push origin lmtoken-v$(VERSION)
 
 clean:
 	$(PIO) run -t clean ; rm -rf .pio/build/sim
