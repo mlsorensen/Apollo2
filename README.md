@@ -1,0 +1,221 @@
+# Micra Remote
+
+Community firmware that turns a small ESP32‑S3 touchscreen into a local
+controller for a **La Marzocco Micra** espresso machine — over Bluetooth, with
+no cloud dependency for day‑to‑day use.
+
+Set your brew temperature, flip the steam boiler, put the machine on standby,
+watch the boiler come up to temperature, and (with a supported Bluetooth scale)
+run a live shot timer and flow graph — all from a dedicated little screen next
+to the machine instead of a phone app.
+
+> Only the initial pairing needs the internet (to fetch your machine's local
+> Bluetooth token from your La Marzocco account, once). After that everything is
+> local Bluetooth.
+
+---
+
+## Features
+
+- **Micra control over Bluetooth (BLE)** — brew temperature set‑point, steam
+  boiler level + on/off, power / standby, and live status (connecting, ready,
+  disconnected) with the real brew and steam temperatures.
+- **Bluetooth scale integration** — pair a supported scale (Bookoo Themis) for a
+  live weight readout, an automatic shot timer, a scrolling flow‑rate graph
+  (g/s or g), and tare from the screen.
+- **Automatic time** — optionally join your home Wi‑Fi and the clock keeps itself
+  correct over NTP, with a timezone picker that handles daylight saving. Time is
+  saved to the on‑board RTC (where present) so it survives a power‑off.
+- **Phone‑based setup, no app** — pairing and Wi‑Fi credentials are entered
+  through a tiny web page the device serves from its own Wi‑Fi access point; you
+  just join `Micra-Setup` and open it in a browser.
+- **Made to live on the counter** — themes, °C/°F, 12/24‑hour clock, adjustable
+  brightness, and a temperature‑history view. Layouts scale from a 2" pocket
+  remote to a 7" panel.
+
+Everything is designed to keep working if the machine, the scale, or Wi‑Fi is
+absent — the UI just shows the relevant part as offline.
+
+---
+
+## Supported hardware
+
+The firmware targets Waveshare ESP32‑S3 touch boards. One board is selected at
+build time.
+
+| Board | Display | Notes |
+|-------|---------|-------|
+| **ESP32‑S3‑Touch‑LCD‑2** | 2.0" 240×320, ST7789 (SPI) | The primary target — a portable, battery‑friendly remote. |
+| **ESP32‑S3‑Touch‑LCD‑4.3B** | 4.3" 800×480, RGB parallel | Larger counter‑top panel; has a PCF85063 RTC. Not yet hardware‑verified. |
+| **ESP32‑S3‑Touch‑LCD‑7B** | 7" 1024×600, RGB parallel | Largest panel. Not yet hardware‑verified. |
+
+All three use the ESP32‑S3R8 (16 MB flash, 8 MB octal PSRAM). A supported scale
+(Bookoo Themis Mini) is optional.
+
+---
+
+## Getting started
+
+### 1. Flash the firmware
+
+Requires [PlatformIO](https://platformio.org/) (`pio`) and a USB cable.
+
+```sh
+make flash            # auto-detect a connected board and flash it
+make flash-4-3b       # or target a specific board: 2inch | 7b | 4-3b
+make monitor          # open the serial console (115200 baud)
+```
+
+### 2. Get your machine's Bluetooth token (once)
+
+Local Bluetooth control needs a per‑machine auth token that lives in your La
+Marzocco account. A small self‑contained tool fetches it:
+
+```sh
+make lmtoken          # builds tools/lmtoken (Go, no dependencies)
+tools/lmtoken/lmtoken # prompts for your LM account email + password, prints the token
+```
+
+See [`tools/lmtoken/README.md`](tools/lmtoken/README.md) for cross‑compiling and
+scripting details. This is the only step that touches the internet.
+
+### 3. Pair the device
+
+1. On the device: **Settings → Micra → Bluetooth → Set up**. It brings up a Wi‑Fi
+   access point named **`Micra-Setup`**.
+2. On your phone, join `Micra-Setup` and open **http://192.168.4.1**.
+3. Paste the token from step 2 and save. The device connects to the machine and
+   the access point closes on its own.
+
+### 4. (Optional) Wi‑Fi + automatic time
+
+On the same setup page you can enter your home Wi‑Fi name and password. The
+device then joins your network, gets an IP, and syncs the clock over NTP. Pick
+your city under **Settings → Device → WiFi → Timezone**. Auto‑sync can be turned
+off there too (**Auto time (NTP)**).
+
+Because the setup page is always reachable from **Set up WiFi**, you can never be
+locked out if your network changes.
+
+---
+
+## Using it
+
+- **Home** shows the machine (and scale, if paired). The large action button is
+  Standby / Turn On when connected, and becomes a **Connect** button when the
+  machine is disconnected.
+- **Settings** groups everything under Micra, Scale, and Device (brightness,
+  clock, units, theme, Wi‑Fi).
+- **Stats** shows brew/boiler temperature history and device info.
+
+---
+
+## Developer documentation
+
+### Architecture
+
+The code is layered so the same UI runs on a real board and on a laptop:
+
+```
+include/core/        Pure interfaces (ports) + domain types. No LVGL, Arduino,
+                     BLE, or SDL — just C++ and structs. e.g. IMachine, IScale,
+                     IClock, INetwork, IProvisioner, IBrewController.
+
+src/ui/              The LVGL user interface. Depends ONLY on core/ interfaces,
+                     never on a concrete platform. Portable.
+
+src/platform_esp32/  Device implementations of the core ports: NimBLE links to
+                     the machine + scale, NVS config, display/touch drivers,
+                     Wi-Fi station + NTP, the setup-portal web server.
+
+src/platform_host/   "Fake" implementations that feed canned data, so the UI can
+                     be built and rendered on a host with no hardware.
+
+src/device/main.cpp  Device entry: wires the real implementations to ui::App.
+src/sim/main.cpp     Simulator entry: wires the fakes, renders frames to PNG.
+```
+
+The UI is written against the `core::` ports and is injected with concrete
+implementations at startup (`App::build(...)`). Swapping the real BLE machine for
+a `FakeMachine` is all that separates a board build from a laptop render — the UI
+code is byte‑for‑byte identical.
+
+### The simulator
+
+No hardware needed. Builds a native executable that renders each screen/layout
+to `renders/*.png`:
+
+```sh
+make sim              # build + run, writes renders/*.png
+```
+
+This is the fastest way to iterate on UI: change code, `make sim`, look at the
+PNGs. Every supported screen size and several states are rendered.
+
+### Building directly
+
+```sh
+pio run -e esp32-s3-micra        # 2-inch firmware (default)
+pio run -e esp32-s3-micra-4-3b   # 4.3" 800x480
+pio run -e esp32-s3-micra-7b     # 7"  1024x600
+pio run -e sim                   # native simulator
+```
+
+Build environments and per‑board flags live in
+[`platformio.ini`](platformio.ini); the pin/panel definitions for each board are
+in [`include/platform_esp32/board_config.h`](include/platform_esp32/board_config.h).
+
+### Adding a board
+
+Add an `#elif defined(BOARD_...)` block in `board_config.h` with the same
+constant names the drivers read (pins, panel size, feature macros), then add a
+matching `[env:...]` in `platformio.ini` with the `-DBOARD_...` flag. Driver code
+never hardcodes a pin — it reads `board::` constants — so a new board is mostly a
+config block.
+
+### Repository layout
+
+```
+include/core/          Domain interfaces + types (header-only)
+include/platform_esp32/ Device driver headers + board_config.h
+include/platform_host/  Host fakes
+include/ui/             UI headers (widgets, screen profiles, timezones)
+include/vendor/         Vendored third-party headers (stb_image_write)
+src/                    Implementations (see Architecture above)
+tools/                  sim.sh, flash.sh, lmtoken (Go), PlatformIO helper scripts
+renders/                Simulator output (PNG)
+```
+
+---
+
+## Credits & third‑party
+
+This project stands on the work of others. Grateful thanks to:
+
+- **[pylamarzocco](https://github.com/zweckj/pylamarzocco)** by Josef Zweck
+  (MIT) — the reference for La Marzocco's Bluetooth protocol (GATT
+  characteristic UUIDs, the JSON command/state payloads, machine name prefix) and
+  the cloud auth flow that `tools/lmtoken` re‑implements in Go.
+- **[goscale](https://github.com/mlsorensen/goscale)** (Apache‑2.0) — the model
+  for the scale interface and the Bookoo Themis notification decode.
+- **[apollo](https://github.com/mlsorensen/apollo)** — brew‑by‑weight /
+  paddle‑stop approach that inspires the (in‑progress) brew controller.
+- **Waveshare** — board bring‑up details and register maps for the CH422G IO
+  expander, GT911 / CST816 touch controllers, and the RGB panel timings, from
+  their published ESP32‑S3 demos.
+- **[stb_image_write](https://github.com/nothings/stb)** by Sean Barrett (public
+  domain / MIT) — vendored in `include/vendor/` for PNG output in the simulator;
+  its license is retained in the file.
+
+Library dependencies (fetched by PlatformIO): **LVGL** (MIT), **NimBLE‑Arduino**
+(Apache‑2.0), **Arduino‑ESP32** (LGPL‑2.1 / Apache‑2.0), **GFX Library for
+Arduino** (BSD‑style), and **ArduinoJson** (MIT). Each retains its own license.
+
+---
+
+## License
+
+[MIT](LICENSE) © 2026 Marcus.
+
+Not affiliated with or endorsed by La Marzocco. "La Marzocco" and "Micra" are
+trademarks of their respective owner; used here only to describe compatibility.
