@@ -9,6 +9,8 @@ watch the boiler come up to temperature, and (with a supported Bluetooth scale)
 run a live shot timer and flow graph — all from a dedicated little screen next
 to the machine instead of a phone app.
 
+![Micra Remote — Home with a paired scale](docs/img/home-scale.png)
+
 > Only the initial pairing needs the internet (to fetch your machine's local
 > Bluetooth token from your La Marzocco account, once). After that everything is
 > local Bluetooth.
@@ -35,6 +37,21 @@ to the machine instead of a phone app.
 
 Everything is designed to keep working if the machine, the scale, or Wi‑Fi is
 absent — the UI just shows the relevant part as offline.
+
+### Screenshots
+
+<p align="center">
+  <img src="docs/img/home-noscale.png" width="49%" alt="Home without a scale — brew/steam hero card">
+  <img src="docs/img/settings-device.png" width="49%" alt="Device settings — Wi-Fi, timezone, theme">
+</p>
+<p align="center">
+  <img src="docs/img/stats.png" width="49%" alt="Temperature history">
+</p>
+
+<!-- Screenshots live in docs/img/ (tracked). They are curated copies of the
+     simulator's output (renders/, git-ignored). When the UI changes, regenerate
+     with `make sim` and refresh the relevant docs/img/*.png before/with any
+     README update. -->
 
 ---
 
@@ -151,6 +168,11 @@ make sim              # build + run, writes renders/*.png
 
 This is the fastest way to iterate on UI: change code, `make sim`, look at the
 PNGs. Every supported screen size and several states are rendered.
+
+The `renders/` folder is git‑ignored build output; the README screenshots in
+`docs/img/` are curated copies. **When the UI changes, run `make sim` and refresh
+the affected `docs/img/*.png` as part of the same change** so the README stays
+accurate.
 
 ### Building directly
 
