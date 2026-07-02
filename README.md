@@ -81,26 +81,36 @@ make flash-4-3b       # or target a specific board: 2inch | 7b | 4-3b
 make monitor          # open the serial console (115200 baud)
 ```
 
-### 2. Get your machine's Bluetooth token (once)
+### 2. Pair the machine
 
-Local Bluetooth control needs a per‑machine auth token that lives in your La
-Marzocco account. A small self‑contained tool fetches it:
+**Settings → Micra → Bluetooth → Scan**, then pick your machine.
 
-```sh
-make lmtoken          # builds tools/lmtoken (Go, no dependencies)
-tools/lmtoken/lmtoken # prompts for your LM account email + password, prints the token
-```
+- **If it has never been paired to the La Marzocco app**, the machine still has
+  its factory default token and the device reads it over Bluetooth automatically
+  — you're connected, nothing to type.
+- **If it's already paired to the LM app**, that default token has been rotated,
+  so the auto‑read can't get it and you'll be prompted to enter the current one —
+  see step 3.
 
-See [`tools/lmtoken/README.md`](tools/lmtoken/README.md) for cross‑compiling and
-scripting details. This is the only step that touches the internet.
+### 3. Enter a token manually (only if step 2 didn't auto‑connect)
 
-### 3. Pair the device
+Tap **WiFi** on the prompt (or **Settings → Micra → Set up**) to start the
+device's own Wi‑Fi access point, **`Micra-Setup`**. Join it from your phone, open
+**http://192.168.4.1**, paste your token, and Save — the device connects and the
+access point closes on its own.
 
-1. On the device: **Settings → Micra → Bluetooth → Set up**. It brings up a Wi‑Fi
-   access point named **`Micra-Setup`**.
-2. On your phone, join `Micra-Setup` and open **http://192.168.4.1**.
-3. Paste the token from step 2 and save. The device connects to the machine and
-   the access point closes on its own.
+Where to get the token:
+
+- **Machine already paired to the LM app** → download **lmtoken** for your OS from
+  the [Releases](../../releases) page, unzip, and run it. It asks for your La
+  Marzocco account email + password and prints the current token. This is the only
+  step that uses the internet, and it runs on your computer.
+- **Machine never paired to the LM app** → its default token is also printed as a
+  **QR code inside the machine**, if you'd rather scan and paste it than let
+  step 2 read it automatically.
+
+> Prefer to build `lmtoken` from source (Go), or script it? See
+> [`tools/lmtoken/README.md`](tools/lmtoken/README.md).
 
 ### 4. (Optional) Wi‑Fi + automatic time
 
