@@ -3,8 +3,8 @@ GO     := go
 BIN    := bin
 DIST   := dist
 
-# GOOS/GOARCH pairs to cross-compile (linux arm, linux x86, macos arm, windows x86)
-PLATFORMS := linux/arm64 linux/amd64 darwin/arm64 windows/amd64
+# GOOS/GOARCH pairs to cross-compile (linux arm/x86, macOS arm/intel, windows x86)
+PLATFORMS := linux/arm64 linux/amd64 darwin/arm64 darwin/amd64 windows/amd64
 
 .DEFAULT_GOAL := build
 

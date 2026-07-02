@@ -1,0 +1,55 @@
+name: lmtoken release
+
+# Cross-compile the lmtoken CLI and publish the binaries to a GitHub Release.
+# Trigger by pushing a tag like `lmtoken-v1.0.0`, or run it manually from the
+# Actions tab (supply the tag). Free on public repositories — the build runs on
+# GitHub-hosted runners and the binaries are hosted on GitHub Releases.
+
+on:
+  push:
+    tags:
+      - 'lmtoken-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to create (e.g. lmtoken-v1.0.0)'
+        required: true
+
+permissions:
+  contents: write  # needed to create the Release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/lmtoken
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache: false  # lmtoken is stdlib-only (no go.sum) — nothing to cache
+
+      - name: Test
+        run: go test ./...
+
+      - name: Cross-compile + package (dist/*.zip)
+        run: make package
+
+      - name: Checksums
+        run: (cd dist && shasum -a 256 *.zip > SHA256SUMS.txt)
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          files: |
+            tools/lmtoken/dist/*.zip
+            tools/lmtoken/dist/SHA256SUMS.txt
+          body: |
+            Prebuilt **lmtoken** binaries. Download the zip for your OS, unzip, and run it —
+            it asks for your La Marzocco account email + password and prints your machine's
+            Bluetooth token. See the repository README for what to do with the token.

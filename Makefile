@@ -9,13 +9,14 @@
 #   make monitor          open the serial monitor
 #   make sim              build + run the host simulator (writes renders/*.png)
 #   make lmtoken          build the cloud token tool (tools/lmtoken)
+#   make lmtoken-release  cross-compile + zip lmtoken for all OSes (tools/lmtoken/dist/)
 #   make clean
 
 PIO ?= pio
 BOARD ?=
 
 .DEFAULT_GOAL := build
-.PHONY: flash flash-2inch flash-7b flash-4-3b build build-7b build-4-3b monitor sim lmtoken clean
+.PHONY: flash flash-2inch flash-7b flash-4-3b build build-7b build-4-3b monitor sim lmtoken lmtoken-release clean
 
 flash:
 	@tools/flash.sh $(BOARD)
@@ -46,6 +47,9 @@ sim:
 
 lmtoken:
 	$(MAKE) -C tools/lmtoken build
+
+lmtoken-release:
+	$(MAKE) -C tools/lmtoken package  # writes tools/lmtoken/dist/*.zip
 
 clean:
 	$(PIO) run -t clean ; rm -rf .pio/build/sim
