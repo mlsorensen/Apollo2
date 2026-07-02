@@ -3,6 +3,10 @@ GO     := go
 BIN    := bin
 DIST   := dist
 
+# Strip debug info + symbol table (-s -w) and drop absolute build paths (-trimpath)
+# for smaller, reproducible binaries. Quoted in the recipes so -s -w stay one flag.
+LDFLAGS := -s -w
+
 # GOOS/GOARCH pairs to cross-compile (linux arm/x86, macOS arm/intel, windows x86)
 PLATFORMS := linux/arm64 linux/amd64 darwin/arm64 darwin/amd64 windows/amd64
 
@@ -12,7 +16,7 @@ PLATFORMS := linux/arm64 linux/amd64 darwin/arm64 darwin/amd64 windows/amd64
 
 build:
 	@mkdir -p $(BIN)
-	$(GO) build -o $(BIN)/$(BINARY) .
+	$(GO) build -trimpath -ldflags="$(LDFLAGS)" -o $(BIN)/$(BINARY) .
 
 build-all:
 	@mkdir -p $(BIN)
@@ -21,7 +25,7 @@ build-all:
 		out=$(BIN)/$(BINARY)-$$os-$$arch; \
 		if [ "$$os" = "windows" ]; then out=$$out.exe; fi; \
 		echo "building $$out"; \
-		GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 $(GO) build -o $$out . || exit 1; \
+		GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 $(GO) build -trimpath -ldflags="$(LDFLAGS)" -o $$out . || exit 1; \
 	done
 
 # Zip each cross-compiled binary together with the README into dist/.
