@@ -94,6 +94,7 @@ int main() {
   ok &= r({320, 240}, "renders/scale_settings_320x240.png", 1, ui::kSectionScaleSettings);
   ok &= r({800, 480}, "renders/micra_bt_800x480.png", 1, ui::kSectionMicraBt);
   ok &= r({320, 240}, "renders/device_320x240.png", 1, ui::kSectionDevice);
+  ok &= r({800, 480}, "renders/device_800x480.png", 1, ui::kSectionDevice);
 
   // 7" 1024x600 (ESP32-S3-Touch-LCD-7B): the XL tier.
   ok &= r({1024, 600}, "renders/home_1024x600.png");
@@ -104,6 +105,7 @@ int main() {
 
   // Stats tab (tab 2): graph sections + info.
   ok &= r({320, 240}, "renders/stats_brew_320x240.png", 2, -1, false, 0, ui::kStatsBrew);
+  ok &= r({800, 480}, "renders/stats_brew_800x480.png", 2, -1, false, 0, ui::kStatsBrew);
   ok &= r({320, 240}, "renders/stats_info_320x240.png", 2, -1, false, 0, ui::kStatsInfo);
   ok &= r({1024, 600}, "renders/stats_brew_1024x600.png", 2, -1, false, 0, ui::kStatsBrew);
   ok &= r({1024, 600}, "renders/stats_boiler_1024x600.png", 2, -1, false, 0, ui::kStatsBoiler);
