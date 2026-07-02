@@ -60,12 +60,12 @@ build time.
 
 | Board | Display | Notes |
 |-------|---------|-------|
-| **ESP32‑S3‑Touch‑LCD‑2** | 2.0" 240×320, ST7789 (SPI) | The primary target — a portable, battery‑friendly remote. |
-| **ESP32‑S3‑Touch‑LCD‑4.3B** | 4.3" 800×480, RGB parallel | Larger counter‑top panel; has a PCF85063 RTC. Not yet hardware‑verified. |
-| **ESP32‑S3‑Touch‑LCD‑7B** | 7" 1024×600, RGB parallel | Largest panel. Not yet hardware‑verified. |
+| **ESP32‑S3‑Touch‑LCD‑2** | 2.0" 240×320, ST7789 (SPI) | A portable, battery‑friendly remote. |
+| **ESP32‑S3‑Touch‑LCD‑4.3B** | 4.3" 800×480, RGB parallel | Larger counter‑top panel, primary dev target. Has a PCF85063 RTC. |
+| **ESP32‑S3‑Touch‑LCD‑7B** | 7" 1024×600, RGB parallel | Largest panel. |
 
 All three use the ESP32‑S3R8 (16 MB flash, 8 MB octal PSRAM). A supported scale
-(Bookoo Themis Mini) is optional.
+(Bookoo Themis Mini) is optional. Future support for Acaia Umbra coming.
 
 ---
 
@@ -76,7 +76,7 @@ All three use the ESP32‑S3R8 (16 MB flash, 8 MB octal PSRAM). A supported scal
 Requires [PlatformIO](https://platformio.org/) (`pio`) and a USB cable.
 
 ```sh
-make flash            # auto-detect a connected board and flash it
+make flash            # print selection of flash options
 make flash-4-3b       # or target a specific board: 2inch | 7b | 4-3b
 make monitor          # open the serial console (115200 baud)
 ```
