@@ -240,8 +240,79 @@ constexpr int  kPaddleDrivePin = -1;
 constexpr int  kPaddleSensePin = -1;
 constexpr bool kPaddleActiveHigh = true;
 
+#elif defined(BOARD_WAVESHARE_P4_WIFI6_43)
+
+// Waveshare ESP32-P4-WIFI6-Touch-LCD-4.3 — ESP32-P4NRW32 (32MB flash, 32MB
+// PSRAM), 4.3" 480x800 ST7701 panel over 2-lane MIPI-DSI, GT911 touch, WiFi/BLE
+// via an on-board ESP32-C6 over SDIO (esp-hosted; SDIO pins match the esp-hosted
+// P4 defaults so no override is needed). No IO expander — reset/backlight are
+// native GPIOs. Pins traced from the board schematic + Waveshare's BSP
+// (esp32_p4_wifi6_touch_lcd_4_3.h). UNVERIFIED on hardware yet.
+constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-4.3";
+#define BOARD_DISPLAY_DSI     // MIPI-DSI panel via Arduino_GFX
+#define BOARD_TOUCH_GT911     // GT911, 16-bit registers
+constexpr bool kSupportsBrightness = true;  // LEDC PWM backlight (dimmable)
+
+// --- Shared I2C bus (GT911 touch; also the audio codecs / camera header) ---
+constexpr int kI2cSda = 7;
+constexpr int kI2cScl = 8;
+
+// --- Display: ST7701, 480x800 native PORTRAIT, 2-lane MIPI-DSI ---
+// The UI wants landscape, so we run Arduino_GFX rotation=1 => 800x480 (the same
+// native-portrait-rotated pattern as the 2-inch ST7789). DPI timing from the
+// Waveshare BSP: 30 MHz pixel clock; HPW 12, HBP 42, HFP 42; VPW 8, VBP 2,
+// VFP 60; 500 Mbps per lane.
+constexpr int  kLcdNativeW = 480;
+constexpr int  kLcdNativeH = 800;
+constexpr int  kLcdRotation = 1;      // 1 => 800x480 landscape
+constexpr int  kLcdRst = 27;          // native GPIO reset (no expander)
+constexpr int  kLcdBacklight = 26;    // LEDC PWM (BSP uses 10-bit LEDC here)
+constexpr int  kLcdBacklightEn = 33;  // backlight boost enable — drive high
+constexpr long kDsiDpiClockHz = 30000000;
+constexpr int  kDsiLaneBitRateMbps = 500;
+constexpr int  kDsiHsyncPulse = 12, kDsiHsyncBack = 42, kDsiHsyncFront = 42;
+constexpr int  kDsiVsyncPulse = 8,  kDsiVsyncBack = 2,  kDsiVsyncFront = 60;
+
+// --- Touch: GT911 on I2C, native-GPIO reset (the S3 RGB boards reset it via
+//     the IO expander; here it's a plain pin) ---
+constexpr int  kTouchSda = 7;   // == kI2cSda (Touch reads these names)
+constexpr int  kTouchScl = 8;
+constexpr int  kTouchAddr = 0x5D;    // 0x5D (INT low at boot) or 0x14
+constexpr int  kTouchRst = 23;
+constexpr int  kTouchInt = 2;        // wired per schematic (BSP polls; so do we)
+// GT911 reports in the panel's native PORTRAIT orientation; the display runs
+// rotated. Best-guess mapping for rotation=1 — flip a flag if a tap lands in
+// the wrong place (see the one-line-per-press serial log).
+constexpr bool kTouchSwapXY = true;
+constexpr bool kTouchMirrorX = false;
+constexpr bool kTouchMirrorY = true;
+
+// --- Battery: BAT_ADC is GPIO20 through an R12/R15 divider (schematic), but the
+//     ratio is unmeasured and Waveshare's own code never reads it. DISABLED until
+//     calibrated on hardware (a wrong divider could fake a low-battery deep-sleep)
+//     -> reports USB-powered. To enable: set kBatteryAdc = 20 and calibrate
+//     kBatteryDivider against a multimeter at the battery terminals. ---
+constexpr int   kBatteryAdc = -1;
+constexpr float kBatteryDivider = 3.0f;      // placeholder until measured
+constexpr int   kBatteryChargePin = -1;
+constexpr bool  kBatteryChargeActiveLow = true;
+constexpr float kBatteryFullVolts = 4.13f;
+constexpr float kBatteryEmptyVolts = 3.40f;
+constexpr float kBatteryCutoffVolts = 3.40f;
+constexpr float kBatteryResumeVolts = 3.70f;
+constexpr float kBatteryChargingVolts = 4.15f;
+constexpr float kBatteryNoCellVolts = 4.35f;
+constexpr int   kVbusAdc = -1;
+constexpr float kVbusDivider = 2.0f;
+constexpr float kVbusPresentVolts = 4.0f;
+
+// --- Paddle control (brew-by-weight): pins TBD (40-pin header available) ---
+constexpr int  kPaddleDrivePin = -1;
+constexpr int  kPaddleSensePin = -1;
+constexpr bool kPaddleActiveHigh = true;
+
 #else
-#error "No board selected. Add -DBOARD_WAVESHARE_S3_LCD_2 (or _7B / _43B) to build_flags in platformio.ini."
+#error "No board selected. Add -DBOARD_WAVESHARE_S3_LCD_2 (or _7B / _43B / P4_WIFI6_43) to build_flags in platformio.ini."
 #endif
 
 }  // namespace board

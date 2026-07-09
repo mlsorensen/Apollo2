@@ -1,8 +1,11 @@
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include <Wire.h>
-#include <driver/rtc_io.h>
 #include <esp_sleep.h>
+#include <soc/soc_caps.h>
+#if SOC_PM_SUPPORT_EXT0_WAKEUP
+#include <driver/rtc_io.h>
+#endif
 #include <lvgl.h>
 
 #include "platform_esp32/battery.h"
@@ -64,9 +67,14 @@ void enter_lowbatt_sleep() {
   g_lowbatt_sleep = 1;
   if (board::kTouchInt >= 0) {
     const auto pin = static_cast<gpio_num_t>(board::kTouchInt);
+#if SOC_PM_SUPPORT_EXT0_WAKEUP
     rtc_gpio_pullup_en(pin);
     rtc_gpio_pulldown_dis(pin);
     esp_sleep_enable_ext0_wakeup(pin, 0);  // wake when INT goes low (a touch)
+#elif SOC_PM_SUPPORT_EXT1_WAKEUP
+    // Chips without EXT0 (e.g. the P4): EXT1 with a one-pin mask, wake on low.
+    esp_sleep_enable_ext1_wakeup(1ULL << pin, ESP_EXT1_WAKEUP_ANY_LOW);
+#endif
   }
   esp_deep_sleep_start();  // never returns
 }
@@ -86,11 +94,14 @@ void batt_only_init() {
 
 void setup() {
   Serial.begin(115200);
+#if defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT
   // Native USB-CDC: with no serial host attached, writes otherwise BLOCK on a TX
   // timeout until the buffer drains — which stalls the main loop (and thus touch/
   // rendering) whenever anything logs. 0 = never block (drop if no reader). This
-  // is why the UI felt sluggish until a serial monitor was connected.
+  // is why the UI felt sluggish until a serial monitor was connected. (Boards on
+  // a real UART bridge — e.g. the P4 — don't have or need this.)
   Serial.setTxTimeoutMs(0);
+#endif
 
   // Woke from a low-battery park (a touch or a reset)? Read the pack WITHOUT
   // powering up the panel/LVGL/BLE and REFUSE to fully boot unless it has charged

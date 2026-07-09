@@ -55,7 +55,7 @@ absent — the UI just shows the relevant part as offline.
 
 ## Supported hardware
 
-The firmware targets Waveshare ESP32‑S3 touch boards. One board is selected at
+The firmware targets Waveshare ESP32 touch boards. One board is selected at
 build time.
 
 | Board | Display | Notes |
@@ -63,9 +63,10 @@ build time.
 | **ESP32‑S3‑Touch‑LCD‑2** | 2.0" 240×320, ST7789 (SPI) | A portable, battery‑friendly remote. |
 | **ESP32‑S3‑Touch‑LCD‑4.3B** | 4.3" 800×480, RGB parallel | Larger counter‑top panel, primary dev target. Has a PCF85063 RTC. |
 | **ESP32‑S3‑Touch‑LCD‑7B** | 7" 1024×600, RGB parallel | Largest panel. |
+| **ESP32‑P4‑WIFI6‑Touch‑LCD‑4.3** | 4.3" 800×480, MIPI‑DSI (ST7701) | ESP32‑P4 (32 MB flash / 32 MB PSRAM); WiFi 6 + BLE via on‑board ESP32‑C6. Bring‑up in progress. |
 
-All three use the ESP32‑S3R8 (16 MB flash, 8 MB octal PSRAM). A supported scale
-(Bookoo Themis Mini) is optional. Future support for Acaia Umbra coming.
+The S3 boards use the ESP32‑S3R8 (16 MB flash, 8 MB octal PSRAM). A supported
+scale (Bookoo Themis Mini) is optional. Future support for Acaia Umbra coming.
 
 ---
 
@@ -193,8 +194,9 @@ accurate.
 
 ```sh
 pio run -e esp32-s3-micra        # 2-inch firmware (default)
-pio run -e esp32-s3-micra-4-3b   # 4.3" 800x480
+pio run -e esp32-s3-micra-4-3b   # 4.3" 800x480 (S3, RGB panel)
 pio run -e esp32-s3-micra-7b     # 7"  1024x600
+pio run -e esp32-p4-micra-43     # 4.3" 800x480 (P4, MIPI-DSI, WiFi6/BLE via C6)
 pio run -e sim                   # native simulator
 ```
 
