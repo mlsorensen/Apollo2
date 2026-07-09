@@ -147,6 +147,16 @@ bool Touch::begin(int screen_w, int screen_h) {
   delay(10);
   io_extension().set(board::kIoExtTouchReset, true);
   delay(100);
+#else
+  // No expander (e.g. the P4 board): same reset pulse on a native GPIO.
+  if (board::kTouchInt >= 0) pinMode(board::kTouchInt, INPUT);
+  if (board::kTouchRst >= 0) {
+    pinMode(board::kTouchRst, OUTPUT);
+    digitalWrite(board::kTouchRst, LOW);
+    delay(10);
+    digitalWrite(board::kTouchRst, HIGH);
+    delay(100);
+  }
 #endif
   for (int i = 0; i < 10 && !acked; ++i) {
     if (gt911_probe(0x5D)) { g_addr = 0x5D; acked = true; }
