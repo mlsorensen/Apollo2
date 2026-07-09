@@ -144,14 +144,21 @@ The code is layered so the same UI runs on a real board and on a laptop:
 ```
 include/core/        Pure interfaces (ports) + domain types. No LVGL, Arduino,
                      BLE, or SDL — just C++ and structs. e.g. IMachine, IScale,
-                     IClock, INetwork, IProvisioner, IBrewController.
+                     IClock, INetwork, IProvisioner, IBrewController, and the
+                     BLE central port (ble::ICentral).
+
+src/core/            Portable protocol logic: the La Marzocco Micra link and
+                     the Bookoo scale driver, written only against ble::ICentral
+                     — so a new platform (Linux/BlueZ, Pico/btstack) reuses the
+                     Bluetooth protocol code unchanged and implements only the
+                     transport.
 
 src/ui/              The LVGL user interface. Depends ONLY on core/ interfaces,
                      never on a concrete platform. Portable.
 
-src/platform_esp32/  Device implementations of the core ports: NimBLE links to
-                     the machine + scale, NVS config, display/touch drivers,
-                     Wi-Fi station + NTP, the setup-portal web server.
+src/platform_esp32/  Device implementations of the core ports: the NimBLE GATT
+                     transport, NVS config, display/touch drivers, Wi-Fi
+                     station + NTP, the setup-portal web server.
 
 src/platform_host/   "Fake" implementations that feed canned data, so the UI can
                      be built and rendered on a host with no hardware.
@@ -206,7 +213,8 @@ config block.
 ### Repository layout
 
 ```
-include/core/          Domain interfaces + types (header-only)
+include/core/          Domain interfaces + types
+src/core/              Portable protocol implementations (Micra BLE, scales)
 include/platform_esp32/ Device driver headers + board_config.h
 include/platform_host/  Host fakes
 include/ui/             UI headers (widgets, screen profiles, timezones)
