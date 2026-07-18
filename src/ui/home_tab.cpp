@@ -1452,17 +1452,28 @@ static int shot_col_of(const HomeWidgets& w, uint32_t t, uint32_t window,
 
 // One-event-behind display time: the edge animates toward the LAST-received
 // sample instead of jumping when each new one arrives — smooth growth for a
-// fixed lag of ~1.2 observed update intervals (imperceptible for espresso).
+// fixed lag of ~2.2 STORED-sample intervals (imperceptible for espresso).
 // ALWAYS capped strictly BEFORE the second-newest sample: painted columns are
 // final (x_painted only moves forward, they're never revisited), so both their
 // interpolation endpoints must have COMPLETE smoothing kernels — a column at
 // time t interpolates samples si..si+1 and shot_val(si+1) needs si+2. Capping
 // at the newest sample let the edge paint one-sided-smoothed values under BLE
 // jitter, leaving a permanent kink per occurrence (visible at medium/strong).
-// The 2.2-interval wall-clock lag does the smooth event-behind animation; the
-// sample cap is the data-availability guard (a stall just pauses the edge).
+// The wall-clock lag does the smooth event-behind animation; the sample cap is
+// the data-availability guard (a stall just pauses the edge).
+//
+// The lag is sized off the STORED cadence (shot_store_interval_ms), NOT the
+// raw event rate: the ring stores at most one sample per kShotSampleMs, so on
+// a fast scale (Umbra: ~20Hz, delivered in bursts per BLE connection event)
+// an event-rate lag clamps to less than the storage interval and the edge
+// alternates between gliding and waiting on the sample cap — the
+// half-smooth/half-jerky motion. Keeping the lag past the stored cadence
+// makes the wall clock the binding constraint the whole shot.
 static uint32_t shot_display_time(const HomeWidgets& w) {
-  uint32_t lag = static_cast<uint32_t>(2.2f * w.flow_evt_interval_ms);
+  float interval = w.shot_store_interval_ms;
+  if (interval < static_cast<float>(kShotSampleMs))
+    interval = static_cast<float>(kShotSampleMs);
+  uint32_t lag = static_cast<uint32_t>(2.2f * interval);
   if (lag < 150) lag = 150;
   if (lag > 1200) lag = 1200;
   uint32_t t = w.shot_elapsed_ms > lag ? w.shot_elapsed_ms - lag : 0;
@@ -1532,6 +1543,7 @@ void begin_shot_plot(HomeWidgets& w) {
   w.shot_t0 = lv_tick_get();
   w.shot_elapsed_ms = 0;
   w.shot_last_sample_ms = 0;
+  w.shot_store_interval_ms = 150.0f;  // re-learn the stored cadence per shot
   w.shot_x_painted = -1;  // first tick paints full
   w.shot_si = 0;
   w.shot_map_window_ms = 0;
@@ -1575,6 +1587,12 @@ void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
   if (scale.seq != w.shot_seq_seen) {
     w.shot_seq_seen = scale.seq;
     if (w.shot_n == 0 || now - w.shot_last_sample_ms >= kShotSampleMs) {
+      if (w.shot_n > 0) {  // track the achieved storage cadence (sizes the edge lag)
+        const uint32_t dt = now - w.shot_last_sample_ms;
+        if (dt < 2000)
+          w.shot_store_interval_ms +=
+              0.2f * (static_cast<float>(dt) - w.shot_store_interval_ms);
+      }
       w.shot_last_sample_ms = now;
       w.shot_weights[w.shot_head] = rw;
       w.shot_flows[w.shot_head] = rf;
