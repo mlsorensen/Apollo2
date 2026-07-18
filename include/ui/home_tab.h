@@ -150,6 +150,11 @@ struct HomeWidgets {
   uint32_t shot_map_tstart_ms = 0;
   uint32_t shot_seq_seen = 0;           // event-locked sampling (snapshot.seq)
   uint32_t shot_stall_since = 0;        // frontier watchdog (0 = advancing)
+  // EMA of the interval between STORED shot samples (>= kShotSampleMs by the
+  // storage cap; includes BLE burst effects). Sizes the edge-animation lag so
+  // the wall clock — not the newest-sample cap — is always what limits the
+  // edge; fast scales (Umbra ~20Hz, bursty) otherwise ride the cap and jerk.
+  float shot_store_interval_ms = 150.0f;
   float shot_smooth_k = 0.15f;          // 3-point kernel neighbor weight (0 = off);
                                         // set by App from IDisplaySettings::flow_smooth
 
