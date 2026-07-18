@@ -515,6 +515,10 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   for (uint32_t i = 0; i < lv_tabview_get_tab_count(tv); ++i) {
     lv_obj_t* tb = lv_tabview_get_tab_button(tv, i);
     style_tab_button(tb, tab_font);
+    // Tab buttons are the tabview's own (not ui::make_button), so give them the
+    // same press feedback by hand.
+    lv_obj_add_event_cb(
+        tb, [](lv_event_t*) { ui::play_button_press(); }, LV_EVENT_PRESSED, nullptr);
     // Compact: the tab bar is horizontal and shares the row with the clock/battery
     // tray. Grow the buttons so they fill the bar (big touch targets) instead of
     // sitting small with dead space; the non-grow tray labels stay at the right.

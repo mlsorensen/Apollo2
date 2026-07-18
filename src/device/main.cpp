@@ -190,9 +190,12 @@ void setup() {
   // (an on/off-only board has no brightness control in the UI).
   g_display.set_brightness(board::kSupportsBrightness ? g_config.brightness() : 100);
 
-  // Speaker (audio boards): codec + I2S up-front so button clicks are instant.
-  // Needs Wire + the IO extension, which the display init above brought up.
-  platform::sound_begin();
+  // Speaker (audio boards): codec + I2S set up front so button clicks are
+  // instant. Needs Wire + the IO extension, which the display init above
+  // brought up. Gated on the setting so "Button sounds" OFF + Restart leaves
+  // the whole audio stack cold — the escape hatch if audio ever interferes
+  // with BLE again (the always-clocking first cut broke connects).
+  if (g_config.click_sound()) platform::sound_begin();
 
   // Build the UI bound to the machine + provisioner + battery + display.
   const ui::ScreenProfile screen{g_display.width(), g_display.height()};
