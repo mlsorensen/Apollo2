@@ -1,6 +1,9 @@
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include <Wire.h>
+#if defined(CONFIG_ESP_HOSTED_ENABLE_BT_NIMBLE)
+#include <esp32-hal-hosted.h>  // hostedInitBLE(): SDIO link to the radio co-processor
+#endif
 #include <esp_sleep.h>
 #include <soc/soc_caps.h>
 #if SOC_PM_SUPPORT_EXT0_WAKEUP
@@ -120,6 +123,19 @@ void setup() {
   Serial.println();
   Serial.printf("Micra remote — %s\n", board::kName);
   g_config.begin();  // create NVS namespace on first boot (quiets read errors)
+
+#if defined(CONFIG_ESP_HOSTED_ENABLE_BT_NIMBLE)
+  // Hosted-radio boards (P4 + C6 over SDIO): the transport must be brought up
+  // through Arduino's hosted HAL (esp_hosted_init + connect_to_slave + BT
+  // controller RPC) before any NimBLE call. esp-nimble-cpp's init alone lands
+  // in the vhci driver with the SDIO link down -> "card init failed" + abort.
+  Serial.println("hosted radio: bringing up SDIO link to co-processor...");
+  if (!hostedInitBLE()) {
+    Serial.println("ERROR: hosted radio init failed; BLE unavailable");
+  } else {
+    Serial.println("hosted radio: link up");
+  }
+#endif
 
   if (!g_display.begin()) {
     Serial.println("ERROR: display init failed");

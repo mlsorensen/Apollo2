@@ -119,10 +119,12 @@ bool Display::begin() {
   Serial.printf("DSI: panel up %dx%d\n", g_gfx->width(), g_gfx->height());
   g_gfx->fillScreen(0x0000);
   // Backlight after the panel shows black: boost enable high, then PWM full.
+  // NOTE: the PWM is ACTIVE-LOW on this board (see set_brightness) — duty 0
+  // is full brightness.
   pinMode(board::kLcdBacklightEn, OUTPUT);
   digitalWrite(board::kLcdBacklightEn, HIGH);
   ledcAttach(board::kLcdBacklight, 5000, 8);  // 5 kHz, 8-bit PWM backlight
-  ledcWrite(board::kLcdBacklight, 255);
+  ledcWrite(board::kLcdBacklight, 0);
 #elif defined(BOARD_DISPLAY_RGB)
   // RGB parallel panel (e.g. 7B). The IO-extension I2C must come up first so we
   // can release the panel reset and turn the backlight on.
@@ -229,6 +231,11 @@ void Display::set_brightness(int percent) {
   // The digital backlight enable is already on from begin(), so we don't re-touch
   // it per change (avoids a redundant write fighting the PWM on the same pin).
   io_extension().set_pwm(static_cast<uint8_t>(percent));
+#elif defined(BOARD_DISPLAY_DSI)
+  // This panel's backlight PWM is ACTIVE-LOW (Waveshare BSP configures LEDC
+  // with output_invert=1): duty 0 = full bright, 255 = off. Verified on
+  // hardware — writing normal-polarity duty leaves the screen black.
+  ledcWrite(board::kLcdBacklight, 255 - percent * 255 / 100);
 #else
   ledcWrite(board::kLcdBacklight, percent * 255 / 100);
 #endif

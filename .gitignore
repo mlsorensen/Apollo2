@@ -7,3 +7,10 @@ renders/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# pioarduino build artifacts (P4 env)
+.dummy/
+managed_components/
+dependencies.lock
+sdkconfig.esp32-p4-micra-43
+sdkconfig.defaults
