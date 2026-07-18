@@ -168,7 +168,8 @@ void make_inline_stepper(lv_obj_t* row, const lv_font_t* text_font,
 // Device rows: Brightness + clock (Hour/Minute) + 24-hour + Fahrenheit + Theme.
 void build_device_rows(lv_obj_t* page, const lv_font_t* text_font,
                        const lv_font_t* symbol_font, int btn_size,
-                       bool with_brightness, ui::SettingsWidgets& out) {
+                       bool with_brightness, bool with_sound,
+                       ui::SettingsWidgets& out) {
   // Brightness only where the backlight can dim; else the row is omitted and the
   // pointers stay null (App guards on them).
   if (with_brightness) {
@@ -206,6 +207,15 @@ void build_device_rows(lv_obj_t* page, const lv_font_t* text_font,
   lv_obj_t* rp = make_setting_row(page, "Performance overlay", text_font);
   out.perf_overlay_switch = lv_switch_create(rp);
   lv_obj_set_size(out.perf_overlay_switch, btn_size + 8, btn_size / 2 + 6);
+
+  // Button-press click, only on boards with a speaker (core::ISound).
+  if (with_sound) {
+    lv_obj_t* rs = make_setting_row(page, "Button sounds", text_font);
+    out.click_sound_switch = lv_switch_create(rs);
+    lv_obj_set_size(out.click_sound_switch, btn_size + 8, btn_size / 2 + 6);
+  } else {
+    out.click_sound_switch = nullptr;
+  }
 
   // --- WiFi: enable + status + setup/forget + timezone --------------------
   section_label(page, "WiFi", text_font);
@@ -294,7 +304,7 @@ void root_entry(lv_obj_t* menu, lv_obj_t* root_page, lv_obj_t* target,
 namespace ui {
 
 void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
-                        bool with_brightness, SettingsWidgets& out) {
+                        bool with_brightness, bool with_sound, SettingsWidgets& out) {
   const bool compact = is_compact(screen);
   const bool xl = is_xl(screen);
   const lv_font_t* font =
@@ -440,7 +450,8 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   }
 
   // Device (leaf)
-  build_device_rows(out.device_page, font, symbol_font, btn_size, with_brightness, out);
+  build_device_rows(out.device_page, font, symbol_font, btn_size, with_brightness,
+                    with_sound, out);
 
   // --- Chooser pages: Bluetooth | Settings under each device ---------------
   out.micra_page = lv_menu_page_create(menu, "Micra");

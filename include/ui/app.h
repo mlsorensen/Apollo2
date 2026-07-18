@@ -13,6 +13,7 @@
 #include "core/provisioner.h"
 #include "core/scale.h"
 #include "core/scale_provisioner.h"
+#include "core/sound.h"
 #include "ui/home_tab.h"
 #include "ui/screen.h"
 #include "ui/settings_tab.h"
@@ -35,7 +36,7 @@ class App {
              core::IBattery& battery, core::IDisplaySettings& display,
              core::IClock& clock, core::IHistory& history, core::IScale& scale,
              core::IScaleProvisioner& scale_provisioner, core::IBrewController& brew,
-             core::INetwork& network, const ScreenProfile& screen);
+             core::INetwork& network, core::ISound& sound, const ScreenProfile& screen);
 
   // Reflect the latest machine state and scan results in the UI (no I/O).
   void refresh();
@@ -91,6 +92,7 @@ class App {
   void set_drop_negative_flow(bool on);  // Scale "Drop negative g/s" switch
   void set_scope_graph(bool on);         // Scale "Oscilloscope graph" switch
   void set_perf_overlay(bool on);        // Device "Performance overlay" switch
+  void set_click_sound(bool on);         // Device "Button sounds" switch
   void theme_select(int index);          // Device theme roller selection
   void apply_pending_theme();            // deferred rebuild (from lv_async_call)
   void apply_layout_rebuild();           // deferred rebuild after scale pair/forget
@@ -142,6 +144,8 @@ class App {
   core::IScaleProvisioner* scale_provisioner_ = nullptr;
   core::IBrewController* brew_ = nullptr;
   core::INetwork* network_ = nullptr;
+  core::ISound* sound_ = nullptr;
+  bool click_sound_on_ = true;  // cached from IDisplaySettings (checked per press)
   lv_obj_t* tabview_ = nullptr;
   ScreenProfile screen_{};          // stored so we can rebuild on a theme change
   lv_obj_t* modal_ = nullptr;       // current overlay modal, if open

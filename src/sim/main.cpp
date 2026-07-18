@@ -17,6 +17,7 @@
 #include "platform_host/fake_provisioner.h"
 #include "platform_host/fake_scale.h"
 #include "platform_host/fake_scale_provisioner.h"
+#include "platform_host/fake_sound.h"
 #include "platform_host/png_display.h"
 #include "ui/app.h"
 #include "ui/screen.h"
@@ -36,9 +37,10 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
 
   disp_settings.set_theme(theme);  // build() reads this into ui::theme::set_active
   host::PngDisplay display(screen.width, screen.height);
+  static host::FakeSound fake_sound;  // stateless; shared across renders
   ui::App app;
   app.build(machine, provisioner, battery, disp_settings, clock, history, scale,
-            scale_provisioner, brew, network, screen);
+            scale_provisioner, brew, network, fake_sound, screen);
   app.show_tab(tab);
   if (settings_section >= 0) app.select_settings_section(settings_section);
   if (stats_section >= 0) app.select_stats_section(stats_section);

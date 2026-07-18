@@ -60,6 +60,8 @@ class Config {
 
   bool perf_overlay() const;  // LVGL FPS/CPU overlay (default false)
   void set_perf_overlay(bool on);
+  bool click_sound() const;  // button-press click (default true; audio boards)
+  void set_click_sound(bool on);
 
   // WiFi station (home network join + NTP time sync). Credentials are entered via
   // the setup portal; timezone/NTP server via Settings.

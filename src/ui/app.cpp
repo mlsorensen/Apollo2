@@ -256,6 +256,11 @@ void on_perf_overlay_switch(lv_event_t* e) {
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
   app->set_perf_overlay(lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
+void on_click_sound_switch(lv_event_t* e) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  app->set_click_sound(lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
 void on_wifi_switch(lv_event_t* e) {
   auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
@@ -417,7 +422,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                 core::IBattery& battery, core::IDisplaySettings& display,
                 core::IClock& clock, core::IHistory& history, core::IScale& scale,
                 core::IScaleProvisioner& scale_provisioner, core::IBrewController& brew,
-                core::INetwork& network, const ScreenProfile& screen) {
+                core::INetwork& network, core::ISound& sound, const ScreenProfile& screen) {
   machine_ = &machine;
   provisioner_ = &provisioner;
   battery_ = &battery;
@@ -428,11 +433,23 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   scale_provisioner_ = &scale_provisioner;
   brew_ = &brew;
   network_ = &network;
+  sound_ = &sound;
   screen_ = screen;
   const bool compact = is_compact(screen);
   const bool xl = is_xl(screen);
 
   ui::theme::set_active(display_->theme());  // pick the palette before any widget is colored
+
+  // Button-press click on audio boards. The hook is read at event time and
+  // checks the cached setting, so the switch takes effect immediately.
+  click_sound_on_ = display_->click_sound();
+  if (sound_->available()) {
+    ui::set_button_press_hook([this] {
+      if (click_sound_on_ && sound_ != nullptr) sound_->click();
+    });
+  } else {
+    ui::set_button_press_hook(nullptr);
+  }
 
   // A rebuild (theme change) recreates everything; drop the old charge timer and
   // flow-graph canvas buffer first so we don't leak them across rebuilds
@@ -551,7 +568,8 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
               net_status());
   update_battery_runtime(battery_state_);
 
-  build_settings_tab(settings, screen, display_->supports_brightness(), settings_);
+  build_settings_tab(settings, screen, display_->supports_brightness(),
+                     sound_->available(), settings_);
   // lv_menu handles page navigation (root <-> Micra/Scale/Device) itself.
   // Micra connection:
   lv_obj_add_event_cb(settings_.scan_btn, on_scan_clicked, LV_EVENT_CLICKED, this);
@@ -605,6 +623,11 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   }
   lv_obj_add_event_cb(settings_.perf_overlay_switch, on_perf_overlay_switch,
                       LV_EVENT_VALUE_CHANGED, this);
+  if (settings_.click_sound_switch != nullptr) {
+    if (click_sound_on_) lv_obj_add_state(settings_.click_sound_switch, LV_STATE_CHECKED);
+    lv_obj_add_event_cb(settings_.click_sound_switch, on_click_sound_switch,
+                        LV_EVENT_VALUE_CHANGED, this);
+  }
   if (settings_.theme_btn != nullptr)
     lv_obj_add_event_cb(settings_.theme_btn, on_theme_clicked, LV_EVENT_CLICKED, this);
   // WiFi (Device section):
@@ -864,6 +887,11 @@ void App::set_scope_graph(bool on) {
   ui::set_flow_scope_mode(home_, on);  // apply + reset the plot to the new style
 }
 
+void App::set_click_sound(bool on) {
+  click_sound_on_ = on;
+  if (display_ != nullptr) display_->set_click_sound(on);  // persist
+}
+
 void App::set_perf_overlay(bool on) {
   if (display_ != nullptr) display_->set_perf_overlay(on);  // persist
   apply_perf_overlay(on);  // show/hide the LVGL sysmon label now
@@ -912,7 +940,7 @@ void App::rebuild() {
     scroll_y = lv_obj_get_scroll_y(settings_.device_page);
 
   build(*machine_, *provisioner_, *battery_, *display_, *clock_, *history_, *scale_,
-        *scale_provisioner_, *brew_, *network_, screen_);
+        *scale_provisioner_, *brew_, *network_, *sound_, screen_);
   show_tab(1);                       // back to Settings...
   select_settings_section(section);  // ...on the section that triggered the rebuild
 

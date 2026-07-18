@@ -28,6 +28,8 @@ class DisplaySettings : public core::IDisplaySettings {
   void set_flow_smooth(int level) override;
   bool perf_overlay() const override;
   void set_perf_overlay(bool on) override;
+  bool click_sound() const override;
+  void set_click_sound(bool on) override;
 
  private:
   Display& display_;

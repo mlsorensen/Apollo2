@@ -330,6 +330,21 @@ constexpr int  kPaddleDrivePin = -1;   // no native-GPIO paddle path on this boa
 constexpr int  kPaddleSensePin = -1;
 constexpr bool kPaddleActiveHigh = true;
 
+// --- Audio: ES8311 codec (DAC -> onboard speaker header) + ES7210 mic ADC
+//     (unused). I2S pins per the vendor 11_speaker_microphone demo — note the
+//     demo header is authoritative over the wiki pin table: DOUT to the codec
+//     is GPIO15, mic data (unused) is GPIO43. Codec control rides the shared
+//     I2C bus; the PA enable is EXIO4 per the docs (the vendor demo leaves it
+//     untouched, so it may be hardwired on — we drive it high regardless). ---
+#define BOARD_HAS_AUDIO
+constexpr int kAudioI2sPort = 1;  // vendor demo uses I2S_NUM_1
+constexpr int kAudioMclk = 6;
+constexpr int kAudioBclk = 44;
+constexpr int kAudioLrclk = 16;
+constexpr int kAudioDout = 15;    // ESP -> ES8311 SDIN (speaker)
+constexpr int kEs8311Addr = 0x18;
+constexpr int kIoExtPaEnable = 4;  // EXIO4 = PA_CTRL
+
 #elif defined(BOARD_WAVESHARE_P4_WIFI6_43)
 
 // Waveshare ESP32-P4-WIFI6-Touch-LCD-4.3 — ESP32-P4NRW32 (32MB flash, 32MB

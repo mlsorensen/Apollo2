@@ -23,6 +23,8 @@ class FakeDisplaySettings : public core::IDisplaySettings {
   void set_flow_smooth(int level) override { flow_smooth_ = level; }
   bool perf_overlay() const override { return perf_overlay_; }
   void set_perf_overlay(bool on) override { perf_overlay_ = on; }
+  bool click_sound() const override { return click_sound_; }
+  void set_click_sound(bool on) override { click_sound_ = on; }
 
  private:
   int brightness_ = 80;
@@ -32,6 +34,7 @@ class FakeDisplaySettings : public core::IDisplaySettings {
   bool scope_graph_ = true;  // matches the device default
   int flow_smooth_ = 1;      // light
   bool perf_overlay_ = false;
+  bool click_sound_ = true;
 };
 
 }  // namespace host

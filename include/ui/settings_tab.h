@@ -130,10 +130,11 @@ struct SettingsWidgets {
   lv_obj_t* wifi_forget_btn = nullptr;  // clear saved credentials
   lv_obj_t* tz_dropdown = nullptr;      // timezone picker (POSIX TZ under the hood)
   lv_obj_t* ntp_switch = nullptr;       // sync clock from NTP while connected (default on)
+  lv_obj_t* click_sound_switch = nullptr;  // button-press click (audio boards only)
 };
 
 void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
-                        bool with_brightness, SettingsWidgets& out);
+                        bool with_brightness, bool with_sound, SettingsWidgets& out);
 
 // Navigate to a section's page (kSectionMicra / kSectionScale / kSectionDevice).
 void settings_select_section(SettingsWidgets& w, int section);
