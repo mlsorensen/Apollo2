@@ -22,9 +22,23 @@ accurate and the layering rules there are hard rules:
 
 ## Boards / build
 
-`make build` (2-inch S3), `build-7b`, `build-4-3b`, `build-p4`; matching
-`flash-*` targets auto-detect the port and can probe a running board's serial
-banner. All envs + `sim` must compile before committing platform changes.
+`make build` (2-inch S3), `build-7b`, `build-4-3b`, `build-4-3c`, `build-p4`;
+matching `flash-*` targets auto-detect the port and can probe a running board's
+serial banner. All envs + `sim` must compile before committing platform changes.
+
+### ESP32-S3-Touch-LCD-4.3C (env `esp32-s3-micra-4-3c`) — verified on HW
+
+The 4.3B's RGB/GT911/RTC wiring plus the 7B-style register-based IO extension
+(Waveshare CH32V003 @0x24) instead of the 4.3B's CH422G — which adds true PWM
+backlight dimming (reg 0x05, inverted duty; vendor clamps at 95% to avoid
+full-off) and battery monitoring via the expander's ADC (reg 0x06, ÷3 divider,
+scale 3·3.3/1023 — not yet multimeter-calibrated; the 7B's same-family chip
+needed 0.009632). Support is config-only: no new driver code. RGB timings are
+the 4.3C demo's (pulse 4, porches 8/8, 16 MHz), not the 4.3B's.
+`HWCDC::isPlugged()` works on this S3 (unlike the P4) for the USB/plug icon.
+Bring-up gotcha: scripted DTR/RTS toggling on the USB-CDC port can strand the
+board in ROM download mode — black screen, silent serial, yet flashing still
+works. Recover with the physical RST button; don't script reset dances.
 
 ### ESP32-P4-WIFI6-Touch-LCD-4.3 (env `esp32-p4-micra-43`) — bring-up pending
 

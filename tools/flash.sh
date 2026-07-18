@@ -15,6 +15,7 @@ board_to_env() {
     2|2inch|lcd2|s3-lcd-2|esp32-s3-micra)        echo "esp32-s3-micra" ;;
     7|7b|lcd7|s3-lcd-7|7inch|esp32-s3-micra-7b)  echo "esp32-s3-micra-7b" ;;
     4|43|4-3b|4.3b|43b|lcd43|esp32-s3-micra-4-3b) echo "esp32-s3-micra-4-3b" ;;
+    4-3c|4.3c|43c|esp32-s3-micra-4-3c)            echo "esp32-s3-micra-4-3c" ;;
     p4|p4-43|p4-wifi6|esp32-p4-micra-43)          echo "esp32-p4-micra-43" ;;
     *) echo "" ;;
   esac
@@ -49,6 +50,7 @@ while time.time() < deadline:
     buf += s.read(256)
     if b"P4-WIFI6" in buf: print("esp32-p4-micra-43");  break  # before LCD-4: its banner has "LCD-4.3" too
     if b"LCD-7" in buf:   print("esp32-s3-micra-7b");   break
+    if b"LCD-4.3C" in buf: print("esp32-s3-micra-4-3c"); break  # before the generic LCD-4 match
     if b"LCD-4" in buf:   print("esp32-s3-micra-4-3b"); break
     if b"LCD-2" in buf:   print("esp32-s3-micra");      break
 s.close()
@@ -75,6 +77,7 @@ if [ -z "$ENV" ]; then
   echo "       Re-run with the board so we don't flash the wrong build:" >&2
   echo "         make flash-7b        (7\" 1024x600)" >&2
   echo "         make flash-4-3b      (4.3\" 800x480)" >&2
+  echo "         make flash-4-3c      (4.3\" 800x480, dimmable)" >&2
   echo "         make flash-2inch     (2\" 320x240)" >&2
   echo "         make flash-p4        (P4-WIFI6 4.3\" 800x480)" >&2
   exit 2
