@@ -662,7 +662,13 @@ void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_set_size(out.shot_btn, LV_SIZE_CONTENT, btn_size);
   lv_obj_set_style_pad_hor(out.shot_btn, 14, 0);
   lv_obj_set_style_radius(out.shot_btn, btn_size / 2, 0);
-  lv_obj_set_style_bg_color(out.shot_btn, lv_color_hex(ui::theme::accent()), 0);
+  // Outlined like the step buttons sharing this row (card fill + ring), so the
+  // stepper slot reads as one family; update_home colors the ring + text by
+  // state instead of flooding the fill.
+  lv_obj_set_style_bg_color(out.shot_btn, lv_color_hex(ui::theme::card()), 0);
+  lv_obj_set_style_border_width(out.shot_btn, 2, 0);
+  lv_obj_set_style_border_color(out.shot_btn, lv_color_hex(ui::theme::scrollbar()), 0);
+  lv_obj_set_style_opa(out.shot_btn, LV_OPA_40, LV_STATE_DISABLED);
   out.shot_btn_label = lv_label_create(out.shot_btn);
   lv_label_set_text(out.shot_btn_label, "Auto");
   lv_obj_set_style_text_color(out.shot_btn_label, lv_color_hex(ui::theme::text()), 0);
@@ -1051,14 +1057,18 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
                             brew.phase == core::ShotPhase::kSettling;
         lv_label_set_text(w.shot_btn_label,
                           review ? "Reset" : brew.shot_mode ? "Auto" : "Manual");
-        const uint32_t col = review          ? ui::theme::warn()
-                             : active         ? ui::theme::rail()
+        // State lives in the outline + text: accent = auto armed, warn = Reset,
+        // neutral ring = manual/busy (the fill stays card(), see build).
+        const uint32_t ring = review          ? ui::theme::warn()
+                              : active         ? ui::theme::scrollbar()
+                              : brew.shot_mode ? ui::theme::accent()
+                                               : ui::theme::scrollbar();
+        lv_obj_set_style_border_color(w.shot_btn, lv_color_hex(ring), 0);
+        const uint32_t txt = review          ? ui::theme::warn()
+                             : active         ? ui::theme::muted()
                              : brew.shot_mode ? ui::theme::accent()
-                                              : ui::theme::rail();
-        lv_obj_set_style_bg_color(w.shot_btn, lv_color_hex(col), 0);
-        lv_obj_set_style_text_color(
-            w.shot_btn_label,
-            lv_color_hex(active ? ui::theme::muted() : ui::theme::text()), 0);
+                                              : ui::theme::text();
+        lv_obj_set_style_text_color(w.shot_btn_label, lv_color_hex(txt), 0);
         if (active) {
           lv_obj_add_state(w.shot_btn, LV_STATE_DISABLED);
         } else {
