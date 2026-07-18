@@ -9,7 +9,7 @@
     "f_psram": "200000000L",
     "flash_mode": "qio",
     "mcu": "esp32p4",
-    "chip_variant": "esp32p4",
+    "chip_variant": "esp32p4_es",
     "variant": "esp32p4"
   },
   "connectivity": [
@@ -23,7 +23,7 @@
     "arduino",
     "espidf"
   ],
-  "name": "Waveshare ESP32-P4-WIFI6-Touch-LCD-4.3 (P4NRW32, rev >= 3.0)",
+  "name": "Waveshare ESP32-P4-WIFI6-Touch-LCD-4.3 (P4NRW32, rev v1.x silicon)",
   "upload": {
     "flash_size": "32MB",
     "maximum_ram_size": 786432,
