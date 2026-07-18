@@ -79,6 +79,15 @@ int main() {
   disp.set_scope_graph(false);
   ok &= r({800, 480}, "renders/home_scroll_800x480.png");
   disp.set_scope_graph(true);
+  // Sleeping Umbra: a sleep-capable scale with its link switched off shows the
+  // SCALE card as "Sleeping" (muted dot) with Connect armed to wake it.
+  scale.set_umbra(true);
+  scale.set_connected(false);
+  scale_provisioner.set_connect_enabled(false);
+  ok &= r({800, 480}, "renders/home_sleeping_800x480.png");
+  scale_provisioner.set_connect_enabled(true);
+  scale.set_connected(true);
+  scale.set_umbra(false);
   // No-scale Home (classic layout) — toggle the fake to "no scale saved".
   scale_provisioner.set_saved(false);
   ok &= r({320, 240}, "renders/home_noscale_320x240.png");

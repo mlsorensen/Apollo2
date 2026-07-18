@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -8,22 +9,23 @@
 #include "core/ble.h"
 #include "core/provisioner.h"  // core::ScanResult
 #include "core/scale.h"
+#include "core/scale_driver.h"
 
-// Bluetooth-scale protocol — the scale-side analogue of core::MicraLink, and
-// portable the same way (core::ble::ICentral + core/system.h only).
+// Bluetooth-scale connection manager — the scale-side analogue of core::MicraLink,
+// and portable the same way (core::ble::ICentral + core/system.h only).
 //
 // All BLE work happens inside run() — scan, connect, (re)connect — which the
-// platform calls from a dedicated thread. Once connected it subscribes to the
-// scale's notify characteristic; decoded weight/timer/battery frames update a
-// mutex-guarded cache that snapshot() reads from the UI thread.
-//
-// First/only driver: the Bookoo Themis Mini (advertised name prefix "BOOKOO";
-// 20-byte notify frame on char 0xFF11; tare written to 0xFF12). Other scales slot
-// in later by generalising do_connect()'s characteristic discovery + the decoder.
+// platform calls from a dedicated thread. Everything model-specific (UUIDs,
+// init sequence, frame decode, keepalives, command bytes) lives behind
+// core::IScaleDriver (scale_driver.h): the saved scale's name classifies the
+// model, do_connect() instantiates a fresh driver per connection, and decoded
+// weight/timer/battery frames land in a mutex-guarded cache that snapshot()
+// reads from the UI thread. Drivers today: Bookoo Themis, Acaia (Umbra/Lunar/
+// Pyxis).
 
 namespace core {
 
-class ScaleLink : public IScale {
+class ScaleLink : public IScale, public IScaleSink {
  public:
   explicit ScaleLink(ble::ICentral& ble) : ble_(ble) {}
 
@@ -33,7 +35,7 @@ class ScaleLink : public IScale {
 
   // Runtime setters (thread-safe; trigger a reconnect).
   void set_address(std::string address);
-  void set_name(std::string name);  // display name for the snapshot
+  void set_name(std::string name);  // display name; also selects the driver
 
   // Manual connect gate (a battery remote can drop the scale to save power).
   bool connect_enabled() const { return connect_enabled_.load(); }
@@ -49,10 +51,12 @@ class ScaleLink : public IScale {
   bool scanning() const;
   std::vector<ScanResult> scan_results() const;
 
-  // Called from the transport's notify callback (BLE thread) with a decoded
-  // frame. Flow is derived from the weight stream by the UI, so only weight is
-  // published.
-  void publish_sample(float weight_g, uint32_t timer_ms, int battery_pct);
+  // core::IScaleSink — called from the transport's notify callback (BLE
+  // thread) by the driver. Flow is derived from the weight stream by the UI,
+  // so only weight is published; on_weight bumps snapshot.seq.
+  void on_weight(float grams) override;
+  void on_timer(uint32_t timer_ms) override;
+  void on_battery(int pct) override;
 
  private:
   bool do_connect(const std::string& address);
@@ -64,13 +68,18 @@ class ScaleLink : public IScale {
   std::string address_;         // guarded by mutex_
   std::string name_ = "Scale";  // guarded by mutex_
 
+  // Model driver for the saved scale; refreshed per connection attempt.
+  // Guarded by mutex_; shared_ptr so the notify callback + link loop keep a
+  // replaced driver alive until they let go.
+  std::shared_ptr<IScaleDriver> driver_;
+
   mutable std::mutex mutex_;  // guards the cached fields below
   bool connected_ = false;
   float weight_g_ = 0.0f;
   uint32_t timer_ms_ = 0;
   int battery_pct_ = 0;
   bool battery_valid_ = false;
-  uint32_t seq_ = 0;  // increments per publish_sample (snapshot.seq)
+  uint32_t seq_ = 0;  // increments per weight update (snapshot.seq)
   std::vector<ScanResult> scan_results_;
 
   std::atomic<bool> connect_enabled_{true};  // scales auto-connect when saved

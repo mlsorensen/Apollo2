@@ -56,6 +56,11 @@ struct HomeWidgets {
   lv_obj_t* scale_target = nullptr;   // "/ 36 g" target sub
   lv_obj_t* tare_btn = nullptr;
   lv_obj_t* tare_label = nullptr;
+  // Connect/Disconnect inside the SCALE card (large scale-aware layout only).
+  // Toggles the scale link — for a sleep-capable scale (Umbra) "Disconnect"
+  // lets it doze off and "Connect" wakes it, so the pair double as sleep/wake.
+  lv_obj_t* scale_connect_btn = nullptr;
+  lv_obj_t* scale_connect_label = nullptr;
   // Shot button under the TIMER column (large scale layout + paddle boards only):
   // toggles shot mode when idle/brewing, becomes "Reset" during review.
   lv_obj_t* shot_btn = nullptr;
@@ -172,9 +177,12 @@ void build_rail_tray(lv_obj_t* rail, const lv_font_t* font, HomeWidgets& out);
 void build_bottom_tray(lv_obj_t* bar, const lv_font_t* font, HomeWidgets& out);
 
 // Apply machine + battery + scale state to the built widgets (live, no rebuild).
+// scale_features/scale_connect_enabled drive the sleep-aware scale status: a
+// disconnected sleep-capable scale shows as "Sleeping", not gone.
 void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
                  const core::BatteryState& battery, const core::WallTime& clock,
                  bool clock_24h, bool fahrenheit, const core::ScaleSnapshot& scale,
+                 const core::ScaleFeatures& scale_features, bool scale_connect_enabled,
                  const core::BrewSnapshot& brew, core::NetState net);
 
 // Scroll the flow strip chart left by however many pixels elapsed wall-clock time

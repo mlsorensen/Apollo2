@@ -415,6 +415,7 @@ void build_tare_button(lv_obj_t* parent, const lv_font_t* font, ui::HomeWidgets&
   out.tare_btn = ui::make_button(parent);
   lv_obj_set_style_bg_color(out.tare_btn, lv_color_hex(ui::theme::card()), 0);
   lv_obj_set_style_radius(out.tare_btn, 14, 0);
+  lv_obj_set_style_opa(out.tare_btn, LV_OPA_40, LV_STATE_DISABLED);  // scale gone
   out.tare_label = lv_label_create(out.tare_btn);
   lv_label_set_text(out.tare_label, LV_SYMBOL_LOOP "  Tare");
   lv_obj_set_style_text_color(out.tare_label, lv_color_hex(ui::theme::text()), 0);
@@ -618,11 +619,13 @@ void build_compact_scale_card(lv_obj_t* parent, int pad, const lv_font_t* cap_fo
 }
 
 // MICRA panel: two centered temperature columns (BREW / STEAM), each caption ->
-// live value -> [-] set [+].
+// live value -> [-] set [+], with the power/standby button along the bottom
+// (each device's controls live in its own card — no bottom action bar).
 void build_micra_panel(lv_obj_t* parent, const lv_font_t* cap_font,
                        const lv_font_t* status_font, const lv_font_t* val_font,
                        const lv_font_t* set_font, int btn_size,
-                       const lv_font_t* symbol_font, int pad, ui::HomeWidgets& out) {
+                       const lv_font_t* symbol_font, int pad, int action_h,
+                       const lv_font_t* action_font, ui::HomeWidgets& out) {
   lv_obj_t* card = make_panel_card(parent, pad);
   make_panel_header(card, "MICRA", cap_font, status_font, &out.micra_status_dot,
                     &out.micra_status_label);
@@ -633,14 +636,23 @@ void build_micra_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_t* scol = make_panel_column(body, "STEAM", cap_font, val_font, &out.boiler_value);
   make_stepper_group(scol, btn_size, symbol_font, set_font, &out.boiler_set,
                      &out.boiler_minus, &out.boiler_plus);
+  // Center the clusters in the body so the card's slack splits above and below
+  // them — breathing room against the header AND the action button.
+  lv_obj_set_flex_align(bcol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_flex_align(scol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  build_power_button(card, action_h, action_font, out);
 }
 
 // SCALE panel: centered WEIGHT + TIMER columns, with the target stepper tucked
-// under the weight column (same caption/value/stepper pattern as MICRA).
+// under the weight column (same caption/value/stepper pattern as MICRA), and
+// Connect/Disconnect + Tare side by side along the bottom.
 void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
                        const lv_font_t* status_font, const lv_font_t* big_font,
                        const lv_font_t* set_font, int btn_size,
-                       const lv_font_t* symbol_font, int pad, ui::HomeWidgets& out) {
+                       const lv_font_t* symbol_font, int pad, int action_h,
+                       const lv_font_t* action_font, ui::HomeWidgets& out) {
   lv_obj_t* card = make_panel_card(parent, pad);
   make_panel_header(card, "SCALE", cap_font, status_font, &out.scale_status_dot,
                     &out.scale_status_label);
@@ -648,7 +660,11 @@ void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_t* wcol = make_panel_column(body, "WEIGHT", cap_font, big_font, &out.scale_weight);
   make_stepper_group(wcol, btn_size, symbol_font, set_font, &out.scale_target,
                      &out.target_minus, &out.target_plus);
+  lv_obj_set_flex_align(wcol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);  // centered like the MICRA columns
   lv_obj_t* tcol = make_panel_column(body, "TIMER", cap_font, big_font, &out.shot_timer_label);
+  lv_obj_set_flex_align(tcol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
   // Shot button in the stepper's slot under the timer: shot-mode toggle, or
   // Reset while a finished shot is up for review. Hidden unless the board has
   // paddle hardware (update_home shows it); sized to line up with the stepper.
@@ -656,13 +672,48 @@ void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_set_size(out.shot_btn, LV_SIZE_CONTENT, btn_size);
   lv_obj_set_style_pad_hor(out.shot_btn, 14, 0);
   lv_obj_set_style_radius(out.shot_btn, btn_size / 2, 0);
-  lv_obj_set_style_bg_color(out.shot_btn, lv_color_hex(ui::theme::accent()), 0);
+  // Outlined like the step buttons sharing this row (card fill + ring), so the
+  // stepper slot reads as one family; update_home colors the ring + text by
+  // state instead of flooding the fill.
+  lv_obj_set_style_bg_color(out.shot_btn, lv_color_hex(ui::theme::card()), 0);
+  lv_obj_set_style_border_width(out.shot_btn, 2, 0);
+  lv_obj_set_style_border_color(out.shot_btn, lv_color_hex(ui::theme::scrollbar()), 0);
+  lv_obj_set_style_opa(out.shot_btn, LV_OPA_40, LV_STATE_DISABLED);
   out.shot_btn_label = lv_label_create(out.shot_btn);
-  lv_label_set_text(out.shot_btn_label, "Auto");
+  lv_label_set_text(out.shot_btn_label, "Auto Shot");
   lv_obj_set_style_text_color(out.shot_btn_label, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(out.shot_btn_label, set_font, 0);
   lv_obj_center(out.shot_btn_label);
   lv_obj_add_flag(out.shot_btn, LV_OBJ_FLAG_HIDDEN);  // update_home reveals it
+
+  // Connect/Disconnect + Tare side by side at the card's bottom. For a
+  // sleep-capable scale (Umbra) the connect toggle doubles as sleep/wake:
+  // disconnecting lets it doze off, connecting wakes it.
+  lv_obj_t* acts = lv_obj_create(card);
+  lv_obj_remove_style_all(acts);
+  lv_obj_remove_flag(acts, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_width(acts, lv_pct(100));
+  lv_obj_set_height(acts, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(acts, LV_FLEX_FLOW_ROW);
+  lv_obj_set_style_pad_column(acts, pad, 0);
+
+  out.scale_connect_btn = ui::make_button(acts);
+  lv_obj_set_height(out.scale_connect_btn, action_h);
+  lv_obj_set_width(out.scale_connect_btn, 0);
+  lv_obj_set_flex_grow(out.scale_connect_btn, 1);
+  lv_obj_set_style_radius(out.scale_connect_btn, 14, 0);
+  out.scale_connect_label = lv_label_create(out.scale_connect_btn);
+  lv_obj_set_style_text_color(out.scale_connect_label, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(out.scale_connect_label, action_font, 0);
+  lv_obj_center(out.scale_connect_label);
+
+  build_tare_button(acts, action_font, out);
+  // On the card surface the neutral buttons use the rail tone (card-on-card is
+  // invisible); update_home colors the connect button by state.
+  lv_obj_set_style_bg_color(out.tare_btn, lv_color_hex(ui::theme::rail()), 0);
+  lv_obj_set_height(out.tare_btn, action_h);
+  lv_obj_set_width(out.tare_btn, 0);
+  lv_obj_set_flex_grow(out.tare_btn, 1);
 }
 
 }  // namespace
@@ -756,6 +807,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   out.brew_set = out.boiler_set = nullptr;
   out.scale_weight = out.scale_target = nullptr;
   out.tare_btn = out.tare_label = nullptr;
+  out.scale_connect_btn = out.scale_connect_label = nullptr;
   out.paddle_pill = out.paddle_label = nullptr;
   out.status_dot = out.status_label = nullptr;
   out.micra_status_dot = out.micra_status_label = nullptr;
@@ -846,14 +898,13 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   }
 
   // Shared large-screen panel sizing (the MICRA / SCALE cards + their steppers).
-  const int panel_h = xl ? 210 : 168;
   const lv_font_t* panel_cap = &lv_font_montserrat_14;
   const lv_font_t* panel_status = sub_font;                       // 20 wide / 28 xl
   // One value size for BOTH panels so the value rows + steppers line up across
   // MICRA and SCALE (weight/timer are not a bigger "hero" — they match the temps).
   const lv_font_t* panel_val = xl ? &lv_font_montserrat_28 : &lv_font_montserrat_24;
   const lv_font_t* panel_set = &lv_font_montserrat_14;
-  const int panel_btn = xl ? 48 : 36;
+  const int panel_btn = xl ? 54 : 42;
   const lv_font_t* panel_sym = xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
 
   if (!scale_enabled) {
@@ -899,42 +950,33 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
     return;
   }
 
-  // Large scale-aware screens: two device panels (MICRA / SCALE) with their own
-  // status + steppers, weight and shot timer; then the flow graph as the hero;
-  // then Tare + Power. Clock/battery live in the rail tray (build_rail_tray).
+  // Large scale-aware screens: the upper half is two device panels (MICRA /
+  // SCALE), each carrying its own status + controls — power inside MICRA,
+  // Connect/Tare inside SCALE (no bottom action bar) — and the flow graph is
+  // the entire lower half. Clock/battery live in the rail tray (build_rail_tray).
+  const int action_h = xl ? 56 : 48;  // in-card action buttons (power/connect/tare)
+  // Tighter padding than the generic card_pad: each card now stacks header +
+  // value/stepper body + an action button inside its half of the screen.
+  const int panel_pad = xl ? 16 : 12;
   lv_obj_t* panels = lv_obj_create(parent);
   lv_obj_remove_style_all(panels);
   lv_obj_remove_flag(panels, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_width(panels, lv_pct(100));
-  lv_obj_set_height(panels, panel_h);
+  // 7:5 with the graph card below — a shade over half for the cards so their
+  // content breathes (~35 px moved out of the graph at 800x480).
+  lv_obj_set_flex_grow(panels, 7);
   lv_obj_set_flex_flow(panels, LV_FLEX_FLOW_ROW);
   lv_obj_set_style_pad_column(panels, gap, 0);
   build_micra_panel(panels, panel_cap, panel_status, panel_val, panel_set, panel_btn,
-                    panel_sym, card_pad, out);
+                    panel_sym, panel_pad, action_h, btn_font, out);
   build_scale_panel(panels, panel_cap, panel_status, panel_val, panel_set, panel_btn,
-                    panel_sym, card_pad, out);
+                    panel_sym, panel_pad, action_h, btn_font, out);
 
-  // The flow graph fills the rest — the hero. The card is created here for correct
-  // flex order, but its canvas is sized only after the actions row exists and the
-  // layout is final (populate_flow_graph below).
+  // The flow graph fills the (slightly smaller) lower half. The card is created
+  // here for correct flex order, but its canvas is sized only once the layout
+  // is final (populate_flow_graph below).
   lv_obj_t* graph_card = make_flow_graph_card(parent);
-
-  // Power (under MICRA, left) beside Tare (under SCALE, right) — each action sits
-  // below the card it belongs to.
-  lv_obj_t* actions = lv_obj_create(parent);
-  lv_obj_remove_style_all(actions);
-  lv_obj_remove_flag(actions, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_width(actions, lv_pct(100));
-  lv_obj_set_height(actions, LV_SIZE_CONTENT);
-  lv_obj_set_flex_flow(actions, LV_FLEX_FLOW_ROW);
-  lv_obj_set_style_pad_column(actions, gap, 0);
-  build_power_button(actions, btn_h, btn_font, out);
-  lv_obj_set_width(out.power_btn, 0);
-  lv_obj_set_flex_grow(out.power_btn, 1);  // equal halves with the tare button
-  build_tare_button(actions, btn_font, out);
-  lv_obj_set_height(out.tare_btn, btn_h);
-  lv_obj_set_width(out.tare_btn, 0);
-  lv_obj_set_flex_grow(out.tare_btn, 1);
+  lv_obj_set_flex_grow(graph_card, 5);  // the other side of the 7:5 split
 
   // Everything's in place: resolve the final layout, then size + paint the graph
   // to the card's real content box.
@@ -945,6 +987,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
 void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
                  const core::BatteryState& battery, const core::WallTime& clock,
                  bool clock_24h, bool fahrenheit, const core::ScaleSnapshot& scale,
+                 const core::ScaleFeatures& scale_features, bool scale_connect_enabled,
                  const core::BrewSnapshot& brew, core::NetState net) {
   const bool connected = state.link == core::Link::Connected;
   const bool on = state.power == core::Power::On;
@@ -1026,15 +1069,19 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
         const bool active = brew.phase == core::ShotPhase::kBrewing ||
                             brew.phase == core::ShotPhase::kSettling;
         lv_label_set_text(w.shot_btn_label,
-                          review ? "Reset" : brew.shot_mode ? "Auto" : "Manual");
-        const uint32_t col = review          ? ui::theme::warn()
-                             : active         ? ui::theme::rail()
+                          review ? "Reset" : brew.shot_mode ? "Auto shot" : "Manual");
+        // State lives in the outline + text: accent = auto armed, warn = Reset,
+        // neutral ring = manual/busy (the fill stays card(), see build).
+        const uint32_t ring = review          ? ui::theme::warn()
+                              : active         ? ui::theme::scrollbar()
+                              : brew.shot_mode ? ui::theme::accent()
+                                               : ui::theme::scrollbar();
+        lv_obj_set_style_border_color(w.shot_btn, lv_color_hex(ring), 0);
+        const uint32_t txt = review          ? ui::theme::warn()
+                             : active         ? ui::theme::muted()
                              : brew.shot_mode ? ui::theme::accent()
-                                              : ui::theme::rail();
-        lv_obj_set_style_bg_color(w.shot_btn, lv_color_hex(col), 0);
-        lv_obj_set_style_text_color(
-            w.shot_btn_label,
-            lv_color_hex(active ? ui::theme::muted() : ui::theme::text()), 0);
+                                              : ui::theme::text();
+        lv_obj_set_style_text_color(w.shot_btn_label, lv_color_hex(txt), 0);
         if (active) {
           lv_obj_add_state(w.shot_btn, LV_STATE_DISABLED);
         } else {
@@ -1091,11 +1138,45 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     const char* mtxt = state.link == core::Link::Unconfigured ? "Not set up" : status;
     lv_label_set_text(w.micra_status_label, mtxt);
   }
-  const uint32_t scale_dot = scale.connected ? ui::theme::ok() : ui::theme::alert();
+  // Scale status, sleep-aware: a deliberately-disconnected sleep-capable scale
+  // (Umbra) is dozing but still connectable — show it "Sleeping" (calm, muted),
+  // never as a missing device. With the link enabled but down we're actively
+  // retrying, so that reads "Connecting...".
+  const char* scale_txt;
+  uint32_t scale_dot;
+  if (scale.connected) {
+    scale_txt = "Connected";
+    scale_dot = ui::theme::ok();
+  } else if (scale_connect_enabled) {
+    scale_txt = "Connecting...";
+    scale_dot = ui::theme::warn();
+  } else if (scale_features.sleep) {
+    scale_txt = "Sleeping";
+    scale_dot = ui::theme::muted();
+  } else {
+    scale_txt = "Disconnected";
+    scale_dot = ui::theme::muted();
+  }
   if (w.scale_status_dot != nullptr)
     lv_obj_set_style_bg_color(w.scale_status_dot, lv_color_hex(scale_dot), 0);
   if (w.scale_status_label != nullptr)
-    lv_label_set_text(w.scale_status_label, scale.connected ? "Connected" : "Disconnected");
+    lv_label_set_text(w.scale_status_label, scale_txt);
+
+  // In-card scale actions: the connect toggle mirrors the link switch (accent =
+  // "will connect/wake"), and Tare only works with a live link.
+  if (w.scale_connect_btn != nullptr) {
+    lv_label_set_text(w.scale_connect_label,
+                      scale_connect_enabled ? "Disconnect" : "Connect");
+    lv_obj_set_style_bg_color(
+        w.scale_connect_btn,
+        lv_color_hex(scale_connect_enabled ? ui::theme::rail() : ui::theme::accent()),
+        0);
+    if (scale.connected) {
+      lv_obj_remove_state(w.tare_btn, LV_STATE_DISABLED);
+    } else {
+      lv_obj_add_state(w.tare_btn, LV_STATE_DISABLED);
+    }
+  }
 
   // Clock (top-right): "14:30" (24h) or "2:30 PM" (12h); dashes until set.
   if (clock.valid) {
@@ -1159,11 +1240,15 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   // Action button: Power when connected; otherwise it doubles as a connect /
   // setup affordance so the old dead "Offline" button does something. Disabled in
   // states where a tap can't help (mid-connect, or needs setup/token first).
+  // Neutral fill: card() on the classic layouts (button sits on the bg), rail()
+  // when the button lives inside the MICRA card (card-on-card is invisible).
+  const uint32_t pow_neutral =
+      (w.scale_connect_btn != nullptr) ? ui::theme::rail() : ui::theme::card();
   switch (state.link) {
     case core::Link::Connected:
       lv_obj_remove_state(w.power_btn, LV_STATE_DISABLED);
       lv_obj_set_style_bg_color(
-          w.power_btn, lv_color_hex(on ? ui::theme::card() : ui::theme::accent()), 0);
+          w.power_btn, lv_color_hex(on ? pow_neutral : ui::theme::accent()), 0);
       lv_label_set_text(w.power_label,
                         on ? LV_SYMBOL_POWER "  Standby" : LV_SYMBOL_POWER "  Turn On");
       break;
@@ -1174,18 +1259,18 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
       break;
     case core::Link::Connecting:
       lv_obj_add_state(w.power_btn, LV_STATE_DISABLED);
-      lv_obj_set_style_bg_color(w.power_btn, lv_color_hex(ui::theme::card()), 0);
+      lv_obj_set_style_bg_color(w.power_btn, lv_color_hex(pow_neutral), 0);
       lv_label_set_text(w.power_label, LV_SYMBOL_REFRESH "  Connecting...");
       break;
     case core::Link::NeedsToken:
       lv_obj_add_state(w.power_btn, LV_STATE_DISABLED);
-      lv_obj_set_style_bg_color(w.power_btn, lv_color_hex(ui::theme::card()), 0);
+      lv_obj_set_style_bg_color(w.power_btn, lv_color_hex(pow_neutral), 0);
       lv_label_set_text(w.power_label, LV_SYMBOL_WARNING "  Token needed");
       break;
     case core::Link::Unconfigured:
     default:
       lv_obj_add_state(w.power_btn, LV_STATE_DISABLED);
-      lv_obj_set_style_bg_color(w.power_btn, lv_color_hex(ui::theme::card()), 0);
+      lv_obj_set_style_bg_color(w.power_btn, lv_color_hex(pow_neutral), 0);
       lv_label_set_text(w.power_label, LV_SYMBOL_SETTINGS "  Set up in Settings");
       break;
   }
