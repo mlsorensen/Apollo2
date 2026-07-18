@@ -27,7 +27,7 @@ class FakeDisplaySettings : public core::IDisplaySettings {
   int theme_ = 0;
   bool fahrenheit_ = false;
   bool drop_negative_flow_ = true;
-  bool scope_graph_ = false;
+  bool scope_graph_ = true;  // matches the device default
   bool perf_overlay_ = false;
 };
 

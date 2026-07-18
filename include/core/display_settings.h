@@ -32,9 +32,9 @@ class IDisplaySettings {
   virtual bool drop_negative_flow() const = 0;
   virtual void set_drop_negative_flow(bool on) = 0;
 
-  // Flow graph style: false = scrolling strip chart (default), true = oscilloscope
-  // sweep (a stationary trace a cursor wipes across). Sweep repaints only one column
-  // per step, so it's far cheaper and tears less on the RGB panel.
+  // Flow graph style: true = oscilloscope sweep (a stationary trace a cursor wipes
+  // across; the default), false = scrolling strip chart. Sweep repaints only one
+  // column per step, so it's far cheaper and tears less on the RGB panel.
   virtual bool scope_graph() const = 0;
   virtual void set_scope_graph(bool on) = 0;
 

@@ -19,7 +19,7 @@ void format_now(char* out, size_t n, float c, bool f) {
 // Flow strip chart. The plot scrolls right->left by wall-clock time (see
 // flow_graph_tick) over kFlowWindowS seconds. The Y axis auto-ranges (per-mode
 // default/floor, grows to the window peak, shrinks back with hysteresis).
-constexpr int kFlowWindowS = 60;       // seconds spanned by the full plot width
+constexpr int kFlowWindowS = 45;       // seconds spanned by the full plot width
 // Pixels scrolled per re-blit. The whole-plot copy is the cost, so scrolling N px
 // at 1/N the cadence keeps the same average speed for ~1/N the CPU (chunkier
 // motion). 1 = smoothest/most expensive; bump to trade smoothness for CPU.
@@ -35,7 +35,7 @@ constexpr int kFlowScopeGapPx = 4;
 // Modes: 0 = flow rate (g/s), 1 = weight (g). Each has a unit + a default axis
 // full-scale, which is also the floor the axis shrinks back to.
 const char* flow_unit(int mode) { return mode == 1 ? "g" : "g/s"; }
-float flow_default_max(int mode) { return mode == 1 ? 30.0f : 6.0f; }
+float flow_default_max(int mode) { return mode == 1 ? 10.0f : 6.0f; }
 
 // Smallest "nice" axis >= v for the mode (even / multiple of 10 so the labels
 // 0, max/2, max stay clean), floored at the mode default.
