@@ -36,6 +36,7 @@ void BrewController::poll(uint32_t now_ms) {
           if (s0.connected) {
             phase_ = ShotPhase::kBrewing;
             auto_stopped_ = false;
+            blind_since_ms_ = 0;
             if (s0.weight_g > -kPreTaredG && s0.weight_g < kPreTaredG) {
               // Scale already reads ~0 (tared with the cup on — the natural
               // flow): baseline is confirmed instantly, no mid-shot tare, no
@@ -67,11 +68,21 @@ void BrewController::poll(uint32_t now_ms) {
   if (phase_ == ShotPhase::kBrewing) {
     const ScaleSnapshot s = scale_.snapshot();
     if (!s.connected) {
-      // Lost the scale mid-shot: automation can't finish, but the machine keeps
-      // running — the user still owns the paddle.
-      phase_ = ShotPhase::kIdle;
-      timer_.stop(last_now_ms_);
+      // Scale went dark mid-shot. A transient BLE blip (supervision timeout +
+      // fast reconnect — machine vibration can cause one) must NOT kill the
+      // shot: fly blind for a grace period and resume seamlessly on reconnect
+      // (the tare survives a link blip, so the baseline stays valid). Only a
+      // sustained loss cancels the automation — the machine keeps running
+      // either way; the user still owns the paddle.
+      if (blind_since_ms_ == 0) {
+        blind_since_ms_ = now_ms;
+      } else if (reached(now_ms, blind_since_ms_ + kBlindGraceMs)) {
+        phase_ = ShotPhase::kIdle;
+        timer_.stop(last_now_ms_);
+        blind_since_ms_ = 0;
+      }
     } else if (!baseline_set_) {
+      blind_since_ms_ = 0;
       // Confirm the instant the tare visibly lands (weight snaps to ~0 — a
       // notify or two, typically 100-300ms), so the graph hold is barely
       // noticeable. The deadline is only the dropped-command fallback: past it,
@@ -82,11 +93,14 @@ void BrewController::poll(uint32_t now_ms) {
         baseline_set_ = true;
       }
     } else if (s.weight_g - start_g_ >= target_g_ - overshoot_g_) {
+      blind_since_ms_ = 0;
       paddle_.drive(false);
       driving_ = false;
       timer_.stop(now_ms);
       auto_stopped_ = true;
       end_shot(now_ms);
+    } else {
+      blind_since_ms_ = 0;
     }
   }
 

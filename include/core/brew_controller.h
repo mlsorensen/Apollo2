@@ -76,6 +76,7 @@ class BrewController : public IBrewController {
 
   uint32_t settle_until_ms_ = 0;
   uint32_t review_until_ms_ = 0;
+  uint32_t blind_since_ms_ = 0;  // scale dark since (kBrewing); 0 = seeing it
   uint32_t last_sense_ms_ = 0;
   uint32_t last_now_ms_ = 0;  // for snapshot()'s elapsed time
 
@@ -83,6 +84,7 @@ class BrewController : public IBrewController {
   static constexpr uint32_t kBaselineDelayMs = 1200;  // tare settle before baseline
   static constexpr float kPreTaredG = 0.5f;           // |weight| under this = already tared
   static constexpr uint32_t kSettleMs = 3000;         // drip tail before the freeze
+  static constexpr uint32_t kBlindGraceMs = 4000;     // tolerated mid-shot scale blackout
   static constexpr float kOvershootLearnRate = 0.5f;  // fraction of the error absorbed per shot
   static constexpr float kOvershootMaxG = 8.0f;       // sanity clamp (0..max)
 };

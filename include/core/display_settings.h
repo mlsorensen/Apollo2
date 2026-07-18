@@ -38,6 +38,12 @@ class IDisplaySettings {
   virtual bool scope_graph() const = 0;
   virtual void set_scope_graph(bool on) = 0;
 
+  // Shot-graph line smoothing level: 0 = off, 1 = light (0.15), 2 = medium
+  // (0.25), 3 = strong (0.33) — the neighbor weight of the draw-time 3-point
+  // kernel. Persisted.
+  virtual int flow_smooth() const = 0;
+  virtual void set_flow_smooth(int level) = 0;
+
   // Performance overlay: LVGL's on-screen FPS / CPU / render-time monitor. Off by
   // default (it's a diagnostic and covers a screen corner); the UI shows/hides the
   // sysmon label at runtime to match this.

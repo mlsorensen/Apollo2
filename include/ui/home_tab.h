@@ -144,6 +144,9 @@ struct HomeWidgets {
   uint32_t shot_map_window_ms = 0;      // mapping of the painted columns
   uint32_t shot_map_tstart_ms = 0;
   uint32_t shot_seq_seen = 0;           // event-locked sampling (snapshot.seq)
+  uint32_t shot_stall_since = 0;        // frontier watchdog (0 = advancing)
+  float shot_smooth_k = 0.15f;          // 3-point kernel neighbor weight (0 = off);
+                                        // set by App from IDisplaySettings::flow_smooth
 
   // Charging animation: a looping battery-fill icon (no percent — terminal
   // voltage under charge is charger-dependent). The timer advances the frame.
@@ -218,5 +221,13 @@ void end_shot_plot(HomeWidgets& w);
 // from the same fast path as flow_graph_tick while a shot runs/settles (the
 // review freeze simply stops calling it).
 void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale);
+
+// Flush the one-event-behind display lag (final full paint). Call when the
+// shot freezes into review so the frozen plot shows the complete tail.
+void finish_shot_plot(HomeWidgets& w);
+
+// Apply a smoothing-kernel weight (0/0.15/0.25/0.33); repaints the shot plot
+// if one is on screen (live or frozen in review) so the change shows at once.
+void set_shot_smoothing(HomeWidgets& w, float k);
 
 }  // namespace ui

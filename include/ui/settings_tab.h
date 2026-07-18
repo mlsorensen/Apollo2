@@ -74,6 +74,9 @@ struct SettingsWidgets {
   lv_obj_t* review_plus = nullptr;
   lv_obj_t* review_value = nullptr;
   int review_hold_s = 30;
+  // Shot-graph smoothing cycle button (Off / Light / Medium / Strong)
+  lv_obj_t* smooth_btn = nullptr;
+  lv_obj_t* smooth_value = nullptr;
   lv_obj_t* drop_neg_flow_switch = nullptr;  // on = clamp negative g/s on the graph
   lv_obj_t* scope_graph_switch = nullptr;    // on = oscilloscope sweep, off = scroll
   lv_obj_t* perf_overlay_switch = nullptr;   // on = show LVGL FPS/CPU overlay

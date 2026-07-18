@@ -421,6 +421,16 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_t* rr = make_setting_row(out.scale_settings_page, "Review hold", font);
     make_inline_stepper(rr, font, symbol_font, btn_size, &out.review_minus,
                         &out.review_value, &out.review_plus, nullptr);
+    // Shot-graph line smoothing: tap cycles Off / Light / Medium / Strong.
+    lv_obj_t* rs2 = make_setting_row(out.scale_settings_page, "Smoothing", font);
+    out.smooth_btn = ui::make_button(rs2);
+    lv_obj_set_height(out.smooth_btn, btn_size);
+    lv_obj_set_style_pad_hor(out.smooth_btn, 14, 0);
+    lv_obj_set_style_bg_color(out.smooth_btn, lv_color_hex(ui::theme::card()), 0);
+    out.smooth_value = lv_label_create(out.smooth_btn);
+    lv_obj_set_style_text_color(out.smooth_value, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(out.smooth_value, font, 0);
+    lv_obj_center(out.smooth_value);
     lv_obj_t* rn = make_setting_row(out.scale_settings_page, "Drop negative g/s", font);
     out.drop_neg_flow_switch = lv_switch_create(rn);
     lv_obj_set_size(out.drop_neg_flow_switch, btn_size + 8, btn_size / 2 + 6);
