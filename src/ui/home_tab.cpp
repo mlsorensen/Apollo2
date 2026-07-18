@@ -636,6 +636,12 @@ void build_micra_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_t* scol = make_panel_column(body, "STEAM", cap_font, val_font, &out.boiler_value);
   make_stepper_group(scol, btn_size, symbol_font, set_font, &out.boiler_set,
                      &out.boiler_minus, &out.boiler_plus);
+  // Center the clusters in the body so the card's slack splits above and below
+  // them — breathing room against the header AND the action button.
+  lv_obj_set_flex_align(bcol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_flex_align(scol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
   build_power_button(card, action_h, action_font, out);
 }
 
@@ -654,7 +660,11 @@ void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_t* wcol = make_panel_column(body, "WEIGHT", cap_font, big_font, &out.scale_weight);
   make_stepper_group(wcol, btn_size, symbol_font, set_font, &out.scale_target,
                      &out.target_minus, &out.target_plus);
+  lv_obj_set_flex_align(wcol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);  // centered like the MICRA columns
   lv_obj_t* tcol = make_panel_column(body, "TIMER", cap_font, big_font, &out.shot_timer_label);
+  lv_obj_set_flex_align(tcol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
   // Shot button in the stepper's slot under the timer: shot-mode toggle, or
   // Reset while a finished shot is up for review. Hidden unless the board has
   // paddle hardware (update_home shows it); sized to line up with the stepper.
@@ -670,7 +680,7 @@ void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_set_style_border_color(out.shot_btn, lv_color_hex(ui::theme::scrollbar()), 0);
   lv_obj_set_style_opa(out.shot_btn, LV_OPA_40, LV_STATE_DISABLED);
   out.shot_btn_label = lv_label_create(out.shot_btn);
-  lv_label_set_text(out.shot_btn_label, "Auto");
+  lv_label_set_text(out.shot_btn_label, "Auto Shot");
   lv_obj_set_style_text_color(out.shot_btn_label, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(out.shot_btn_label, set_font, 0);
   lv_obj_center(out.shot_btn_label);
@@ -894,7 +904,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   // MICRA and SCALE (weight/timer are not a bigger "hero" — they match the temps).
   const lv_font_t* panel_val = xl ? &lv_font_montserrat_28 : &lv_font_montserrat_24;
   const lv_font_t* panel_set = &lv_font_montserrat_14;
-  const int panel_btn = xl ? 48 : 36;
+  const int panel_btn = xl ? 54 : 42;
   const lv_font_t* panel_sym = xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
 
   if (!scale_enabled) {
@@ -952,7 +962,9 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   lv_obj_remove_style_all(panels);
   lv_obj_remove_flag(panels, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_width(panels, lv_pct(100));
-  lv_obj_set_flex_grow(panels, 1);  // upper half (graph card grows equally below)
+  // 7:5 with the graph card below — a shade over half for the cards so their
+  // content breathes (~35 px moved out of the graph at 800x480).
+  lv_obj_set_flex_grow(panels, 7);
   lv_obj_set_flex_flow(panels, LV_FLEX_FLOW_ROW);
   lv_obj_set_style_pad_column(panels, gap, 0);
   build_micra_panel(panels, panel_cap, panel_status, panel_val, panel_set, panel_btn,
@@ -960,10 +972,11 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   build_scale_panel(panels, panel_cap, panel_status, panel_val, panel_set, panel_btn,
                     panel_sym, panel_pad, action_h, btn_font, out);
 
-  // The flow graph fills the lower half. The card is created here for correct
-  // flex order, but its canvas is sized only once the layout is final
-  // (populate_flow_graph below).
+  // The flow graph fills the (slightly smaller) lower half. The card is created
+  // here for correct flex order, but its canvas is sized only once the layout
+  // is final (populate_flow_graph below).
   lv_obj_t* graph_card = make_flow_graph_card(parent);
+  lv_obj_set_flex_grow(graph_card, 5);  // the other side of the 7:5 split
 
   // Everything's in place: resolve the final layout, then size + paint the graph
   // to the card's real content box.
@@ -1056,7 +1069,7 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
         const bool active = brew.phase == core::ShotPhase::kBrewing ||
                             brew.phase == core::ShotPhase::kSettling;
         lv_label_set_text(w.shot_btn_label,
-                          review ? "Reset" : brew.shot_mode ? "Auto" : "Manual");
+                          review ? "Reset" : brew.shot_mode ? "Auto shot" : "Manual");
         // State lives in the outline + text: accent = auto armed, warn = Reset,
         // neutral ring = manual/busy (the fill stays card(), see build).
         const uint32_t ring = review          ? ui::theme::warn()
