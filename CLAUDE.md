@@ -90,6 +90,10 @@ GT911 all up; NimBLE host inits):
 3. BLE: host init verified; actual Micra/scale connections not yet tested.
    Known bug esp-hosted-mcu#180: scan results stall after ~60-90s of
    continuous scanning (our scans are short; reconnects are direct-by-MAC).
-4. Battery: BAT_ADC is GPIO20 via an unmeasured divider; `kBatteryAdc = -1`
-   until calibrated with a multimeter (wrong divider risks spurious
-   low-battery deep-sleep).
+4. Battery: WORKING — BAT_ADC GPIO20, divider ÷3 (confirmed: raw*3 == 4.20V
+   LiPo CV level while charging). `HWCDC::isPlugged()` is non-functional on
+   the P4's USB-Serial-JTAG (always false), so charging detection is the
+   voltage fallback (>= kBatteryChargingVolts) only. Known hardware trait:
+   plugging/unplugging USB with a battery attached FULLY POWER-CYCLES the
+   board (reset reason: power-on) — the power path's VBUS<->boost switchover
+   drops the rail; not fixable in firmware.

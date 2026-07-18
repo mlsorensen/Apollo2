@@ -122,6 +122,25 @@ void setup() {
   delay(300);  // let USB-CDC enumerate
   Serial.println();
   Serial.printf("Micra remote — %s\n", board::kName);
+  {
+    // Why did we boot? Distinguishes power-rail dips (BROWNOUT/POWERON — e.g.
+    // the USB<->battery switchover glitch on the P4 4.3) from firmware faults.
+    const esp_reset_reason_t rr = esp_reset_reason();
+    const char* name = "other";
+    switch (rr) {
+      case ESP_RST_POWERON:   name = "power-on"; break;
+      case ESP_RST_SW:        name = "software"; break;
+      case ESP_RST_PANIC:     name = "panic"; break;
+      case ESP_RST_INT_WDT:
+      case ESP_RST_TASK_WDT:
+      case ESP_RST_WDT:       name = "watchdog"; break;
+      case ESP_RST_BROWNOUT:  name = "brownout"; break;
+      case ESP_RST_DEEPSLEEP: name = "deep-sleep wake"; break;
+      case ESP_RST_USB:       name = "usb"; break;
+      default: break;
+    }
+    Serial.printf("reset reason: %s (%d)\n", name, static_cast<int>(rr));
+  }
   g_config.begin();  // create NVS namespace on first boot (quiets read errors)
 
 #if defined(CONFIG_ESP_HOSTED_ENABLE_BT_NIMBLE)
