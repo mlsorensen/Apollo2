@@ -19,6 +19,8 @@ class FakeDisplaySettings : public core::IDisplaySettings {
   void set_drop_negative_flow(bool on) override { drop_negative_flow_ = on; }
   bool scope_graph() const override { return scope_graph_; }
   void set_scope_graph(bool on) override { scope_graph_ = on; }
+  int flow_smooth() const override { return flow_smooth_; }
+  void set_flow_smooth(int level) override { flow_smooth_ = level; }
   bool perf_overlay() const override { return perf_overlay_; }
   void set_perf_overlay(bool on) override { perf_overlay_ = on; }
 
@@ -28,6 +30,7 @@ class FakeDisplaySettings : public core::IDisplaySettings {
   bool fahrenheit_ = false;
   bool drop_negative_flow_ = true;
   bool scope_graph_ = true;  // matches the device default
+  int flow_smooth_ = 1;      // light
   bool perf_overlay_ = false;
 };
 

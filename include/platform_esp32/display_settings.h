@@ -24,6 +24,8 @@ class DisplaySettings : public core::IDisplaySettings {
   void set_drop_negative_flow(bool on) override;
   bool scope_graph() const override;
   void set_scope_graph(bool on) override;
+  int flow_smooth() const override;
+  void set_flow_smooth(int level) override;
   bool perf_overlay() const override;
   void set_perf_overlay(bool on) override;
 

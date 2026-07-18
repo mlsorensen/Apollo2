@@ -1285,17 +1285,45 @@ static uint32_t shot_tstart_of(uint32_t elapsed, uint32_t window) {
          kShotSlideStepMs;  // sliding (past the cap) also snaps
 }
 
+// The newest stored sample's shot-time (0 when empty).
+static uint32_t shot_t_last(const HomeWidgets& w) {
+  if (w.shot_n == 0) return 0;
+  const int idx = (w.shot_head - 1 + ui::HomeWidgets::kShotCap) %
+                  ui::HomeWidgets::kShotCap;
+  return w.shot_ts[idx];
+}
+
+// Logical sample i (0..shot_n-1) of `vals`, smoothed by the draw-time 3-point
+// kernel [k, 1-2k, k] (neighbors clamped at the ends; k = shot_smooth_k, a
+// user setting — stored samples stay raw). The 2.2-interval display lag
+// guarantees a painted sample's next neighbor already exists, so the
+// smoothing is stable — painted columns never need revisiting.
+static float shot_val(const HomeWidgets& w, const float* vals, int i) {
+  auto idx = [&w](int j) {
+    return (w.shot_head - w.shot_n + j + 2 * ui::HomeWidgets::kShotCap) %
+           ui::HomeWidgets::kShotCap;
+  };
+  const float c = vals[idx(i)];
+  if (w.shot_smooth_k <= 0.0f) return c;
+  const float p = vals[idx(i > 0 ? i - 1 : i)];
+  const float n = vals[idx(i + 1 < w.shot_n ? i + 1 : i)];
+  return c * (1.0f - 2.0f * w.shot_smooth_k) + (p + n) * w.shot_smooth_k;
+}
+
 // Paint columns x0..x1 under the given mapping, advancing the sample cursor
-// (w.shot_si) and the pen (w.flow_prev_y) — callable incrementally.
+// (w.shot_si) and the pen (w.flow_prev_y) — callable incrementally. Columns
+// past t_limit (the one-event-behind display time; see shot_plot_tick) or past
+// the recorded samples stay bare.
 static void shot_plot_paint_columns(HomeWidgets& w, int x0, int x1, uint32_t window,
-                                    uint32_t t_start) {
+                                    uint32_t t_start, uint32_t t_limit) {
   const float* vals = (w.flow_mode == 1) ? w.shot_weights : w.shot_flows;
   auto sample_idx = [&w](int i) {
     return (w.shot_head - w.shot_n + i + 2 * ui::HomeWidgets::kShotCap) %
            ui::HomeWidgets::kShotCap;
   };
   const uint16_t bright = flow_bright_color();
-  const uint32_t t_last = w.shot_n > 0 ? w.shot_ts[sample_idx(w.shot_n - 1)] : 0;
+  uint32_t t_last = w.shot_n > 0 ? w.shot_ts[sample_idx(w.shot_n - 1)] : 0;
+  if (t_last > t_limit) t_last = t_limit;
   for (int x = x0; x <= x1; ++x) {
     const uint32_t t =
         t_start + static_cast<uint32_t>(static_cast<uint64_t>(window) *
@@ -1309,13 +1337,14 @@ static void shot_plot_paint_columns(HomeWidgets& w, int x0, int x1, uint32_t win
     while (w.shot_si + 1 < w.shot_n && w.shot_ts[sample_idx(w.shot_si + 1)] <= t)
       ++w.shot_si;
     const int i0 = sample_idx(w.shot_si);
-    float v = vals[i0];
+    float v = shot_val(w, vals, w.shot_si);
     if (w.shot_si + 1 < w.shot_n) {  // linear interpolation to the next sample
       const int i1 = sample_idx(w.shot_si + 1);
       const uint32_t t0 = w.shot_ts[i0], t1 = w.shot_ts[i1];
       if (t1 > t0 && t >= t0) {
         const float f = static_cast<float>(t - t0) / static_cast<float>(t1 - t0);
-        v = vals[i0] + (vals[i1] - vals[i0]) * f;
+        const float v1 = shot_val(w, vals, w.shot_si + 1);
+        v = v + (v1 - v) * f;
       }
     }
     const float y = flow_row(v, w.flow_h, w.flow_ymax);
@@ -1325,19 +1354,49 @@ static void shot_plot_paint_columns(HomeWidgets& w, int x0, int x1, uint32_t win
   }
 }
 
-// The rightmost column covered by recorded samples under a mapping.
-static int shot_edge_col(const HomeWidgets& w, uint32_t window, uint32_t t_start) {
-  const uint32_t t_rel = w.shot_elapsed_ms > t_start ? w.shot_elapsed_ms - t_start : 0;
+// The column of shot-time `t` under a mapping.
+static int shot_col_of(const HomeWidgets& w, uint32_t t, uint32_t window,
+                       uint32_t t_start) {
+  const uint32_t t_rel = t > t_start ? t - t_start : 0;
   int x = static_cast<int>(static_cast<uint64_t>(t_rel) *
                            static_cast<uint32_t>(w.flow_w - 1) / window);
   if (x > w.flow_w - 1) x = w.flow_w - 1;
   return x;
 }
 
+
+// One-event-behind display time: the edge animates toward the LAST-received
+// sample instead of jumping when each new one arrives — smooth growth for a
+// fixed lag of ~1.2 observed update intervals (imperceptible for espresso).
+// ALWAYS capped strictly BEFORE the second-newest sample: painted columns are
+// final (x_painted only moves forward, they're never revisited), so both their
+// interpolation endpoints must have COMPLETE smoothing kernels — a column at
+// time t interpolates samples si..si+1 and shot_val(si+1) needs si+2. Capping
+// at the newest sample let the edge paint one-sided-smoothed values under BLE
+// jitter, leaving a permanent kink per occurrence (visible at medium/strong).
+// The 2.2-interval wall-clock lag does the smooth event-behind animation; the
+// sample cap is the data-availability guard (a stall just pauses the edge).
+static uint32_t shot_display_time(const HomeWidgets& w) {
+  uint32_t lag = static_cast<uint32_t>(2.2f * w.flow_evt_interval_ms);
+  if (lag < 150) lag = 150;
+  if (lag > 1200) lag = 1200;
+  uint32_t t = w.shot_elapsed_ms > lag ? w.shot_elapsed_ms - lag : 0;
+  uint32_t t_safe = 0;
+  if (w.shot_n >= 3) {
+    const int idx2 = (w.shot_head - 2 + 2 * ui::HomeWidgets::kShotCap) %
+                     ui::HomeWidgets::kShotCap;  // second-newest sample
+    const uint32_t ts2 = w.shot_ts[idx2];
+    t_safe = ts2 > 0 ? ts2 - 1 : 0;
+  }
+  if (t > t_safe) t = t_safe;
+  return t;
+}
+
 // Full repaint: re-fit the Y axis over the visible samples, repaint everything,
 // stamp the mapping, whole-canvas invalidate. Used on window snaps, rescales,
-// and the mode toggle; the per-sample path is incremental (shot_plot_tick).
-static void shot_plot_redraw_full(HomeWidgets& w) {
+// and the mode toggle; the per-frame path is incremental (shot_plot_tick).
+// t_limit caps how far the trace draws (the display lag); UINT32_MAX = all.
+static void shot_plot_redraw_full(HomeWidgets& w, uint32_t t_limit) {
   if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_w <= 1) return;
   const uint32_t window = shot_window_of(w.shot_elapsed_ms);
   const uint32_t t_start = shot_tstart_of(w.shot_elapsed_ms, window);
@@ -1365,8 +1424,12 @@ static void shot_plot_redraw_full(HomeWidgets& w) {
 
   w.shot_si = 0;
   w.flow_prev_y = -1.0f;
-  shot_plot_paint_columns(w, 0, w.flow_w - 1, window, t_start);
-  w.shot_x_painted = shot_edge_col(w, window, t_start);
+  shot_plot_paint_columns(w, 0, w.flow_w - 1, window, t_start, t_limit);
+  // The painted frontier: never past the newest sample (see shot_display_time).
+  uint32_t t_edge = t_limit < w.shot_elapsed_ms ? t_limit : w.shot_elapsed_ms;
+  const uint32_t t_last = shot_t_last(w);
+  if (t_edge > t_last) t_edge = t_last;
+  w.shot_x_painted = shot_col_of(w, t_edge, window, t_start);
   lv_obj_invalidate(w.flow_canvas);
 
   if (w.flow_xspan_label != nullptr) {
@@ -1388,6 +1451,7 @@ void begin_shot_plot(HomeWidgets& w) {
   w.shot_si = 0;
   w.shot_map_window_ms = 0;
   w.shot_map_tstart_ms = 0;
+  w.shot_stall_since = 0;
   // X labels: the shot plot's x maps time-from-shot-start, so the scroll
   // style's age ticks would lie — show the single window caption regardless
   // of the sweep style.
@@ -1417,44 +1481,73 @@ void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
   const uint32_t now = lv_tick_get();
   const float rw = scale.weight_g;
   const float rf = update_flow_rate(w, scale, now);  // keep the rate window fed every call
-  // Event-locked: draw when the scale actually publishes (whatever its stream
-  // rate), capped at kShotSampleMs spacing so a fast scale can't outrun the
-  // ring's 45s coverage.
-  if (scale.seq == w.shot_seq_seen) return;
-  w.shot_seq_seen = scale.seq;
-  if (w.shot_n != 0 && now - w.shot_last_sample_ms < kShotSampleMs) return;
-  w.shot_last_sample_ms = now;
   w.shot_elapsed_ms = now - w.shot_t0;
-  w.shot_weights[w.shot_head] = rw;
-  w.shot_flows[w.shot_head] = rf;
-  w.shot_ts[w.shot_head] = w.shot_elapsed_ms;
-  w.shot_head = (w.shot_head + 1) % ui::HomeWidgets::kShotCap;
-  if (w.shot_n < ui::HomeWidgets::kShotCap) ++w.shot_n;
 
-  // Full repaint only when the mapping snaps or the Y axis must grow; otherwise
-  // append just the new right-edge columns with a matching tiny invalidate —
-  // that's the common case, and it keeps the shot plot as cheap as the sweep.
+  // Sample storage is event-locked: record when the scale actually publishes
+  // (whatever its stream rate), capped at kShotSampleMs spacing so a fast
+  // scale can't outrun the ring's 45s coverage.
+  bool full = w.shot_x_painted < 0;
+  if (scale.seq != w.shot_seq_seen) {
+    w.shot_seq_seen = scale.seq;
+    if (w.shot_n == 0 || now - w.shot_last_sample_ms >= kShotSampleMs) {
+      w.shot_last_sample_ms = now;
+      w.shot_weights[w.shot_head] = rw;
+      w.shot_flows[w.shot_head] = rf;
+      w.shot_ts[w.shot_head] = w.shot_elapsed_ms;
+      w.shot_head = (w.shot_head + 1) % ui::HomeWidgets::kShotCap;
+      if (w.shot_n < ui::HomeWidgets::kShotCap) ++w.shot_n;
+      const float want = flow_nice_max(w.flow_mode, (w.flow_mode == 1) ? rw : rf);
+      if (want > w.flow_ymax) {  // Y grows on the new sample
+        w.flow_ymax = want;
+        set_flow_ylabels(w);
+        full = true;
+      }
+    }
+  }
+
+  // Painting runs every call (not per event): the edge chases the one-behind
+  // display time, so it glides a column or two per frame instead of jumping a
+  // whole event-interval span at once. Full repaint only when the mapping
+  // snaps or the Y axis grew.
   const uint32_t window = shot_window_of(w.shot_elapsed_ms);
   const uint32_t t_start = shot_tstart_of(w.shot_elapsed_ms, window);
-  const float v = (w.flow_mode == 1) ? rw : rf;
-  bool full = window != w.shot_map_window_ms || t_start != w.shot_map_tstart_ms ||
-              w.shot_x_painted < 0;
-  const float want = flow_nice_max(w.flow_mode, v);
-  if (want > w.flow_ymax) {
-    w.flow_ymax = want;
-    set_flow_ylabels(w);
-    full = true;
-  }
+  if (window != w.shot_map_window_ms || t_start != w.shot_map_tstart_ms) full = true;
+  const uint32_t t_disp = shot_display_time(w);
   if (full) {
-    shot_plot_redraw_full(w);
+    shot_plot_redraw_full(w, t_disp);
     return;
   }
-  const int x_new = shot_edge_col(w, window, t_start);
+  const int x_new = shot_col_of(w, t_disp, window, t_start);
   if (x_new > w.shot_x_painted) {
-    shot_plot_paint_columns(w, w.shot_x_painted + 1, x_new, window, t_start);
+    shot_plot_paint_columns(w, w.shot_x_painted + 1, x_new, window, t_start, t_disp);
     invalidate_flow_span(w, w.shot_x_painted + 1, x_new - w.shot_x_painted);
     w.shot_x_painted = x_new;
+    w.shot_stall_since = 0;
+  } else if (w.shot_stall_since == 0) {
+    w.shot_stall_since = now;
+  } else if (now - w.shot_stall_since > 2000) {
+    // Self-heal watchdog: a live shot's frontier should never sit still for 2s
+    // (even pre-infusion advances columns with time). A rare un-diagnosed
+    // wedge froze the chart mid-shot with the stream healthy — a full repaint
+    // re-derives ALL frontier state (mapping, sample cursor, pen, frontier)
+    // from scratch, turning any such wedge into a <=2s hiccup.
+    w.shot_stall_since = 0;
+    shot_plot_redraw_full(w, t_disp);
   }
+}
+
+void finish_shot_plot(HomeWidgets& w) {
+  if (!w.flow_shot_plot) return;
+  // The edge runs one event interval behind while live — flush the trailing
+  // sliver so the frozen review plot shows the complete shot.
+  shot_plot_redraw_full(w, UINT32_MAX);
+}
+
+void set_shot_smoothing(HomeWidgets& w, float k) {
+  w.shot_smooth_k = k;
+  // Repaint an on-screen shot plot in place (frozen review, or mid-shot — the
+  // live edge briefly runs unlagged, then resumes normally).
+  if (w.flow_shot_plot) shot_plot_redraw_full(w, UINT32_MAX);
 }
 
 void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
@@ -1593,7 +1686,7 @@ void toggle_flow_mode(HomeWidgets& w) {
     // review too): re-fit the axis for the new quantity and repaint.
     w.flow_ymax = flow_default_max(w.flow_mode);
     set_flow_ylabels(w);
-    shot_plot_redraw_full(w);
+    shot_plot_redraw_full(w, UINT32_MAX);
     return;
   }
   if (w.flow_blanked) {

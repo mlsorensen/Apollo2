@@ -266,6 +266,13 @@ void on_auto_connect_switch(lv_event_t* e) {
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
   app->set_auto_connect(lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
+void on_smooth_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_flow_smooth();
+}
+
+// Shot-graph smoothing levels (IDisplaySettings::flow_smooth 0..3).
+constexpr float kSmoothK[] = {0.0f, 0.15f, 0.25f, 0.33f};
+constexpr const char* kSmoothName[] = {"Off", "Light", "Medium", "Strong"};
 void on_wifi_setup_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->start_wifi_setup();
 }
@@ -549,6 +556,13 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   if (settings_.review_minus != nullptr) {
     lv_obj_add_event_cb(settings_.review_minus, on_review_minus, LV_EVENT_CLICKED, this);
     lv_obj_add_event_cb(settings_.review_plus, on_review_plus, LV_EVENT_CLICKED, this);
+  }
+  if (settings_.smooth_btn != nullptr) {
+    const int level = display_ != nullptr ? display_->flow_smooth() : 1;
+    if (settings_.smooth_value != nullptr)
+      lv_label_set_text(settings_.smooth_value, kSmoothName[level & 3]);
+    home_.shot_smooth_k = kSmoothK[level & 3];
+    lv_obj_add_event_cb(settings_.smooth_btn, on_smooth_clicked, LV_EVENT_CLICKED, this);
   }
   lv_obj_add_event_cb(settings_.target_plus, on_target_plus, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.brew_minus, on_brew_minus, LV_EVENT_ALL, this);
@@ -975,6 +989,16 @@ void App::tare_scale() {
   if (scale_ != nullptr) scale_->tare();
 }
 
+void App::cycle_flow_smooth() {
+  if (display_ == nullptr) return;
+  int level = display_->flow_smooth();
+  level = (level + 1) % 4;
+  display_->set_flow_smooth(level);
+  if (settings_.smooth_value != nullptr)
+    lv_label_set_text(settings_.smooth_value, kSmoothName[level]);
+  ui::set_shot_smoothing(home_, kSmoothK[level]);
+}
+
 void App::shot_button() {
   if (brew_ == nullptr) return;
   const core::BrewSnapshot b = brew_->snapshot();
@@ -1016,6 +1040,9 @@ void App::pump_scale_chart() {
       if (!bsnap.baseline_set) ui::reset_flow_history(home_);
     } else if (home_.flow_shot_plot && bsnap.phase == core::ShotPhase::kIdle) {
       ui::end_shot_plot(home_);  // review dismissed/timed out -> live sweep
+    } else if (bsnap.phase == core::ShotPhase::kReview &&
+               shot_phase_ != core::ShotPhase::kReview) {
+      ui::finish_shot_plot(home_);  // flush the display lag before the freeze
     }
     shot_phase_ = bsnap.phase;
     // Hold until the post-tare baseline is confirmed (the tare window's readings

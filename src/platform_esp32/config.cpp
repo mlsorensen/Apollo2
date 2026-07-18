@@ -23,6 +23,7 @@ constexpr char kShotModeKey[] = "shotmode";
 constexpr char kOvershootKey[] = "ovshoot";
 constexpr char kReviewHoldKey[] = "revhold";
 constexpr char kAutoConnectKey[] = "autoconn";
+constexpr char kFlowSmoothKey[] = "flowsmth";
 constexpr char kWifiEnKey[] = "wifi_en";
 constexpr char kWifiSsidKey[] = "ssid";
 constexpr char kWifiPassKey[] = "wifipass";
@@ -127,6 +128,21 @@ void Config::set_overshoot_g(float grams) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putFloat(kOvershootKey, grams);
+  p.end();
+}
+
+int Config::flow_smooth() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 1;
+  const int v = p.isKey(kFlowSmoothKey) ? p.getInt(kFlowSmoothKey, 1) : 1;
+  p.end();
+  return v;
+}
+
+void Config::set_flow_smooth(int level) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putInt(kFlowSmoothKey, level);
   p.end();
 }
 

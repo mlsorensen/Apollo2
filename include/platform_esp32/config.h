@@ -37,6 +37,8 @@ class Config {
   void set_review_hold_s(int seconds);
   bool auto_connect() const;           // connect to the saved Micra at boot (default false)
   void set_auto_connect(bool on);
+  int flow_smooth() const;             // shot-graph smoothing level 0..3 (default 1)
+  void set_flow_smooth(int level);
 
   int brightness() const;     // screen brightness 0..100 (default 100)
   void set_brightness(int percent);

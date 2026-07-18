@@ -101,6 +101,7 @@ class App {
   void set_restart_handler(std::function<void()> h) { restart_handler_ = std::move(h); }
   void restart_device() { if (restart_handler_) restart_handler_(); }
   void review_hold_adjust(int dir);  // Scale settings: review-hold stepper (5s steps)
+  void cycle_flow_smooth();          // Scale settings: Off/Light/Medium/Strong
   void set_auto_connect(bool on) {   // Micra settings: connect to saved machine at boot
     if (provisioner_ != nullptr) provisioner_->set_auto_connect(on);
   }
