@@ -656,6 +656,13 @@ void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_t* card = make_panel_card(parent, pad);
   make_panel_header(card, "SCALE", cap_font, status_font, &out.scale_status_dot,
                     &out.scale_status_label);
+  // Scale battery: icon-only level estimate to the right of the status text
+  // (same flex group as the dot + status). update_home shows/colors it when
+  // the connected scale reports a level.
+  out.scale_batt_label = lv_label_create(lv_obj_get_parent(out.scale_status_dot));
+  lv_obj_set_style_text_font(out.scale_batt_label, status_font, 0);
+  lv_obj_set_style_text_color(out.scale_batt_label, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_add_flag(out.scale_batt_label, LV_OBJ_FLAG_HIDDEN);
   lv_obj_t* body = make_panel_body(card);
   lv_obj_t* wcol = make_panel_column(body, "WEIGHT", cap_font, big_font, &out.scale_weight);
   make_stepper_group(wcol, btn_size, symbol_font, set_font, &out.scale_target,
@@ -808,6 +815,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   out.scale_weight = out.scale_target = nullptr;
   out.tare_btn = out.tare_label = nullptr;
   out.scale_connect_btn = out.scale_connect_label = nullptr;
+  out.scale_batt_label = nullptr;
   out.paddle_pill = out.paddle_label = nullptr;
   out.status_dot = out.status_label = nullptr;
   out.micra_status_dot = out.micra_status_label = nullptr;
@@ -1162,6 +1170,20 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   if (w.scale_status_label != nullptr)
     lv_label_set_text(w.scale_status_label, scale_txt);
 
+  // Scale battery: icon-only estimate beside the status, when reported.
+  if (w.scale_batt_label != nullptr) {
+    if (scale.connected && scale.battery_valid) {
+      lv_obj_remove_flag(w.scale_batt_label, LV_OBJ_FLAG_HIDDEN);
+      lv_label_set_text(w.scale_batt_label, battery_icon(scale.battery_pct));
+      lv_obj_set_style_text_color(
+          w.scale_batt_label,
+          lv_color_hex(scale.battery_pct < 15 ? ui::theme::alert() : ui::theme::muted()),
+          0);
+    } else {
+      lv_obj_add_flag(w.scale_batt_label, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
+
   // In-card scale actions: the connect toggle mirrors the link switch (accent =
   // "will connect/wake"), and Tare only works with a live link.
   if (w.scale_connect_btn != nullptr) {
@@ -1274,6 +1296,38 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
       lv_label_set_text(w.power_label, LV_SYMBOL_SETTINGS "  Set up in Settings");
       break;
   }
+}
+
+namespace {
+
+// One pulse step of the shot-button attention flash. Alternates a warn fill
+// with the button's normal outlined look, then restores + self-deletes. The
+// 2 Hz update_home may repaint the label color mid-flash; the next 130 ms step
+// simply reasserts it, and the final step restores the review state's colors.
+void shot_flash_cb(lv_timer_t* t) {
+  auto* w = static_cast<ui::HomeWidgets*>(lv_timer_get_user_data(t));
+  const bool dead = w->shot_btn == nullptr || w->shot_flash_count <= 0;
+  if (!dead) {
+    --w->shot_flash_count;
+    const bool lit = (w->shot_flash_count & 1) != 0;
+    lv_obj_set_style_bg_color(
+        w->shot_btn, lv_color_hex(lit ? ui::theme::warn() : ui::theme::card()), 0);
+    lv_obj_set_style_text_color(
+        w->shot_btn_label, lv_color_hex(lit ? ui::theme::bg() : ui::theme::warn()), 0);
+  }
+  if (dead || w->shot_flash_count == 0) {
+    if (w->shot_flash_timer == t) w->shot_flash_timer = nullptr;
+    lv_timer_delete(t);
+  }
+}
+
+}  // namespace
+
+void flash_shot_button(HomeWidgets& w) {
+  if (w.shot_btn == nullptr) return;
+  w.shot_flash_count = 6;  // 3 warn pulses
+  if (w.shot_flash_timer == nullptr)
+    w.shot_flash_timer = lv_timer_create(shot_flash_cb, 130, &w);
 }
 
 void reset_flow_graph(HomeWidgets& w) {

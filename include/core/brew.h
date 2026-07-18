@@ -16,10 +16,13 @@
 //   ESP shot timer starts, graph resets -> target-overshoot reached (or manual
 //   paddle OFF): line opened, timer stops -> Review: graph frozen for reading,
 //   dismissed by the Reset button or a timeout -> Idle.
-// The physical paddle is relayed EDGE-triggered at all times regardless of the
-// shot machinery: an ON edge always starts the machine, an OFF edge always
-// stops it — an automation-initiated stop just leaves the line open until the
-// user's next edge.
+// The physical paddle is relayed EDGE-triggered regardless of the shot
+// machinery — an ON edge starts the machine, an OFF edge stops it; an
+// automation-initiated stop just leaves the line open until the user's next
+// edge — with ONE exception: during kReview an ON edge is swallowed (machine
+// stays off) and review_reject_seq ticks so the UI can flash the Reset
+// button. Automation only re-arms from kIdle, so relaying there would
+// silently run a manual shot when the user expected an auto one.
 
 namespace core {
 
@@ -45,6 +48,8 @@ struct BrewSnapshot {
   float target_weight_g;  // stop target
   float overshoot_g;      // current learned drip/lag compensation
   int   review_hold_s;    // how long kReview lingers before auto-dismissing
+  uint32_t review_reject_seq;  // ticks per paddle ON edge swallowed in kReview
+                               // (UI flashes the Reset button on a change)
 };
 
 class IBrewController {

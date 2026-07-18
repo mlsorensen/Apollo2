@@ -65,6 +65,14 @@ struct HomeWidgets {
   // toggles shot mode when idle/brewing, becomes "Reset" during review.
   lv_obj_t* shot_btn = nullptr;
   lv_obj_t* shot_btn_label = nullptr;
+  // Attention flash on the shot button (a paddle flip swallowed during review —
+  // see BrewSnapshot::review_reject_seq). Timer owned like batt_timer: App
+  // deletes it on rebuild/teardown. flash_shot_button() (re)arms the pulse.
+  lv_timer_t* shot_flash_timer = nullptr;
+  int shot_flash_count = 0;
+  // Scale battery icon in the SCALE header, right of the status text (icon-only
+  // level estimate; hidden unless the connected scale reports a level).
+  lv_obj_t* scale_batt_label = nullptr;
   lv_obj_t* paddle_pill = nullptr;    // paddle/brew status chip (bg = state color)
   lv_obj_t* paddle_label = nullptr;
   // Flow-rate strip chart (large screens only). A self-managed lv_canvas: newest
@@ -242,5 +250,10 @@ void finish_shot_plot(HomeWidgets& w);
 // Apply a smoothing-kernel weight (0/0.15/0.25/0.33); repaints the shot plot
 // if one is on screen (live or frozen in review) so the change shows at once.
 void set_shot_smoothing(HomeWidgets& w, float k);
+
+// Pulse the shot button a few times in the warn color — "look here first".
+// Used when a paddle flip is swallowed during shot review (the button says
+// Reset and must be dealt with before the next shot). No-op without a button.
+void flash_shot_button(HomeWidgets& w);
 
 }  // namespace ui

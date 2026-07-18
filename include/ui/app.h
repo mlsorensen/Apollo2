@@ -152,6 +152,7 @@ class App {
   float last_weight_g_ = 0.0f;          // last weight drawn (redraw on change only)
   bool last_scale_connected_ = false;
   core::ShotPhase shot_phase_ = core::ShotPhase::kIdle;  // last seen (graph reset/freeze edges)
+  uint32_t brew_reject_seen_ = 0;  // last review_reject_seq (flash Reset on change)
   bool theme_rebuild_pending_ = false;  // coalesce rapid theme cycling into one rebuild
   bool layout_rebuild_pending_ = false; // coalesce a scale pair/forget rebuild
   int rebuild_section_ = kSectionDevice;  // Settings section to return to after rebuild()

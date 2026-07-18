@@ -27,7 +27,15 @@ void BrewController::poll(uint32_t now_ms) {
       paddle_on_ = on;
     } else if (on != paddle_on_) {
       paddle_on_ = on;
-      if (on) {
+      if (on && phase_ == ShotPhase::kReview) {
+        // Swallow the ON edge while the frozen review is up: the user almost
+        // certainly expects the NEXT (auto) shot, but automation only re-arms
+        // from kIdle — relaying here would silently run a MANUAL shot. The
+        // machine stays off; the UI flashes the Reset button (review_reject_seq)
+        // to say "dismiss the review first". The matching OFF edge then falls
+        // through to the branch below, which is a harmless no-op here.
+        ++review_reject_seq_;
+      } else if (on) {
         paddle_.drive(true);
         driving_ = true;
         timer_.start(now_ms);  // ESP times every shot, automated or not
@@ -53,8 +61,6 @@ void BrewController::poll(uint32_t now_ms) {
             }
           }
         }
-        // In kReview a fresh ON edge still runs the machine (manual shot) but
-        // leaves the frozen graph alone; automation re-arms only from kIdle.
       } else {
         paddle_.drive(false);
         driving_ = false;
@@ -150,6 +156,7 @@ BrewSnapshot BrewController::snapshot() const {
       .target_weight_g = target_g_,
       .overshoot_g = overshoot_g_,
       .review_hold_s = review_hold_s_,
+      .review_reject_seq = review_reject_seq_,
   };
 }
 

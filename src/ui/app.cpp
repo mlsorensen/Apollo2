@@ -407,6 +407,7 @@ namespace ui {
 
 App::~App() {
   if (home_.batt_timer != nullptr) lv_timer_delete(home_.batt_timer);
+  if (home_.shot_flash_timer != nullptr) lv_timer_delete(home_.shot_flash_timer);
   if (home_.flow_buf != nullptr) lv_free(home_.flow_buf);
   if (home_.flow_weights != nullptr) lv_free(home_.flow_weights);
   if (home_.flow_flows != nullptr) lv_free(home_.flow_flows);
@@ -439,6 +440,11 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   if (home_.batt_timer != nullptr) {
     lv_timer_delete(home_.batt_timer);
     home_.batt_timer = nullptr;
+  }
+  if (home_.shot_flash_timer != nullptr) {
+    lv_timer_delete(home_.shot_flash_timer);
+    home_.shot_flash_timer = nullptr;
+    home_.shot_flash_count = 0;
   }
   if (home_.flow_buf != nullptr) {
     lv_free(home_.flow_buf);
@@ -1035,6 +1041,12 @@ void App::pump_scale_chart() {
   core::BrewSnapshot bsnap{};
   if (have_brew) {
     bsnap = brew_->snapshot();
+    // A paddle flip swallowed during review: point the user at the Reset
+    // button (the flip did NOT start the machine — see BrewController).
+    if (bsnap.review_reject_seq != brew_reject_seen_) {
+      brew_reject_seen_ = bsnap.review_reject_seq;
+      ui::flash_shot_button(home_);
+    }
     const bool entering_brew =
         bsnap.phase == core::ShotPhase::kBrewing && shot_phase_ != core::ShotPhase::kBrewing;
     if (entering_brew) {

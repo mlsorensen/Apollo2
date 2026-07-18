@@ -76,6 +76,7 @@ class BrewController : public IBrewController {
 
   uint32_t settle_until_ms_ = 0;
   uint32_t review_until_ms_ = 0;
+  uint32_t review_reject_seq_ = 0;  // paddle ON edges swallowed during kReview
   uint32_t blind_since_ms_ = 0;  // scale dark since (kBrewing); 0 = seeing it
   uint32_t last_sense_ms_ = 0;
   uint32_t last_now_ms_ = 0;  // for snapshot()'s elapsed time
