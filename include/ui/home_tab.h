@@ -56,6 +56,10 @@ struct HomeWidgets {
   lv_obj_t* scale_target = nullptr;   // "/ 36 g" target sub
   lv_obj_t* tare_btn = nullptr;
   lv_obj_t* tare_label = nullptr;
+  // Shot button under the TIMER column (large scale layout + paddle boards only):
+  // toggles shot mode when idle/brewing, becomes "Reset" during review.
+  lv_obj_t* shot_btn = nullptr;
+  lv_obj_t* shot_btn_label = nullptr;
   lv_obj_t* paddle_pill = nullptr;    // paddle/brew status chip (bg = state color)
   lv_obj_t* paddle_label = nullptr;
   // Flow-rate strip chart (large screens only). A self-managed lv_canvas: newest
@@ -89,6 +93,17 @@ struct HomeWidgets {
   // us re-scale (redraw at a new flow_ymax) when the window's max crosses a "nice"
   // threshold. flow_y* labels are updated on rescale.
   int flow_mode = 0;
+  // Flow rate = trailing-window derivative over a short time-stamped weight
+  // history (~1.5s): Δweight/Δtime across the window. Any real flow spans many
+  // scale-resolution steps in that window (no fake zero-dips when a reading
+  // repeats), and after a stop the rate ramps linearly to zero as the window
+  // slides past the edge (no EMA shelf). Ring sampled every ~50ms.
+  static constexpr int kFlowHistCap = 64;  // 64 x 50ms = 3.2s of history
+  float flow_hist_w[kFlowHistCap] = {};
+  uint32_t flow_hist_t[kFlowHistCap] = {};
+  int flow_hist_n = 0;                // valid entries
+  int flow_hist_head = 0;             // next write slot
+  uint32_t flow_hist_last_ms = 0;     // last sample time
   float* flow_weights = nullptr;      // per-column weight (g) ring (freed by App)
   float* flow_flows = nullptr;        // per-column flow rate (g/s) ring (freed by App)
   float flow_ymax = 6.0f;             // current axis full-scale
@@ -153,5 +168,16 @@ void set_flow_scope_mode(HomeWidgets& w, bool on);
 // Show the X-axis labels appropriate to the current style: age ticks in scroll mode,
 // a single window-span caption in scope mode. Call after setting flow_scope_mode.
 void apply_flow_xaxis_labels(HomeWidgets& w);
+
+// Clear the flow plot back to an empty grid (both value rings + axis reset).
+// Used at shot start so the graph records exactly one shot, and by the style
+// toggles. A no-op when there's no graph on this layout. Does NOT clear the
+// flow-rate history — the weight stream is continuous across a plot clear.
+void reset_flow_graph(HomeWidgets& w);
+
+// Clear the flow-rate weight history too — needed when the weight STREAM
+// becomes discontinuous (a tare re-zeroes it; a disconnect ends it). The rate
+// then reads 0 briefly while the window re-warms.
+void reset_flow_history(HomeWidgets& w);
 
 }  // namespace ui

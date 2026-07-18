@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 // Per-board pin & panel configuration. Exactly ONE board is selected at build
 // time via a -DBOARD_* flag in platformio.ini. This is the single place board
 // pins live — driver code reads these constants and never hardcodes a pin.
@@ -106,6 +108,7 @@ constexpr int kIoExtAddr = 0x24;
 constexpr int kIoExtTouchReset = 1;  // IO_1
 constexpr int kIoExtBacklight = 2;   // IO_2
 constexpr int kIoExtLcdReset = 3;    // IO_3
+constexpr uint8_t kIoExtDirMask = 0xFF;  // all pins outputs (no isolated DI here)
 
 // --- Display: 16-bit RGB565 parallel panel ---
 constexpr int  kLcdNativeW = 1024;
@@ -265,6 +268,9 @@ constexpr int kIoExtAddr = 0x24;
 constexpr int kIoExtTouchReset = 1;  // IO_1
 constexpr int kIoExtBacklight = 2;   // IO_2 (DISP enable; dimming is the PWM reg)
 constexpr int kIoExtLcdReset = 3;    // IO_3
+// EXIO0 (DI0) + EXIO5 (DI1) are the isolated inputs -> direction bits 0
+// (matches Waveshare's isolation-IO demo mask 0xDE).
+constexpr uint8_t kIoExtDirMask = 0xDE;
 
 // --- Display: 16-bit RGB565 parallel panel, 800x480 (pins identical to 4.3B) ---
 constexpr int  kLcdNativeW = 800;
@@ -310,9 +316,17 @@ constexpr int   kVbusAdc = -1;
 constexpr float kVbusDivider = 2.0f;
 constexpr float kVbusPresentVolts = 4.0f;
 
-// --- Paddle control (brew-by-weight): the 4.3C's isolated DO0/DO1 (EXIO6/7)
-//     are candidates once that port lands; pins TBD ---
-constexpr int  kPaddleDrivePin = -1;
+// --- Paddle control (brew-by-weight) via the isolated terminal block ---
+// Drive: DO0 (EXIO6) is an open-collector "contact" to the terminal GND —
+//   Micra white (4.9V) -> DO0, Micra black (0V) -> GND. Expander pin LOW turns
+//   the opto LED on -> transistor conducts -> paddle circuit closed.
+// Sense: the physical paddle switch wires between DI COM (internally biased
+//   ~5V) and DI0 (EXIO0). PC814 opto input is polarity-free; expander pin
+//   reads LOW when the paddle is closed.
+#define BOARD_PADDLE_VIA_IOEXT
+constexpr int  kPaddleIoExtDrive = 6;  // EXIO6 = DO0, active-LOW (low = closed)
+constexpr int  kPaddleIoExtSense = 0;  // EXIO0 = DI0, LOW = paddle on
+constexpr int  kPaddleDrivePin = -1;   // no native-GPIO paddle path on this board
 constexpr int  kPaddleSensePin = -1;
 constexpr bool kPaddleActiveHigh = true;
 

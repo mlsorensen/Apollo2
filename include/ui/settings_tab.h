@@ -69,9 +69,15 @@ struct SettingsWidgets {
   lv_obj_t* target_plus = nullptr;
   lv_obj_t* target_value = nullptr;
   float target_g = 36.0f;
+  // Shot-review hold stepper (seconds the frozen graph lingers before auto-reset)
+  lv_obj_t* review_minus = nullptr;
+  lv_obj_t* review_plus = nullptr;
+  lv_obj_t* review_value = nullptr;
+  int review_hold_s = 30;
   lv_obj_t* drop_neg_flow_switch = nullptr;  // on = clamp negative g/s on the graph
   lv_obj_t* scope_graph_switch = nullptr;    // on = oscilloscope sweep, off = scroll
   lv_obj_t* perf_overlay_switch = nullptr;   // on = show LVGL FPS/CPU overlay
+  lv_obj_t* restart_btn = nullptr;           // soft reboot (display-glitch escape hatch)
 
   // --- Brew temp stepper (continuous, tenths) ------------------------------
   lv_obj_t* brew_minus = nullptr;

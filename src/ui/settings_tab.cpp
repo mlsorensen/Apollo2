@@ -406,6 +406,10 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_t* r = make_setting_row(out.scale_settings_page, "Target", font);
     make_inline_stepper(r, font, symbol_font, btn_size, &out.target_minus,
                         &out.target_value, &out.target_plus, nullptr);
+    // How long the frozen shot-review graph lingers before auto-resetting.
+    lv_obj_t* rr = make_setting_row(out.scale_settings_page, "Review hold", font);
+    make_inline_stepper(rr, font, symbol_font, btn_size, &out.review_minus,
+                        &out.review_value, &out.review_plus, nullptr);
     lv_obj_t* rn = make_setting_row(out.scale_settings_page, "Drop negative g/s", font);
     out.drop_neg_flow_switch = lv_switch_create(rn);
     lv_obj_set_size(out.drop_neg_flow_switch, btn_size + 8, btn_size / 2 + 6);
@@ -433,6 +437,31 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   root_entry(menu, out.root_page, out.micra_page, "Micra", font, btn_h);
   root_entry(menu, out.root_page, out.scale_page, "Scale", font, btn_h);
   root_entry(menu, out.root_page, out.device_page, "Device", font, btn_h);
+
+  // Root-level action row (not a drill-in): soft reboot — the escape hatch for
+  // the RGB panel's occasional shifted-raster boot glitch (ghost lines ~10-20px
+  // off). Same card styling as the entries, restart glyph instead of a chevron.
+  {
+    lv_obj_t* cont = lv_menu_cont_create(out.root_page);
+    lv_obj_set_style_bg_color(cont, lv_color_hex(ui::theme::card()), 0);
+    lv_obj_set_style_bg_opa(cont, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(cont, 8, 0);
+    lv_obj_set_style_pad_all(cont, 10, 0);
+    lv_obj_set_height(cont, btn_h);
+    lv_obj_add_flag(cont, LV_OBJ_FLAG_CLICKABLE);
+    out.restart_btn = cont;
+
+    lv_obj_t* lbl = lv_label_create(cont);
+    lv_label_set_text(lbl, "Restart display");
+    lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(lbl, font, 0);
+    lv_obj_set_flex_grow(lbl, 1);
+
+    lv_obj_t* glyph = lv_label_create(cont);
+    lv_label_set_text(glyph, LV_SYMBOL_REFRESH);
+    lv_obj_set_style_text_color(glyph, lv_color_hex(ui::theme::muted()), 0);
+    lv_obj_set_style_text_font(glyph, font, 0);
+  }
 
   lv_menu_set_page(menu, out.root_page);
 }

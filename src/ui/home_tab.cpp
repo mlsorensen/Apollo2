@@ -27,7 +27,9 @@ constexpr int kFlowStepPx = 1;
 // We derive flow ourselves as the rate of weight gain (scales reliably stream
 // weight, not flow). Measure it over this window of the weight history so per-
 // sample jitter averages out instead of producing a spiky line.
-constexpr uint32_t kFlowRateWindowMs = 700;
+constexpr uint32_t kFlowRateWindowMs = 1500;  // trailing derivative window
+constexpr uint32_t kFlowHistSampleMs = 50;    // weight-history sampling cadence
+constexpr float kFlowMinSpanS = 0.4f;         // need this much history for a rate
 // Oscilloscope mode: blank columns kept just ahead of the write head so the sweep
 // point reads clearly (fresh trace behind it, gap in front).
 constexpr int kFlowScopeGapPx = 4;
@@ -197,6 +199,13 @@ void redraw_flow_from_ring(HomeWidgets& w) {
     draw_flow_segment(w, x, y, color);
     w.flow_prev_y = y;
   }
+  // Leave the pen at the LIVE head, not the ring's last column. In scope mode
+  // the last column is the previous sweep's tail (usually ~0): a mid-sweep
+  // rescale that returned with the pen there made the next painted column draw
+  // a phantom vertical stab down to zero (baked into the canvas, absent from
+  // the ring — the "line to zero and back" artifact).
+  if (w.flow_scope_mode)
+    w.flow_prev_y = flow_row(ring[w.flow_cursor], w.flow_h, w.flow_ymax);
 }
 
 // Invalidate `n` plot columns starting at screen-column c0 (wrapping past the right
@@ -631,7 +640,21 @@ void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_t* wcol = make_panel_column(body, "WEIGHT", cap_font, big_font, &out.scale_weight);
   make_stepper_group(wcol, btn_size, symbol_font, set_font, &out.scale_target,
                      &out.target_minus, &out.target_plus);
-  make_panel_column(body, "TIMER", cap_font, big_font, &out.shot_timer_label);
+  lv_obj_t* tcol = make_panel_column(body, "TIMER", cap_font, big_font, &out.shot_timer_label);
+  // Shot button in the stepper's slot under the timer: shot-mode toggle, or
+  // Reset while a finished shot is up for review. Hidden unless the board has
+  // paddle hardware (update_home shows it); sized to line up with the stepper.
+  out.shot_btn = ui::make_button(tcol);
+  lv_obj_set_size(out.shot_btn, LV_SIZE_CONTENT, btn_size);
+  lv_obj_set_style_pad_hor(out.shot_btn, 14, 0);
+  lv_obj_set_style_radius(out.shot_btn, btn_size / 2, 0);
+  lv_obj_set_style_bg_color(out.shot_btn, lv_color_hex(ui::theme::accent()), 0);
+  out.shot_btn_label = lv_label_create(out.shot_btn);
+  lv_label_set_text(out.shot_btn_label, "Auto");
+  lv_obj_set_style_text_color(out.shot_btn_label, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(out.shot_btn_label, set_font, 0);
+  lv_obj_center(out.shot_btn_label);
+  lv_obj_add_flag(out.shot_btn, LV_OBJ_FLAG_HIDDEN);  // update_home reveals it
 }
 
 }  // namespace
@@ -964,16 +987,52 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     std::snprintf(tb, sizeof(tb), "%.0f g", static_cast<double>(brew.target_weight_g));
     lv_label_set_text(w.scale_target, tb);
 
-    // Shot timer (scale panel): the scale's built-in timer, mm:ss-free seconds.
+    // Shot timer (scale panel). Paddle boards use the ESP-side shot timer (works
+    // with any scale, keeps counting after the scale's own timer resets); boards
+    // without paddle hardware fall back to the scale's built-in timer.
     if (w.shot_timer_label != nullptr) {
       char sb[16];
-      if (scale.connected) {
+      if (brew.available) {
+        std::snprintf(sb, sizeof(sb), "%.1f s",
+                      static_cast<double>(brew.shot_ms) / 1000.0);
+      } else if (scale.connected) {
         std::snprintf(sb, sizeof(sb), "%.1f s",
                       static_cast<double>(scale.timer_ms) / 1000.0);
       } else {
         std::snprintf(sb, sizeof(sb), "-- s");
       }
       lv_label_set_text(w.shot_timer_label, sb);
+    }
+
+    // Shot button (under the timer): Reset while a finished shot is frozen for
+    // review; otherwise the shot-mode toggle (accent = armed, grey = off).
+    // DISABLED while a shot runs/settles — a mid-shot mode flip wouldn't cancel
+    // the running automation (the paddle is the mid-shot escape), and a tap
+    // during settling could land on Reset the instant it appears.
+    if (w.shot_btn != nullptr) {
+      if (!brew.available) {
+        lv_obj_add_flag(w.shot_btn, LV_OBJ_FLAG_HIDDEN);
+      } else {
+        lv_obj_remove_flag(w.shot_btn, LV_OBJ_FLAG_HIDDEN);
+        const bool review = brew.phase == core::ShotPhase::kReview;
+        const bool active = brew.phase == core::ShotPhase::kBrewing ||
+                            brew.phase == core::ShotPhase::kSettling;
+        lv_label_set_text(w.shot_btn_label,
+                          review ? "Reset" : brew.shot_mode ? "Auto" : "Manual");
+        const uint32_t col = review          ? ui::theme::warn()
+                             : active         ? ui::theme::rail()
+                             : brew.shot_mode ? ui::theme::accent()
+                                              : ui::theme::rail();
+        lv_obj_set_style_bg_color(w.shot_btn, lv_color_hex(col), 0);
+        lv_obj_set_style_text_color(
+            w.shot_btn_label,
+            lv_color_hex(active ? ui::theme::muted() : ui::theme::text()), 0);
+        if (active) {
+          lv_obj_add_state(w.shot_btn, LV_STATE_DISABLED);
+        } else {
+          lv_obj_remove_state(w.shot_btn, LV_STATE_DISABLED);
+        }
+      }
     }
 
     // Paddle/brew pill: only meaningful when paddle hardware is present.
@@ -1124,6 +1183,31 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   }
 }
 
+void reset_flow_graph(HomeWidgets& w) {
+  if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_weights == nullptr ||
+      w.flow_flows == nullptr || w.flow_w <= 0)
+    return;
+  for (int x = 0; x < w.flow_w; ++x) {
+    w.flow_weights[x] = 0.0f;
+    w.flow_flows[x] = 0.0f;
+    clear_flow_column(w, x);
+  }
+  w.flow_prev_y = -1;
+  w.flow_tick = 0;      // restart the scroll clock cleanly on the next tick
+  w.flow_accum_ms = 0;
+  w.flow_cursor = 0;    // scope sweep restarts at the left edge
+  w.flow_ymax = flow_default_max(w.flow_mode);
+  set_flow_ylabels(w);
+  w.flow_blanked = true;
+  lv_obj_invalidate(w.flow_canvas);
+}
+
+void reset_flow_history(HomeWidgets& w) {
+  w.flow_hist_n = 0;  // rate reads 0 for ~kFlowMinSpanS while it re-warms
+  w.flow_hist_head = 0;
+  w.flow_hist_last_ms = 0;
+}
+
 void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
   if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_weights == nullptr ||
       w.flow_flows == nullptr || w.flow_w <= 0)
@@ -1133,18 +1217,8 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
   // Clear once on the transition to an empty grid, then idle until it reconnects.
   if (!scale.connected) {
     if (!w.flow_blanked) {
-      for (int x = 0; x < w.flow_w; ++x) {
-        w.flow_weights[x] = 0.0f;
-        w.flow_flows[x] = 0.0f;
-        clear_flow_column(w, x);
-      }
-      w.flow_prev_y = -1;
-      w.flow_tick = 0;      // restart the scroll clock cleanly on reconnect
-      w.flow_accum_ms = 0;
-      w.flow_ymax = flow_default_max(w.flow_mode);
-      set_flow_ylabels(w);
-      w.flow_blanked = true;
-      lv_obj_invalidate(w.flow_canvas);
+      reset_flow_graph(w);
+      reset_flow_history(w);  // reconnect weights won't relate to these samples
     }
     return;
   }
@@ -1164,20 +1238,36 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
                                static_cast<uint32_t>(w.flow_w);
   if (ms_per_step == 0) return;
 
-  // Flow = signed rate of weight gain, measured over kFlowRateWindowMs of weight
-  // history (rw vs the weight that many steps back). A rising weight is real flow; a
-  // falling weight (cup removed) is negative. drop-negative floors that to zero so it
-  // never shows as an upswing; with it off we show the magnitude (the raw activity).
-  // The most-recent stored sample is at the right edge (scroll) or the cursor (scope).
+  // Flow = trailing-window derivative (see the kFlowHist* comment in the
+  // header): Δweight over the ~1.5s ending now, from the time-stamped history
+  // ring. A rising weight is real flow; a falling one (cup removed) is
+  // negative. drop-negative floors that to zero so it never shows as an
+  // upswing; with it off we show the magnitude (the raw activity).
   const float rw = scale.weight_g;   // g (signed; the scale streams weight, not flow)
-  const int last_idx = w.flow_scope_mode ? w.flow_cursor : (w.flow_w - 1);
-  int back = static_cast<int>(kFlowRateWindowMs / ms_per_step);
-  if (back < 1) back = 1;
-  if (back > w.flow_w - 1) back = w.flow_w - 1;
-  int back_idx = last_idx - back;
-  if (back_idx < 0) back_idx += w.flow_w;  // wraps in scope mode; a no-op in scroll
-  const float win_s = back * static_cast<float>(ms_per_step) / 1000.0f;
-  float rf = (win_s > 0.0f) ? (rw - w.flow_weights[back_idx]) / win_s : 0.0f;
+  if (w.flow_hist_n == 0 || now - w.flow_hist_last_ms >= kFlowHistSampleMs) {
+    w.flow_hist_t[w.flow_hist_head] = now;
+    w.flow_hist_w[w.flow_hist_head] = rw;
+    w.flow_hist_head = (w.flow_hist_head + 1) % ui::HomeWidgets::kFlowHistCap;
+    if (w.flow_hist_n < ui::HomeWidgets::kFlowHistCap) ++w.flow_hist_n;
+    w.flow_hist_last_ms = now;
+  }
+  float rf = 0.0f;
+  {
+    // Oldest sample still inside the window (or the oldest we have while the
+    // ring warms up after a reset/reconnect).
+    int ref = -1;
+    for (int i = 0; i < w.flow_hist_n; ++i) {
+      const int idx = (w.flow_hist_head - w.flow_hist_n + i +
+                       2 * ui::HomeWidgets::kFlowHistCap) %
+                      ui::HomeWidgets::kFlowHistCap;
+      ref = idx;
+      if (now - w.flow_hist_t[idx] <= kFlowRateWindowMs) break;
+    }
+    if (ref >= 0) {
+      const float span_s = (now - w.flow_hist_t[ref]) / 1000.0f;
+      if (span_s >= kFlowMinSpanS) rf = (rw - w.flow_hist_w[ref]) / span_s;
+    }
+  }
   if (w.flow_drop_negative) { if (rf < 0.0f) rf = 0.0f; }
   else if (rf < 0.0f) rf = -rf;   // show outflow as positive activity when not dropping
   const float raw = (w.flow_mode == 1) ? rw : rf;

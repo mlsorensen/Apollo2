@@ -39,6 +39,14 @@ void on_tare_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->tare_scale();
 }
 
+void on_shot_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->shot_button();
+}
+
+void on_restart_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->restart_device();
+}
+
 void on_flow_unit_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->toggle_flow_units();
 }
@@ -108,6 +116,12 @@ void on_scale_connect_clicked(lv_event_t* e) {
 }
 void on_target_minus(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->target_adjust(-1);
+}
+void on_review_minus(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->review_hold_adjust(-1);
+}
+void on_review_plus(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->review_hold_adjust(+1);
 }
 void on_target_plus(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->target_adjust(+1);
@@ -492,6 +506,8 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(home_.power_btn, on_power_clicked, LV_EVENT_CLICKED, this);
   if (home_.tare_btn != nullptr)
     lv_obj_add_event_cb(home_.tare_btn, on_tare_clicked, LV_EVENT_CLICKED, this);
+  if (home_.shot_btn != nullptr)
+    lv_obj_add_event_cb(home_.shot_btn, on_shot_clicked, LV_EVENT_CLICKED, this);
   if (home_.flow_unit_btn != nullptr)
     lv_obj_add_event_cb(home_.flow_unit_btn, on_flow_unit_clicked, LV_EVENT_CLICKED, this);
   // Inline set-point steppers (large screens): reuse the Settings handlers so Home
@@ -525,6 +541,10 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(settings_.scale_connect_btn, on_scale_connect_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.scale_forget_btn, on_scale_forget_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.target_minus, on_target_minus, LV_EVENT_CLICKED, this);
+  if (settings_.review_minus != nullptr) {
+    lv_obj_add_event_cb(settings_.review_minus, on_review_minus, LV_EVENT_CLICKED, this);
+    lv_obj_add_event_cb(settings_.review_plus, on_review_plus, LV_EVENT_CLICKED, this);
+  }
   lv_obj_add_event_cb(settings_.target_plus, on_target_plus, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.brew_minus, on_brew_minus, LV_EVENT_ALL, this);
   lv_obj_add_event_cb(settings_.brew_plus, on_brew_plus, LV_EVENT_ALL, this);
@@ -546,6 +566,8 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                       LV_EVENT_VALUE_CHANGED, this);
   lv_obj_add_event_cb(settings_.scope_graph_switch, on_scope_graph_switch,
                       LV_EVENT_VALUE_CHANGED, this);
+  if (settings_.restart_btn != nullptr)
+    lv_obj_add_event_cb(settings_.restart_btn, on_restart_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.perf_overlay_switch, on_perf_overlay_switch,
                       LV_EVENT_VALUE_CHANGED, this);
   if (settings_.theme_btn != nullptr)
@@ -565,7 +587,11 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(stats_.zoom_in, on_zoom_in, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(stats_.zoom_out, on_zoom_out, LV_EVENT_CLICKED, this);
 
-  if (brew_ != nullptr) settings_.target_g = brew_->snapshot().target_weight_g;
+  if (brew_ != nullptr) {
+    const core::BrewSnapshot b = brew_->snapshot();
+    settings_.target_g = b.target_weight_g;
+    settings_.review_hold_s = b.review_hold_s;
+  }
   update_settings_view();
   update_temp_panels(machine_->snapshot());
 
@@ -938,6 +964,20 @@ void App::tare_scale() {
   if (scale_ != nullptr) scale_->tare();
 }
 
+void App::shot_button() {
+  if (brew_ == nullptr) return;
+  const core::BrewSnapshot b = brew_->snapshot();
+  // Guard against a tap sneaking through while the button is disabled mid-shot
+  // (state applied on the 2 Hz refresh, so there's a small window).
+  if (b.phase == core::ShotPhase::kBrewing || b.phase == core::ShotPhase::kSettling) return;
+  if (b.phase == core::ShotPhase::kReview) {
+    brew_->dismiss_review();  // back to live monitoring; graph resumes next tick
+  } else {
+    brew_->set_shot_mode(!b.shot_mode);
+  }
+  refresh();  // reflect the new button label/color immediately, not at the next 2 Hz
+}
+
 void App::toggle_flow_units() { ui::toggle_flow_mode(home_); }
 
 void App::pump_scale_chart() {
@@ -946,19 +986,62 @@ void App::pump_scale_chart() {
   // Sweep the flow graph left->right by wall-clock time (smooth regardless of the
   // sample rate); flow is derived from the streamed weight. Cheap no-op without a graph.
   const core::ScaleSnapshot snap = scale_->snapshot();
-  ui::flow_graph_tick(home_, snap);
 
-  // Update the weight readout faster than the 2 Hz UI refresh (watching a shot),
-  // throttled to ~10 Hz so it isn't wasteful. lv_label_set_text no-ops if the
-  // text is unchanged, so a settled scale costs nothing.
-  if (home_.scale_weight != nullptr) {
+  // Shot lifecycle -> graph: clear the plot when a shot starts (it records exactly
+  // one shot), freeze it during review (no ticking = the trace stays put), resume
+  // after. The weight readout below keeps updating either way.
+  bool graph_frozen = false;
+  const bool have_brew = brew_ != nullptr;
+  core::BrewSnapshot bsnap{};
+  if (have_brew) {
+    bsnap = brew_->snapshot();
+    const bool entering_brew =
+        bsnap.phase == core::ShotPhase::kBrewing && shot_phase_ != core::ShotPhase::kBrewing;
+    if (entering_brew) {
+      ui::reset_flow_graph(home_);
+      // A tare was sent only if the baseline isn't already confirmed (the scale
+      // wasn't pre-tared): the old weight samples are then in pre-tare units and
+      // must go. Pre-tared shots keep the history -> rate is live from t=0.
+      if (!bsnap.baseline_set) ui::reset_flow_history(home_);
+    }
+    shot_phase_ = bsnap.phase;
+    // Hold the cleared plot until the post-tare baseline is confirmed — the
+    // scale's readings during the tare window are garbage (the cup-placement
+    // spike that used to inflate the Y axis). The trace then starts once,
+    // cleanly. kSettling still ticks (the drip tail settles to zero on-screen);
+    // only kReview freezes the trace.
+    if (bsnap.phase == core::ShotPhase::kBrewing && !bsnap.baseline_set) {
+      home_.flow_tick = 0;  // pen up: no time accrues while held
+      graph_frozen = true;
+    } else if (bsnap.phase == core::ShotPhase::kReview) {
+      home_.flow_tick = 0;  // pen up: no time accrues while frozen
+      graph_frozen = true;
+    }
+  }
+  if (!graph_frozen) ui::flow_graph_tick(home_, snap);
+
+  // Weight readout: redraw the moment the cached snapshot carries a new value, so
+  // the display runs at the scale's own notify rate (the snapshot is just the last
+  // BLE notify). lv_label_set_text no-ops when the formatted text is unchanged.
+  if (home_.scale_weight != nullptr &&
+      (snap.weight_g != last_weight_g_ || snap.connected != last_scale_connected_)) {
+    last_weight_g_ = snap.weight_g;
+    last_scale_connected_ = snap.connected;
+    char wb[16];
+    if (snap.connected) std::snprintf(wb, sizeof(wb), "%.1f g", static_cast<double>(snap.weight_g));
+    else std::snprintf(wb, sizeof(wb), "-- g");
+    lv_label_set_text(home_.scale_weight, wb);
+  }
+
+  // Shot timer: continuous (ms) value, so redraw on a fixed ~10 Hz cadence that
+  // matches its 0.1 s display resolution — faster would render invisible changes.
+  if (have_brew && bsnap.available && home_.shot_timer_label != nullptr) {
     const uint32_t t = lv_tick_get();
     if (t - scale_readout_tick_ >= 100) {
       scale_readout_tick_ = t;
-      char wb[16];
-      if (snap.connected) std::snprintf(wb, sizeof(wb), "%.1f g", static_cast<double>(snap.weight_g));
-      else std::snprintf(wb, sizeof(wb), "-- g");
-      lv_label_set_text(home_.scale_weight, wb);
+      char sb[16];
+      std::snprintf(sb, sizeof(sb), "%.1f s", static_cast<double>(bsnap.shot_ms) / 1000.0);
+      lv_label_set_text(home_.shot_timer_label, sb);
     }
   }
 }
@@ -1427,6 +1510,12 @@ void set_target_label(ui::SettingsWidgets& s) {
   std::snprintf(b, sizeof(b), "%.0f g", static_cast<double>(s.target_g));
   lv_label_set_text(s.target_value, b);
 }
+void set_review_label(ui::SettingsWidgets& s) {
+  if (s.review_value == nullptr) return;
+  char b[16];
+  std::snprintf(b, sizeof(b), "%d s", s.review_hold_s);
+  lv_label_set_text(s.review_value, b);
+}
 }  // namespace
 
 void App::update_scale_view() {
@@ -1479,6 +1568,7 @@ void App::update_scale_view() {
     lv_obj_center(lbl);
   }
   set_target_label(settings_);
+  set_review_label(settings_);
 }
 
 void App::start_scale_scan() {
@@ -1519,6 +1609,15 @@ void App::target_adjust(int dir) {
     lv_label_set_text(home_.scale_target, tb);
   }
   if (brew_ != nullptr) brew_->set_target_weight_g(settings_.target_g);
+}
+
+void App::review_hold_adjust(int dir) {
+  int v = settings_.review_hold_s + dir * 5;  // 5s steps
+  if (v < 5) v = 5;
+  if (v > 120) v = 120;
+  settings_.review_hold_s = v;
+  set_review_label(settings_);
+  if (brew_ != nullptr) brew_->set_review_hold_s(v);
 }
 
 }  // namespace ui

@@ -19,6 +19,9 @@ constexpr char kPerfOverlayKey[] = "perfovl";
 constexpr char kScaleMacKey[] = "smac";
 constexpr char kScaleNameKey[] = "sname";
 constexpr char kTargetKey[] = "tgtg";
+constexpr char kShotModeKey[] = "shotmode";
+constexpr char kOvershootKey[] = "ovshoot";
+constexpr char kReviewHoldKey[] = "revhold";
 constexpr char kWifiEnKey[] = "wifi_en";
 constexpr char kWifiSsidKey[] = "ssid";
 constexpr char kWifiPassKey[] = "wifipass";
@@ -109,6 +112,51 @@ float Config::target_weight_g() const {
   const float v = p.isKey(kTargetKey) ? p.getFloat(kTargetKey, 36.0f) : 36.0f;
   p.end();
   return v;
+}
+
+float Config::overshoot_g() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 2.0f;
+  const float v = p.isKey(kOvershootKey) ? p.getFloat(kOvershootKey, 2.0f) : 2.0f;
+  p.end();
+  return v;
+}
+
+void Config::set_overshoot_g(float grams) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putFloat(kOvershootKey, grams);
+  p.end();
+}
+
+int Config::review_hold_s() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 30;
+  const int v = p.isKey(kReviewHoldKey) ? p.getInt(kReviewHoldKey, 30) : 30;
+  p.end();
+  return v;
+}
+
+void Config::set_review_hold_s(int seconds) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putInt(kReviewHoldKey, seconds);
+  p.end();
+}
+
+bool Config::shot_mode() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return true;
+  const bool v = p.isKey(kShotModeKey) ? p.getBool(kShotModeKey, true) : true;
+  p.end();
+  return v;
+}
+
+void Config::set_shot_mode(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kShotModeKey, on);
+  p.end();
 }
 
 void Config::set_target_weight_g(float grams) {
