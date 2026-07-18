@@ -240,6 +240,82 @@ constexpr int  kPaddleDrivePin = -1;
 constexpr int  kPaddleSensePin = -1;
 constexpr bool kPaddleActiveHigh = true;
 
+#elif defined(BOARD_WAVESHARE_S3_LCD_43C)
+
+// Waveshare ESP32-S3-Touch-LCD-4.3C — 4.3", 800x480 RGB parallel panel, GT911
+// touch. Same RGB/touch wiring as the 4.3B, but the expander is the 7B-style
+// register-based "IO extension" chip (CH32V003 firmware, addr 0x24) instead of
+// a CH422G — which gives this board what the 4.3B lacks: a real PWM backlight
+// (reg 0x05, inverted duty) and a battery ADC (reg 0x06). Pins + RGB timing
+// traced to Waveshare's 4.3C demo (examples/arduino 03_lcd + 14_lvgl_slider).
+constexpr char kName[] = "Waveshare ESP32-S3-Touch-LCD-4.3C";
+#define BOARD_DISPLAY_RGB
+#define BOARD_TOUCH_GT911
+#define BOARD_HAS_IO_EXTENSION
+// PCF85063 RTC on the shared I2C bus (same as the 4.3B).
+#define BOARD_HAS_PCF85063_RTC
+constexpr bool kSupportsBrightness = true;  // IO-extension PWM backlight (dimmable)
+
+// --- Shared I2C bus (IO extension + GT911 touch) ---
+constexpr int kI2cSda = 8;
+constexpr int kI2cScl = 9;
+
+// --- IO extension @ 0x24: output-pin assignments (same roles as the 7B/4.3B) ---
+constexpr int kIoExtAddr = 0x24;
+constexpr int kIoExtTouchReset = 1;  // IO_1
+constexpr int kIoExtBacklight = 2;   // IO_2 (DISP enable; dimming is the PWM reg)
+constexpr int kIoExtLcdReset = 3;    // IO_3
+
+// --- Display: 16-bit RGB565 parallel panel, 800x480 (pins identical to 4.3B) ---
+constexpr int  kLcdNativeW = 800;
+constexpr int  kLcdNativeH = 480;
+constexpr int  kLcdRotation = 0;     // panel is already landscape
+constexpr int  kRgbDe = 5, kRgbVsync = 3, kRgbHsync = 46, kRgbPclk = 7;
+constexpr int  kRgbR[5] = {1, 2, 42, 41, 40};        // R3..R7
+constexpr int  kRgbG[6] = {39, 0, 45, 48, 47, 21};   // G2..G7
+constexpr int  kRgbB[5] = {14, 38, 18, 17, 10};      // B3..B7
+constexpr int  kRgbHsyncFront = 8,   kRgbHsyncPulse = 4,  kRgbHsyncBack = 8;
+constexpr int  kRgbVsyncFront = 8,   kRgbVsyncPulse = 4,  kRgbVsyncBack = 8;
+constexpr int  kRgbPclkActiveNeg = 1;
+constexpr long kRgbPclkHz = 16000000;  // 16 MHz (Waveshare 4.3C demo value)
+constexpr int  kRgbBouncePx = kLcdNativeW * 10;
+
+// --- Touch: GT911 on the shared I2C bus (same as the 4.3B) ---
+constexpr int  kTouchSda = 8;
+constexpr int  kTouchScl = 9;
+constexpr int  kTouchAddr = 0x5D;
+constexpr int  kTouchInt = 4;
+constexpr int  kTouchRst = -1;       // driven via kIoExtTouchReset, not a GPIO
+constexpr bool kTouchSwapXY = false;
+constexpr bool kTouchMirrorX = false;
+constexpr bool kTouchMirrorY = false;
+
+// --- Battery: read via the IO-extension's ADC (reg 0x06), like the 7B. Scale is
+//     the vendor formula (10-bit ADC, 3.3 V ref, ÷3 divider): 3 * 3.3 / 1023 —
+//     calibrate against a multimeter at the pack if it reads off (the 7B's
+//     same-family chip needed 0.009632). Charger is a CS8501 (no status pin). ---
+#define BOARD_BATTERY_VIA_IOEXT
+constexpr float kBatteryIoExtScale = 0.0096774f;
+constexpr int   kBatteryAdc = -1;               // no direct ESP32 ADC pin
+constexpr float kBatteryDivider = 1.0f;         // (unused; folded into the scale)
+constexpr int   kBatteryChargePin = -1;
+constexpr bool  kBatteryChargeActiveLow = true;
+constexpr float kBatteryFullVolts = 4.07f;
+constexpr float kBatteryEmptyVolts = 3.40f;
+constexpr float kBatteryCutoffVolts = 3.40f;
+constexpr float kBatteryResumeVolts = 3.70f;
+constexpr float kBatteryChargingVolts = 4.15f;
+constexpr float kBatteryNoCellVolts = 4.35f;
+constexpr int   kVbusAdc = -1;
+constexpr float kVbusDivider = 2.0f;
+constexpr float kVbusPresentVolts = 4.0f;
+
+// --- Paddle control (brew-by-weight): the 4.3C's isolated DO0/DO1 (EXIO6/7)
+//     are candidates once that port lands; pins TBD ---
+constexpr int  kPaddleDrivePin = -1;
+constexpr int  kPaddleSensePin = -1;
+constexpr bool kPaddleActiveHigh = true;
+
 #elif defined(BOARD_WAVESHARE_P4_WIFI6_43)
 
 // Waveshare ESP32-P4-WIFI6-Touch-LCD-4.3 — ESP32-P4NRW32 (32MB flash, 32MB
@@ -324,7 +400,7 @@ constexpr int  kPaddleSensePin = -1;
 constexpr bool kPaddleActiveHigh = true;
 
 #else
-#error "No board selected. Add -DBOARD_WAVESHARE_S3_LCD_2 (or _7B / _43B / P4_WIFI6_43) to build_flags in platformio.ini."
+#error "No board selected. Add -DBOARD_WAVESHARE_S3_LCD_2 (or _7B / _43B / _43C / P4_WIFI6_43) to build_flags in platformio.ini."
 #endif
 
 }  // namespace board
