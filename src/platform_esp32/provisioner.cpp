@@ -45,6 +45,9 @@ void Provisioner::forget() {
 bool Provisioner::connect_enabled() const { return link_.connect_enabled(); }
 void Provisioner::set_connect_enabled(bool enabled) { link_.set_connect_enabled(enabled); }
 
+bool Provisioner::auto_connect() const { return config_.auto_connect(); }
+void Provisioner::set_auto_connect(bool on) { config_.set_auto_connect(on); }
+
 bool Provisioner::has_token() const { return !config_.token().empty(); }
 
 void Provisioner::start_token_setup() { token_setup_.start(TokenSetup::Mode::Token); }

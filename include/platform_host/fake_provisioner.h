@@ -19,6 +19,8 @@ class FakeProvisioner : public core::IProvisioner {
   void forget() override {}
   bool connect_enabled() const override { return connect_enabled_; }
   void set_connect_enabled(bool enabled) override { connect_enabled_ = enabled; }
+  bool auto_connect() const override { return auto_connect_; }
+  void set_auto_connect(bool on) override { auto_connect_ = on; }
 
   bool has_token() const override { return true; }
   void start_token_setup() override {}
@@ -29,6 +31,7 @@ class FakeProvisioner : public core::IProvisioner {
 
  private:
   bool connect_enabled_ = true;
+  bool auto_connect_ = false;
 };
 
 }  // namespace host

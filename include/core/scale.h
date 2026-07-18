@@ -33,6 +33,9 @@ struct ScaleSnapshot {
   uint32_t    timer_ms;      // built-in shot timer, ms (0 if !features.timer)
   bool        battery_valid;
   int         battery_pct;   // 0..100 when battery_valid
+  uint32_t    seq;           // increments per received update — consumers use it
+                             // to draw event-locked and to measure the stream
+                             // rate (scales differ: ~2..20Hz)
 };
 
 // The port the UI depends on for scale data + commands. The BLE ScaleLink and

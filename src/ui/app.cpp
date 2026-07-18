@@ -261,6 +261,11 @@ void on_wifi_switch(lv_event_t* e) {
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
   app->set_wifi_enabled(lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
+void on_auto_connect_switch(lv_event_t* e) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  app->set_auto_connect(lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
 void on_wifi_setup_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->start_wifi_setup();
 }
@@ -568,6 +573,12 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                       LV_EVENT_VALUE_CHANGED, this);
   if (settings_.restart_btn != nullptr)
     lv_obj_add_event_cb(settings_.restart_btn, on_restart_clicked, LV_EVENT_CLICKED, this);
+  if (settings_.auto_connect_switch != nullptr) {
+    if (provisioner_ != nullptr && provisioner_->auto_connect())
+      lv_obj_add_state(settings_.auto_connect_switch, LV_STATE_CHECKED);
+    lv_obj_add_event_cb(settings_.auto_connect_switch, on_auto_connect_switch,
+                        LV_EVENT_VALUE_CHANGED, this);
+  }
   lv_obj_add_event_cb(settings_.perf_overlay_switch, on_perf_overlay_switch,
                       LV_EVENT_VALUE_CHANGED, this);
   if (settings_.theme_btn != nullptr)
@@ -998,27 +1009,31 @@ void App::pump_scale_chart() {
     const bool entering_brew =
         bsnap.phase == core::ShotPhase::kBrewing && shot_phase_ != core::ShotPhase::kBrewing;
     if (entering_brew) {
-      ui::reset_flow_graph(home_);
+      ui::begin_shot_plot(home_);  // dynamic-X plot owns the canvas for the shot
       // A tare was sent only if the baseline isn't already confirmed (the scale
       // wasn't pre-tared): the old weight samples are then in pre-tare units and
       // must go. Pre-tared shots keep the history -> rate is live from t=0.
       if (!bsnap.baseline_set) ui::reset_flow_history(home_);
+    } else if (home_.flow_shot_plot && bsnap.phase == core::ShotPhase::kIdle) {
+      ui::end_shot_plot(home_);  // review dismissed/timed out -> live sweep
     }
     shot_phase_ = bsnap.phase;
-    // Hold the cleared plot until the post-tare baseline is confirmed — the
-    // scale's readings during the tare window are garbage (the cup-placement
-    // spike that used to inflate the Y axis). The trace then starts once,
-    // cleanly. kSettling still ticks (the drip tail settles to zero on-screen);
-    // only kReview freezes the trace.
+    // Hold until the post-tare baseline is confirmed (the tare window's readings
+    // are garbage — usually a ~200ms blink now); freeze during review. kSettling
+    // keeps ticking so the drip tail settles to zero on-screen.
     if (bsnap.phase == core::ShotPhase::kBrewing && !bsnap.baseline_set) {
-      home_.flow_tick = 0;  // pen up: no time accrues while held
       graph_frozen = true;
     } else if (bsnap.phase == core::ShotPhase::kReview) {
-      home_.flow_tick = 0;  // pen up: no time accrues while frozen
       graph_frozen = true;
     }
   }
-  if (!graph_frozen) ui::flow_graph_tick(home_, snap);
+  if (!graph_frozen) {
+    if (home_.flow_shot_plot) {
+      ui::shot_plot_tick(home_, snap);
+    } else {
+      ui::flow_graph_tick(home_, snap);
+    }
+  }
 
   // Weight readout: redraw the moment the cached snapshot carries a new value, so
   // the display runs at the scale's own notify rate (the snapshot is just the last

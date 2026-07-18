@@ -101,6 +101,9 @@ class App {
   void set_restart_handler(std::function<void()> h) { restart_handler_ = std::move(h); }
   void restart_device() { if (restart_handler_) restart_handler_(); }
   void review_hold_adjust(int dir);  // Scale settings: review-hold stepper (5s steps)
+  void set_auto_connect(bool on) {   // Micra settings: connect to saved machine at boot
+    if (provisioner_ != nullptr) provisioner_->set_auto_connect(on);
+  }
   void zoom_step(int dir);                // Stats time-axis zoom: -1 in, +1 out
   void commit_temp_edits();              // write pending temp edits (on exit)
 

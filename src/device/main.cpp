@@ -224,6 +224,10 @@ void setup() {
   g_micra.set_token_persister([](std::string t) { g_config.set_token(t); });  // pairing-read
   Serial.printf("Saved machine: mac=%s token=%s\n", mac.empty() ? "(none)" : mac.c_str(),
                 g_config.token().empty() ? "(none)" : "set");
+  // Opt-in auto-connect (Micra > Settings): grab the saved machine at boot
+  // instead of waiting for a Connect tap. Default off — a connected remote
+  // occupies the Micra's single BLE slot.
+  if (!mac.empty() && g_config.auto_connect()) g_micra.set_connect_enabled(true);
   g_micra.begin(mac);
 
   // Start the Bluetooth scale link from its saved MAC (empty -> idles).

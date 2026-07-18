@@ -70,6 +70,7 @@ class ScaleLink : public IScale {
   uint32_t timer_ms_ = 0;
   int battery_pct_ = 0;
   bool battery_valid_ = false;
+  uint32_t seq_ = 0;  // increments per publish_sample (snapshot.seq)
   std::vector<ScanResult> scan_results_;
 
   std::atomic<bool> connect_enabled_{true};  // scales auto-connect when saved

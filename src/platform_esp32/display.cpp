@@ -36,7 +36,13 @@ lv_color_t* g_draw_buf = nullptr;
 // Number of screen rows LVGL renders per flush in partial mode. Larger = fewer
 // bands/flushes per refresh (the flow graph's ~200px plot renders in ~1 band).
 // PSRAM on RGB boards, so the size is cheap. (Probe: was 40.)
-constexpr int kBufferLines = 200;
+constexpr int kBufferLines = 200;    // PSRAM fallback chunk (RGB/DSI) / SPI chunk
+// Internal-RAM chunk (~51KB at 800px). SIZE IS A CEILING, NOT A KNOB: LVGL
+// software-blends into this buffer, and internal vs PSRAM is a ~2.5x render
+// speedup — but NimBLE allocates from the same internal heap, and 2x32-line
+// buffers (102KB) starved it (BLE dead; same failure class as the old 128KB
+// internal LVGL pool). One 32-line buffer is the tested safe point.
+constexpr int kBufferLinesFast = 32;
 
 uint32_t tick_cb() { return millis(); }
 
@@ -355,13 +361,15 @@ bool Display::begin() {
   const int w = g_gfx->width();
   const int h = g_gfx->height();
 #endif
-  const size_t buf_px = static_cast<size_t>(w) * kBufferLines;
-  const size_t buf_bytes = buf_px * sizeof(lv_color_t);
+  size_t buf_bytes = static_cast<size_t>(w) * kBufferLines * sizeof(lv_color_t);
 #if defined(BOARD_DISPLAY_RGB) || defined(BOARD_DISPLAY_DSI)
-  // Keep this scratch buffer in PSRAM. An internal-RAM scratch renders faster (no
-  // contention with the panel's continuous framebuffer scan), BUT the ~64-80 KB it
-  // takes is exactly what the WiFi stack needs to init for the token portal
-  // (internal buffer + BLE + WiFi = esp_wifi_init NO_MEM), so PSRAM it is.
+  // Draw scratch: prefer a SMALL chunk in INTERNAL RAM. LVGL's software renderer
+  // does read-modify-write blending per pixel, and over the PSRAM bus that made
+  // full-page redraws (settings scrolls) crawl at ~4fps / 160ms render. A
+  // 40-line internal chunk (~64KB on 800px) renders at SRAM speed with more,
+  // cheaper chunks. Historical NO_MEM caution: an EARLIER build starved
+  // esp_wifi_init with a 200-line internal buffer; 40 lines leaves that
+  // headroom. Fallback: the old 200-line PSRAM buffer (slow but always fits).
   //
   // TEARING (why we accept it): the flow graph tears slightly because this is a
   // SINGLE framebuffer. A direct-ESP-IDF esp_lcd double-framebuffer + vsync swap
@@ -376,12 +384,18 @@ bool Display::begin() {
   // it here. Viable tear-free routes if revisited: scroll the graph directly
   // inside both framebuffers (cheap: memmove the strip in each), or use an SPI
   // panel that has its own GRAM and self-refreshes.
-  g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM));
-  if (g_draw_buf == nullptr) {
-    g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_INTERNAL));
+  const size_t fast_bytes =
+      static_cast<size_t>(w) * kBufferLinesFast * sizeof(lv_color_t);
+  g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(fast_bytes, MALLOC_CAP_INTERNAL));
+  if (g_draw_buf != nullptr) {
+    buf_bytes = fast_bytes;
+    Serial.printf("RGB: LVGL draw buffer INTERNAL (%u bytes, %d lines)\n",
+                  static_cast<unsigned>(buf_bytes), kBufferLinesFast);
+  } else {
+    g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM));
+    Serial.printf("RGB: LVGL draw buffer PSRAM fallback %s (%u bytes)\n",
+                  g_draw_buf ? "ok" : "FAILED", static_cast<unsigned>(buf_bytes));
   }
-  Serial.printf("RGB: LVGL draw buffer %s (%u bytes)\n",
-                g_draw_buf ? "ok" : "FAILED", static_cast<unsigned>(buf_bytes));
 #else
   // SPI pushes this buffer over the bus via DMA -> must be DMA-capable.
   g_draw_buf = static_cast<lv_color_t*>(
