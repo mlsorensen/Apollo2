@@ -128,6 +128,9 @@ class App {
   core::NetState net_status() const {
     return network_ != nullptr ? network_->status() : core::NetState::Disabled;
   }
+  bool scale_connect_enabled() const {
+    return scale_provisioner_ != nullptr && scale_provisioner_->connect_enabled();
+  }
 
   core::IMachine* machine_ = nullptr;
   core::IProvisioner* provisioner_ = nullptr;

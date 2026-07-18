@@ -16,8 +16,12 @@ class BookooDriver : public IScaleDriver {
   const char* model() const override { return "Bookoo Themis"; }
 
   ScaleFeatures features() const override {
-    return ScaleFeatures{
-        .tare = true, .flow = true, .timer = true, .battery = true, .beep = false};
+    return ScaleFeatures{.tare = true,
+                         .flow = true,
+                         .timer = true,
+                         .battery = true,
+                         .beep = false,
+                         .sleep = false};
   }
 
   const char* select_notify(ble::ICentral& ble) override {
