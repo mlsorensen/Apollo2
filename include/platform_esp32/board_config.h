@@ -268,7 +268,11 @@ constexpr int  kLcdRotation = 1;      // 1 => 800x480 landscape
 constexpr int  kLcdRst = 27;          // native GPIO reset (no expander)
 constexpr int  kLcdBacklight = 26;    // LEDC PWM (BSP uses 10-bit LEDC here)
 constexpr int  kLcdBacklightEn = 33;  // backlight boost enable — drive high
-constexpr long kDsiDpiClockHz = 30000000;
+// 33.4MHz over the 576x870 total raster ≈ 66Hz refresh (BSP default is 30MHz
+// ≈ 60Hz). Raised to shift the panel's faint VCOM/inversion shimmer away from
+// 60Hz; verdict on hardware was "can't tell" — kept because it's harmless and
+// possibly helping. Revert to 30000000 if a future panel batch misbehaves.
+constexpr long kDsiDpiClockHz = 33400000;
 constexpr int  kDsiLaneBitRateMbps = 500;
 constexpr int  kDsiHsyncPulse = 12, kDsiHsyncBack = 42, kDsiHsyncFront = 42;
 constexpr int  kDsiVsyncPulse = 8,  kDsiVsyncBack = 2,  kDsiVsyncFront = 60;
