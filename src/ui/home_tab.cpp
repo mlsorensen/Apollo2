@@ -47,14 +47,28 @@ float flow_nice_max(int mode, float v) {
 }
 
 // Map a value to a canvas row against the current axis: 0 = top = ymax, h-1 = 0.
-int flow_row(float v, int h, float ymax) {
+// Returns a float row: the fractional part carries sub-pixel position, which the
+// anti-aliased segment renderer turns into edge coverage instead of a whole-pixel
+// jump (a hard 1px line visibly "steps" as the plot scrolls).
+float flow_row(float v, int h, float ymax) {
   if (v < 0.0f) v = 0.0f;
   float frac = (ymax > 0.0f) ? v / ymax : 0.0f;
   if (frac > 1.0f) frac = 1.0f;
-  int y = static_cast<int>((1.0f - frac) * (h - 1) + 0.5f);
-  if (y < 0) y = 0;
-  if (y >= h) y = h - 1;
+  float y = (1.0f - frac) * static_cast<float>(h - 1);
+  if (y < 0.0f) y = 0.0f;
+  if (y > static_cast<float>(h - 1)) y = static_cast<float>(h - 1);
   return y;
+}
+
+// Alpha-blend src over dst in RGB565 (a = 0..255). Integer per-channel mix; cheap
+// enough for the few edge pixels per column the AA renderer touches.
+uint16_t blend565(uint16_t dst, uint16_t src, uint8_t a) {
+  const uint32_t sr = (src >> 11) & 0x1F, sg = (src >> 5) & 0x3F, sb = src & 0x1F;
+  const uint32_t dr = (dst >> 11) & 0x1F, dg = (dst >> 5) & 0x3F, db = dst & 0x1F;
+  const uint32_t r = (sr * a + dr * (255 - a)) / 255;
+  const uint32_t g = (sg * a + dg * (255 - a)) / 255;
+  const uint32_t b = (sb * a + db * (255 - a)) / 255;
+  return static_cast<uint16_t>((r << 11) | (g << 5) | b);
 }
 
 // Repaint one canvas column to the background + a mid gridline (half scale) so the
@@ -83,15 +97,55 @@ uint16_t flow_dim_color() {
   return lv_color_to_u16(lv_color_mix(a, bg, 100));  // ~40% accent over the bg
 }
 
+// Fill the area under the line in column x with a translucent wash of the trace
+// color (~40% over the plot background). Painted after the column clear and
+// before the line, so the line's AA feather blends onto the fill seamlessly.
+// Gridline rows get the wash blended over the gridline color so the grid stays
+// readable through the fill.
+void fill_flow_below(HomeWidgets& w, int x, float yf, uint16_t trace_color) {
+  const float y0f = (w.flow_prev_y < 0.0f) ? yf : w.flow_prev_y;
+  const float b = (y0f < yf ? yf : y0f);  // bottom of the line span at this column
+  int start = static_cast<int>(b) + 1;
+  if (start < 0) start = 0;
+  if (start >= w.flow_h) return;
+  const uint16_t bg = lv_color_to_u16(lv_color_hex(ui::theme::card()));
+  const uint16_t fill = blend565(bg, trace_color, 102);  // ~40% wash
+  int gy[2];
+  for (int t = 1; t <= 2; ++t) gy[t - 1] = w.flow_h * t / 3;  // gridline rows
+  uint16_t* col = w.flow_buf + x;
+  for (int yy = start; yy < w.flow_h; ++yy) {
+    uint16_t* px = col + static_cast<size_t>(yy) * w.flow_stride;
+    // Gridlines were just repainted by clear_flow_column: wash over them too.
+    *px = (yy == gy[0] || yy == gy[1]) ? blend565(*px, trace_color, 102) : fill;
+  }
+}
+
 // Draw the flow line into column x in `color`: a vertical run joining the previous
 // pen row to the new one, so consecutive samples connect into a continuous line.
-void draw_flow_segment(HomeWidgets& w, int x, int y, uint16_t color) {
-  const int y0 = (w.flow_prev_y < 0) ? y : w.flow_prev_y;
-  const int lo = y0 < y ? y0 : y;
-  const int hi = y0 < y ? y : y0;
+// Anti-aliased: the run covers [lo, hi] with a half-pixel of feather each side,
+// and each row is painted at its fractional coverage (blended over what's already
+// in the column). Sub-pixel motion then reads as intensity easing instead of the
+// line snapping a whole pixel per step.
+void draw_flow_segment(HomeWidgets& w, int x, float yf, uint16_t color) {
+  const float y0f = (w.flow_prev_y < 0.0f) ? yf : w.flow_prev_y;
+  const float a = (y0f < yf ? y0f : yf) - 0.75f;  // feathered span: halfwidth 0.75
+  const float b = (y0f < yf ? yf : y0f) + 0.75f;
   uint16_t* col = w.flow_buf + x;
+  int lo = static_cast<int>(a);      // first candidate row (a >= -0.75 -> lo >= -1)
+  int hi = static_cast<int>(b + 1.0f);
+  if (lo < 0) lo = 0;
+  if (hi >= w.flow_h) hi = w.flow_h - 1;
   for (int yy = lo; yy <= hi; ++yy) {
-    if (yy >= 0 && yy < w.flow_h) col[yy * w.flow_stride] = color;
+    // Coverage of pixel row [yy-0.5, yy+0.5] by the span [a, b], 0..1.
+    float ov = (b < yy + 0.5f ? b : yy + 0.5f) - (a > yy - 0.5f ? a : yy - 0.5f);
+    if (ov <= 0.0f) continue;
+    if (ov > 1.0f) ov = 1.0f;
+    uint16_t* px = col + static_cast<size_t>(yy) * w.flow_stride;
+    if (ov >= 0.996f) {
+      *px = color;
+    } else {
+      *px = blend565(*px, color, static_cast<uint8_t>(ov * 255.0f + 0.5f));
+    }
   }
 }
 
@@ -132,10 +186,11 @@ void redraw_flow_from_ring(HomeWidgets& w) {
   w.flow_prev_y = -1;
   for (int x = 0; x < w.flow_w; ++x) {
     if (x == seam) w.flow_prev_y = -1;  // pen up: don't connect across the sweep seam
-    const int y = flow_row(ring[x], w.flow_h, w.flow_ymax);
+    const float y = flow_row(ring[x], w.flow_h, w.flow_ymax);
     clear_flow_column(w, x);
     // Scope mode: columns past the cursor belong to the previous sweep -> dim them.
     const uint16_t color = (w.flow_scope_mode && x > w.flow_cursor) ? dim : bright;
+    fill_flow_below(w, x, y, color);
     draw_flow_segment(w, x, y, color);
     w.flow_prev_y = y;
   }
@@ -1142,8 +1197,9 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
                      static_cast<size_t>(w.flow_w - 1) * sizeof(float));
         w.flow_weights[rx] = rw;
         w.flow_flows[rx] = rf;
-        const int y = flow_row(raw, w.flow_h, w.flow_ymax);
+        const float y = flow_row(raw, w.flow_h, w.flow_ymax);
         clear_flow_column(w, rx);
+        fill_flow_below(w, rx, y, bright);
         draw_flow_segment(w, rx, y, bright);
         w.flow_prev_y = y;
       }
@@ -1165,8 +1221,9 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
           scope_wrapped = true;
           w.flow_prev_y = -1;
         }
-        const int y = flow_row(raw, w.flow_h, w.flow_ymax);
+        const float y = flow_row(raw, w.flow_h, w.flow_ymax);
         clear_flow_column(w, c);
+        fill_flow_below(w, c, y, bright);
         draw_flow_segment(w, c, y, bright);
         w.flow_prev_y = y;
         for (int g = 1; g <= kFlowScopeGapPx; ++g) {  // blank gap just ahead of the head

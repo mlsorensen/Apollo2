@@ -6,6 +6,17 @@
 #include <lvgl.h>
 
 #include "platform_esp32/board_config.h"
+#if defined(BOARD_DISPLAY_DSI)
+#include <cstring>
+
+#include <esp_cache.h>
+#include <esp_lcd_mipi_dsi.h>
+#include <esp_lcd_panel_io.h>
+#include <esp_lcd_panel_ops.h>
+#include <esp_ldo_regulator.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+#endif
 #if defined(BOARD_HAS_IO_EXTENSION)
 #include <Wire.h>
 
@@ -82,6 +93,96 @@ const lcd_init_cmd_t kSt7701Init[] = {
     {0x11, (uint8_t[]){0x00}, 0, 120},
     {0x29, (uint8_t[]){0x00}, 0, 0},
 };
+
+// --- Double-buffered DPI scan-out ---------------------------------------
+// The DPI panel continuously scans a PSRAM framebuffer; blitting LVGL strips
+// into the live buffer mid-scan makes moving content (the flow graph) visibly
+// blink. So: two driver-owned framebuffers. LVGL stays in PARTIAL mode and we
+// rotate each strip into the BACK buffer; when the frame's last strip lands we
+// present it (zero-copy scan-out switch, latched by the driver at the next
+// frame boundary), wait one refresh event so the old front is off-glass, then
+// copy the frame's dirty rows front->back so the back buffer is current again.
+// This deliberately avoids LVGL's direct-mode dirty-sync (see the S3 4.3B
+// post-mortem below) — the bookkeeping here is ours and total.
+esp_lcd_panel_handle_t g_dpi_panel = nullptr;
+uint16_t* g_dsi_fb[2] = {nullptr, nullptr};
+int g_dsi_back = 1;   // driver scans fb0 after init; we render into fb1 first
+// Dirty portrait-row union of the in-flight frame. Portrait row == landscape x.
+int g_dirty_r1 = 1 << 30, g_dirty_r2 = -1;
+SemaphoreHandle_t g_dsi_refresh_sem = nullptr;
+// Deferred back-buffer sync: after presenting a frame we do NOT block for the
+// scan-out flip. The wait + dirty-row copy happen lazily at the start of the
+// NEXT frame — by then the frame boundary has almost always passed, so the
+// semaphore take is free and the copy overlaps otherwise-idle time instead of
+// sitting in the presented frame's flush path (measured: ~18ms -> ~2ms).
+bool g_sync_pending = false;
+int g_sync_r1 = 0, g_sync_r2 = -1;
+
+void dsi_sync_back_buffer() {
+  if (!g_sync_pending) return;
+  // The flip is latched at the frame boundary; make sure one has passed so the
+  // buffer we're about to write is genuinely off-glass.
+  xSemaphoreTake(g_dsi_refresh_sem, pdMS_TO_TICKS(50));
+  const size_t off = static_cast<size_t>(g_sync_r1) * board::kLcdNativeW;
+  const size_t bytes = static_cast<size_t>(g_sync_r2 - g_sync_r1 + 1) *
+                       board::kLcdNativeW * sizeof(uint16_t);
+  std::memcpy(g_dsi_fb[g_dsi_back] + off, g_dsi_fb[g_dsi_back ^ 1] + off, bytes);
+  esp_cache_msync(g_dsi_fb[g_dsi_back] + off, bytes,
+                  ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
+  g_sync_pending = false;
+}
+
+bool dsi_refresh_done_cb(esp_lcd_panel_handle_t, esp_lcd_dpi_panel_event_data_t*,
+                         void*) {
+  BaseType_t woken = pdFALSE;
+  xSemaphoreGiveFromISR(g_dsi_refresh_sem, &woken);
+  return woken == pdTRUE;
+}
+
+// LVGL flush for the DSI path. Rotates the landscape strip 90° into the back
+// framebuffer using the same mapping as Arduino_GFX rotation=1 (portrait row =
+// landscape x; portrait col = native_w-1 - landscape y), so orientation and the
+// touch calibration are unchanged.
+void dsi_flush_cb(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map) {
+  constexpr int fbw = board::kLcdNativeW;  // portrait width  (480)
+  constexpr int fbh = board::kLcdNativeH;  // portrait height (800)
+  const int w = lv_area_get_width(area);
+  const int h = lv_area_get_height(area);
+  const uint16_t* src = reinterpret_cast<uint16_t*>(px_map);
+  // Before the first write into the back buffer, finish the deferred sync from
+  // the previously presented frame (usually free — see dsi_sync_back_buffer).
+  dsi_sync_back_buffer();
+  uint16_t* fb = g_dsi_fb[g_dsi_back];
+  for (int j = 0; j < h; ++j) {
+    uint16_t* p = fb + static_cast<size_t>(area->x1) * fbw + (fbw - 1 - (area->y1 + j));
+    const uint16_t* s = src + static_cast<size_t>(j) * w;
+    for (int i = 0; i < w; ++i) {
+      *p = s[i];
+      p += fbw;
+    }
+  }
+  if (area->x1 < g_dirty_r1) g_dirty_r1 = area->x1;
+  if (area->x2 > g_dirty_r2) g_dirty_r2 = area->x2;
+
+  if (lv_display_flush_is_last(disp) && g_dirty_r2 >= g_dirty_r1) {
+    const int r1 = g_dirty_r1, r2 = g_dirty_r2;
+    // Present: draw_bitmap with a pointer inside the back framebuffer does no
+    // copy — the driver writes the touched rows back to PSRAM and switches
+    // scan-out to this buffer at the next frame boundary.
+    xSemaphoreTake(g_dsi_refresh_sem, 0);  // drain a stale refresh event
+    esp_lcd_panel_draw_bitmap(g_dpi_panel, 0, r1, fbw, r2 + 1,
+                              fb + static_cast<size_t>(r1) * fbw);
+    // Don't wait here: queue the wait + dirty-row sync for the start of the
+    // next frame, when the flip has long since latched.
+    g_dsi_back ^= 1;
+    g_sync_r1 = r1;
+    g_sync_r2 = r2;
+    g_sync_pending = true;
+    g_dirty_r1 = 1 << 30;
+    g_dirty_r2 = -1;
+  }
+  lv_display_flush_ready(disp);
+}
 #endif  // BOARD_DISPLAY_DSI
 
 void flush_cb(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map) {
@@ -100,24 +201,95 @@ namespace platform {
 
 bool Display::begin() {
 #if defined(BOARD_DISPLAY_DSI)
-  // MIPI-DSI panel (e.g. the P4 4.3"). Arduino_DSI_Display owns the esp_lcd DSI
-  // bus + DPI framebuffer (PSRAM) and pulses the reset GPIO itself; rotation=1
-  // maps the native-portrait panel to our landscape UI (same pattern as the
-  // 2-inch ST7789).
-  auto* dsipanel = new Arduino_ESP32DSIPanel(
-      board::kDsiHsyncPulse, board::kDsiHsyncBack, board::kDsiHsyncFront,
-      board::kDsiVsyncPulse, board::kDsiVsyncBack, board::kDsiVsyncFront,
-      board::kDsiDpiClockHz, board::kDsiLaneBitRateMbps);
-  g_gfx = new Arduino_DSI_Display(
-      board::kLcdNativeW, board::kLcdNativeH, dsipanel, board::kLcdRotation,
-      /*auto_flush=*/true, board::kLcdRst, kSt7701Init,
-      sizeof(kSt7701Init) / sizeof(kSt7701Init[0]));
-  if (!g_gfx->begin()) {
-    Serial.println("DSI: panel begin() FAILED (DSI bus / framebuffer alloc?)");
+  // MIPI-DSI panel (the P4 4.3"), direct esp_lcd — NOT Arduino_GFX — so the
+  // DPI layer can own TWO framebuffers (dsi_flush_cb above presents tear-free
+  // on the frame boundary). Sequence per the IDF DSI examples & Waveshare BSP:
+  // PHY LDO on -> DSI bus -> DBI channel for the ST7701 DCS init -> DPI panel.
+  esp_ldo_channel_handle_t ldo = nullptr;
+  esp_ldo_channel_config_t ldo_cfg = {};
+  ldo_cfg.chan_id = 3;  // LDO_VO3 feeds VDD_MIPI_DPHY on this board
+  ldo_cfg.voltage_mv = 2500;
+  if (esp_ldo_acquire_channel(&ldo_cfg, &ldo) != ESP_OK) {
+    Serial.println("DSI: MIPI PHY LDO acquire FAILED");
     return false;
   }
-  Serial.printf("DSI: panel up %dx%d\n", g_gfx->width(), g_gfx->height());
-  g_gfx->fillScreen(0x0000);
+
+  esp_lcd_dsi_bus_config_t bus_cfg = {};
+  bus_cfg.bus_id = 0;
+  bus_cfg.num_data_lanes = 2;
+  bus_cfg.phy_clk_src = MIPI_DSI_PHY_CLK_SRC_DEFAULT;
+  bus_cfg.lane_bit_rate_mbps = board::kDsiLaneBitRateMbps;
+  esp_lcd_dsi_bus_handle_t dsi_bus = nullptr;
+  if (esp_lcd_new_dsi_bus(&bus_cfg, &dsi_bus) != ESP_OK) {
+    Serial.println("DSI: bus create FAILED");
+    return false;
+  }
+
+  // Panel reset, then the vendor init table over the DCS (DBI) channel.
+  pinMode(board::kLcdRst, OUTPUT);
+  digitalWrite(board::kLcdRst, HIGH);
+  delay(10);
+  digitalWrite(board::kLcdRst, LOW);
+  delay(10);
+  digitalWrite(board::kLcdRst, HIGH);
+  delay(120);
+
+  esp_lcd_dbi_io_config_t dbi_cfg = {};
+  dbi_cfg.virtual_channel = 0;
+  dbi_cfg.lcd_cmd_bits = 8;
+  dbi_cfg.lcd_param_bits = 8;
+  esp_lcd_panel_io_handle_t dbi_io = nullptr;
+  if (esp_lcd_new_panel_io_dbi(dsi_bus, &dbi_cfg, &dbi_io) != ESP_OK) {
+    Serial.println("DSI: DBI io create FAILED");
+    return false;
+  }
+  for (size_t i = 0; i < sizeof(kSt7701Init) / sizeof(kSt7701Init[0]); ++i) {
+    esp_lcd_panel_io_tx_param(dbi_io, kSt7701Init[i].cmd, kSt7701Init[i].data,
+                              kSt7701Init[i].data_bytes);
+    if (kSt7701Init[i].delay_ms) delay(kSt7701Init[i].delay_ms);
+  }
+
+  esp_lcd_dpi_panel_config_t dpi_cfg = {};
+  dpi_cfg.virtual_channel = 0;
+  dpi_cfg.dpi_clk_src = MIPI_DSI_DPI_CLK_SRC_DEFAULT;
+  dpi_cfg.dpi_clock_freq_mhz = board::kDsiDpiClockHz / 1000000;
+  dpi_cfg.pixel_format = LCD_COLOR_PIXEL_FORMAT_RGB565;
+  dpi_cfg.num_fbs = 2;  // double buffer: scan one, render into the other
+  dpi_cfg.video_timing.h_size = board::kLcdNativeW;
+  dpi_cfg.video_timing.v_size = board::kLcdNativeH;
+  dpi_cfg.video_timing.hsync_pulse_width = board::kDsiHsyncPulse;
+  dpi_cfg.video_timing.hsync_back_porch = board::kDsiHsyncBack;
+  dpi_cfg.video_timing.hsync_front_porch = board::kDsiHsyncFront;
+  dpi_cfg.video_timing.vsync_pulse_width = board::kDsiVsyncPulse;
+  dpi_cfg.video_timing.vsync_back_porch = board::kDsiVsyncBack;
+  dpi_cfg.video_timing.vsync_front_porch = board::kDsiVsyncFront;
+  dpi_cfg.flags.use_dma2d = true;
+  if (esp_lcd_new_panel_dpi(dsi_bus, &dpi_cfg, &g_dpi_panel) != ESP_OK ||
+      esp_lcd_panel_init(g_dpi_panel) != ESP_OK) {
+    Serial.println("DSI: DPI panel create/init FAILED (framebuffer alloc?)");
+    return false;
+  }
+  if (esp_lcd_dpi_panel_get_frame_buffer(g_dpi_panel, 2, (void**)&g_dsi_fb[0],
+                                         (void**)&g_dsi_fb[1]) != ESP_OK) {
+    Serial.println("DSI: get framebuffers FAILED");
+    return false;
+  }
+  const size_t fb_bytes = static_cast<size_t>(board::kLcdNativeW) *
+                          board::kLcdNativeH * sizeof(uint16_t);
+  std::memset(g_dsi_fb[0], 0, fb_bytes);
+  std::memset(g_dsi_fb[1], 0, fb_bytes);
+  esp_cache_msync(g_dsi_fb[0], fb_bytes,
+                  ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
+  esp_cache_msync(g_dsi_fb[1], fb_bytes,
+                  ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
+
+  g_dsi_refresh_sem = xSemaphoreCreateBinary();
+  esp_lcd_dpi_panel_event_callbacks_t cbs = {};
+  cbs.on_refresh_done = dsi_refresh_done_cb;
+  esp_lcd_dpi_panel_register_event_callbacks(g_dpi_panel, &cbs, nullptr);
+
+  Serial.printf("DSI: panel up %dx%d, double-buffered\n", board::kLcdNativeH,
+                board::kLcdNativeW);
   // Backlight after the panel shows black: boost enable high, then PWM full.
   // NOTE: the PWM is ACTIVE-LOW on this board (see set_brightness) — duty 0
   // is full brightness.
@@ -175,8 +347,14 @@ bool Display::begin() {
   lv_init();
   lv_tick_set_cb(tick_cb);
 
+#if defined(BOARD_DISPLAY_DSI)
+  // Logical (rotated) size: the UI is landscape on a native-portrait panel.
+  const int w = board::kLcdNativeH;
+  const int h = board::kLcdNativeW;
+#else
   const int w = g_gfx->width();
   const int h = g_gfx->height();
+#endif
   const size_t buf_px = static_cast<size_t>(w) * kBufferLines;
   const size_t buf_bytes = buf_px * sizeof(lv_color_t);
 #if defined(BOARD_DISPLAY_RGB) || defined(BOARD_DISPLAY_DSI)
@@ -212,14 +390,23 @@ bool Display::begin() {
   if (g_draw_buf == nullptr) return false;
 
   lv_display_t* disp = lv_display_create(w, h);
+#if defined(BOARD_DISPLAY_DSI)
+  lv_display_set_flush_cb(disp, dsi_flush_cb);
+#else
   lv_display_set_flush_cb(disp, flush_cb);
+#endif
   lv_display_set_buffers(disp, g_draw_buf, nullptr, buf_bytes,
                          LV_DISPLAY_RENDER_MODE_PARTIAL);
   return true;
 }
 
+#if defined(BOARD_DISPLAY_DSI)
+int Display::width() const { return board::kLcdNativeH; }   // landscape UI
+int Display::height() const { return board::kLcdNativeW; }
+#else
 int Display::width() const { return g_gfx ? g_gfx->width() : 0; }
 int Display::height() const { return g_gfx ? g_gfx->height() : 0; }
+#endif
 
 void Display::set_brightness(int percent) {
   if (percent < 0) percent = 0;

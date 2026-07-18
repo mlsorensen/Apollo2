@@ -70,7 +70,7 @@ struct HomeWidgets {
   int flow_w = 0;             // plot width/height in px (canvas size)
   int flow_h = 0;
   int flow_stride = 0;        // buffer row pitch in pixels (>= flow_w)
-  int flow_prev_y = -1;      // previous sample's row (continuous line; -1 = pen up)
+  float flow_prev_y = -1.0f;  // previous sample's row, fractional (AA); -1 = pen up
   uint32_t flow_tick = 0;    // last advance timestamp (ms); 0 = uninitialized
   uint32_t flow_accum_ms = 0;  // fractional-pixel time bank
   bool flow_blanked = false;   // true while the plot is cleared (scale disconnected)
