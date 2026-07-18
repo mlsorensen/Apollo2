@@ -296,8 +296,14 @@ constexpr bool kTouchMirrorY = true;
 //     calibrated on hardware (a wrong divider could fake a low-battery deep-sleep)
 //     -> reports USB-powered. To enable: set kBatteryAdc = 20 and calibrate
 //     kBatteryDivider against a multimeter at the battery terminals. ---
-constexpr int   kBatteryAdc = -1;
-constexpr float kBatteryDivider = 3.0f;      // placeholder until measured
+// BAT_ADC per the schematic; divider is a PROVISIONAL ÷3 guess (Waveshare's
+// demos never read the battery, so there's no reference value). ÷3 is the
+// safe wrong guess: if the real divider is smaller we OVER-read (falls into
+// the no-cell/plug display path) rather than under-read into a spurious
+// low-battery deep-sleep. battery.cpp logs raw+scaled volts every ~10s on
+// this board — calibrate kBatteryDivider from that against a multimeter.
+constexpr int   kBatteryAdc = 20;
+constexpr float kBatteryDivider = 3.0f;
 constexpr int   kBatteryChargePin = -1;
 constexpr bool  kBatteryChargeActiveLow = true;
 constexpr float kBatteryFullVolts = 4.13f;

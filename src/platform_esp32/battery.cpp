@@ -53,7 +53,22 @@ core::BatteryState Battery::battery() const {
   constexpr int kSamples = 16;
   uint32_t mv_sum = 0;
   for (int i = 0; i < kSamples; ++i) mv_sum += analogReadMilliVolts(board::kBatteryAdc);
-  volts = (mv_sum / static_cast<float>(kSamples)) / 1000.0f * board::kBatteryDivider;
+  const float raw_mv = mv_sum / static_cast<float>(kSamples);
+  volts = raw_mv / 1000.0f * board::kBatteryDivider;
+
+#if defined(BOARD_WAVESHARE_P4_WIFI6_43)
+  // Bring-up calibration log (divider unverified on this board): compare the
+  // scaled volts against a multimeter on the pack, fix kBatteryDivider, then
+  // delete this block.
+  {
+    static uint32_t last_log_ms = 0;
+    if (millis() - last_log_ms > 10000) {
+      last_log_ms = millis();
+      Serial.printf("battery: adc raw=%.0fmV x%.2f -> %.2fV usb=%d\n", raw_mv,
+                    board::kBatteryDivider, volts, s.usb ? 1 : 0);
+    }
+  }
+#endif
 #endif
 
   // No cell: either no reading, or (on USB) the bare charge node floating above
