@@ -11,11 +11,18 @@
 namespace platform {
 
 namespace {
-const char kForm[] =
+// The portal serves ONE of these two pages per session (see Mode in the
+// header): the token page from Micra pairing, the WiFi page from WiFi settings.
+const char kPageHead[] =
     "<!DOCTYPE html><html><head><meta name=viewport "
     "content='width=device-width,initial-scale=1'></head>"
     "<body style='font-family:sans-serif;max-width:480px;margin:2em auto;padding:0 1em'>"
-    "<h2>Micra Remote</h2><p>Paste your machine's BLE token, then Save:</p>"
+    "<h2>Micra Remote</h2>";
+
+const char kPageTail[] = "</body></html>";
+
+const char kTokenPage[] =
+    "<p>Paste your machine's BLE token, then Save:</p>"
     "<p style='font-size:.82em;color:#888'>No token? Run the <b>lmtoken</b> tool "
     "on a computer to fetch it from your La Marzocco account.</p>"
     "<form id=f onsubmit='return submitTok()'>"
@@ -40,13 +47,21 @@ const char kForm[] =
     ".catch(function(){m.style.color='#c00';"
     "m.textContent='Could not reach the device \\u2014 try again.';});"
     "return false;}</script>"
-    // WiFi (optional): join a home network for automatic time (NTP). On save the
-    // device leaves this AP and connects to that network, so this page closes —
-    // the device screen then shows the connection status + its local IP.
+    // Point at the separate WiFi flow instead of offering it here: this page's
+    // AP closes the moment the Micra link connects, which would leave an
+    // embedded WiFi form dead on the phone.
     "<hr style='margin:2em 0'>"
-    "<h3>WiFi (optional)</h3>"
+    "<p style='font-size:.82em;color:#888'>To join your home WiFi for automatic "
+    "time, use <b>Settings &rarr; WiFi &rarr; Setup</b> on the device after "
+    "pairing &mdash; it opens its own setup page.</p>";
+
+// WiFi credentials page: join a home network for automatic time (NTP). On save
+// the device leaves this AP and connects to that network, so this page closes —
+// the device screen then shows the connection status + its local IP.
+const char kWifiPage[] =
+    "<h3>WiFi</h3>"
     "<p style='font-size:.9em'>Join your home WiFi for automatic time. The device "
-    "will leave this setup network and connect \\u2014 watch its screen for the "
+    "will leave this setup network and connect &mdash; watch its screen for the "
     "result and its local IP.</p>"
     "<form onsubmit='return submitWifi()'>"
     "<input id=ssid name='ssid' placeholder='Network name' autocomplete='off' "
@@ -71,8 +86,7 @@ const char kForm[] =
     ".catch(function(){m.style.color='#c00';"
     "m.textContent='Saved \\u2014 the device is leaving this network. Watch its "
     "screen.';});"
-    "return false;}</script>"
-    "</body></html>";
+    "return false;}</script>";
 
 // The token is a 32-byte value rendered as exactly 64 hex characters.
 bool looks_like_token(const String& t) {
@@ -90,7 +104,8 @@ bool looks_like_token(const String& t) {
 TokenSetup::TokenSetup(Config& config, MicraLink& link)
     : config_(config), link_(link) {}
 
-void TokenSetup::start() {
+void TokenSetup::start(Mode mode) {
+  mode_ = mode;      // an already-open portal switches pages on the next load
   if (active_) return;
   WiFi.mode(WIFI_AP);
   // Pin the AP IP + subnet (192.168.4.1/24) before bringing it up. Without this
@@ -130,7 +145,12 @@ void TokenSetup::handle() {
   if (stop_pending_ && millis() > stop_at_ms_) stop();
 }
 
-void TokenSetup::handle_root() { server_.send(200, "text/html", kForm); }
+void TokenSetup::handle_root() {
+  String page(kPageHead);
+  page += (mode_ == Mode::Token) ? kTokenPage : kWifiPage;
+  page += kPageTail;
+  server_.send(200, "text/html", page);
+}
 
 void TokenSetup::handle_save() {
   String token = server_.arg("token");
@@ -149,7 +169,8 @@ void TokenSetup::handle_save() {
   // connects (or the safety timeout fires).
   server_.send(200, "text/plain",
                "Saved. The device is connecting -- this page stays open in case "
-               "the token is wrong; you can paste a new one and Save again.");
+               "the token is wrong; you can paste a new one and Save again. Once "
+               "connected, the device closes this setup network.");
 }
 
 void TokenSetup::handle_wifi() {

@@ -47,7 +47,7 @@ void Provisioner::set_connect_enabled(bool enabled) { link_.set_connect_enabled(
 
 bool Provisioner::has_token() const { return !config_.token().empty(); }
 
-void Provisioner::start_token_setup() { token_setup_.start(); }
+void Provisioner::start_token_setup() { token_setup_.start(TokenSetup::Mode::Token); }
 
 void Provisioner::stop_token_setup() { token_setup_.stop(); }
 

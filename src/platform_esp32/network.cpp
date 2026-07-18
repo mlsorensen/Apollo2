@@ -158,7 +158,7 @@ void Network::set_enabled(bool on) {
 
 void Network::begin_setup_portal() {
   stop_station();          // free the radio for the AP
-  token_setup_.start();    // shared portal: token + WiFi credential form
+  token_setup_.start(TokenSetup::Mode::Wifi);  // credentials page (token has its own)
 }
 
 void Network::stop_setup_portal() {
