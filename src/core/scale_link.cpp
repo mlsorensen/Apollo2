@@ -178,8 +178,12 @@ ScaleSnapshot ScaleLink::snapshot() const {
 ScaleFeatures ScaleLink::features() const {
   std::lock_guard<std::mutex> lk(mutex_);
   if (driver_) return driver_->features();
-  return ScaleFeatures{
-      .tare = true, .flow = true, .timer = true, .battery = true, .beep = false};
+  return ScaleFeatures{.tare = true,
+                       .flow = true,
+                       .timer = true,
+                       .battery = true,
+                       .beep = false,
+                       .sleep = false};
 }
 
 void ScaleLink::tare() { pending_tare_.store(true); }

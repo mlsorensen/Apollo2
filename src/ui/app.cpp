@@ -518,6 +518,9 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(home_.power_btn, on_power_clicked, LV_EVENT_CLICKED, this);
   if (home_.tare_btn != nullptr)
     lv_obj_add_event_cb(home_.tare_btn, on_tare_clicked, LV_EVENT_CLICKED, this);
+  if (home_.scale_connect_btn != nullptr)  // in-card connect toggle (sleep/wake)
+    lv_obj_add_event_cb(home_.scale_connect_btn, on_scale_connect_clicked,
+                        LV_EVENT_CLICKED, this);
   if (home_.shot_btn != nullptr)
     lv_obj_add_event_cb(home_.shot_btn, on_shot_clicked, LV_EVENT_CLICKED, this);
   if (home_.flow_unit_btn != nullptr)
@@ -538,7 +541,8 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   battery_state_ = battery_->battery();
   update_home(home_, machine_->snapshot(), battery_state_, clock_->now(),
               clock_->use_24h(), display_->use_fahrenheit(), scale_->snapshot(),
-              brew_->snapshot(), net_status());
+              scale_->features(), scale_connect_enabled(), brew_->snapshot(),
+              net_status());
   update_battery_runtime(battery_state_);
 
   build_settings_tab(settings, screen, display_->supports_brightness(), settings_);
@@ -659,8 +663,8 @@ void App::refresh() {
     if (battery_ != nullptr) {
       battery_state_ = battery_->battery();
       update_home(home_, snap, battery_state_, clock_->now(), clock_->use_24h(),
-                  display_->use_fahrenheit(), scale_->snapshot(), brew_->snapshot(),
-                  net_status());
+                  display_->use_fahrenheit(), scale_->snapshot(), scale_->features(),
+                  scale_connect_enabled(), brew_->snapshot(), net_status());
       update_battery_runtime(battery_state_);
 
       // Critically-low pack (on battery, sustained) -> hand off to deep sleep.
@@ -838,7 +842,8 @@ void App::set_use_fahrenheit(bool on) {
     const core::MachineSnapshot snap = machine_->snapshot();
     update_temp_panels(snap);
     update_home(home_, snap, battery_state_, clock_->now(), clock_->use_24h(), on,
-                scale_->snapshot(), brew_->snapshot(), net_status());
+                scale_->snapshot(), scale_->features(), scale_connect_enabled(),
+                brew_->snapshot(), net_status());
     update_stats_view();
   }
 }

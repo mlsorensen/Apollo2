@@ -70,6 +70,11 @@ size_t encode(uint8_t type, const uint8_t* payload, size_t n, uint8_t* out) {
 
 class AcaiaDriver : public IScaleDriver {
  public:
+  // umbra_hint: the advertised name said UMBRA. Only used to answer features()
+  // truthfully before the first connect; once connected the GATT-detected
+  // generation is authoritative.
+  explicit AcaiaDriver(bool umbra_hint) : umbra_hint_(umbra_hint) {}
+
   const char* model() const override {
     switch (gen_) {
       case Gen::kUmbra: return "Acaia Umbra";
@@ -81,9 +86,14 @@ class AcaiaDriver : public IScaleDriver {
 
   ScaleFeatures features() const override {
     // Beep IS settable on the Umbra (encode(10,[0,7,v])) — off until the UI
-    // grows a control for it (phase 4 of the multi-scale plan).
-    return ScaleFeatures{
-        .tare = true, .flow = true, .timer = true, .battery = true, .beep = false};
+    // grows a control for it.
+    const bool umbra = gen_ == Gen::kUmbra || (gen_ == Gen::kUnknown && umbra_hint_);
+    return ScaleFeatures{.tare = true,
+                         .flow = true,
+                         .timer = true,
+                         .battery = true,
+                         .beep = false,
+                         .sleep = umbra};
   }
 
   const char* select_notify(ble::ICentral& ble) override {
@@ -262,6 +272,7 @@ class AcaiaDriver : public IScaleDriver {
   }
 
   Gen gen_ = Gen::kUnknown;
+  const bool umbra_hint_;
 
   // BLE notify thread only.
   uint8_t rx_[256];
@@ -276,8 +287,8 @@ class AcaiaDriver : public IScaleDriver {
 
 }  // namespace
 
-std::shared_ptr<IScaleDriver> make_acaia_driver() {
-  return std::make_shared<AcaiaDriver>();
+std::shared_ptr<IScaleDriver> make_acaia_driver(bool umbra_hint) {
+  return std::make_shared<AcaiaDriver>(umbra_hint);
 }
 
 }  // namespace core

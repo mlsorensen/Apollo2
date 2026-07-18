@@ -8,8 +8,8 @@
 
 namespace core {
 
-std::shared_ptr<IScaleDriver> make_bookoo_driver();  // scale_driver_bookoo.cpp
-std::shared_ptr<IScaleDriver> make_acaia_driver();   // scale_driver_acaia.cpp
+std::shared_ptr<IScaleDriver> make_bookoo_driver();                // scale_driver_bookoo.cpp
+std::shared_ptr<IScaleDriver> make_acaia_driver(bool umbra_hint);  // scale_driver_acaia.cpp
 
 namespace {
 
@@ -42,7 +42,7 @@ bool scale_name_supported(const char* name) {
 std::shared_ptr<IScaleDriver> make_scale_driver(const char* name) {
   if (name == nullptr) return nullptr;
   if (is_bookoo(name)) return make_bookoo_driver();
-  if (is_acaia(name)) return make_acaia_driver();
+  if (is_acaia(name)) return make_acaia_driver(has_prefix_ci(name, "UMBRA"));
   return nullptr;
 }
 
