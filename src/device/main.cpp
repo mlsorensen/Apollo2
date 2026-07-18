@@ -49,7 +49,7 @@ platform::DisplaySettings g_display_settings{g_display, g_config};
 platform::Clock g_clock{g_config};
 platform::Network g_network{g_config, g_clock, g_token_setup};  // WiFi station + NTP
 platform::History g_history;
-platform::ScaleLink g_scale;            // NimBLE Bluetooth scale (Bookoo Themis)
+platform::ScaleLink g_scale;            // NimBLE Bluetooth scale (Bookoo/Acaia)
 platform::ScaleProvisioner g_scale_provisioner{g_scale, g_config};
 // Brew-by-weight: paddle relay + shot state machine over the paddle + scale
 // ports (core logic; polled from loop()).

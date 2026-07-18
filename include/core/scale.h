@@ -20,6 +20,9 @@ struct ScaleFeatures {
   bool timer;    // reports a built-in shot timer
   bool battery;  // reports a battery charge level
   bool beep;     // beep on/off is settable
+  bool sleep;    // has a discoverable low-power sleep mode: dozes off some time
+                 // after a disconnect but keeps advertising, and CONNECTING
+                 // wakes it — the UI presents it as "sleeping", never as gone
 };
 
 // A flat, copyable snapshot of the scale's latest state (enough to draw one UI
