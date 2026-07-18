@@ -43,9 +43,11 @@ constexpr uint8_t kMsgGetStatus = 6;  // status request (battery lives there)
 constexpr uint8_t kMsgIdentify = 11;
 constexpr uint8_t kMsgEvent = 12;     // out: notification request; in: events
 
-// Incoming command ids + event subtypes.
+// Incoming command ids + event subtypes (event msgType = notif-request id + 5:
+// weight 0 -> 5, battery 1 -> 6, timer 2 -> 7).
 constexpr uint8_t kCmdStatus = 8;
 constexpr uint8_t kEventWeight = 5;
+constexpr uint8_t kEventBattery = 6;
 constexpr uint8_t kEventTimer = 7;
 
 constexpr uint32_t kHeartbeatMs = 2000;      // apollo's cadence (Lunar/Pyxis)
@@ -136,22 +138,28 @@ class AcaiaDriver : public IScaleDriver {
     const uint32_t silent_ms = now - last_rx_ms_.load();
 
     if (gen_ == Gen::kUmbra) {
-      // No heartbeat — liveness is the notify stream itself.
+      // No heartbeat AND no polling — goscale sends NOTHING to the Umbra after
+      // init, and neither do we. A 60 s get-status poll here made the scale
+      // blip a bogus constant weight (~-10 g for ~0.5 s, every poll, verified
+      // on HW); battery arrives as pushed kEventBattery events instead.
+      // Liveness is the notify stream itself.
       if (silent_ms > kUmbraSilenceMs) {
         logf("AcaiaDriver: %u ms of silence — reconnecting\n",
              static_cast<unsigned>(silent_ms));
         return false;
       }
-    } else if (static_cast<int32_t>(now - next_beat_ms_) >= 0) {
+      return true;
+    }
+
+    if (static_cast<int32_t>(now - next_beat_ms_) >= 0) {
       // Mandatory keepalive. Apollo's stall recovery: heartbeats acked but no
       // data flowing -> re-identify instead of waiting for a dead link.
       if (silent_ms > kStallMs) send_ident(ble);
       send_heartbeat(ble);
       next_beat_ms_ = now + kHeartbeatMs;
     }
-
     if (static_cast<int32_t>(now - next_status_ms_) >= 0) {
-      send_get_status(ble);  // battery refresh (status is the only source)
+      send_get_status(ble);  // battery refresh (goscale-lunar polls this too)
       next_status_ms_ = now + kStatusPollMs;
     }
     return true;
@@ -246,6 +254,8 @@ class AcaiaDriver : public IScaleDriver {
 
     if (event == kEventWeight && n >= 6) {
       sink.on_weight(decode_weight(p));
+    } else if (event == kEventBattery && n >= 1) {
+      sink.on_battery(p[0] & 0x7F);  // pushed by the scale (notif request id 1)
     } else if (event == kEventTimer && n >= 3) {
       sink.on_timer((p[0] * 60u + p[1]) * 1000u + p[2] * 100u);  // min, sec, tenths
     }
