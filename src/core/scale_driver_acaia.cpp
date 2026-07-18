@@ -274,9 +274,13 @@ class AcaiaDriver : public IScaleDriver {
     const size_t n = content_len - 1;
 
     if (event == kEventWeight && n >= 6) {
-      const float w = decode_weight(p);
-      if (w < -5.0f) log_frame("negative-weight frame", f, total);
-      sink.on_weight(w);
+      // Payload byte 5: bit0 unstable, bit1 negative, bits 2-7 the weight
+      // TYPE. Publish only type 0 (net — what the scale's display shows).
+      // Root-caused on HW: the Umbra emits a type-3 housekeeping reading
+      // (zero-tracking offset, ~-10 g) every 60 s sharp — frame
+      // EF DD 0C 08 05 53 00 00 00 01 0F 5C 14, checksum valid — which,
+      // published as live weight, blipped the chart + flow rate.
+      if ((p[5] >> 2) == 0) sink.on_weight(decode_weight(p));
     } else if (event == kEventBattery && n >= 1) {
       sink.on_battery(p[0] & 0x7F);  // pushed by the scale (notif request id 1)
     } else if (event == kEventTimer && n >= 3) {
