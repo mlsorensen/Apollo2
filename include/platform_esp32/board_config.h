@@ -306,7 +306,9 @@ constexpr int   kBatteryAdc = 20;
 constexpr float kBatteryDivider = 3.0f;
 constexpr int   kBatteryChargePin = -1;
 constexpr bool  kBatteryChargeActiveLow = true;
-constexpr float kBatteryFullVolts = 4.13f;
+// A fresh-off-charger pack read 97% against 4.13 -> it rests ~4.10-4.11 full
+// on this board's charger; anchor there so full shows 100%.
+constexpr float kBatteryFullVolts = 4.10f;
 constexpr float kBatteryEmptyVolts = 3.40f;
 constexpr float kBatteryCutoffVolts = 3.40f;
 constexpr float kBatteryResumeVolts = 3.70f;
