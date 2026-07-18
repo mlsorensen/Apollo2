@@ -127,9 +127,12 @@ void fill_flow_below(HomeWidgets& w, int x, float yf, uint16_t trace_color) {
 // in the column). Sub-pixel motion then reads as intensity easing instead of the
 // line snapping a whole pixel per step.
 void draw_flow_segment(HomeWidgets& w, int x, float yf, uint16_t color) {
+  // Line thickness: the trace reads as ~2*halfwidth px (solid core + one
+  // feathered row each side).
+  constexpr float kHalfWidth = 1.25f;
   const float y0f = (w.flow_prev_y < 0.0f) ? yf : w.flow_prev_y;
-  const float a = (y0f < yf ? y0f : yf) - 0.75f;  // feathered span: halfwidth 0.75
-  const float b = (y0f < yf ? yf : y0f) + 0.75f;
+  const float a = (y0f < yf ? y0f : yf) - kHalfWidth;
+  const float b = (y0f < yf ? yf : y0f) + kHalfWidth;
   uint16_t* col = w.flow_buf + x;
   int lo = static_cast<int>(a);      // first candidate row (a >= -0.75 -> lo >= -1)
   int hi = static_cast<int>(b + 1.0f);
