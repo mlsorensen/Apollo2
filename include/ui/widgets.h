@@ -16,6 +16,10 @@ namespace ui {
 // or after buttons are built.
 void set_button_press_hook(std::function<void()> hook);
 
+// Fire the press hook manually — for buttons NOT built by make_button (e.g.
+// the tabview's own tab-bar buttons) that should still give press feedback.
+void play_button_press();
+
 // Our button: an LVGL button with the default theme's (unthemed, blueish) drop
 // shadow removed. Use this instead of lv_button_create everywhere.
 lv_obj_t* make_button(lv_obj_t* parent);

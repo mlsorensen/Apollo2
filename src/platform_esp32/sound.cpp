@@ -10,6 +10,10 @@
 #include <cmath>
 
 #include "driver/i2s_std.h"
+#include "esp_heap_caps.h"
+#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "platform_esp32/io_extension.h"
 
 // ES8311 codec bring-up, DAC path only. The register sequence is distilled
@@ -103,6 +107,13 @@ void codec_start() {
   es_write(0x31, es_read(0x31) & 0x9F);  // unmute
 }
 
+// The I2S engine runs ONLY while a click is playing. Idle, the channel is
+// disabled — no MCLK/BCLK toggling, no DMA traffic, no per-descriptor
+// interrupts — because this board's BLE has proven sensitive to standing
+// internal-RAM/bus load (a continuously-clocking I2S broke Micra + scale
+// connects outright on first bring-up). click() enables the channel, queues
+// the pre-rendered tick, and arms a one-shot esp_timer that disables the
+// channel again once the tail has drained.
 class Es8311Sound : public core::ISound {
  public:
   void begin() {
@@ -113,11 +124,13 @@ class Es8311Sound : public core::ISound {
       return;
     }
 
-    // I2S first so MCLK/BCLK are running (and silence is streaming) before the
-    // codec starts its DAC.
     i2s_chan_config_t chan_cfg =
         I2S_CHANNEL_DEFAULT_CONFIG(static_cast<i2s_port_t>(kAudioI2sPort), I2S_ROLE_MASTER);
     chan_cfg.auto_clear = true;  // underrun plays silence, never loops the click
+    // Just enough DMA to hold one whole click, so a write never blocks: 4 x 180
+    // frames = 720 >= kClickFrames (~617). Roughly half the default footprint.
+    chan_cfg.dma_desc_num = 4;
+    chan_cfg.dma_frame_num = 180;
     if (i2s_new_channel(&chan_cfg, &tx_, nullptr) != ESP_OK) return;
     i2s_std_config_t std_cfg = {
         .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(kRate),  // MCLK = 256 * fs
@@ -133,7 +146,8 @@ class Es8311Sound : public core::ISound {
         },
     };
     if (i2s_channel_init_std_mode(tx_, &std_cfg) != ESP_OK) return;
-    if (i2s_channel_enable(tx_) != ESP_OK) return;
+    // NOT enabled here — see click(). The codec keeps its register config with
+    // the clocks stopped and picks the stream back up when they return.
 
     codec_open();
     codec_set_fs();
@@ -144,8 +158,12 @@ class Es8311Sound : public core::ISound {
     io_extension().set(kIoExtPaEnable, true);
 
     // Pre-render the click: a short decaying sine tick, same sample in both
-    // slots (the codec takes the left).
-    click_ = static_cast<int16_t*>(malloc(sizeof(int16_t) * 2 * kClickFrames));
+    // slots (the codec takes the left). PSRAM — i2s_channel_write copies into
+    // the DMA descriptors, so the source needn't be DMA-capable.
+    click_ = static_cast<int16_t*>(
+        heap_caps_malloc(sizeof(int16_t) * 2 * kClickFrames,
+                         MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (click_ == nullptr) click_ = static_cast<int16_t*>(malloc(sizeof(int16_t) * 2 * kClickFrames));
     if (click_ == nullptr) return;
     for (int i = 0; i < kClickFrames; ++i) {
       const float t = static_cast<float>(i) / kRate;
@@ -155,21 +173,51 @@ class Es8311Sound : public core::ISound {
       click_[2 * i] = v;
       click_[2 * i + 1] = v;
     }
+
+    lock_ = xSemaphoreCreateMutex();
+    const esp_timer_create_args_t targs = {
+        .callback = &Es8311Sound::idle_cb,
+        .arg = this,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "snd_idle",
+        .skip_unhandled_events = true,
+    };
+    if (esp_timer_create(&targs, &idle_timer_) != ESP_OK) return;
     ok_ = true;
-    log_i("sound: ES8311 up (44.1 kHz, click %d frames)", kClickFrames);
+    log_i("sound: ES8311 up (44.1 kHz, click %d frames, on-demand I2S)", kClickFrames);
   }
 
   bool available() const override { return ok_; }
 
   void click() override {
     if (!ok_) return;
-    size_t written = 0;  // fits the DMA buffers; returns without blocking
-    i2s_channel_write(tx_, click_, sizeof(int16_t) * 2 * kClickFrames, &written, 30);
+    xSemaphoreTake(lock_, portMAX_DELAY);
+    if (!running_ && i2s_channel_enable(tx_) == ESP_OK) running_ = true;
+    if (running_) {
+      size_t written = 0;  // fits the DMA buffers; returns without blocking
+      i2s_channel_write(tx_, click_, sizeof(int16_t) * 2 * kClickFrames, &written, 30);
+      esp_timer_stop(idle_timer_);  // (re)arm the stop for after the tail drains
+      esp_timer_start_once(idle_timer_, 250 * 1000);
+    }
+    xSemaphoreGive(lock_);
   }
 
  private:
+  static void idle_cb(void* arg) {
+    auto* self = static_cast<Es8311Sound*>(arg);
+    xSemaphoreTake(self->lock_, portMAX_DELAY);
+    if (self->running_) {
+      i2s_channel_disable(self->tx_);
+      self->running_ = false;
+    }
+    xSemaphoreGive(self->lock_);
+  }
+
   i2s_chan_handle_t tx_ = nullptr;
   int16_t* click_ = nullptr;
+  esp_timer_handle_t idle_timer_ = nullptr;
+  SemaphoreHandle_t lock_ = nullptr;
+  bool running_ = false;  // guarded by lock_
   bool ok_ = false;
 };
 

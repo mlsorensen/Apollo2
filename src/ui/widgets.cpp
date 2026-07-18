@@ -20,6 +20,10 @@ void set_button_press_hook(std::function<void()> hook) {
   g_press_hook = std::move(hook);
 }
 
+void play_button_press() {
+  if (g_press_hook) g_press_hook();
+}
+
 lv_obj_t* make_button(lv_obj_t* parent) {
   lv_obj_t* btn = lv_button_create(parent);
   lv_obj_set_style_shadow_width(btn, 0, 0);  // drop LVGL's default drop shadow
