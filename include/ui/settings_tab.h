@@ -78,6 +78,7 @@ struct SettingsWidgets {
   lv_obj_t* scope_graph_switch = nullptr;    // on = oscilloscope sweep, off = scroll
   lv_obj_t* perf_overlay_switch = nullptr;   // on = show LVGL FPS/CPU overlay
   lv_obj_t* restart_btn = nullptr;           // soft reboot (display-glitch escape hatch)
+  lv_obj_t* auto_connect_switch = nullptr;   // Micra: connect to saved machine at boot
 
   // --- Brew temp stepper (continuous, tenths) ------------------------------
   lv_obj_t* brew_minus = nullptr;

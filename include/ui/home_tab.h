@@ -104,6 +104,12 @@ struct HomeWidgets {
   int flow_hist_n = 0;                // valid entries
   int flow_hist_head = 0;             // next write slot
   uint32_t flow_hist_last_ms = 0;     // last sample time
+  // Stream-rate probe (scales stream at ~2..20Hz): EMA of the interval between
+  // scale updates (snapshot.seq ticks). Sizes the derivative window so slow
+  // scales still get multiple updates per window.
+  uint32_t flow_seq_seen = 0;
+  uint32_t flow_evt_last_ms = 0;
+  float flow_evt_interval_ms = 100.0f;  // seeded at the Bookoo's 10Hz
   float* flow_weights = nullptr;      // per-column weight (g) ring (freed by App)
   float* flow_flows = nullptr;        // per-column flow rate (g/s) ring (freed by App)
   float flow_ymax = 6.0f;             // current axis full-scale
@@ -115,6 +121,29 @@ struct HomeWidgets {
   // single "60 s window" caption shown in scope mode instead.
   lv_obj_t* flow_xlabels[4] = {nullptr, nullptr, nullptr, nullptr};
   lv_obj_t* flow_xspan_label = nullptr;
+
+  // Shot plot (dynamic X): while a shot runs, the graph leaves the sweep and
+  // plots time-stamped shot samples with x = t/window, the window growing from
+  // kShotMinWindow to the 45s cap as the shot lengthens — a 30s shot uses the
+  // full width at maximum resolution. Fully redrawn per new sample (~7Hz).
+  static constexpr int kShotCap = 450;  // 450 x 100ms = the 45s cap
+  float shot_weights[kShotCap] = {};    // g at each sample
+  float shot_flows[kShotCap] = {};      // g/s at each sample (post drop-negative)
+  uint32_t shot_ts[kShotCap] = {};      // ms since shot_t0
+  int shot_n = 0;                       // valid samples (ring past the cap)
+  int shot_head = 0;                    // next write slot
+  bool flow_shot_plot = false;          // true = shot plot owns the canvas
+  uint32_t shot_t0 = 0;                 // lv_tick at shot start
+  uint32_t shot_elapsed_ms = 0;         // frozen at review; drives the X window
+  uint32_t shot_last_sample_ms = 0;
+  // Incremental painting state: while the time->x mapping is stable (window
+  // snaps in 5s steps), new samples only append right-edge columns; a full
+  // repaint happens only on a snap or Y rescale.
+  int shot_x_painted = -1;              // rightmost painted column
+  int shot_si = 0;                      // sample cursor for the column sweep
+  uint32_t shot_map_window_ms = 0;      // mapping of the painted columns
+  uint32_t shot_map_tstart_ms = 0;
+  uint32_t shot_seq_seen = 0;           // event-locked sampling (snapshot.seq)
 
   // Charging animation: a looping battery-fill icon (no percent — terminal
   // voltage under charge is charger-dependent). The timer advances the frame.
@@ -179,5 +208,15 @@ void reset_flow_graph(HomeWidgets& w);
 // becomes discontinuous (a tare re-zeroes it; a disconnect ends it). The rate
 // then reads 0 briefly while the window re-warms.
 void reset_flow_history(HomeWidgets& w);
+
+// Enter/leave the shot plot (dynamic X — see the kShot* fields). begin clears
+// the plot and starts collecting; end returns the canvas to the live sweep.
+void begin_shot_plot(HomeWidgets& w);
+void end_shot_plot(HomeWidgets& w);
+
+// Advance the shot plot: sample the scale, grow the X window, redraw. Called
+// from the same fast path as flow_graph_tick while a shot runs/settles (the
+// review freeze simply stops calling it).
+void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale);
 
 }  // namespace ui

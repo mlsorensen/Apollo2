@@ -22,6 +22,7 @@ constexpr char kTargetKey[] = "tgtg";
 constexpr char kShotModeKey[] = "shotmode";
 constexpr char kOvershootKey[] = "ovshoot";
 constexpr char kReviewHoldKey[] = "revhold";
+constexpr char kAutoConnectKey[] = "autoconn";
 constexpr char kWifiEnKey[] = "wifi_en";
 constexpr char kWifiSsidKey[] = "ssid";
 constexpr char kWifiPassKey[] = "wifipass";
@@ -126,6 +127,21 @@ void Config::set_overshoot_g(float grams) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putFloat(kOvershootKey, grams);
+  p.end();
+}
+
+bool Config::auto_connect() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
+  const bool v = p.isKey(kAutoConnectKey) ? p.getBool(kAutoConnectKey, false) : false;
+  p.end();
+  return v;
+}
+
+void Config::set_auto_connect(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kAutoConnectKey, on);
   p.end();
 }
 

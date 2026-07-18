@@ -82,7 +82,7 @@ class BrewController : public IBrewController {
   static constexpr uint32_t kSensePeriodMs = 25;      // paddle poll (edge latency)
   static constexpr uint32_t kBaselineDelayMs = 1200;  // tare settle before baseline
   static constexpr float kPreTaredG = 0.5f;           // |weight| under this = already tared
-  static constexpr uint32_t kSettleMs = 5000;         // drip tail before the freeze
+  static constexpr uint32_t kSettleMs = 3000;         // drip tail before the freeze
   static constexpr float kOvershootLearnRate = 0.5f;  // fraction of the error absorbed per shot
   static constexpr float kOvershootMaxG = 8.0f;       // sanity clamp (0..max)
 };

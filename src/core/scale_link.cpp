@@ -79,6 +79,7 @@ void ScaleLink::publish_sample(float weight_g, uint32_t timer_ms, int battery_pc
   timer_ms_ = timer_ms;
   battery_pct_ = battery_pct;
   battery_valid_ = true;
+  ++seq_;  // stream-rate probe: one tick per received update
 }
 
 void ScaleLink::run() {
@@ -163,6 +164,7 @@ ScaleSnapshot ScaleLink::snapshot() const {
       .timer_ms = timer_ms_,
       .battery_valid = battery_valid_,
       .battery_pct = battery_pct_,
+      .seq = seq_,
   };
 }
 

@@ -21,7 +21,11 @@ void page_column(lv_obj_t* page, bool compact) {
   lv_obj_set_flex_flow(page, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_style_pad_all(page, compact ? 8 : 12, 0);
   lv_obj_set_style_pad_row(page, compact ? 8 : 12, 0);
-  lv_obj_set_style_bg_opa(page, LV_OPA_TRANSP, 0);
+  // OPAQUE page background (same color as the screen, so visually identical):
+  // a transparent scrollable forces LVGL to re-render every layer beneath it
+  // on each scroll frame — the bulk of the settings-scroll CPU cost.
+  lv_obj_set_style_bg_color(page, lv_color_hex(ui::theme::bg()), 0);
+  lv_obj_set_style_bg_opa(page, LV_OPA_COVER, 0);
 }
 
 // Connection panel (saved row + Scan + status + results list), shared by Micra
@@ -378,7 +382,14 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
                          &out.saved_label, &out.setup_btn, &out.connect_btn,
                          &out.connect_label, &out.forget_btn, &out.scan_btn,
                          &out.status, &out.list, "Tap Scan to find your machine");
-  // Micra > Settings: brew + steam boiler
+  // Micra > Settings: connection behavior + brew + steam boiler
+  {
+    // Connect to the saved machine at power-up. Off by default: a connected
+    // remote occupies the Micra's single BLE slot.
+    lv_obj_t* ra = make_setting_row(out.micra_settings_page, "Auto connect", font);
+    out.auto_connect_switch = lv_switch_create(ra);
+    lv_obj_set_size(out.auto_connect_switch, btn_size + 8, btn_size / 2 + 6);
+  }
   section_label(out.micra_settings_page, "Brew", font);
   {
     lv_obj_t* r = make_setting_row(out.micra_settings_page, "Temperature", font);

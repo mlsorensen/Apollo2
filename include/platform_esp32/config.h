@@ -35,6 +35,8 @@ class Config {
   void set_overshoot_g(float grams);
   int review_hold_s() const;           // shot-review linger before auto-reset (default 30)
   void set_review_hold_s(int seconds);
+  bool auto_connect() const;           // connect to the saved Micra at boot (default false)
+  void set_auto_connect(bool on);
 
   int brightness() const;     // screen brightness 0..100 (default 100)
   void set_brightness(int percent);

@@ -19,6 +19,7 @@ class FakeScale : public core::IScale {
         .timer_ms = 27000,
         .battery_valid = true,
         .battery_pct = 78,
+        .seq = 1,
     };
   }
   core::ScaleFeatures features() const override {

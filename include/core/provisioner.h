@@ -46,6 +46,11 @@ class IProvisioner {
   virtual bool connect_enabled() const = 0;
   virtual void set_connect_enabled(bool enabled) = 0;
 
+  // Auto-connect on boot (persisted). Default off: a connected remote occupies
+  // the Micra's single BLE slot, so grabbing it at power-up is opt-in.
+  virtual bool auto_connect() const = 0;
+  virtual void set_auto_connect(bool on) = 0;
+
   // --- Token setup (WiFi portal) ---
   virtual bool has_token() const = 0;          // is a token saved for the machine?
   virtual void start_token_setup() = 0;        // bring up the WiFi paste page

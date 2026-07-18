@@ -27,9 +27,17 @@ constexpr int kFlowStepPx = 1;
 // We derive flow ourselves as the rate of weight gain (scales reliably stream
 // weight, not flow). Measure it over this window of the weight history so per-
 // sample jitter averages out instead of producing a spiky line.
-constexpr uint32_t kFlowRateWindowMs = 1500;  // trailing derivative window
+// 750ms window: ~7 scale events at the Bookoo's 10Hz — enough that any real
+// flow spans multiple resolution steps (no fake zero-dips down to ~0.13 g/s),
+// while reacting twice as fast as the earlier 1.5s window.
+constexpr uint32_t kFlowRateWindowMs = 750;   // trailing derivative window
 constexpr uint32_t kFlowHistSampleMs = 50;    // weight-history sampling cadence
 constexpr float kFlowMinSpanS = 0.4f;         // need this much history for a rate
+constexpr uint32_t kShotSampleMs = 100;       // shot-plot cadence == scale event rate
+constexpr uint32_t kShotMinWindowMs = 10000;  // shot plot's smallest X window
+constexpr uint32_t kShotWindowStepMs = 5000;  // window grows in snaps (stable mapping
+                                              // between snaps -> cheap edge painting)
+constexpr uint32_t kShotSlideStepMs = 2000;   // past the cap, the slide also snaps
 // Oscilloscope mode: blank columns kept just ahead of the write head so the sweep
 // point reads clearly (fresh trace behind it, gap in front).
 constexpr int kFlowScopeGapPx = 4;
@@ -1208,6 +1216,247 @@ void reset_flow_history(HomeWidgets& w) {
   w.flow_hist_last_ms = 0;
 }
 
+// Sample the weight into the rate history and return the current flow rate
+// (trailing-window derivative + drop-negative policy — see the kFlowHist*
+// comment in the header). Shared by the live sweep and the shot plot. The
+// window adapts to the OBSERVED stream rate: ~5 updates wide, floored at
+// kFlowRateWindowMs (fast scales) so slow scales don't re-admit quantization
+// dips.
+static float update_flow_rate(HomeWidgets& w, const core::ScaleSnapshot& scale,
+                              uint32_t now) {
+  const float rw = scale.weight_g;
+  // Stream-rate EMA, fed by seq ticks (true update rate, not value changes).
+  if (scale.seq != w.flow_seq_seen) {
+    if (w.flow_seq_seen != 0 && w.flow_evt_last_ms != 0) {
+      const uint32_t dt = now - w.flow_evt_last_ms;
+      if (dt > 0 && dt < 2000)
+        w.flow_evt_interval_ms += 0.2f * (static_cast<float>(dt) - w.flow_evt_interval_ms);
+    }
+    w.flow_seq_seen = scale.seq;
+    w.flow_evt_last_ms = now;
+  }
+  uint32_t window_ms = static_cast<uint32_t>(5.0f * w.flow_evt_interval_ms);
+  if (window_ms < kFlowRateWindowMs) window_ms = kFlowRateWindowMs;
+  if (window_ms > 3000) window_ms = 3000;  // history ring holds 3.2s
+
+  if (w.flow_hist_n == 0 || now - w.flow_hist_last_ms >= kFlowHistSampleMs) {
+    w.flow_hist_t[w.flow_hist_head] = now;
+    w.flow_hist_w[w.flow_hist_head] = rw;
+    w.flow_hist_head = (w.flow_hist_head + 1) % ui::HomeWidgets::kFlowHistCap;
+    if (w.flow_hist_n < ui::HomeWidgets::kFlowHistCap) ++w.flow_hist_n;
+    w.flow_hist_last_ms = now;
+  }
+  float rf = 0.0f;
+  int ref = -1;
+  for (int i = 0; i < w.flow_hist_n; ++i) {
+    const int idx = (w.flow_hist_head - w.flow_hist_n + i +
+                     2 * ui::HomeWidgets::kFlowHistCap) %
+                    ui::HomeWidgets::kFlowHistCap;
+    ref = idx;
+    if (now - w.flow_hist_t[idx] <= window_ms) break;
+  }
+  if (ref >= 0) {
+    const float span_s = (now - w.flow_hist_t[ref]) / 1000.0f;
+    if (span_s >= kFlowMinSpanS) rf = (rw - w.flow_hist_w[ref]) / span_s;
+  }
+  if (w.flow_drop_negative) { if (rf < 0.0f) rf = 0.0f; }
+  else if (rf < 0.0f) rf = -rf;   // show outflow as positive activity when not dropping
+  return rf;
+}
+
+// ---- Shot plot (dynamic X) --------------------------------------------------
+// While a shot runs, the plot maps TIME to X: window = clamp(elapsed,
+// kShotMinWindowMs, kFlowWindowS) across the full width, so a young shot gets
+// maximum horizontal resolution and the trace compresses as it lengthens;
+// past the cap the window slides. Fully redrawn per sample (~7Hz).
+
+// Snapped time->x mapping (see kShotWindowStepMs): stable between snaps so
+// painting is incremental almost always.
+static uint32_t shot_window_of(uint32_t elapsed) {
+  if (elapsed <= kShotMinWindowMs) return kShotMinWindowMs;
+  uint32_t win =
+      ((elapsed + kShotWindowStepMs - 1) / kShotWindowStepMs) * kShotWindowStepMs;
+  const uint32_t cap = static_cast<uint32_t>(kFlowWindowS) * 1000u;
+  return win > cap ? cap : win;
+}
+static uint32_t shot_tstart_of(uint32_t elapsed, uint32_t window) {
+  if (elapsed <= window) return 0;
+  return ((elapsed - window + kShotSlideStepMs - 1) / kShotSlideStepMs) *
+         kShotSlideStepMs;  // sliding (past the cap) also snaps
+}
+
+// Paint columns x0..x1 under the given mapping, advancing the sample cursor
+// (w.shot_si) and the pen (w.flow_prev_y) — callable incrementally.
+static void shot_plot_paint_columns(HomeWidgets& w, int x0, int x1, uint32_t window,
+                                    uint32_t t_start) {
+  const float* vals = (w.flow_mode == 1) ? w.shot_weights : w.shot_flows;
+  auto sample_idx = [&w](int i) {
+    return (w.shot_head - w.shot_n + i + 2 * ui::HomeWidgets::kShotCap) %
+           ui::HomeWidgets::kShotCap;
+  };
+  const uint16_t bright = flow_bright_color();
+  const uint32_t t_last = w.shot_n > 0 ? w.shot_ts[sample_idx(w.shot_n - 1)] : 0;
+  for (int x = x0; x <= x1; ++x) {
+    const uint32_t t =
+        t_start + static_cast<uint32_t>(static_cast<uint64_t>(window) *
+                                        static_cast<uint32_t>(x) /
+                                        static_cast<uint32_t>(w.flow_w - 1));
+    clear_flow_column(w, x);
+    if (w.shot_n == 0 || t > t_last) {
+      w.flow_prev_y = -1.0f;  // beyond the recorded trace: bare grid
+      continue;
+    }
+    while (w.shot_si + 1 < w.shot_n && w.shot_ts[sample_idx(w.shot_si + 1)] <= t)
+      ++w.shot_si;
+    const int i0 = sample_idx(w.shot_si);
+    float v = vals[i0];
+    if (w.shot_si + 1 < w.shot_n) {  // linear interpolation to the next sample
+      const int i1 = sample_idx(w.shot_si + 1);
+      const uint32_t t0 = w.shot_ts[i0], t1 = w.shot_ts[i1];
+      if (t1 > t0 && t >= t0) {
+        const float f = static_cast<float>(t - t0) / static_cast<float>(t1 - t0);
+        v = vals[i0] + (vals[i1] - vals[i0]) * f;
+      }
+    }
+    const float y = flow_row(v, w.flow_h, w.flow_ymax);
+    fill_flow_below(w, x, y, bright);
+    draw_flow_segment(w, x, y, bright);
+    w.flow_prev_y = y;
+  }
+}
+
+// The rightmost column covered by recorded samples under a mapping.
+static int shot_edge_col(const HomeWidgets& w, uint32_t window, uint32_t t_start) {
+  const uint32_t t_rel = w.shot_elapsed_ms > t_start ? w.shot_elapsed_ms - t_start : 0;
+  int x = static_cast<int>(static_cast<uint64_t>(t_rel) *
+                           static_cast<uint32_t>(w.flow_w - 1) / window);
+  if (x > w.flow_w - 1) x = w.flow_w - 1;
+  return x;
+}
+
+// Full repaint: re-fit the Y axis over the visible samples, repaint everything,
+// stamp the mapping, whole-canvas invalidate. Used on window snaps, rescales,
+// and the mode toggle; the per-sample path is incremental (shot_plot_tick).
+static void shot_plot_redraw_full(HomeWidgets& w) {
+  if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_w <= 1) return;
+  const uint32_t window = shot_window_of(w.shot_elapsed_ms);
+  const uint32_t t_start = shot_tstart_of(w.shot_elapsed_ms, window);
+  w.shot_map_window_ms = window;
+  w.shot_map_tstart_ms = t_start;
+
+  const float* vals = (w.flow_mode == 1) ? w.shot_weights : w.shot_flows;
+  auto sample_idx = [&w](int i) {
+    return (w.shot_head - w.shot_n + i + 2 * ui::HomeWidgets::kShotCap) %
+           ui::HomeWidgets::kShotCap;
+  };
+  // Y range over the visible samples (grow immediately, shrink with the same
+  // half-scale hysteresis as the sweep so the axis doesn't pulse).
+  float wmax = 0.0f;
+  for (int i = 0; i < w.shot_n; ++i) {
+    const int idx = sample_idx(i);
+    if (w.shot_ts[idx] < t_start) continue;
+    if (vals[idx] > wmax) wmax = vals[idx];
+  }
+  const float want = flow_nice_max(w.flow_mode, wmax);
+  if (want > w.flow_ymax || (want < w.flow_ymax && wmax < w.flow_ymax * 0.5f)) {
+    w.flow_ymax = want;
+    set_flow_ylabels(w);
+  }
+
+  w.shot_si = 0;
+  w.flow_prev_y = -1.0f;
+  shot_plot_paint_columns(w, 0, w.flow_w - 1, window, t_start);
+  w.shot_x_painted = shot_edge_col(w, window, t_start);
+  lv_obj_invalidate(w.flow_canvas);
+
+  if (w.flow_xspan_label != nullptr) {
+    lv_label_set_text_fmt(w.flow_xspan_label, "%u s window",
+                          static_cast<unsigned>((window + 500) / 1000));
+  }
+}
+
+void begin_shot_plot(HomeWidgets& w) {
+  if (w.flow_canvas == nullptr) return;
+  reset_flow_graph(w);
+  w.flow_shot_plot = true;
+  w.shot_n = 0;
+  w.shot_head = 0;
+  w.shot_t0 = lv_tick_get();
+  w.shot_elapsed_ms = 0;
+  w.shot_last_sample_ms = 0;
+  w.shot_x_painted = -1;  // first tick paints full
+  w.shot_si = 0;
+  w.shot_map_window_ms = 0;
+  w.shot_map_tstart_ms = 0;
+  // X labels: the shot plot's x maps time-from-shot-start, so the scroll
+  // style's age ticks would lie — show the single window caption regardless
+  // of the sweep style.
+  for (lv_obj_t* l : w.flow_xlabels)
+    if (l != nullptr) lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN);
+  if (w.flow_xspan_label != nullptr) {
+    lv_obj_remove_flag(w.flow_xspan_label, LV_OBJ_FLAG_HIDDEN);
+    lv_label_set_text_fmt(w.flow_xspan_label, "%u s window",
+                          static_cast<unsigned>(kShotMinWindowMs / 1000));
+  }
+}
+
+void end_shot_plot(HomeWidgets& w) {
+  if (!w.flow_shot_plot) return;
+  w.flow_shot_plot = false;
+  reset_flow_graph(w);  // back to the live sweep on a fresh grid
+  if (w.flow_xspan_label != nullptr)
+    lv_label_set_text_fmt(w.flow_xspan_label, "%d s window", kFlowWindowS);
+  apply_flow_xaxis_labels(w);  // restore the labels for the active sweep style
+}
+
+void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
+  if (!w.flow_shot_plot || w.flow_canvas == nullptr || w.flow_buf == nullptr ||
+      w.flow_w <= 1)
+    return;
+  if (!scale.connected) return;  // controller cancels the shot; App ends the plot
+  const uint32_t now = lv_tick_get();
+  const float rw = scale.weight_g;
+  const float rf = update_flow_rate(w, scale, now);  // keep the rate window fed every call
+  // Event-locked: draw when the scale actually publishes (whatever its stream
+  // rate), capped at kShotSampleMs spacing so a fast scale can't outrun the
+  // ring's 45s coverage.
+  if (scale.seq == w.shot_seq_seen) return;
+  w.shot_seq_seen = scale.seq;
+  if (w.shot_n != 0 && now - w.shot_last_sample_ms < kShotSampleMs) return;
+  w.shot_last_sample_ms = now;
+  w.shot_elapsed_ms = now - w.shot_t0;
+  w.shot_weights[w.shot_head] = rw;
+  w.shot_flows[w.shot_head] = rf;
+  w.shot_ts[w.shot_head] = w.shot_elapsed_ms;
+  w.shot_head = (w.shot_head + 1) % ui::HomeWidgets::kShotCap;
+  if (w.shot_n < ui::HomeWidgets::kShotCap) ++w.shot_n;
+
+  // Full repaint only when the mapping snaps or the Y axis must grow; otherwise
+  // append just the new right-edge columns with a matching tiny invalidate —
+  // that's the common case, and it keeps the shot plot as cheap as the sweep.
+  const uint32_t window = shot_window_of(w.shot_elapsed_ms);
+  const uint32_t t_start = shot_tstart_of(w.shot_elapsed_ms, window);
+  const float v = (w.flow_mode == 1) ? rw : rf;
+  bool full = window != w.shot_map_window_ms || t_start != w.shot_map_tstart_ms ||
+              w.shot_x_painted < 0;
+  const float want = flow_nice_max(w.flow_mode, v);
+  if (want > w.flow_ymax) {
+    w.flow_ymax = want;
+    set_flow_ylabels(w);
+    full = true;
+  }
+  if (full) {
+    shot_plot_redraw_full(w);
+    return;
+  }
+  const int x_new = shot_edge_col(w, window, t_start);
+  if (x_new > w.shot_x_painted) {
+    shot_plot_paint_columns(w, w.shot_x_painted + 1, x_new, window, t_start);
+    invalidate_flow_span(w, w.shot_x_painted + 1, x_new - w.shot_x_painted);
+    w.shot_x_painted = x_new;
+  }
+}
+
 void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
   if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_weights == nullptr ||
       w.flow_flows == nullptr || w.flow_w <= 0)
@@ -1238,38 +1487,11 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
                                static_cast<uint32_t>(w.flow_w);
   if (ms_per_step == 0) return;
 
-  // Flow = trailing-window derivative (see the kFlowHist* comment in the
-  // header): Δweight over the ~1.5s ending now, from the time-stamped history
-  // ring. A rising weight is real flow; a falling one (cup removed) is
-  // negative. drop-negative floors that to zero so it never shows as an
-  // upswing; with it off we show the magnitude (the raw activity).
+  // Flow = trailing-window derivative over the time-stamped weight history
+  // (update_flow_rate — shared with the shot plot). A rising weight is real
+  // flow; a falling one (cup removed) is negative, handled per drop-negative.
   const float rw = scale.weight_g;   // g (signed; the scale streams weight, not flow)
-  if (w.flow_hist_n == 0 || now - w.flow_hist_last_ms >= kFlowHistSampleMs) {
-    w.flow_hist_t[w.flow_hist_head] = now;
-    w.flow_hist_w[w.flow_hist_head] = rw;
-    w.flow_hist_head = (w.flow_hist_head + 1) % ui::HomeWidgets::kFlowHistCap;
-    if (w.flow_hist_n < ui::HomeWidgets::kFlowHistCap) ++w.flow_hist_n;
-    w.flow_hist_last_ms = now;
-  }
-  float rf = 0.0f;
-  {
-    // Oldest sample still inside the window (or the oldest we have while the
-    // ring warms up after a reset/reconnect).
-    int ref = -1;
-    for (int i = 0; i < w.flow_hist_n; ++i) {
-      const int idx = (w.flow_hist_head - w.flow_hist_n + i +
-                       2 * ui::HomeWidgets::kFlowHistCap) %
-                      ui::HomeWidgets::kFlowHistCap;
-      ref = idx;
-      if (now - w.flow_hist_t[idx] <= kFlowRateWindowMs) break;
-    }
-    if (ref >= 0) {
-      const float span_s = (now - w.flow_hist_t[ref]) / 1000.0f;
-      if (span_s >= kFlowMinSpanS) rf = (rw - w.flow_hist_w[ref]) / span_s;
-    }
-  }
-  if (w.flow_drop_negative) { if (rf < 0.0f) rf = 0.0f; }
-  else if (rf < 0.0f) rf = -rf;   // show outflow as positive activity when not dropping
+  const float rf = update_flow_rate(w, scale, now);
   const float raw = (w.flow_mode == 1) ? rw : rf;
 
   const uint16_t bright = flow_bright_color();
@@ -1366,6 +1588,14 @@ void toggle_flow_mode(HomeWidgets& w) {
   // switch: re-scale the axis to the now-active quantity's window peak and redraw in
   // the new unit (unless blanked — leave the empty grid until the scale reconnects).
   if (w.flow_unit_label != nullptr) lv_label_set_text(w.flow_unit_label, flow_unit(w.flow_mode));
+  if (w.flow_shot_plot) {
+    // The shot plot redraws wholesale from its own samples (works frozen in
+    // review too): re-fit the axis for the new quantity and repaint.
+    w.flow_ymax = flow_default_max(w.flow_mode);
+    set_flow_ylabels(w);
+    shot_plot_redraw_full(w);
+    return;
+  }
   if (w.flow_blanked) {
     w.flow_ymax = flow_default_max(w.flow_mode);
     set_flow_ylabels(w);

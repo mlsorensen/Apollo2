@@ -27,6 +27,8 @@ class Provisioner : public core::IProvisioner {
   void forget() override;
   bool connect_enabled() const override;
   void set_connect_enabled(bool enabled) override;
+  bool auto_connect() const override;
+  void set_auto_connect(bool on) override;
 
   bool has_token() const override;
   void start_token_setup() override;
