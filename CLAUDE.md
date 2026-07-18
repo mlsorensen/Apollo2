@@ -40,6 +40,15 @@ Bring-up gotcha: scripted DTR/RTS toggling on the USB-CDC port can strand the
 board in ROM download mode — black screen, silent serial, yet flashing still
 works. Recover with the physical RST button; don't script reset dances.
 
+Paddle (brew-by-weight, verified on HW): 3-wire harness — Micra white -> DO0,
+paddle switch -> DI0, Micra black + paddle return -> shared GND. DI COM is the
+*biased* side of the input opto (internally ~5V), so a dry contact must close
+DI0 to GND — wiring it to DI COM does nothing. Drive = EXIO6 (active-low),
+sense = EXIO0 (low = closed), direction mask 0xDE. GOTCHA: the expander can
+ACK its init yet DROP the first direction-mask write (inputs read 0xFF
+forever); paddle.cpp re-asserts the mask in begin() and every ~64th sense
+poll — keep that if refactoring.
+
 ### ESP32-P4-WIFI6-Touch-LCD-4.3 (env `esp32-p4-micra-43`) — bring-up pending
 
 First non-S3 board: P4NRW32, 480x800 ST7701 over 2-lane MIPI-DSI (rotated to

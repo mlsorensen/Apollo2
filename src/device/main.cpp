@@ -11,9 +11,9 @@
 #endif
 #include <lvgl.h>
 
+#include "core/brew_controller.h"
 #include "platform_esp32/battery.h"
 #include "platform_esp32/board_config.h"
-#include "platform_esp32/brew_controller.h"
 #include "platform_esp32/clock.h"
 #include "platform_esp32/config.h"
 #include "platform_esp32/display.h"
@@ -22,6 +22,7 @@
 #include "platform_esp32/io_extension.h"
 #include "platform_esp32/micra_link.h"
 #include "platform_esp32/network.h"
+#include "platform_esp32/paddle.h"
 #include "platform_esp32/provisioner.h"
 #include "platform_esp32/scale_link.h"
 #include "platform_esp32/scale_provisioner.h"
@@ -50,7 +51,9 @@ platform::Network g_network{g_config, g_clock, g_token_setup};  // WiFi station 
 platform::History g_history;
 platform::ScaleLink g_scale;            // NimBLE Bluetooth scale (Bookoo Themis)
 platform::ScaleProvisioner g_scale_provisioner{g_scale, g_config};
-platform::BrewController g_brew;        // available() iff board has paddle pins; Phase 4 = logic
+// Brew-by-weight: paddle relay + shot state machine over the paddle + scale
+// ports (core logic; polled from loop()).
+core::BrewController g_brew{platform::paddle(), g_scale};
 ui::App g_app;
 
 constexpr uint32_t kUiRefreshMs = 500;
@@ -170,6 +173,18 @@ void setup() {
 
   g_battery.begin();
   g_clock.begin();  // seed wall-clock from the RTC (if any); I2C is up via Display
+
+  // Paddle hardware (after the display so the IO extension is begun where the
+  // paddle rides it). Seed the shot config from NVS and wire the persisters.
+  platform::paddle().begin();
+  g_brew.seed(g_config.target_weight_g(), g_config.shot_mode(), g_config.overshoot_g(),
+              g_config.review_hold_s());
+  g_brew.set_target_persister([](float g) { g_config.set_target_weight_g(g); });
+  g_brew.set_shot_mode_persister([](bool on) { g_config.set_shot_mode(on); });
+  g_brew.set_overshoot_persister([](float g) { g_config.set_overshoot_g(g); });
+  g_brew.set_review_hold_persister([](int s) { g_config.set_review_hold_s(s); });
+  Serial.printf("Paddle: %s\n",
+                platform::paddle().available() ? "available" : "not wired on this board");
   // Restore saved brightness where dimmable; otherwise hold the backlight at max
   // (an on/off-only board has no brightness control in the UI).
   g_display.set_brightness(board::kSupportsBrightness ? g_config.brightness() : 100);
@@ -178,6 +193,14 @@ void setup() {
   const ui::ScreenProfile screen{g_display.width(), g_display.height()};
   g_app.build(g_micra, g_provisioner, g_battery, g_display_settings, g_clock, g_history,
               g_scale, g_scale_provisioner, g_brew, g_network, screen);
+
+  // Settings > Device "Restart": soft reboot — re-runs the whole panel init,
+  // the escape hatch for the RGB panel's occasional shifted-raster boot glitch.
+  g_app.set_restart_handler([] {
+    Serial.println("User-requested restart");
+    Serial.flush();
+    esp_restart();
+  });
 
   // Critically-low battery -> deep sleep instead of brown-out thrashing. Kill the
   // backlight first (dominant load, can latch on in sleep), then park (~uA) until a
@@ -215,6 +238,7 @@ void setup() {
 }
 
 void loop() {
+  g_brew.poll(millis());     // paddle relay + shot state machine (edge-critical)
   g_app.pump_scale_chart();  // drain the scale's flow stream into the graph (fast)
   lv_timer_handler();        // LVGL render/input
   g_token_setup.handle();    // pump the WiFi setup web server when active

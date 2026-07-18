@@ -95,6 +95,12 @@ class App {
   void apply_pending_theme();            // deferred rebuild (from lv_async_call)
   void apply_layout_rebuild();           // deferred rebuild after scale pair/forget
   void select_stats_section(int section); // Stats segmented selector
+  void shot_button();  // shot-mode toggle, or Reset while a shot is in review
+  // Soft-reboot handler (Settings > Device "Restart"): wired by device main to
+  // esp_restart(); no-op in the sim.
+  void set_restart_handler(std::function<void()> h) { restart_handler_ = std::move(h); }
+  void restart_device() { if (restart_handler_) restart_handler_(); }
+  void review_hold_adjust(int dir);  // Scale settings: review-hold stepper (5s steps)
   void zoom_step(int dir);                // Stats time-axis zoom: -1 in, +1 out
   void commit_temp_edits();              // write pending temp edits (on exit)
 
@@ -135,7 +141,10 @@ class App {
   bool pairing_active_ = false;     // waiting on a pairing-read outcome
   bool wifi_setup_shown_ = false;   // token-over-WiFi instructions modal is open
   bool wifi_portal_shown_ = false;  // WiFi-credential setup modal is open
-  uint32_t scale_readout_tick_ = 0;     // throttles the fast (~10 Hz) weight readout
+  uint32_t scale_readout_tick_ = 0;     // paces the shot-timer redraw (~10 Hz)
+  float last_weight_g_ = 0.0f;          // last weight drawn (redraw on change only)
+  bool last_scale_connected_ = false;
+  core::ShotPhase shot_phase_ = core::ShotPhase::kIdle;  // last seen (graph reset/freeze edges)
   bool theme_rebuild_pending_ = false;  // coalesce rapid theme cycling into one rebuild
   bool layout_rebuild_pending_ = false; // coalesce a scale pair/forget rebuild
   int rebuild_section_ = kSectionDevice;  // Settings section to return to after rebuild()
@@ -161,6 +170,7 @@ class App {
 
   // Low-battery cutoff -> deep sleep (handler provided by the device).
   std::function<void()> batt_low_handler_;
+  std::function<void()> restart_handler_;  // Settings > Device "Restart" (device only)
   float batt_cutoff_volts_ = 0.0f;
   int batt_low_count_ = 0;  // consecutive sub-cutoff reads (debounce)
 };

@@ -29,6 +29,12 @@ class Config {
   // Brew-by-weight target (grams) — persisted so it survives reboots.
   float target_weight_g() const;       // default 36
   void set_target_weight_g(float grams);
+  bool shot_mode() const;              // brew-by-weight automation armed (default true)
+  void set_shot_mode(bool on);
+  float overshoot_g() const;           // learned drip/lag compensation (default 2.0)
+  void set_overshoot_g(float grams);
+  int review_hold_s() const;           // shot-review linger before auto-reset (default 30)
+  void set_review_hold_s(int seconds);
 
   int brightness() const;     // screen brightness 0..100 (default 100)
   void set_brightness(int percent);

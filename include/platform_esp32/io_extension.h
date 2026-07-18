@@ -16,6 +16,8 @@ class IoExtension {
   void set(uint8_t pin, bool high);  // drive one output pin (0..7)
   void set_pwm(uint8_t percent);     // backlight 0..100 (scaled to the 0..255 reg)
   uint16_t read_adc();               // 16-bit ADC word (reg 0x06; e.g. battery)
+  uint8_t read_input();              // input-pin levels (reg 0x04; 0xFF on error)
+  void apply_dir_mask();             // (re)write the per-board direction mask
   bool ok() const { return ok_; }
 
  private:

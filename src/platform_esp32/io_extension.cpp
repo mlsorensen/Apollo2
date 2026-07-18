@@ -5,6 +5,10 @@
 
 #include "platform_esp32/board_config.h"
 
+// Only expander boards compile this (others define none of the kIoExt* pins;
+// every call site is feature-macro-gated, so nothing links to it elsewhere).
+#if defined(BOARD_HAS_IO_EXTENSION)
+
 namespace platform {
 
 #if defined(BOARD_IO_EXPANDER_CH422G)
@@ -52,6 +56,10 @@ void IoExtension::set_pwm(uint8_t percent) {
 
 uint16_t IoExtension::read_adc() { return 0; }  // no ADC on the CH422G
 
+uint8_t IoExtension::read_input() { return 0xFF; }  // inputs unused on the 4.3B
+
+void IoExtension::apply_dir_mask() {}  // n/a for the CH422G
+
 #else
 
 // Register map from Waveshare's 7B demo: mode 0x02, output 0x03, input 0x04, PWM
@@ -59,6 +67,7 @@ uint16_t IoExtension::read_adc() { return 0; }  // no ADC on the CH422G
 namespace {
 constexpr uint8_t kRegMode = 0x02;
 constexpr uint8_t kRegOutput = 0x03;
+constexpr uint8_t kRegInput = 0x04;
 constexpr uint8_t kRegPwm = 0x05;
 constexpr uint8_t kRegAdc = 0x06;
 }  // namespace
@@ -75,7 +84,9 @@ bool IoExtension::begin(uint8_t addr) {
   Wire.beginTransmission(addr_);
   ok_ = (Wire.endTransmission() == 0);
   if (!ok_) return false;
-  write_reg(kRegMode, 0xFF);  // all pins outputs
+  // Per-board direction mask (bit=1 output, bit=0 input) — the 4.3C keeps its
+  // isolated DI pins as inputs; boards without inputs use all-outputs 0xFF.
+  write_reg(kRegMode, board::kIoExtDirMask);
   out_ = 0xFF;
   write_reg(kRegOutput, out_);
   return true;
@@ -112,6 +123,18 @@ uint16_t IoExtension::read_adc() {
   return static_cast<uint16_t>(hi << 8 | lo);
 }
 
+uint8_t IoExtension::read_input() {
+  // Same STOP-then-read shape as read_adc (see the i2c-ng note above). 0xFF on
+  // error = "all inputs idle-high", which reads as paddle-open (safe).
+  Wire.beginTransmission(addr_);
+  Wire.write(kRegInput);
+  if (Wire.endTransmission(true) != 0) return 0xFF;
+  if (Wire.requestFrom(addr_, static_cast<uint8_t>(1)) != 1) return 0xFF;
+  return static_cast<uint8_t>(Wire.read());
+}
+
+void IoExtension::apply_dir_mask() { write_reg(kRegMode, board::kIoExtDirMask); }
+
 #endif  // BOARD_IO_EXPANDER_CH422G
 
 IoExtension& io_extension() {
@@ -120,3 +143,5 @@ IoExtension& io_extension() {
 }
 
 }  // namespace platform
+
+#endif  // BOARD_HAS_IO_EXTENSION
