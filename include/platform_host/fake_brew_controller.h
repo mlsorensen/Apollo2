@@ -23,6 +23,7 @@ class FakeBrewController : public core::IBrewController {
         .target_weight_g = target_g_,
         .overshoot_g = 2.0f,
         .review_hold_s = review_hold_s_,
+        .review_reject_seq = 0,
     };
   }
   void set_target_weight_g(float grams) override { target_g_ = grams; }
