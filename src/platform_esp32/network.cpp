@@ -45,6 +45,14 @@ void Network::start_station() {
     return;
   }
   ip_.clear();
+  // WiFi-NO_MEM diagnosis (esp_wifi_init fails with ESP_ERR_NO_MEM on the
+  // 4.3C): log what internal RAM the stack actually has to work with at init
+  // time — total free + largest contiguous block (fragmentation shows up as a
+  // big gap between them).
+  Serial.printf("Network: internal heap free=%u largest=%u\n",
+                static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)),
+                static_cast<unsigned>(
+                    heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)));
   WiFi.mode(WIFI_STA);
   WiFi.setTxPower(kTxPower);
   WiFi.begin(ssid.c_str(), pass.c_str());
