@@ -45,7 +45,7 @@ class Config {
   bool drop_negative_flow() const;  // clamp negative g/s on the flow graph (default true)
   void set_drop_negative_flow(bool on);
 
-  bool scope_graph() const;  // oscilloscope-style flow graph (default false = scroll)
+  bool scope_graph() const;  // oscilloscope-style flow graph (default true; false = scroll)
   void set_scope_graph(bool on);
 
   bool perf_overlay() const;  // LVGL FPS/CPU overlay (default false)

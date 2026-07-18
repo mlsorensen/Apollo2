@@ -196,7 +196,7 @@ void Config::set_drop_negative_flow(bool on) {
 bool Config::scope_graph() const {
   Preferences p;
   if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
-  const bool v = p.isKey(kScopeGraphKey) ? p.getBool(kScopeGraphKey, false) : false;
+  const bool v = p.isKey(kScopeGraphKey) ? p.getBool(kScopeGraphKey, true) : true;
   p.end();
   return v;
 }
