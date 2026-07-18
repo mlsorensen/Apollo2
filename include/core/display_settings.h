@@ -49,6 +49,11 @@ class IDisplaySettings {
   // sysmon label at runtime to match this.
   virtual bool perf_overlay() const = 0;
   virtual void set_perf_overlay(bool on) = 0;
+
+  // Button-press click sound (boards with a speaker — core::ISound). Default on;
+  // the row is hidden entirely when the board can't make sound.
+  virtual bool click_sound() const = 0;
+  virtual void set_click_sound(bool on) = 0;
 };
 
 }  // namespace core

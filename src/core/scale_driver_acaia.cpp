@@ -1,4 +1,5 @@
 #include <atomic>
+#include <cstdio>
 #include <cstring>
 
 #include "core/scale_driver.h"
@@ -211,12 +212,29 @@ class AcaiaDriver : public IScaleDriver {
     send(ble, buf, encode(kMsgGetStatus, kZero, sizeof(kZero), buf));
   }
 
+  // Diagnostics for the every-60s bogus-weight mystery (~-10 g blips seen on
+  // the Umbra): dump raw bytes for anything unusual — implausible weights,
+  // frame types we don't recognize, and re-sync skips. Rate-limited to 1/s so
+  // a storm can't swamp serial. Remove once root-caused.
+  void log_frame(const char* why, const uint8_t* d, size_t n) {
+    const uint32_t now = now_ms();
+    if (now - last_diag_ms_ < 1000) return;
+    last_diag_ms_ = now;
+    char hex[3 * 24 + 1];
+    const size_t m = n < 24 ? n : 24;
+    for (size_t i = 0; i < m; ++i) std::snprintf(hex + 3 * i, 4, "%02X ", d[i]);
+    logf("AcaiaDriver: %s [%u]: %s\n", why, static_cast<unsigned>(n), hex);
+  }
+
   void process_buffer(IScaleSink& sink) {
     size_t pos = 0;
     for (;;) {
+      const size_t scan_start = pos;
       while (pos + 1 < rx_len_ && !(rx_[pos] == kHeader1 && rx_[pos + 1] == kHeader2)) {
         ++pos;  // re-sync to the next header
       }
+      if (pos != scan_start)
+        log_frame("resync skipped", rx_ + scan_start, pos - scan_start);
       if (pos + 4 > rx_len_) break;  // need header + cmd + len
       const size_t total = static_cast<size_t>(rx_[pos + 3]) + 5;
       if (total < 6 || total > sizeof(rx_)) {
@@ -247,19 +265,26 @@ class AcaiaDriver : public IScaleDriver {
       return;
     }
 
-    if (cmd != kMsgEvent || content_len < 1) return;
+    if (cmd != kMsgEvent || content_len < 1) {
+      log_frame("unknown cmd", f, total);
+      return;
+    }
     const uint8_t event = f[4];
     const uint8_t* p = f + 5;
     const size_t n = content_len - 1;
 
     if (event == kEventWeight && n >= 6) {
-      sink.on_weight(decode_weight(p));
+      const float w = decode_weight(p);
+      if (w < -5.0f) log_frame("negative-weight frame", f, total);
+      sink.on_weight(w);
     } else if (event == kEventBattery && n >= 1) {
       sink.on_battery(p[0] & 0x7F);  // pushed by the scale (notif request id 1)
     } else if (event == kEventTimer && n >= 3) {
       sink.on_timer((p[0] * 60u + p[1]) * 1000u + p[2] * 100u);  // min, sec, tenths
+    } else if (event != 8 && event != 11) {
+      // Button (8) and heartbeat-response (11): known, nothing to publish.
+      log_frame("unknown event", f, total);
     }
-    // Button (8) and heartbeat-response (11) events: nothing to publish.
   }
 
   // 6-byte weight payload: bytes 0-3 raw u32 — BIG-endian on Umbra, LITTLE on
@@ -287,6 +312,7 @@ class AcaiaDriver : public IScaleDriver {
   // BLE notify thread only.
   uint8_t rx_[256];
   size_t rx_len_ = 0;
+  uint32_t last_diag_ms_ = 0;  // log_frame rate limit
 
   std::atomic<uint32_t> last_rx_ms_{0};  // written on notify, read from tick()
 

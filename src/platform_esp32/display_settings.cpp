@@ -40,6 +40,10 @@ void DisplaySettings::set_flow_smooth(int level) { config_.set_flow_smooth(level
 
 bool DisplaySettings::perf_overlay() const { return config_.perf_overlay(); }
 
+bool DisplaySettings::click_sound() const { return config_.click_sound(); }
+
+void DisplaySettings::set_click_sound(bool on) { config_.set_click_sound(on); }
+
 void DisplaySettings::set_perf_overlay(bool on) { config_.set_perf_overlay(on); }
 
 }  // namespace platform

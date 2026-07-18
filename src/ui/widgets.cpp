@@ -1,12 +1,29 @@
 #include "ui/widgets.h"
 
+#include <utility>
+
 #include "ui/theme.h"
 
+namespace {
+
+std::function<void()> g_press_hook;
+
+void on_button_pressed(lv_event_t* /*e*/) {
+  if (g_press_hook) g_press_hook();
+}
+
+}  // namespace
+
 namespace ui {
+
+void set_button_press_hook(std::function<void()> hook) {
+  g_press_hook = std::move(hook);
+}
 
 lv_obj_t* make_button(lv_obj_t* parent) {
   lv_obj_t* btn = lv_button_create(parent);
   lv_obj_set_style_shadow_width(btn, 0, 0);  // drop LVGL's default drop shadow
+  lv_obj_add_event_cb(btn, on_button_pressed, LV_EVENT_PRESSED, nullptr);
   return btn;
 }
 

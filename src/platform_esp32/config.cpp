@@ -16,6 +16,7 @@ constexpr char kFahrenheitKey[] = "fahr";
 constexpr char kDropNegFlowKey[] = "dropnegf";
 constexpr char kScopeGraphKey[] = "scopegraph";
 constexpr char kPerfOverlayKey[] = "perfovl";
+constexpr char kClickSoundKey[] = "clicksnd";
 constexpr char kScaleMacKey[] = "smac";
 constexpr char kScaleNameKey[] = "sname";
 constexpr char kTargetKey[] = "tgtg";
@@ -300,6 +301,21 @@ void Config::set_perf_overlay(bool on) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putBool(kPerfOverlayKey, on);
+  p.end();
+}
+
+bool Config::click_sound() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return true;
+  const bool v = p.isKey(kClickSoundKey) ? p.getBool(kClickSoundKey, true) : true;
+  p.end();
+  return v;
+}
+
+void Config::set_click_sound(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kClickSoundKey, on);
   p.end();
 }
 

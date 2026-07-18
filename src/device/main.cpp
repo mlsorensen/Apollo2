@@ -25,6 +25,7 @@
 #include "platform_esp32/paddle.h"
 #include "platform_esp32/provisioner.h"
 #include "platform_esp32/scale_link.h"
+#include "platform_esp32/sound.h"
 #include "platform_esp32/scale_provisioner.h"
 #include "platform_esp32/token_setup.h"
 #include "platform_esp32/touch.h"
@@ -189,10 +190,14 @@ void setup() {
   // (an on/off-only board has no brightness control in the UI).
   g_display.set_brightness(board::kSupportsBrightness ? g_config.brightness() : 100);
 
+  // Speaker (audio boards): codec + I2S up-front so button clicks are instant.
+  // Needs Wire + the IO extension, which the display init above brought up.
+  platform::sound_begin();
+
   // Build the UI bound to the machine + provisioner + battery + display.
   const ui::ScreenProfile screen{g_display.width(), g_display.height()};
   g_app.build(g_micra, g_provisioner, g_battery, g_display_settings, g_clock, g_history,
-              g_scale, g_scale_provisioner, g_brew, g_network, screen);
+              g_scale, g_scale_provisioner, g_brew, g_network, platform::sound(), screen);
 
   // Settings > Device "Restart": soft reboot — re-runs the whole panel init,
   // the escape hatch for the RGB panel's occasional shifted-raster boot glitch.
