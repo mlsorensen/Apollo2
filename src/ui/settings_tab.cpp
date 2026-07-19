@@ -297,6 +297,9 @@ void root_entry(lv_obj_t* menu, lv_obj_t* root_page, lv_obj_t* target,
   lv_obj_set_style_text_font(chev, font, 0);
 
   lv_menu_set_load_page_event(menu, cont, target);
+  // lv_menu's cont is not a ui::make_button — give it press feedback by hand.
+  lv_obj_add_event_cb(
+      cont, [](lv_event_t*) { ui::play_button_press(); }, LV_EVENT_PRESSED, nullptr);
 }
 
 }  // namespace
@@ -347,6 +350,9 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     }
   }
   if (lv_obj_t* back = lv_menu_get_main_header_back_button(menu)) {
+    // lv_menu's own widget — press feedback by hand (like the tab buttons).
+    lv_obj_add_event_cb(
+        back, [](lv_event_t*) { ui::play_button_press(); }, LV_EVENT_PRESSED, nullptr);
     // Pull the back button out of the header's flex flow and pin it left, so the
     // centered title isn't pushed off-center by it.
     lv_obj_add_flag(back, LV_OBJ_FLAG_IGNORE_LAYOUT);
