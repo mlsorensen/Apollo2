@@ -16,6 +16,15 @@ class IDisplaySettings {
   // the brightness control and the board just holds the backlight at full.
   virtual bool supports_brightness() const = 0;
 
+  // Screen-dim timeout in minutes (0 = never). After this long with no touch
+  // input the UI calls set_screensaver(true); the next touch wakes it.
+  virtual int screen_timeout_min() const = 0;
+  virtual void set_screen_timeout_min(int minutes) = 0;
+  // Live screensaver state — NOT persisted. true drops the backlight to 5%
+  // (fully off on boards that can only switch it); false restores the saved
+  // brightness. The persisted brightness preference is untouched either way.
+  virtual void set_screensaver(bool on) = 0;
+
   // Selected color scheme, as an index into the UI's palette list (ui::theme).
   // The port only persists the choice; the UI owns the palettes + applies them.
   virtual int theme() const = 0;

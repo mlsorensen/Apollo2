@@ -107,6 +107,11 @@ struct SettingsWidgets {
   lv_obj_t* brightness_value = nullptr;
   int brightness = 100;
 
+  // Screen-dim timeout cycle button (Off / 15 min / 30 min)
+  lv_obj_t* dim_btn = nullptr;
+  lv_obj_t* dim_value = nullptr;
+  int screen_timeout_min = 0;
+
   lv_obj_t* hour_minus = nullptr;
   lv_obj_t* hour_plus = nullptr;
   lv_obj_t* hour_value = nullptr;

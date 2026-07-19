@@ -50,30 +50,17 @@ constexpr bool kTouchMirrorY = true;
 // --- Battery monitoring (from the vendor demo) ---
 // GPIO5 = ADC1_CH4, battery divided by 3. Use analogReadMilliVolts for the
 // calibrated reading. NOTE: GPIO5 is also a MOSFET-control solder pad on this
-// board — we only ever read it as an ADC input. This board exposes NO charge-
-// status pin, so charging is inferred from voltage (kBatteryChargingVolts).
+// board — we only ever read it as an ADC input. No charge-status pin: the node
+// voltage alone decides USB vs battery (kUsbPowerVolts, see core/battery.h).
 constexpr int   kBatteryAdc = 5;             // ADC GPIO reading battery voltage
 constexpr float kBatteryDivider = 3.0f;      // battery_volts = adc_volts * divider
-constexpr int   kBatteryChargePin = -1;      // none on this board -> infer
-constexpr bool  kBatteryChargeActiveLow = true;  // (unused; no pin)
 // Full reads ~4.13 V at rest on this board's ADC path (measured: 92% with the old
 // 4.20 cap, charge-current = 0), so cap there to read ~100% when full.
 constexpr float kBatteryFullVolts = 4.13f;
 constexpr float kBatteryEmptyVolts = 3.40f;  // 0% with margin above the brownout zone
 constexpr float kBatteryCutoffVolts = 3.40f; // deep-sleep at/below this (avoids brownout)
 constexpr float kBatteryResumeVolts = 3.70f; // only wake fully once charged past here
-constexpr float kBatteryChargingVolts = 4.15f;   // (legacy voltage-only charge guess)
-// On USB power with NO cell installed, the charge node floats above any real
-// battery; above this we report "no battery" (plug icon) rather than a percent.
-constexpr float kBatteryNoCellVolts = 4.35f;
-
-// Optional VBUS (USB 5V) sense on an ADC GPIO — the robust "is USB plugged in"
-// signal (catches dumb chargers too, unlike HWCDC::isPlugged). -1 = none, fall
-// back to the USB-peripheral check. If you wire a divider from the 5V bus to a
-// spare ADC pin, set the pin + divider here.
-constexpr int   kVbusAdc = -1;
-constexpr float kVbusDivider = 2.0f;       // vbus_volts = adc_volts * divider
-constexpr float kVbusPresentVolts = 4.0f;  // above this => USB present
+constexpr float kUsbPowerVolts = 4.15f;      // node at/above this => external (USB) power
 
 // --- Paddle control (brew-by-weight) ---
 // Drive line into the Micra's paddle circuit (a relay, or the 4.3B's opto-
@@ -146,19 +133,13 @@ constexpr bool kTouchMirrorY = false;
 constexpr float kBatteryIoExtScale = 0.009632f;
 constexpr int   kBatteryAdc = -1;               // no direct ESP32 ADC pin
 constexpr float kBatteryDivider = 1.0f;         // (unused; folded into the scale)
-constexpr int   kBatteryChargePin = -1;
-constexpr bool  kBatteryChargeActiveLow = true;
 // The IO-extension ADC path reads ~4.07 V at rest when full (measured: 86% with
 // the old 4.20 cap, charge-current = 0), so cap there to read ~100% when full.
 constexpr float kBatteryFullVolts = 4.07f;
 constexpr float kBatteryEmptyVolts = 3.40f;  // 0% with margin above the brownout zone
 constexpr float kBatteryCutoffVolts = 3.40f; // deep-sleep at/below this (avoids brownout)
 constexpr float kBatteryResumeVolts = 3.70f; // only wake fully once charged past here
-constexpr float kBatteryChargingVolts = 4.15f;
-constexpr float kBatteryNoCellVolts = 4.35f;
-constexpr int   kVbusAdc = -1;
-constexpr float kVbusDivider = 2.0f;
-constexpr float kVbusPresentVolts = 4.0f;
+constexpr float kUsbPowerVolts = 4.15f;      // node at/above this => external (USB) power
 
 // --- Paddle control (brew-by-weight) ---
 // See the 2-inch block above. The 4.3B has opto-isolated GPIO suited to driving
@@ -221,22 +202,16 @@ constexpr bool kTouchMirrorX = false;
 constexpr bool kTouchMirrorY = false;
 
 // --- Battery: the CH422G has NO ADC, so no battery reading for now -> the board
-//     reports USB-powered (plug icon). A direct-ESP-ADC path can be added later
+//     reports USB-powered (USB icon). A direct-ESP-ADC path can be added later
 //     once the divider pin is known. (kBatteryAdc < 0 + no IOEXT -> usb=true.) ---
 constexpr float kBatteryIoExtScale = 0.009632f;  // unused (kept for symmetry)
 constexpr int   kBatteryAdc = -1;
 constexpr float kBatteryDivider = 1.0f;
-constexpr int   kBatteryChargePin = -1;
-constexpr bool  kBatteryChargeActiveLow = true;
 constexpr float kBatteryFullVolts = 4.07f;
 constexpr float kBatteryEmptyVolts = 3.40f;
 constexpr float kBatteryCutoffVolts = 3.40f;
 constexpr float kBatteryResumeVolts = 3.70f;
-constexpr float kBatteryChargingVolts = 4.15f;
-constexpr float kBatteryNoCellVolts = 4.35f;
-constexpr int   kVbusAdc = -1;
-constexpr float kVbusDivider = 2.0f;
-constexpr float kVbusPresentVolts = 4.0f;
+constexpr float kUsbPowerVolts = 4.15f;
 
 // --- Paddle control (brew-by-weight): the intended target; pins TBD ---
 constexpr int  kPaddleDrivePin = -1;
@@ -304,17 +279,11 @@ constexpr bool kTouchMirrorY = false;
 constexpr float kBatteryIoExtScale = 0.0096774f;
 constexpr int   kBatteryAdc = -1;               // no direct ESP32 ADC pin
 constexpr float kBatteryDivider = 1.0f;         // (unused; folded into the scale)
-constexpr int   kBatteryChargePin = -1;
-constexpr bool  kBatteryChargeActiveLow = true;
 constexpr float kBatteryFullVolts = 4.07f;
 constexpr float kBatteryEmptyVolts = 3.40f;
 constexpr float kBatteryCutoffVolts = 3.40f;
 constexpr float kBatteryResumeVolts = 3.70f;
-constexpr float kBatteryChargingVolts = 4.15f;
-constexpr float kBatteryNoCellVolts = 4.35f;
-constexpr int   kVbusAdc = -1;
-constexpr float kVbusDivider = 2.0f;
-constexpr float kVbusPresentVolts = 4.0f;
+constexpr float kUsbPowerVolts = 4.15f;
 
 // --- Paddle control (brew-by-weight) via the isolated terminal block ---
 // Drive: DO0 (EXIO6) is an open-collector "contact" to the terminal GND —
@@ -404,24 +373,18 @@ constexpr bool kTouchMirrorY = true;
 // BAT_ADC per the schematic; divider is a PROVISIONAL ÷3 guess (Waveshare's
 // demos never read the battery, so there's no reference value). ÷3 is the
 // safe wrong guess: if the real divider is smaller we OVER-read (falls into
-// the no-cell/plug display path) rather than under-read into a spurious
+// the USB-power display path) rather than under-read into a spurious
 // low-battery deep-sleep. battery.cpp logs raw+scaled volts every ~10s on
 // this board — calibrate kBatteryDivider from that against a multimeter.
 constexpr int   kBatteryAdc = 20;
 constexpr float kBatteryDivider = 3.0f;
-constexpr int   kBatteryChargePin = -1;
-constexpr bool  kBatteryChargeActiveLow = true;
 // A fresh-off-charger pack read 97% against 4.13 -> it rests ~4.10-4.11 full
 // on this board's charger; anchor there so full shows 100%.
 constexpr float kBatteryFullVolts = 4.10f;
 constexpr float kBatteryEmptyVolts = 3.40f;
 constexpr float kBatteryCutoffVolts = 3.40f;
 constexpr float kBatteryResumeVolts = 3.70f;
-constexpr float kBatteryChargingVolts = 4.15f;
-constexpr float kBatteryNoCellVolts = 4.35f;
-constexpr int   kVbusAdc = -1;
-constexpr float kVbusDivider = 2.0f;
-constexpr float kVbusPresentVolts = 4.0f;
+constexpr float kUsbPowerVolts = 4.15f;
 
 // --- Paddle control (brew-by-weight): pins TBD (40-pin header available) ---
 constexpr int  kPaddleDrivePin = -1;

@@ -43,6 +43,9 @@ class Config {
   int brightness() const;     // screen brightness 0..100 (default 100)
   void set_brightness(int percent);
 
+  int screen_timeout_min() const;  // dim after this many idle minutes (0 = off; default 30)
+  void set_screen_timeout_min(int minutes);
+
   bool clock_24h() const;     // 24-hour clock display (default true)
   void set_clock_24h(bool on);
 

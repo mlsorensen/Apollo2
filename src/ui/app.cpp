@@ -278,6 +278,28 @@ void on_smooth_clicked(lv_event_t* e) {
 // Shot-graph smoothing levels (IDisplaySettings::flow_smooth 0..3).
 constexpr float kSmoothK[] = {0.0f, 0.15f, 0.25f, 0.33f};
 constexpr const char* kSmoothName[] = {"Off", "Light", "Medium", "Strong"};
+
+// Screen-dim timeout choices (IDisplaySettings::screen_timeout_min).
+constexpr int kDimMinutes[] = {0, 15, 30};
+constexpr int kDimCount = static_cast<int>(sizeof(kDimMinutes) / sizeof(kDimMinutes[0]));
+void on_dim_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_screen_timeout();
+}
+
+void set_dim_label(ui::SettingsWidgets& s) {
+  if (s.dim_value == nullptr) return;
+  if (s.screen_timeout_min <= 0) {
+    lv_label_set_text(s.dim_value, "Off");
+  } else {
+    char b[12];
+    std::snprintf(b, sizeof(b), "%d min", s.screen_timeout_min);
+    lv_label_set_text(s.dim_value, b);
+  }
+}
+
+void on_screensaver_timer(lv_timer_t* t) {
+  static_cast<ui::App*>(lv_timer_get_user_data(t))->screensaver_tick();
+}
 void on_wifi_setup_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->start_wifi_setup();
 }
@@ -411,7 +433,7 @@ void set_temp_controls_enabled(ui::SettingsWidgets& s, bool connected) {
 namespace ui {
 
 App::~App() {
-  if (home_.batt_timer != nullptr) lv_timer_delete(home_.batt_timer);
+  if (screensaver_timer_ != nullptr) lv_timer_delete(screensaver_timer_);
   if (home_.shot_flash_timer != nullptr) lv_timer_delete(home_.shot_flash_timer);
   if (home_.flow_buf != nullptr) lv_free(home_.flow_buf);
   if (home_.flow_weights != nullptr) lv_free(home_.flow_weights);
@@ -451,13 +473,9 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     ui::set_button_press_hook(nullptr);
   }
 
-  // A rebuild (theme change) recreates everything; drop the old charge timer and
+  // A rebuild (theme change) recreates everything; drop the old flash timer and
   // flow-graph canvas buffer first so we don't leak them across rebuilds
   // (lv_obj_clean deletes the widgets, but these are heap allocations we own).
-  if (home_.batt_timer != nullptr) {
-    lv_timer_delete(home_.batt_timer);
-    home_.batt_timer = nullptr;
-  }
   if (home_.shot_flash_timer != nullptr) {
     lv_timer_delete(home_.shot_flash_timer);
     home_.shot_flash_timer = nullptr;
@@ -606,6 +624,8 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     lv_obj_add_event_cb(settings_.brightness_minus, on_brightness_minus, LV_EVENT_CLICKED, this);
     lv_obj_add_event_cb(settings_.brightness_plus, on_brightness_plus, LV_EVENT_CLICKED, this);
   }
+  if (settings_.dim_btn != nullptr)
+    lv_obj_add_event_cb(settings_.dim_btn, on_dim_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.hour_minus, on_hour_minus, LV_EVENT_ALL, this);
   lv_obj_add_event_cb(settings_.hour_plus, on_hour_plus, LV_EVENT_ALL, this);
   lv_obj_add_event_cb(settings_.minute_minus, on_minute_minus, LV_EVENT_ALL, this);
@@ -659,6 +679,12 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
 
   settings_.brightness = display_->brightness();
   set_brightness_label(settings_);
+  settings_.screen_timeout_min = display_->screen_timeout_min();
+  set_dim_label(settings_);
+  // Idle-dim poll. Created once (build() reruns on theme rebuilds; the timer
+  // isn't part of the widget tree, so it survives them).
+  if (screensaver_timer_ == nullptr)
+    screensaver_timer_ = lv_timer_create(on_screensaver_timer, 250, this);
   settings_.clock_24h = clock_->use_24h();
   if (settings_.clock_24h) lv_obj_add_state(settings_.clock_mode_switch, LV_STATE_CHECKED);
   if (display_->use_fahrenheit()) lv_obj_add_state(settings_.units_switch, LV_STATE_CHECKED);
@@ -701,7 +727,7 @@ void App::refresh() {
       update_battery_runtime(battery_state_);
 
       // Critically-low pack (on battery, sustained) -> hand off to deep sleep.
-      if (batt_low_handler_ && battery_state_.present && !battery_state_.charging &&
+      if (batt_low_handler_ && battery_state_.present &&
           battery_state_.volts > 0.0f && battery_state_.volts <= batt_cutoff_volts_) {
         if (++batt_low_count_ >= 6) {  // ~3 s at the 500 ms refresh -> not a transient sag
           batt_low_count_ = 0;
@@ -1042,6 +1068,26 @@ void App::cycle_flow_smooth() {
   ui::set_shot_smoothing(home_, kSmoothK[level]);
 }
 
+void App::cycle_screen_timeout() {
+  if (display_ == nullptr) return;
+  int i = 0;
+  while (i < kDimCount && kDimMinutes[i] != settings_.screen_timeout_min) ++i;
+  const int mins = kDimMinutes[(i + 1) % kDimCount];  // unknown value -> wraps to Off
+  settings_.screen_timeout_min = mins;
+  display_->set_screen_timeout_min(mins);
+  set_dim_label(settings_);
+}
+
+void App::screensaver_tick() {
+  if (display_ == nullptr) return;
+  const int mins = settings_.screen_timeout_min;
+  const bool idle = mins > 0 && lv_display_get_inactive_time(nullptr) >=
+                                    static_cast<uint32_t>(mins) * 60000u;
+  if (idle == screensaver_on_) return;  // touch resets LVGL's inactivity clock
+  screensaver_on_ = idle;
+  display_->set_screensaver(idle);
+}
+
 void App::shot_button() {
   if (brew_ == nullptr) return;
   const core::BrewSnapshot b = brew_->snapshot();
@@ -1067,7 +1113,8 @@ void App::pump_scale_chart() {
 
   // Shot lifecycle -> graph: clear the plot when a shot starts (it records exactly
   // one shot), freeze it during review (no ticking = the trace stays put), resume
-  // after. The weight readout below keeps updating either way.
+  // after. The weight readout freezes with it, so pulling the cup during review
+  // doesn't wipe the final weight off the display; it goes live again on reset.
   bool graph_frozen = false;
   const bool have_brew = brew_ != nullptr;
   core::BrewSnapshot bsnap{};
@@ -1114,7 +1161,11 @@ void App::pump_scale_chart() {
   // Weight readout: redraw the moment the cached snapshot carries a new value, so
   // the display runs at the scale's own notify rate (the snapshot is just the last
   // BLE notify). lv_label_set_text no-ops when the formatted text is unchanged.
-  if (home_.scale_weight != nullptr &&
+  // Frozen during review (like the graph and the stopped timer): the label holds
+  // the settled final weight even if the cup is pulled. On dismiss the change
+  // check sees live-vs-held differ and the readout resets with the rest.
+  const bool weight_frozen = have_brew && bsnap.phase == core::ShotPhase::kReview;
+  if (home_.scale_weight != nullptr && !weight_frozen &&
       (snap.weight_g != last_weight_g_ || snap.connected != last_scale_connected_)) {
     last_weight_g_ = snap.weight_g;
     last_scale_connected_ = snap.connected;
@@ -1370,8 +1421,8 @@ void App::update_battery_runtime(const core::BatteryState& b) {
   const uint32_t now = lv_tick_get();
 
   // --- Ring maintenance (every refresh, to catch the minute boundary) ---
-  if (!b.present || b.charging) {
-    batt_hist_count_ = 0;  // charging / USB / no battery -> no window
+  if (!b.present) {
+    batt_hist_count_ = 0;  // USB power / no battery -> no window
     batt_hist_head_ = 0;
     batt_last_sample_ms_ = 0;
   } else if (batt_hist_count_ == 0 || now - batt_last_sample_ms_ >= 60000u) {
@@ -1389,9 +1440,7 @@ void App::update_battery_runtime(const core::BatteryState& b) {
   char* rt = batt_runtime_text_;
   const size_t n = sizeof(batt_runtime_text_);
   if (!b.present) {
-    std::snprintf(rt, n, "-");
-  } else if (b.charging) {
-    std::snprintf(rt, n, "Charging");
+    std::snprintf(rt, n, b.usb ? "USB power" : "-");
   } else if (batt_hist_count_ < 2) {
     std::snprintf(rt, n, "Estimating...");
   } else {

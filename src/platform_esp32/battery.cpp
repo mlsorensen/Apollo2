@@ -28,24 +28,11 @@ core::BatteryState Battery::battery() const {
   for (int i = 0; i < kSamples; ++i) raw_sum += io_extension().read_adc();
   const uint16_t raw = static_cast<uint16_t>(raw_sum / kSamples);
   volts = raw * board::kBatteryIoExtScale;
-  s.usb = HWCDC::isPlugged();
 #else
-  // No battery hardware on this board -> external-power (plug) indicator only.
+  // No battery hardware on this board -> external-power (USB) indicator only.
   if (board::kBatteryAdc < 0) {
     s.usb = true;
     return s;
-  }
-
-  // External power. Prefer a real VBUS (5V) sense on an ADC pin if the board
-  // wires one (works for chargers too); otherwise fall back to the USB
-  // peripheral's host-activity check (HWCDC::isPlugged uses an IDF timer/SOF
-  // check, so no serial terminal is needed, but a data-less charger may miss).
-  if (board::kVbusAdc >= 0) {
-    const float vbus =
-        analogReadMilliVolts(board::kVbusAdc) / 1000.0f * board::kVbusDivider;
-    s.usb = vbus >= board::kVbusPresentVolts;
-  } else {
-    s.usb = HWCDC::isPlugged();
   }
 
   // Oversample to beat per-read ADC noise (calibrated millivolts, averaged),
@@ -64,55 +51,59 @@ core::BatteryState Battery::battery() const {
     static uint32_t last_log_ms = 0;
     if (millis() - last_log_ms > 10000) {
       last_log_ms = millis();
-      Serial.printf("battery: adc raw=%.0fmV x%.2f -> %.2fV usb=%d\n", raw_mv,
-                    board::kBatteryDivider, volts, s.usb ? 1 : 0);
+      Serial.printf("battery: adc raw=%.0fmV x%.2f -> %.2fV\n", raw_mv,
+                    board::kBatteryDivider, volts);
     }
   }
 #endif
 #endif
 
-  // No cell: either no reading, or (on USB) the bare charge node floating above
-  // any real battery. Either way -> not present (UI shows a plug if s.usb).
-  if (volts < 2.5f || volts >= board::kBatteryNoCellVolts) {
-    volts_filt_ = 0.0f;
-    shown_pct_ = -1;
-    return s;
+  // --- Windowed reporting: the charger bounces the node hard (top-off pulses
+  // to ~4.2 V vs sag toward the pack level between them), so per-read
+  // thresholding flapped the tray between "USB" and a percent. Accumulate every
+  // poll; re-decide on a per-state cadence. Source = window MAX vs
+  // kUsbPowerVolts: only external power can push the node that high, so
+  //   - battery -> USB is INSTANT: one qualifying sample proves a plug-in;
+  //   - USB -> battery takes a full kUsbHoldMs with no qualifying sample (the
+  //     inter-pulse sag reads exactly like a pack, so absence of pulses is the
+  //     only unplug signal — this is as "immediate" as voltage alone can be);
+  //   - on battery the percent recomputes only once a minute (window AVERAGE),
+  //     so the readout sits still while nothing is really changing.
+  constexpr uint32_t kWindowMs = 60000;   // battery: percent update cadence
+  constexpr uint32_t kUsbHoldMs = 15000;  // USB: max no-pulse span before "unplugged"
+  const uint32_t now = millis();
+  if (win_n_ == 0) win_started_ms_ = now;
+  win_sum_ += volts;
+  win_max_ = (win_n_ == 0 || volts > win_max_) ? volts : win_max_;
+  ++win_n_;
+
+  const bool saw_usb = win_max_ >= board::kUsbPowerVolts;
+  const bool promote_to_usb = saw_usb && !state_.usb;  // instant USB flip
+  const uint32_t hold_ms = state_.usb ? kUsbHoldMs : kWindowMs;
+  if (state_valid_ && !promote_to_usb && now - win_started_ms_ < hold_ms)
+    return state_;  // hold the reported state until the window closes
+
+  const float avg = win_sum_ / static_cast<float>(win_n_);
+  win_sum_ = 0.0f;
+  win_max_ = 0.0f;
+  win_n_ = 0;
+
+  core::BatteryState next;
+  if (saw_usb || avg < 2.5f) {
+    // External power (or no usable cell reading — yet the board runs, so
+    // external power too). No percent: the node tracks the charger, not the pack.
+    next.usb = true;
+  } else {
+    next.present = true;
+    int pct = static_cast<int>(std::lround(
+        (avg - board::kBatteryEmptyVolts) /
+        (board::kBatteryFullVolts - board::kBatteryEmptyVolts) * 100.0f));
+    next.percent = std::max(0, std::min(100, pct));
+    next.volts = avg;  // windowed pack voltage (for the low-battery cutoff)
   }
-
-  s.present = true;
-  // Charging: prefer the USB signal; fall back to an elevated voltage so a dumb
-  // charger (no USB host activity) that bumps the voltage still reads as charging.
-  s.charging = s.usb || (volts >= board::kBatteryChargingVolts);
-
-  if (s.charging) {
-    // Terminal voltage under charge is unreliable — it swings with the charger,
-    // so a percent is meaningless here (the UI shows the fill animation, no
-    // number). Holding the filter at 0 means % re-seeds from the REAL battery
-    // level the instant we unplug, instead of sliding down from the inflated
-    // charging voltage.
-    volts_filt_ = 0.0f;
-    shown_pct_ = -1;
-    return s;  // percent stays 0; not shown while charging
-  }
-
-  // On battery: EMA (~5 s settle at the 500 ms poll) + percent, freshly seeded
-  // right after unplug since the filter was held at 0 while charging.
-  constexpr float kAlpha = 0.15f;
-  volts_filt_ =
-      (volts_filt_ <= 0.0f) ? volts : volts_filt_ + kAlpha * (volts - volts_filt_);
-
-  int pct = static_cast<int>(std::lround(
-      (volts_filt_ - board::kBatteryEmptyVolts) /
-      (board::kBatteryFullVolts - board::kBatteryEmptyVolts) * 100.0f));
-  pct = std::max(0, std::min(100, pct));
-
-  // Hysteresis: ignore +/-1% flicker at a boundary; only move on a real change.
-  const int delta = pct > shown_pct_ ? pct - shown_pct_ : shown_pct_ - pct;
-  if (shown_pct_ < 0 || delta >= 2) shown_pct_ = pct;
-
-  s.percent = shown_pct_;
-  s.volts = volts_filt_;  // smoothed pack voltage (for the low-battery cutoff)
-  return s;
+  state_ = next;
+  state_valid_ = true;
+  return state_;
 }
 
 }  // namespace platform

@@ -34,9 +34,12 @@ constexpr uint32_t kFlowRateWindowMs = 750;   // trailing derivative window
 constexpr uint32_t kFlowHistSampleMs = 50;    // weight-history sampling cadence
 constexpr float kFlowMinSpanS = 0.4f;         // need this much history for a rate
 constexpr uint32_t kShotSampleMs = 100;       // shot-plot cadence == scale event rate
-constexpr uint32_t kShotMinWindowMs = 10000;  // shot plot's smallest X window
-constexpr uint32_t kShotWindowStepMs = 5000;  // window grows in snaps (stable mapping
-                                              // between snaps -> cheap edge painting)
+constexpr uint32_t kShotMinWindowMs = 15000;   // shot plot's smallest X window
+constexpr uint32_t kShotWindowStepMs = 15000;  // window grows in snaps (stable mapping
+                                               // between snaps -> cheap edge painting):
+                                               // 15s -> 30s -> 45s -> 60s, wide enough
+                                               // that the rescale stays infrequent
+constexpr uint32_t kShotMaxWindowMs = 60000;   // then the window slides
 constexpr uint32_t kShotSlideStepMs = 2000;   // past the cap, the slide also snaps
 // Oscilloscope mode: blank columns kept just ahead of the write head so the sweep
 // point reads clearly (fresh trace behind it, gap in front).
@@ -374,27 +377,6 @@ const char* battery_icon(int pct) {
   if (pct >= 40) return LV_SYMBOL_BATTERY_2;
   if (pct >= 15) return LV_SYMBOL_BATTERY_1;
   return LV_SYMBOL_BATTERY_EMPTY;
-}
-
-const char* battery_fill_icon(int frame) {
-  switch (frame % 5) {
-    case 0:  return LV_SYMBOL_BATTERY_EMPTY;
-    case 1:  return LV_SYMBOL_BATTERY_1;
-    case 2:  return LV_SYMBOL_BATTERY_2;
-    case 3:  return LV_SYMBOL_BATTERY_3;
-    default: return LV_SYMBOL_BATTERY_FULL;
-  }
-}
-
-// Loops the battery fill while charging (no percent — see update_home).
-void battery_anim_cb(lv_timer_t* t) {
-  auto* w = static_cast<ui::HomeWidgets*>(lv_timer_get_user_data(t));
-  if (!w->charging) return;
-  w->charge_frame = (w->charge_frame + 1) % 5;
-  char buf[24];
-  std::snprintf(buf, sizeof(buf), LV_SYMBOL_CHARGE " %s",
-                battery_fill_icon(w->charge_frame));
-  lv_label_set_text(w->battery_label, buf);
 }
 
 // The full-width power button at the bottom (both layouts).
@@ -754,8 +736,6 @@ void build_rail_tray(lv_obj_t* rail, const lv_font_t* font, HomeWidgets& out) {
   out.wifi_label = lv_label_create(tray);  // WiFi glyph; update_home shows/hides + colors it
   lv_obj_set_style_text_font(out.wifi_label, font, 0);
   lv_obj_add_flag(out.wifi_label, LV_OBJ_FLAG_HIDDEN);
-
-  out.batt_timer = lv_timer_create(battery_anim_cb, 350, &out);  // drives charge anim
 }
 
 void build_bottom_tray(lv_obj_t* bar, const lv_font_t* font, HomeWidgets& out) {
@@ -777,7 +757,7 @@ void build_bottom_tray(lv_obj_t* bar, const lv_font_t* font, HomeWidgets& out) {
 
   // Space is tight on the compact bottom bar, so WiFi + battery share one row below
   // the clock. The battery shows just its level icon (no %) — the icon shape plus
-  // the green (charging) / red (low) coloring reads well enough at this size.
+  // the red (low) coloring reads well enough at this size.
   lv_obj_t* icons = lv_obj_create(tray);
   lv_obj_remove_style_all(icons);
   lv_obj_remove_flag(icons, LV_OBJ_FLAG_SCROLLABLE);
@@ -794,8 +774,6 @@ void build_bottom_tray(lv_obj_t* bar, const lv_font_t* font, HomeWidgets& out) {
   out.battery_label = lv_label_create(icons);
   lv_obj_set_style_text_color(out.battery_label, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(out.battery_label, font, 0);
-
-  out.batt_timer = lv_timer_create(battery_anim_cb, 350, &out);  // drives charge anim
 }
 
 void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_enabled,
@@ -1216,16 +1194,13 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   }
 
   // Battery / power (top-right):
-  //   battery + USB  -> charging: bolt + looping fill animation (NO percent)
-  //   battery only   -> percent + level icon
-  //   USB, no cell   -> plug symbol (external power)
-  //   nothing        -> blank
-  w.charging = battery.present && battery.charging;
+  //   USB power (voltage at/above threshold, or no cell) -> USB symbol
+  //   on battery                                         -> percent + level icon
+  //   nothing known                                      -> blank
   char bb[24];
-  if (w.charging) {
-    lv_obj_set_style_text_color(w.battery_label, lv_color_hex(ui::theme::ok()), 0);
-    std::snprintf(bb, sizeof(bb), LV_SYMBOL_CHARGE " %s", battery_fill_icon(w.charge_frame));
-    lv_label_set_text(w.battery_label, bb);
+  if (battery.usb) {
+    lv_label_set_text(w.battery_label, LV_SYMBOL_USB);
+    lv_obj_set_style_text_color(w.battery_label, lv_color_hex(ui::theme::muted()), 0);
   } else if (battery.present) {
     // Compact: icon only (space is tight); larger screens also show the percent.
     if (w.compact) {
@@ -1237,9 +1212,6 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     lv_obj_set_style_text_color(
         w.battery_label,
         lv_color_hex(battery.percent < 15 ? ui::theme::alert() : ui::theme::muted()), 0);
-  } else if (battery.usb) {
-    lv_label_set_text(w.battery_label, LV_SYMBOL_USB);
-    lv_obj_set_style_text_color(w.battery_label, lv_color_hex(ui::theme::muted()), 0);
   } else {
     lv_label_set_text(w.battery_label, "");
   }
@@ -1405,18 +1377,17 @@ static float update_flow_rate(HomeWidgets& w, const core::ScaleSnapshot& scale,
 
 // ---- Shot plot (dynamic X) --------------------------------------------------
 // While a shot runs, the plot maps TIME to X: window = clamp(elapsed,
-// kShotMinWindowMs, kFlowWindowS) across the full width, so a young shot gets
-// maximum horizontal resolution and the trace compresses as it lengthens;
+// kShotMinWindowMs, kShotMaxWindowMs) across the full width, so a young shot
+// gets maximum horizontal resolution and the trace compresses as it lengthens;
 // past the cap the window slides. Fully redrawn per sample (~7Hz).
 
 // Snapped time->x mapping (see kShotWindowStepMs): stable between snaps so
 // painting is incremental almost always.
 static uint32_t shot_window_of(uint32_t elapsed) {
   if (elapsed <= kShotMinWindowMs) return kShotMinWindowMs;
-  uint32_t win =
+  const uint32_t win =
       ((elapsed + kShotWindowStepMs - 1) / kShotWindowStepMs) * kShotWindowStepMs;
-  const uint32_t cap = static_cast<uint32_t>(kFlowWindowS) * 1000u;
-  return win > cap ? cap : win;
+  return win > kShotMaxWindowMs ? kShotMaxWindowMs : win;
 }
 static uint32_t shot_tstart_of(uint32_t elapsed, uint32_t window) {
   if (elapsed <= window) return 0;
@@ -1636,7 +1607,7 @@ void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
 
   // Sample storage is event-locked: record when the scale actually publishes
   // (whatever its stream rate), capped at kShotSampleMs spacing so a fast
-  // scale can't outrun the ring's 45s coverage.
+  // scale can't outrun the ring's 60s coverage.
   bool full = w.shot_x_painted < 0;
   if (scale.seq != w.shot_seq_seen) {
     w.shot_seq_seen = scale.seq;
