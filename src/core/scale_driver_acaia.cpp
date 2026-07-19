@@ -267,9 +267,8 @@ class AcaiaDriver : public IScaleDriver {
     if (cmd == kCmdStatus) {
       // Battery is b1 of the status blob on every generation (Lunar keeps a
       // timer-running flag in bit 7; the Umbra value is plain 0-100 < 128, so
-      // the mask is harmless there).
-      logf("AcaiaDriver: [%u] status frame batt=%u\n",
-           static_cast<unsigned>(now_ms()), f[4] & 0x7Fu);  // 60s correlation
+      // the mask is harmless there). The Umbra pushes one of these ~every
+      // 850 ms on its own — battery needs no polling or event registration.
       if (content_len >= 1) sink.on_battery(f[4] & 0x7F);
       return;
     }
@@ -290,22 +289,9 @@ class AcaiaDriver : public IScaleDriver {
       const size_t avail = end - (off + 1);
       if (event == kEventWeight && avail >= 6) {
         const float w = decode_weight(p);
-        // 60s-anomaly investigation: timestamped dump of every suspicious
-        // weight frame (negative or a >3 g step), unthrottled, bounded.
-        if ((w < -1.0f || w - last_raw_w_ > 3.0f || last_raw_w_ - w > 3.0f) &&
-            anomaly_dump_left_ > 0) {
-          --anomaly_dump_left_;
-          logf("AcaiaDriver: [%u] weight w=%.1f flags=%02X\n",
-               static_cast<unsigned>(now_ms()), static_cast<double>(w), p[5]);
-        }
-        last_raw_w_ = w;
-        if (w <= 5500.0f && w >= -5500.0f) sink.on_weight(w);
+        if (w <= 5500.0f && w >= -5500.0f && accept_weight(w)) sink.on_weight(w);
         off += 1 + 6;
       } else if (event == kEventBattery && avail >= 1) {
-        // Rare (interval-registered) — log every one with a timestamp to test
-        // the "burst == battery measurement window" correlation theory.
-        logf("AcaiaDriver: [%u] battery event %u\n",
-             static_cast<unsigned>(now_ms()), p[0] & 0x7Fu);
         sink.on_battery(p[0] & 0x7F);
         off += 1 + 1;
       } else if (event == kEventTimer && avail >= 3) {
@@ -319,6 +305,50 @@ class AcaiaDriver : public IScaleDriver {
         break;
       }
     }
+  }
+
+  // Auto-zero excursion hold. Every ~62s the Umbra runs an internal auto-zero
+  // cycle and leaks it into the weight stream for ~800 ms: a settling ramp of
+  // small NEGATIVE values unrelated to the pan load (captured: -3.1 -3.1 -3.9
+  // -4.0 -4.1..., flags walking unstable->stable; earlier cycles -8.3, -10.2)
+  // terminated by an exact 0.0, after which normal readings resume. Detector:
+  // when the stream steps from the published baseline into the offset band
+  // (< -0.5 g, > -20 g, deviating > 2.5 g), HOLD — publish nothing and wait.
+  // The cycle always returns to baseline (via its 0.0 when the pan is empty),
+  // so the whole excursion is discarded with zero artifacts; if the stream
+  // does NOT return within ~1.2 s it was a real weight change (e.g. a small
+  // tared item removed) and publishing resumes with that value. Outside the
+  // band-plus-step trigger nothing is ever delayed: dosing, shots, cup
+  // handling, and big negatives (cup off a tared scale, < -20 g) publish
+  // immediately.
+  bool accept_weight(float w) {
+    const uint32_t now = now_ms();
+    if (!holding_) {
+      if (w < -0.5f && w > -20.0f && baseline_g_ - w > 2.5f) {
+        holding_ = true;
+        hold_since_ms_ = now;
+        logf("AcaiaDriver: [%u] auto-zero hold (w=%.1f baseline=%.1f)\n",
+             static_cast<unsigned>(now), static_cast<double>(w),
+             static_cast<double>(baseline_g_));
+        return false;
+      }
+      baseline_g_ = w;
+      return true;
+    }
+    const float dev = w > baseline_g_ ? w - baseline_g_ : baseline_g_ - w;
+    if (dev <= 2.0f) {
+      holding_ = false;  // returned to baseline: the excursion never happened
+      baseline_g_ = w;
+      return true;
+    }
+    if (now - hold_since_ms_ > kHoldTimeoutMs) {
+      holding_ = false;  // no return: a real change — adopt it
+      logf("AcaiaDriver: [%u] auto-zero hold released (real change w=%.1f)\n",
+           static_cast<unsigned>(now), static_cast<double>(w));
+      baseline_g_ = w;
+      return true;
+    }
+    return false;  // mid-excursion: swallow
   }
 
   // 6-byte weight payload: bytes 0-3 raw u32 — endianness varies by model
@@ -348,8 +378,11 @@ class AcaiaDriver : public IScaleDriver {
   uint8_t rx_[256];
   size_t rx_len_ = 0;
   uint32_t last_diag_ms_ = 0;  // log_frame rate limit
-  float last_raw_w_ = 0.0f;         // anomaly-diagnostic state (BLE thread)
-  uint8_t anomaly_dump_left_ = 60;  // suspicious-weight log budget
+  // Auto-zero excursion hold state (BLE thread only; see accept_weight).
+  static constexpr uint32_t kHoldTimeoutMs = 1200;
+  float baseline_g_ = 0.0f;
+  bool holding_ = false;
+  uint32_t hold_since_ms_ = 0;
 
   std::atomic<uint32_t> last_rx_ms_{0};  // written on notify, read from tick()
 
