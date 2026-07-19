@@ -85,6 +85,14 @@ void MicraLink::set_token_persister(std::function<void(std::string)> persister) 
 
 void MicraLink::set_link(Link link) {
   std::lock_guard<std::mutex> lk(mutex_);
+  if (link != link_) {
+    // Silent drops matter: the paddle's wake-vs-shot decision needs Connected,
+    // and a stale power_ + dropped link reads as "shot path" at the next flip.
+    static const char* const kNames[] = {"Unconfigured", "NeedsToken", "Disconnected",
+                                         "Connecting", "Connected"};
+    logf("MicraLink: link %s -> %s\n", kNames[static_cast<int>(link_)],
+         kNames[static_cast<int>(link)]);
+  }
   link_ = link;
 }
 
@@ -285,6 +293,12 @@ bool MicraLink::do_refresh() {
 
   // Commit the parsed values to the shared cache under lock.
   std::lock_guard<std::mutex> lk(mutex_);
+  if (power != power_) {
+    // Power transitions are load-bearing for the paddle's wake-vs-shot
+    // decision (BrewController standby provider) — log the raw mode string.
+    logf("MicraLink: mode '%s' -> power %s\n", mode != nullptr ? mode : "(null)",
+         power == Power::On ? "On" : "Standby");
+  }
   power_ = power;
   brew_temp_c_ = brew_c;
   brew_target_c_ = brew_t;

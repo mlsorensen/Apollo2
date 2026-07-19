@@ -1009,15 +1009,22 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     if (w.boiler_set != nullptr) lv_label_set_text(w.boiler_set, "--");
   }
 
-  // Scale readout (scale-aware layout only).
+  // Scale readout (scale-aware layout only). Frozen during shot review exactly
+  // like pump_scale_chart's writer — this refresh-path write was overwriting
+  // the held final weight with the live reading every 500ms, which broke the
+  // freeze the moment the cup came off the scale.
   if (w.scale_weight != nullptr) {
-    char wb[16];
-    if (scale.connected) {
-      std::snprintf(wb, sizeof(wb), "%.1f g", static_cast<double>(scale.weight_g));
-    } else {
-      std::snprintf(wb, sizeof(wb), "-- g");
+    const bool weight_frozen =
+        brew.available && brew.phase == core::ShotPhase::kReview;
+    if (!weight_frozen) {
+      char wb[16];
+      if (scale.connected) {
+        std::snprintf(wb, sizeof(wb), "%.1f g", static_cast<double>(scale.weight_g));
+      } else {
+        std::snprintf(wb, sizeof(wb), "-- g");
+      }
+      lv_label_set_text(w.scale_weight, wb);
     }
-    lv_label_set_text(w.scale_weight, wb);
     char tb[16];
     // Every layout now labels this "TARGET" (a stepper's value on large screens, a
     // read-only row on compact), so it's just the number of grams.

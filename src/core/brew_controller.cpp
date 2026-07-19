@@ -2,6 +2,8 @@
 
 #include <cmath>
 
+#include "core/system.h"
+
 namespace core {
 
 namespace {
@@ -18,15 +20,31 @@ void BrewController::poll(uint32_t now_ms) {
   // --- Paddle relay: edge-triggered, unconditional (the user is in charge).
   if (reached(now_ms, last_sense_ms_ + kSensePeriodMs)) {
     last_sense_ms_ = now_ms;
-    const bool on = paddle_.sensed();
+    // Glitch filter: the raw level must hold kSenseStablePolls consecutive
+    // polls before it becomes an edge (see the constant's comment — phantom
+    // edge pairs from machine-wake EMI start unintended shots).
+    const bool raw = paddle_.sensed();
+    if (raw != sense_candidate_) {
+      sense_candidate_ = raw;
+      sense_stable_ = 1;
+    } else if (sense_stable_ < kSenseStablePolls) {
+      ++sense_stable_;
+    }
+    const bool on = (sense_stable_ >= kSenseStablePolls) ? sense_candidate_ : paddle_on_;
     if (!sensed_once_) {
-      // Boot safety: adopt the current level WITHOUT acting on it. If the ESP
-      // rebooted mid-shot with the paddle left on, the machine stays off until
-      // the user makes a fresh edge — no surprise auto-start.
-      sensed_once_ = true;
-      paddle_on_ = on;
+      // Boot safety: adopt the first STABLE level WITHOUT acting on it. If the
+      // ESP rebooted mid-shot with the paddle left on, the machine stays off
+      // until the user makes a fresh edge — no surprise auto-start.
+      if (sense_stable_ >= kSenseStablePolls) {
+        sensed_once_ = true;
+        paddle_on_ = on;
+      }
     } else if (on != paddle_on_) {
       paddle_on_ = on;
+      // Every ACCEPTED edge is logged (the raw pin is not): a paddle mystery
+      // always comes down to which edges the controller acted on and when.
+      logf("Brew: paddle %s edge (phase %d)\n", on ? "ON" : "OFF",
+           static_cast<int>(phase_));
       if (on && phase_ == ShotPhase::kReview) {
         // Swallow the ON edge while the frozen review is up: the user almost
         // certainly expects the NEXT (auto) shot, but automation only re-arms
@@ -48,6 +66,7 @@ void BrewController::poll(uint32_t now_ms) {
         paddle_.drive(true);
         driving_ = true;
         timer_.start(now_ms);  // ESP times every shot, automated or not
+        logf("Brew: shot timer started\n");
         if (phase_ == ShotPhase::kIdle && shot_mode_) {
           const ScaleSnapshot s0 = scale_.snapshot();
           if (s0.connected) {

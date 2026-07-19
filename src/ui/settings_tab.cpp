@@ -333,6 +333,16 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   lv_obj_remove_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_pad_all(parent, 0, 0);
 
+  // Fresh widgets -> stale change-detection is a lie. `out` persists across
+  // rebuilds (theme change, scale pair/forget), and if a refresh ran between
+  // the trigger and the deferred rebuild, the counts already "match" — the
+  // scan lists would stay empty and the stepper labels would keep LVGL's
+  // default "Text" forever. Reset so the first update repopulates everything.
+  out.last_count = -1;
+  out.last_scanning = false;
+  out.scale_last_count = -1;
+  out.scale_last_scanning = false;
+
   lv_obj_t* menu = lv_menu_create(parent);
   out.menu = menu;
   lv_obj_set_size(menu, lv_pct(100), lv_pct(100));

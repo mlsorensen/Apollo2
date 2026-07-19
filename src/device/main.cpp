@@ -189,7 +189,15 @@ void setup() {
   // unknown falls back to normal shot handling.
   g_brew.set_standby_provider([] {
     const core::MachineSnapshot s = g_micra.snapshot();
-    return s.link == core::Link::Connected && s.power != core::Power::On;
+    const bool wake_only = s.link == core::Link::Connected && s.power != core::Power::On;
+    // Called exactly once per paddle ON edge — log the decision inputs (a
+    // "shot instead of wake" report hinges on what power read here).
+    Serial.printf("Paddle ON edge: link=%d power=%s -> %s\n", static_cast<int>(s.link),
+                  s.power == core::Power::On        ? "On"
+                  : s.power == core::Power::Standby ? "Standby"
+                                                    : "Off",
+                  wake_only ? "wake only" : "shot path");
+    return wake_only;
   });
   g_brew.set_target_persister([](float g) { g_config.set_target_weight_g(g); });
   g_brew.set_shot_mode_persister([](bool on) { g_config.set_shot_mode(on); });

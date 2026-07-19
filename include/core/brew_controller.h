@@ -64,8 +64,10 @@ class BrewController : public IBrewController {
 
   ShotPhase phase_ = ShotPhase::kIdle;
   bool shot_mode_ = true;
-  bool paddle_on_ = false;    // last sensed level (edge detection)
-  bool sensed_once_ = false;  // no edge until the first real read (boot safety)
+  bool paddle_on_ = false;    // last ACCEPTED level (edge detection)
+  bool sensed_once_ = false;  // no edge until the first stable read (boot safety)
+  bool sense_candidate_ = false;  // raw level being debounced toward acceptance
+  uint8_t sense_stable_ = 0;      // consecutive polls the candidate has held
   bool driving_ = false;      // we currently hold the line closed
   bool auto_stopped_ = false; // this shot was ended by the target (not the paddle)
   float target_g_ = 36.0f;
@@ -88,6 +90,12 @@ class BrewController : public IBrewController {
   uint32_t last_now_ms_ = 0;  // for snapshot()'s elapsed time
 
   static constexpr uint32_t kSensePeriodMs = 25;      // paddle poll (edge latency)
+  // A level change is accepted only after holding this many consecutive polls
+  // (~75ms). Native-GPIO sense wiring (P4: weak pull-up, unshielded harness)
+  // picked up phantom OFF/ON edge pairs from the machine's own wake-up
+  // pump/solenoid kick — a phantom pair re-closes the line on an awake
+  // machine, i.e. an unintended real brew. A hand flip holds for 100s of ms.
+  static constexpr uint8_t kSenseStablePolls = 3;
   static constexpr uint32_t kBaselineDelayMs = 1200;  // tare settle before baseline
   static constexpr float kPreTaredG = 0.5f;           // |weight| under this = already tared
   static constexpr uint32_t kSettleMs = 3000;         // drip tail before the freeze

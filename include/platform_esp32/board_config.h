@@ -306,6 +306,7 @@ constexpr bool kPaddleActiveHigh = true;
 //     I2C bus; the PA enable is EXIO4 per the docs (the vendor demo leaves it
 //     untouched, so it may be hardwired on — we drive it high regardless). ---
 #define BOARD_HAS_AUDIO
+#define BOARD_AUDIO_PA_IOEXT      // PA enable rides the IO extension, not a GPIO
 constexpr int kAudioI2sPort = 1;  // vendor demo uses I2S_NUM_1
 constexpr int kAudioMclk = 6;
 constexpr int kAudioBclk = 44;
@@ -386,9 +387,32 @@ constexpr float kBatteryCutoffVolts = 3.40f;
 constexpr float kBatteryResumeVolts = 3.70f;
 constexpr float kUsbPowerVolts = 4.15f;
 
-// --- Paddle control (brew-by-weight): pins TBD (40-pin header available) ---
-constexpr int  kPaddleDrivePin = -1;
-constexpr int  kPaddleSensePin = -1;
+// --- Audio: ES8311 codec (DAC -> onboard speaker header) + mic input
+//     (unused). Pins from the Waveshare BSP (esp32_p4_wifi6_touch_lcd_4_3.h):
+//     BSP_I2S_MCLK 13, SCLK 12, LCLK 10, DOUT 9 (mic DSIN 11 unused). Codec
+//     control rides the shared I2C bus at the same 0x18 as the 4.3C; the PA
+//     enable is a native GPIO here (BSP_POWER_AMP_IO 53, active-high — the
+//     BSP's es8311_codec_cfg has pa_reverted = false), not an expander pin. ---
+#define BOARD_HAS_AUDIO
+constexpr int kAudioI2sPort = 1;
+constexpr int kAudioMclk = 13;
+constexpr int kAudioBclk = 12;
+constexpr int kAudioLrclk = 10;
+constexpr int kAudioDout = 9;     // ESP -> ES8311 SDIN (speaker)
+constexpr int kEs8311Addr = 0x18;
+constexpr int kAudioPaPin = 53;   // speaker power-amp enable, active-high
+
+// --- Paddle control (brew-by-weight): native GPIOs on the corner of the
+//     40-pin header (GND, 52, 51 — one 3-pin screw terminal). GPIO52 drives a
+//     PC817 opto module's IO input (module GND -> board GND); the module's
+//     output side runs VCC-floating so OUT/GND act as an isolated dry contact:
+//     OUT -> Micra white, module output GND -> Micra black. IO high = LED on =
+//     contact closed, hence active-HIGH (opposite of the 4.3C's expander
+//     drive). GPIO51 reads the physical paddle switch to board GND
+//     (INPUT_PULLUP, low = closed); unlike the 4.3C harness the paddle switch
+//     touches only this board, never the Micra. ---
+constexpr int  kPaddleDrivePin = 52;
+constexpr int  kPaddleSensePin = 51;
 constexpr bool kPaddleActiveHigh = true;
 
 #else

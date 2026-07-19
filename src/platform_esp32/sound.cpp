@@ -14,7 +14,9 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#if defined(BOARD_AUDIO_PA_IOEXT)
 #include "platform_esp32/io_extension.h"
+#endif
 
 // ES8311 codec bring-up, DAC path only. The register sequence is distilled
 // from esp_codec_dev's es8311.c (the driver inside the 4.3C vendor demo),
@@ -153,10 +155,6 @@ class Es8311Sound : public core::ISound {
     codec_set_fs();
     codec_start();
 
-    // Speaker power amp on (vendor demo never touches it — likely hardwired —
-    // but EXIO4 is PA_CTRL per the docs and driving it high is harmless).
-    io_extension().set(kIoExtPaEnable, true);
-
     // Pre-render the click: a short decaying sine tick, same sample in both
     // slots (the codec takes the left). PSRAM — i2s_channel_write copies into
     // the DMA descriptors, so the source needn't be DMA-capable.
@@ -183,6 +181,30 @@ class Es8311Sound : public core::ISound {
         .skip_unhandled_events = true,
     };
     if (esp_timer_create(&targs, &idle_timer_) != ESP_OK) return;
+
+    // Prime the DAC before the amp comes up. Between PA-on and the first click
+    // the on-demand I2S leaves the codec unclocked, and its floating output
+    // through the amp is audible STATIC from boot to the first press (heard on
+    // the P4; the 4.3C's amp is likely hardwired on with the same window). An
+    // enabled channel with nothing queued clocks out zeros (auto_clear), so:
+    // run silence now, amp on after, and the normal idle stop parks the
+    // channel 250ms later — once the DAC has been clocked its output stays
+    // settled through later clock-stops.
+    if (i2s_channel_enable(tx_) == ESP_OK) {
+      running_ = true;
+      esp_timer_start_once(idle_timer_, 250 * 1000);
+    }
+
+    // Speaker power amp on. 4.3C: EXIO4 = PA_CTRL via the IO extension (the
+    // vendor demo never touches it — likely hardwired — but driving it high is
+    // harmless). Native-GPIO boards (P4): a plain active-high enable pin.
+#if defined(BOARD_AUDIO_PA_IOEXT)
+    io_extension().set(kIoExtPaEnable, true);
+#else
+    pinMode(kAudioPaPin, OUTPUT);
+    digitalWrite(kAudioPaPin, HIGH);
+#endif
+
     ok_ = true;
     log_i("sound: ES8311 up (44.1 kHz, click %d frames, on-demand I2S)", kClickFrames);
   }
