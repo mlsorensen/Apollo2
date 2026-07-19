@@ -35,6 +35,15 @@ void BrewController::poll(uint32_t now_ms) {
         // to say "dismiss the review first". The matching OFF edge then falls
         // through to the branch below, which is a harmless no-op here.
         ++review_reject_seq_;
+      } else if (on && standby_ && standby_()) {
+        // The machine is connected and in standby: this flip is its WAKE
+        // switch (the Micra powers on; no water moves). Drive the line through
+        // so the wake happens, but skip the timer + shot automation — there is
+        // no shot to time or tare for. The OFF edge below is then a no-op for
+        // the (never-started) timer, and the NEXT flip — machine now on —
+        // runs as a normal shot.
+        paddle_.drive(true);
+        driving_ = true;
       } else if (on) {
         paddle_.drive(true);
         driving_ = true;
