@@ -36,13 +36,16 @@ lv_color_t* g_draw_buf = nullptr;
 // Number of screen rows LVGL renders per flush in partial mode. Larger = fewer
 // bands/flushes per refresh (the flow graph's ~200px plot renders in ~1 band).
 // PSRAM on RGB boards, so the size is cheap. (Probe: was 40.)
-constexpr int kBufferLines = 200;    // PSRAM fallback chunk (RGB/DSI) / SPI chunk
-// Internal-RAM chunk (~51KB at 800px). SIZE IS A CEILING, NOT A KNOB: LVGL
-// software-blends into this buffer, and internal vs PSRAM is a ~2.5x render
-// speedup — but NimBLE allocates from the same internal heap, and 2x32-line
-// buffers (102KB) starved it (BLE dead; same failure class as the old 128KB
-// internal LVGL pool). One 32-line buffer is the tested safe point.
-constexpr int kBufferLinesFast = 32;
+//
+// HISTORY: an INTERNAL 32-line variant (~51KB, ~2.5x render speedup for the
+// settings scroll) lived here briefly — and consumed the exact chunk of
+// internal heap WiFi needs to start: with it + NimBLE up, free internal RAM
+// bottomed at ~9KB and esp_wifi_init died with ESP_ERR_NO_MEM on every
+// attempt. Reverted by choice (working WiFi over scroll fps). Don't bring it
+// back while WiFi + BLE are expected to coexist; the running graphs never
+// needed it (scope sweep / shot plot invalidate a few columns per frame, so
+// their PSRAM blend cost is negligible).
+constexpr int kBufferLines = 200;    // PSRAM chunk (RGB/DSI) / SPI chunk
 
 uint32_t tick_cb() { return millis(); }
 
@@ -384,18 +387,11 @@ bool Display::begin() {
   // it here. Viable tear-free routes if revisited: scroll the graph directly
   // inside both framebuffers (cheap: memmove the strip in each), or use an SPI
   // panel that has its own GRAM and self-refreshes.
-  const size_t fast_bytes =
-      static_cast<size_t>(w) * kBufferLinesFast * sizeof(lv_color_t);
-  g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(fast_bytes, MALLOC_CAP_INTERNAL));
-  if (g_draw_buf != nullptr) {
-    buf_bytes = fast_bytes;
-    Serial.printf("RGB: LVGL draw buffer INTERNAL (%u bytes, %d lines)\n",
-                  static_cast<unsigned>(buf_bytes), kBufferLinesFast);
-  } else {
-    g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM));
-    Serial.printf("RGB: LVGL draw buffer PSRAM fallback %s (%u bytes)\n",
-                  g_draw_buf ? "ok" : "FAILED", static_cast<unsigned>(buf_bytes));
-  }
+  // PSRAM on purpose — see the kBufferLines comment: the internal variant
+  // starved WiFi of its init heap.
+  g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM));
+  Serial.printf("RGB: LVGL draw buffer PSRAM %s (%u bytes)\n",
+                g_draw_buf ? "ok" : "FAILED", static_cast<unsigned>(buf_bytes));
 #else
   // SPI pushes this buffer over the bus via DMA -> must be DMA-capable.
   g_draw_buf = static_cast<lv_color_t*>(
