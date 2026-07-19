@@ -274,14 +274,15 @@ class AcaiaDriver : public IScaleDriver {
     const size_t n = content_len - 1;
 
     if (event == kEventWeight && n >= 6) {
-      // Payload byte 5: bit0 unstable, bit1 negative, bits 2-7 a weight TYPE.
-      // The Umbra emits a type-3 housekeeping reading (zero-tracking offset,
-      // ~-10 g) every 60 s sharp — frame EF DD 0C 08 05 53 00 00 00 01 0F
-      // 5C 14, checksum valid — which, published as live weight, blipped the
-      // chart + flow rate. BLOCKLIST that type rather than allowlisting the
-      // dossier's "0 = net": the Umbra's normal stream itself carries a
-      // nonzero type (an allowlist of 0 silenced all weight — verified on HW).
-      if ((p[5] >> 2) != 3) sink.on_weight(decode_weight(p));
+      // Payload byte 5, per the official Brewmaster app (wt_event_stm32 in
+      // the decompiled SDK): bit0 stable, bit1 negative, and the weight TYPE
+      // is ONLY bits 2-3 (assembled bit3 | bit2<<1; EWEIGHT_TYPE: 0 net,
+      // 1 pw, 2 tare) — bits 4-7 are unrelated flags the Umbra does set on
+      // its normal stream (pyacaia's "bits 2-7 = type" is wrong there; an
+      // allowlist of type 0 read via >>2 silenced ALL weight on HW). The 60s
+      // ~-10 g zero-tracking housekeeping frame is type 3, outside the app's
+      // own enum: drop exactly frames with BOTH type bits set.
+      if ((p[5] & 0x0C) != 0x0C) sink.on_weight(decode_weight(p));
     } else if (event == kEventBattery && n >= 1) {
       sink.on_battery(p[0] & 0x7F);  // pushed by the scale (notif request id 1)
     } else if (event == kEventTimer && n >= 3) {
