@@ -307,11 +307,13 @@ class AcaiaDriver : public IScaleDriver {
     }
   }
 
-  // Auto-zero excursion hold. Every ~62s the Umbra runs an internal auto-zero
-  // cycle and leaks it into the weight stream for ~800 ms: a settling ramp of
-  // small NEGATIVE values unrelated to the pan load (captured: -3.1 -3.1 -3.9
-  // -4.0 -4.1..., flags walking unstable->stable; earlier cycles -8.3, -10.2)
-  // terminated by an exact 0.0, after which normal readings resume. Detector:
+  // Internal-measurement excursion hold. Every ~62s the Umbra interrupts its
+  // weight stream for ~800 ms with values from some internal measurement —
+  // purpose unknown (zero maintenance? temperature? battery-under-load?);
+  // what's established is the SIGNATURE: a settling ramp of small NEGATIVE
+  // values unrelated to the pan load (captured: -3.1 -3.1 -3.9 -4.0 -4.1...,
+  // flags walking unstable->stable; other sessions -8.3, -10.2) terminated
+  // by an exact 0.0, after which normal readings resume. Detector:
   // when the stream steps from the published baseline into the offset band
   // (< -0.5 g, > -20 g, deviating > 2.5 g), HOLD — publish nothing and wait.
   // The cycle always returns to baseline (via its 0.0 when the pan is empty),
@@ -341,8 +343,17 @@ class AcaiaDriver : public IScaleDriver {
       baseline_g_ = w;
       return true;
     }
+    // Any frame OUTSIDE the offset band means physical interaction (a hand or
+    // scoop in the load path spikes well past it) — the auto-zero cycle never
+    // leaves the band. Release immediately so real removals show in ~a frame
+    // or two instead of waiting out the timeout.
+    if (w < -20.0f || w > baseline_g_ + 2.5f) {
+      holding_ = false;
+      baseline_g_ = w;
+      return true;
+    }
     if (now - hold_since_ms_ > kHoldTimeoutMs) {
-      holding_ = false;  // no return: a real change — adopt it
+      holding_ = false;  // no return, no contact spike: a real change — adopt it
       logf("AcaiaDriver: [%u] auto-zero hold released (real change w=%.1f)\n",
            static_cast<unsigned>(now), static_cast<double>(w));
       baseline_g_ = w;
@@ -379,7 +390,7 @@ class AcaiaDriver : public IScaleDriver {
   size_t rx_len_ = 0;
   uint32_t last_diag_ms_ = 0;  // log_frame rate limit
   // Auto-zero excursion hold state (BLE thread only; see accept_weight).
-  static constexpr uint32_t kHoldTimeoutMs = 1200;
+  static constexpr uint32_t kHoldTimeoutMs = 1000;  // bursts measure <= ~850ms
   float baseline_g_ = 0.0f;
   bool holding_ = false;
   uint32_t hold_since_ms_ = 0;
