@@ -289,6 +289,17 @@ class AcaiaDriver : public IScaleDriver {
       const size_t avail = end - (off + 1);
       if (event == kEventWeight && avail >= 6) {
         const float w = decode_weight(p);
+        // Excursion-hold tuning: raw-stream dump around anything anomalous
+        // (unthrottled, bounded) — a burst the trigger MISSES is otherwise
+        // invisible on serial.
+        if ((w < -0.5f || w - raw_prev_w_ > 1.5f || raw_prev_w_ - w > 1.5f) &&
+            raw_dump_left_ > 0) {
+          --raw_dump_left_;
+          logf("AcaiaDriver: [%u] raw w=%.1f flags=%02X base=%.1f hold=%d\n",
+               static_cast<unsigned>(now_ms()), static_cast<double>(w), p[5],
+               static_cast<double>(baseline_g_), holding_ ? 1 : 0);
+        }
+        raw_prev_w_ = w;
         if (w <= 5500.0f && w >= -5500.0f && accept_weight(w)) sink.on_weight(w);
         off += 1 + 6;
       } else if (event == kEventBattery && avail >= 1) {
@@ -394,6 +405,8 @@ class AcaiaDriver : public IScaleDriver {
   float baseline_g_ = 0.0f;
   bool holding_ = false;
   uint32_t hold_since_ms_ = 0;
+  float raw_prev_w_ = 0.0f;      // raw-dump diagnostic state
+  uint8_t raw_dump_left_ = 100;  // bounded budget
 
   std::atomic<uint32_t> last_rx_ms_{0};  // written on notify, read from tick()
 
