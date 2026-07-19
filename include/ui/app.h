@@ -85,6 +85,8 @@ class App {
   void boiler_adjust(int dir);           // Boiler level +/-
   void steam_set_enabled(bool on);       // steam boiler on/off switch
   void brightness_adjust(int dir);       // Display brightness +/-
+  void cycle_screen_timeout();           // Device "Screen dim": Off / 15 min / 30 min
+  void screensaver_tick();               // idle-dim poll (from an lv_timer, ~4 Hz)
   void hour_adjust(int dir);             // Device clock hour +/- (wraps)
   void minute_adjust(int dir);           // Device clock minute +/- (wraps)
   void set_clock_24h(bool on);           // Device "24-hour" switch
@@ -157,6 +159,11 @@ class App {
   bool last_scale_connected_ = false;
   core::ShotPhase shot_phase_ = core::ShotPhase::kIdle;  // last seen (graph reset/freeze edges)
   uint32_t brew_reject_seen_ = 0;  // last review_reject_seq (flash Reset on change)
+  // Screensaver: dims the backlight after the configured idle time; any touch
+  // restores it (LVGL's inactivity clock resets on input). Timer survives
+  // rebuilds — it belongs to the app, not the widget tree.
+  lv_timer_t* screensaver_timer_ = nullptr;
+  bool screensaver_on_ = false;
   bool theme_rebuild_pending_ = false;  // coalesce rapid theme cycling into one rebuild
   bool layout_rebuild_pending_ = false; // coalesce a scale pair/forget rebuild
   int rebuild_section_ = kSectionDevice;  // Settings section to return to after rebuild()
@@ -166,7 +173,7 @@ class App {
 
   // Battery runtime estimate: a ~10-min sliding window of percent-over-time; the
   // drain rate (oldest-in-window vs now) extrapolates the remaining runtime. The
-  // window is cleared while charging / on USB / no battery (no estimate).
+  // window is cleared while on USB power / no battery (no estimate).
   core::BatteryState battery_state_{};  // latest read (for Stats > Info)
   struct BattSample {
     uint32_t t_ms;

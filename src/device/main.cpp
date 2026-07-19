@@ -119,7 +119,10 @@ void setup() {
   if (g_lowbatt_sleep) {
     batt_only_init();
     const core::BatteryState b = g_battery.battery();
-    if (!(b.charging || b.volts >= board::kBatteryResumeVolts)) enter_lowbatt_sleep();
+    // On USB (node at/above the USB threshold) or rested past the resume level
+    // -> boot. A pack still charging below the resume level stays parked; it'll
+    // pass the threshold as it charges.
+    if (!(b.usb || b.volts >= board::kBatteryResumeVolts)) enter_lowbatt_sleep();
     g_lowbatt_sleep = 0;  // charged enough -> fall through to a normal boot
   }
 
@@ -180,6 +183,14 @@ void setup() {
   platform::paddle().begin();
   g_brew.seed(g_config.target_weight_g(), g_config.shot_mode(), g_config.overshoot_g(),
               g_config.review_hold_s());
+  // A paddle flip while the connected Micra sits in standby only WAKES it (no
+  // water moves) — tell the controller so it passes the flip through without
+  // starting a phantom shot. Only a KNOWN not-on state counts; disconnected or
+  // unknown falls back to normal shot handling.
+  g_brew.set_standby_provider([] {
+    const core::MachineSnapshot s = g_micra.snapshot();
+    return s.link == core::Link::Connected && s.power != core::Power::On;
+  });
   g_brew.set_target_persister([](float g) { g_config.set_target_weight_g(g); });
   g_brew.set_shot_mode_persister([](bool on) { g_config.set_shot_mode(on); });
   g_brew.set_overshoot_persister([](float g) { g_config.set_overshoot_g(g); });

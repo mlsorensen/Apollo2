@@ -66,8 +66,8 @@ struct HomeWidgets {
   lv_obj_t* shot_btn = nullptr;
   lv_obj_t* shot_btn_label = nullptr;
   // Attention flash on the shot button (a paddle flip swallowed during review —
-  // see BrewSnapshot::review_reject_seq). Timer owned like batt_timer: App
-  // deletes it on rebuild/teardown. flash_shot_button() (re)arms the pulse.
+  // see BrewSnapshot::review_reject_seq). App owns the timer: it deletes it on
+  // rebuild/teardown. flash_shot_button() (re)arms the pulse.
   lv_timer_t* shot_flash_timer = nullptr;
   int shot_flash_count = 0;
   // Scale battery icon in the SCALE header, right of the status text (icon-only
@@ -139,7 +139,7 @@ struct HomeWidgets {
   // plots time-stamped shot samples with x = t/window, the window growing from
   // kShotMinWindow to the 45s cap as the shot lengthens — a 30s shot uses the
   // full width at maximum resolution. Fully redrawn per new sample (~7Hz).
-  static constexpr int kShotCap = 450;  // 450 x 100ms = the 45s cap
+  static constexpr int kShotCap = 600;  // 600 x 100ms = the 60s window cap
   float shot_weights[kShotCap] = {};    // g at each sample
   float shot_flows[kShotCap] = {};      // g/s at each sample (post drop-negative)
   uint32_t shot_ts[kShotCap] = {};      // ms since shot_t0
@@ -165,12 +165,6 @@ struct HomeWidgets {
   float shot_store_interval_ms = 150.0f;
   float shot_smooth_k = 0.15f;          // 3-point kernel neighbor weight (0 = off);
                                         // set by App from IDisplaySettings::flow_smooth
-
-  // Charging animation: a looping battery-fill icon (no percent — terminal
-  // voltage under charge is charger-dependent). The timer advances the frame.
-  lv_timer_t* batt_timer = nullptr;
-  bool charging = false;
-  int charge_frame = 0;
 };
 
 // Build the Home widgets into `parent`, sized for `screen`. `scale_enabled`

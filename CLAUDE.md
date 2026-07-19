@@ -35,7 +35,8 @@ full-off) and battery monitoring via the expander's ADC (reg 0x06, ÷3 divider,
 scale 3·3.3/1023 — not yet multimeter-calibrated; the 7B's same-family chip
 needed 0.009632). Support is config-only: no new driver code. RGB timings are
 the 4.3C demo's (pulse 4, porches 8/8, 16 MHz), not the 4.3B's.
-`HWCDC::isPlugged()` works on this S3 (unlike the P4) for the USB/plug icon.
+(USB-vs-battery is now inferred from the battery-node voltage alone —
+kUsbPowerVolts — on every board; HWCDC::isPlugged() is no longer used.)
 Bring-up gotcha: scripted DTR/RTS toggling on the USB-CDC port can strand the
 board in ROM download mode — black screen, silent serial, yet flashing still
 works. Recover with the physical RST button; don't script reset dances.
@@ -115,8 +116,8 @@ GT911 all up; NimBLE host inits):
    continuous scanning (our scans are short; reconnects are direct-by-MAC).
 4. Battery: WORKING — BAT_ADC GPIO20, divider ÷3 (confirmed: raw*3 == 4.20V
    LiPo CV level while charging). `HWCDC::isPlugged()` is non-functional on
-   the P4's USB-Serial-JTAG (always false), so charging detection is the
-   voltage fallback (>= kBatteryChargingVolts) only. Known hardware trait:
+   the P4's USB-Serial-JTAG (always false) — moot now that USB-vs-battery is
+   voltage-only (>= kUsbPowerVolts) on all boards. Known hardware trait:
    plugging/unplugging USB with a battery attached FULLY POWER-CYCLES the
    board (reset reason: power-on) — the power path's VBUS<->boost switchover
    drops the rail; not fixable in firmware.

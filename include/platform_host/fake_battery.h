@@ -2,8 +2,7 @@
 
 #include "core/battery.h"
 
-// Host stand-in: an idle battery at 82%, so the sim previews the percent view
-// (the charging fill animation only shows on a live device with a timer ticking).
+// Host stand-in: an idle battery at 82%, so the sim previews the percent view.
 
 namespace host {
 

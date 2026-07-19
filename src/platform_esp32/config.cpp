@@ -10,6 +10,7 @@ constexpr char kMacKey[] = "mac";
 constexpr char kNameKey[] = "name";
 constexpr char kTokenKey[] = "token";
 constexpr char kBrightnessKey[] = "bright";
+constexpr char kScreenTimeoutKey[] = "scrtimeout";
 constexpr char kClock24Key[] = "clock24";
 constexpr char kThemeKey[] = "theme";
 constexpr char kFahrenheitKey[] = "fahr";
@@ -211,6 +212,21 @@ void Config::set_brightness(int percent) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putInt(kBrightnessKey, percent);
+  p.end();
+}
+
+int Config::screen_timeout_min() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 30;
+  const int v = p.isKey(kScreenTimeoutKey) ? p.getInt(kScreenTimeoutKey, 30) : 30;
+  p.end();
+  return v;
+}
+
+void Config::set_screen_timeout_min(int minutes) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putInt(kScreenTimeoutKey, minutes);
   p.end();
 }
 

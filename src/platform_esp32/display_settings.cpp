@@ -18,6 +18,22 @@ void DisplaySettings::set_brightness(int percent) {
 
 bool DisplaySettings::supports_brightness() const { return board::kSupportsBrightness; }
 
+int DisplaySettings::screen_timeout_min() const { return config_.screen_timeout_min(); }
+
+void DisplaySettings::set_screen_timeout_min(int minutes) {
+  config_.set_screen_timeout_min(minutes);
+}
+
+void DisplaySettings::set_screensaver(bool on) {
+  // Live backlight only — the persisted preference stays what the user set.
+  // On/off-only boards get 0 (backlight off) instead of a 5% dim.
+  if (on) {
+    display_.set_brightness(board::kSupportsBrightness ? 5 : 0);
+  } else {
+    display_.set_brightness(board::kSupportsBrightness ? config_.brightness() : 100);
+  }
+}
+
 int DisplaySettings::theme() const { return config_.theme(); }
 
 void DisplaySettings::set_theme(int index) { config_.set_theme(index); }  // UI applies it

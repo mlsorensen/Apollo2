@@ -180,6 +180,18 @@ void build_device_rows(lv_obj_t* page, const lv_font_t* text_font,
     out.brightness_minus = out.brightness_plus = out.brightness_value = nullptr;
   }
 
+  // Screen dim: tap cycles Off / 15 min / 30 min. On every board — on/off-only
+  // backlights just switch off instead of dimming.
+  lv_obj_t* rd = make_setting_row(page, "Screen dim", text_font);
+  out.dim_btn = ui::make_button(rd);
+  lv_obj_set_height(out.dim_btn, btn_size);
+  lv_obj_set_style_pad_hor(out.dim_btn, 14, 0);
+  lv_obj_set_style_bg_color(out.dim_btn, lv_color_hex(ui::theme::card()), 0);
+  out.dim_value = lv_label_create(out.dim_btn);
+  lv_obj_set_style_text_color(out.dim_value, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(out.dim_value, text_font, 0);
+  lv_obj_center(out.dim_value);
+
   lv_obj_t* rh = make_setting_row(page, "Hour", text_font);
   make_inline_stepper(rh, text_font, symbol_font, btn_size, &out.hour_minus,
                       &out.hour_value, &out.hour_plus, nullptr);
