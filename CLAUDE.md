@@ -114,7 +114,19 @@ GT911 all up; NimBLE host inits):
 3. BLE: host init verified; actual Micra/scale connections not yet tested.
    Known bug esp-hosted-mcu#180: scan results stall after ~60-90s of
    continuous scanning (our scans are short; reconnects are direct-by-MAC).
-4. Battery: WORKING — BAT_ADC GPIO20, divider ÷3 (confirmed: raw*3 == 4.20V
+4. Paddle (brew-by-weight): native GPIOs on the header corner — GND, GPIO52,
+   GPIO51 fit one 3-pin screw terminal. GPIO52 -> PC817 opto module IO (module
+   input GND -> board GND); output side VCC left floating so OUT/GND are an
+   isolated dry contact: OUT -> Micra white, output GND -> Micra black.
+   Active-HIGH drive (IO high = contact closed) — opposite of the 4.3C's
+   expander. GPIO51 <- paddle switch to board GND (INPUT_PULLUP, low =
+   closed); the physical paddle touches only this board, never the Micra.
+   Config-only (native-GPIO path in paddle.cpp); not yet tested on HW.
+5. Audio: config-only reuse of the 4.3C's ES8311 driver — BSP pins MCLK 13 /
+   BCLK 12 / LRCLK 10 / DOUT 9, codec at 0x18 on the shared I2C bus, PA
+   enable native GPIO53 active-high (BOARD_AUDIO_PA_IOEXT selects expander-vs-
+   GPIO PA in sound.cpp). Not yet tested on HW.
+6. Battery: WORKING — BAT_ADC GPIO20, divider ÷3 (confirmed: raw*3 == 4.20V
    LiPo CV level while charging). `HWCDC::isPlugged()` is non-functional on
    the P4's USB-Serial-JTAG (always false) — moot now that USB-vs-battery is
    voltage-only (>= kUsbPowerVolts) on all boards. Known hardware trait:
