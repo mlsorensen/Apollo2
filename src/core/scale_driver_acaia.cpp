@@ -284,22 +284,8 @@ class AcaiaDriver : public IScaleDriver {
     const size_t n = content_len - 1;
 
     if (event == kEventWeight && n >= 6) {
-      // TYPE-FILTER STATUS (in flux): the app's wt_event_stm32 says type =
-      // bits 2-3 of byte 5 — but BOTH a type-0 allowlist AND a type-3
-      // blocklist killed the Umbra's normal stream on HW, so its normal
-      // frames apparently carry type bits too and the 60s housekeeping frame
-      // (EF DD 0C 08 05 53 00 00 00 01 0F 5C 14, ~-10 g zero-tracking) must
-      // differ some other way. Publish everything for now (the blip is
-      // cosmetic; no weight is not) and dump the first frames per connection
-      // to learn what normal frames really look like.
-      if (weight_dump_left_ > 0) {
-        --weight_dump_left_;
-        const uint32_t saved = last_diag_ms_;
-        last_diag_ms_ = 0;  // bypass the rate limit for this bounded dump
-        log_frame("weight frame", f, total);
-        last_diag_ms_ = saved > now_ms() ? saved : now_ms();
-      }
-      sink.on_weight(decode_weight(p));
+      const float w = decode_weight(p);
+      if (accept_weight(w)) sink.on_weight(w);
     } else if (event == kEventBattery && n >= 1) {
       sink.on_battery(p[0] & 0x7F);  // pushed by the scale (notif request id 1)
     } else if (event == kEventTimer && n >= 3) {
@@ -310,10 +296,44 @@ class AcaiaDriver : public IScaleDriver {
     }
   }
 
-  // 6-byte weight payload: bytes 0-3 raw u32 — BIG-endian on Umbra, LITTLE on
-  // Lunar. Parse BE first, fall back to LE when implausible (> 2000 g) —
-  // goscale/apollo's trick, one parser covers both. byte 4 = decimal places,
-  // byte 5 bit1 = negative.
+  // The official app's weight publish gate (parse_eventmsg, Umbra path,
+  // decompiled from classes.dex — the .java copy of that method was mangled).
+  // VALUE heuristics, mirrored exactly, because on the Umbra the frame FLAGS
+  // don't discriminate: its 60s zero-tracking housekeeping frame (~-10 g,
+  // e.g. EF DD 0C 08 05 53 00 00 00 01 0F 5C 14) carries the same type bits
+  // (2-3, both set) as the whole normal stream (normal frame captured on HW:
+  // ... D6 0D 00 00 01 0C ...). Acaia's own filter is:
+  //  - drop out-of-range readings (|w| > 5500 g);
+  //  - drop the FIRST frame below -5 g ("minus5mode" latch): a lone
+  //    housekeeping frame between normal readings never shows, while a real
+  //    sustained negative (cup lifted off a tared scale) publishes from its
+  //    second frame on;
+  //  - drop one-frame transients to (near-)zero right after a non-zero
+  //    reading.
+  bool accept_weight(float w) {
+    bool drop = false;
+    if (w > 5500.0f || w < -5500.0f) drop = true;
+    const bool near_zero = w >= -1.0f && w <= 1.0f;
+    const bool prev_near_zero = prev_weight_g_ >= -1.0f && prev_weight_g_ <= 1.0f;
+    if (!prev_near_zero && near_zero) drop = true;
+    if (prev_weight_g_ != 0.0f && w == 0.0f) drop = true;
+    if (w < -5.0f) {
+      if (!minus5_latch_) {
+        minus5_latch_ = true;
+        drop = true;
+      }
+    } else {
+      minus5_latch_ = false;
+    }
+    prev_weight_g_ = w;  // tracked regardless, like the app's previousWeight
+    return !drop;
+  }
+
+  // 6-byte weight payload: bytes 0-3 raw u32 — endianness varies by model
+  // and even within one scale's streams (the user's Umbra streams LE despite
+  // earlier lore saying BE). Parse BE first, fall back to LE when implausible
+  // (> 2000 g) — goscale/apollo's trick, one parser covers everything seen.
+  // byte 4 = decimal places, byte 5 bit1 = negative.
   static float decode_weight(const uint8_t* p) {
     const uint32_t be = (static_cast<uint32_t>(p[0]) << 24) |
                         (static_cast<uint32_t>(p[1]) << 16) |
@@ -335,8 +355,9 @@ class AcaiaDriver : public IScaleDriver {
   // BLE notify thread only.
   uint8_t rx_[256];
   size_t rx_len_ = 0;
-  uint32_t last_diag_ms_ = 0;   // log_frame rate limit
-  uint8_t weight_dump_left_ = 8;  // hex-dump the first weight frames (diagnosis)
+  uint32_t last_diag_ms_ = 0;  // log_frame rate limit
+  float prev_weight_g_ = 0.0f;  // accept_weight state (app's previousWeight)
+  bool minus5_latch_ = false;   // app's minus5mode
 
   std::atomic<uint32_t> last_rx_ms_{0};  // written on notify, read from tick()
 
