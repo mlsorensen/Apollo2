@@ -268,6 +268,8 @@ class AcaiaDriver : public IScaleDriver {
       // Battery is b1 of the status blob on every generation (Lunar keeps a
       // timer-running flag in bit 7; the Umbra value is plain 0-100 < 128, so
       // the mask is harmless there).
+      logf("AcaiaDriver: [%u] status frame batt=%u\n",
+           static_cast<unsigned>(now_ms()), f[4] & 0x7Fu);  // 60s correlation
       if (content_len >= 1) sink.on_battery(f[4] & 0x7F);
       return;
     }
@@ -276,53 +278,47 @@ class AcaiaDriver : public IScaleDriver {
       log_frame("unknown cmd", f, total);
       return;
     }
-    const uint8_t event = f[4];
-    const uint8_t* p = f + 5;
-    const size_t n = content_len - 1;
 
-    if (event == kEventWeight && n >= 6) {
-      const float w = decode_weight(p);
-      if (w > 5500.0f || w < -5500.0f) return;  // garbage guard (pre-median)
-      sink.on_weight(median5(w));
-    } else if (event == kEventBattery && n >= 1) {
-      sink.on_battery(p[0] & 0x7F);  // pushed by the scale (notif request id 1)
-    } else if (event == kEventTimer && n >= 3) {
-      sink.on_timer((p[0] * 60u + p[1]) * 1000u + p[2] * 100u);  // min, sec, tenths
-    } else if (event != 8 && event != 11) {
-      // Button (8) and heartbeat-response (11): known, nothing to publish.
-      log_frame("unknown event", f, total);
-    }
-  }
-
-  // Weight outlier suppression. Every 60s the Umbra injects a 2-frame burst
-  // into the weight stream — its (drifting) zero-offset reading then a bogus
-  // 0.0 (captured on HW: w=-3.1 flags 0F, then w=0.0 flags 0D, between
-  // normal ...0C frames; earlier bursts read -8.3 and -10.2). The frames are
-  // indistinguishable by flags, and value thresholds fail because the offset
-  // wanders (today's -3.1 sailed past a -5 g latch). A median-of-5 filter
-  // erases ANY <= 2-frame excursion — any sign, any size, idle or mid-shot —
-  // at the cost of the published stream running ~2 frames (~100-200 ms)
-  // behind; the brew controller's overshoot learning absorbs that lag.
-  // Real step changes (cup on/off) come through exact, just delayed.
-  float median5(float w) {
-    med5_[med5_head_] = w;
-    med5_head_ = (med5_head_ + 1) % 5;
-    if (med5_n_ < 5) {  // warmup: pass through until the window fills
-      ++med5_n_;
-      return w;
-    }
-    float t[5];
-    for (int i = 0; i < 5; ++i) t[i] = med5_[i];
-    for (int i = 1; i < 5; ++i) {  // insertion sort, 5 elements
-      const float v = t[i];
-      int j = i - 1;
-      while (j >= 0 && t[j] > v) {
-        t[j + 1] = t[j];
-        --j;
+    // A cmd-12 frame can BUNDLE several events back to back (reference
+    // parsers iterate: id byte + fixed payload per event — weight 6, timer 3,
+    // key 1, battery 1). Events span f[4] .. f[total-3] (checksum trails).
+    size_t off = 4;
+    const size_t end = total - 2;
+    while (off < end) {
+      const uint8_t event = f[off];
+      const uint8_t* p = f + off + 1;
+      const size_t avail = end - (off + 1);
+      if (event == kEventWeight && avail >= 6) {
+        const float w = decode_weight(p);
+        // 60s-anomaly investigation: timestamped dump of every suspicious
+        // weight frame (negative or a >3 g step), unthrottled, bounded.
+        if ((w < -1.0f || w - last_raw_w_ > 3.0f || last_raw_w_ - w > 3.0f) &&
+            anomaly_dump_left_ > 0) {
+          --anomaly_dump_left_;
+          logf("AcaiaDriver: [%u] weight w=%.1f flags=%02X\n",
+               static_cast<unsigned>(now_ms()), static_cast<double>(w), p[5]);
+        }
+        last_raw_w_ = w;
+        if (w <= 5500.0f && w >= -5500.0f) sink.on_weight(w);
+        off += 1 + 6;
+      } else if (event == kEventBattery && avail >= 1) {
+        // Rare (interval-registered) — log every one with a timestamp to test
+        // the "burst == battery measurement window" correlation theory.
+        logf("AcaiaDriver: [%u] battery event %u\n",
+             static_cast<unsigned>(now_ms()), p[0] & 0x7Fu);
+        sink.on_battery(p[0] & 0x7F);
+        off += 1 + 1;
+      } else if (event == kEventTimer && avail >= 3) {
+        sink.on_timer((p[0] * 60u + p[1]) * 1000u + p[2] * 100u);  // min, sec, tenths
+        off += 1 + 3;
+      } else if (event == 8 && avail >= 1) {  // key press: 1-byte payload
+        off += 1 + 1;
+      } else {
+        // Ack (11) and anything unknown: payload size not known — log + stop.
+        if (event != 11) log_frame("unknown event", f, total);
+        break;
       }
-      t[j + 1] = v;
     }
-    return t[2];
   }
 
   // 6-byte weight payload: bytes 0-3 raw u32 — endianness varies by model
@@ -352,9 +348,8 @@ class AcaiaDriver : public IScaleDriver {
   uint8_t rx_[256];
   size_t rx_len_ = 0;
   uint32_t last_diag_ms_ = 0;  // log_frame rate limit
-  float med5_[5] = {};  // median5 window (BLE thread only)
-  int med5_n_ = 0;
-  int med5_head_ = 0;
+  float last_raw_w_ = 0.0f;         // anomaly-diagnostic state (BLE thread)
+  uint8_t anomaly_dump_left_ = 60;  // suspicious-weight log budget
 
   std::atomic<uint32_t> last_rx_ms_{0};  // written on notify, read from tick()
 
