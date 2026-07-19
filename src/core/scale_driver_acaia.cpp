@@ -282,24 +282,8 @@ class AcaiaDriver : public IScaleDriver {
 
     if (event == kEventWeight && n >= 6) {
       const float w = decode_weight(p);
-      // Burst diagnostic (bounded, NOT rate-limited — the earlier 1/s limit
-      // hid that the 60s anomaly is a ~0.5s BURST of frames, so a
-      // first-frame latch can't kill it): log every suspicious frame with
-      // the decode + the gate's verdict, until the budget runs out.
-      const bool suspicious =
-          w < -5.0f || w - prev_weight_g_ > 3.0f || prev_weight_g_ - w > 3.0f;
-      const bool ok = accept_weight(w);
-      if (suspicious && anomaly_dump_left_ > 0) {
-        --anomaly_dump_left_;
-        const uint32_t saved = last_diag_ms_;
-        last_diag_ms_ = 0;
-        char tag[48];
-        std::snprintf(tag, sizeof(tag), "w=%.1f %s", static_cast<double>(w),
-                      ok ? "PUB" : "DROP");
-        log_frame(tag, f, total);
-        last_diag_ms_ = saved;
-      }
-      if (ok) sink.on_weight(w);
+      if (w > 5500.0f || w < -5500.0f) return;  // garbage guard (pre-median)
+      sink.on_weight(median5(w));
     } else if (event == kEventBattery && n >= 1) {
       sink.on_battery(p[0] & 0x7F);  // pushed by the scale (notif request id 1)
     } else if (event == kEventTimer && n >= 3) {
@@ -310,36 +294,35 @@ class AcaiaDriver : public IScaleDriver {
     }
   }
 
-  // Weight publish gate — VALUE heuristics, matching how Acaia's own
-  // software behaves, because on the Umbra the frame FLAGS can't help: its
-  // 60s zero-tracking housekeeping frame (~-10 g, e.g.
-  // EF DD 0C 08 05 53 00 00 00 01 0F 5C 14) carries the same type bits as
-  // the whole normal stream (normal frame captured on HW:
-  // ... D6 0D 00 00 01 0C ...). The gate:
-  //  - drop out-of-range readings (|w| > 5500 g);
-  //  - drop the FIRST frame below -5 g (first-negative latch): a lone
-  //    housekeeping frame between normal readings never shows, while a real
-  //    sustained negative (cup lifted off a tared scale) publishes from its
-  //    second frame on;
-  //  - drop one-frame transients to (near-)zero right after a non-zero
-  //    reading.
-  bool accept_weight(float w) {
-    bool drop = false;
-    if (w > 5500.0f || w < -5500.0f) drop = true;
-    const bool near_zero = w >= -1.0f && w <= 1.0f;
-    const bool prev_near_zero = prev_weight_g_ >= -1.0f && prev_weight_g_ <= 1.0f;
-    if (!prev_near_zero && near_zero) drop = true;
-    if (prev_weight_g_ != 0.0f && w == 0.0f) drop = true;
-    if (w < -5.0f) {
-      if (!minus5_latch_) {
-        minus5_latch_ = true;
-        drop = true;
-      }
-    } else {
-      minus5_latch_ = false;
+  // Weight outlier suppression. Every 60s the Umbra injects a 2-frame burst
+  // into the weight stream — its (drifting) zero-offset reading then a bogus
+  // 0.0 (captured on HW: w=-3.1 flags 0F, then w=0.0 flags 0D, between
+  // normal ...0C frames; earlier bursts read -8.3 and -10.2). The frames are
+  // indistinguishable by flags, and value thresholds fail because the offset
+  // wanders (today's -3.1 sailed past a -5 g latch). A median-of-5 filter
+  // erases ANY <= 2-frame excursion — any sign, any size, idle or mid-shot —
+  // at the cost of the published stream running ~2 frames (~100-200 ms)
+  // behind; the brew controller's overshoot learning absorbs that lag.
+  // Real step changes (cup on/off) come through exact, just delayed.
+  float median5(float w) {
+    med5_[med5_head_] = w;
+    med5_head_ = (med5_head_ + 1) % 5;
+    if (med5_n_ < 5) {  // warmup: pass through until the window fills
+      ++med5_n_;
+      return w;
     }
-    prev_weight_g_ = w;  // tracked whether or not this frame published
-    return !drop;
+    float t[5];
+    for (int i = 0; i < 5; ++i) t[i] = med5_[i];
+    for (int i = 1; i < 5; ++i) {  // insertion sort, 5 elements
+      const float v = t[i];
+      int j = i - 1;
+      while (j >= 0 && t[j] > v) {
+        t[j + 1] = t[j];
+        --j;
+      }
+      t[j + 1] = v;
+    }
+    return t[2];
   }
 
   // 6-byte weight payload: bytes 0-3 raw u32 — endianness varies by model
@@ -369,9 +352,9 @@ class AcaiaDriver : public IScaleDriver {
   uint8_t rx_[256];
   size_t rx_len_ = 0;
   uint32_t last_diag_ms_ = 0;  // log_frame rate limit
-  float prev_weight_g_ = 0.0f;  // accept_weight state
-  bool minus5_latch_ = false;   // first-negative latch (see accept_weight)
-  uint8_t anomaly_dump_left_ = 40;  // burst diagnostic budget (see on weight)
+  float med5_[5] = {};  // median5 window (BLE thread only)
+  int med5_n_ = 0;
+  int med5_head_ = 0;
 
   std::atomic<uint32_t> last_rx_ms_{0};  // written on notify, read from tick()
 
