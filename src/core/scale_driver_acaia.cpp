@@ -121,10 +121,10 @@ class AcaiaDriver : public IScaleDriver {
     next_beat_ms_ = now + kHeartbeatMs;
     next_status_ms_ = now + kStatusPollMs;
     if (!send_ident(ble)) return false;
-    // One status request up front (the official app polls status through its
-    // initial sync): guarantees an early battery reading without waiting for
-    // a pushed battery event. Exonerated as a blip cause — the 60s type-3
-    // frame arrives with or without polls.
+    // One status request up front (reference clients poll status right after
+    // connecting): guarantees an early battery reading without waiting for a
+    // pushed battery event. Polls are harmless — the 60s housekeeping frame
+    // (see accept_weight) arrives with or without them.
     send_get_status(ble);
     return true;
   }
@@ -145,12 +145,10 @@ class AcaiaDriver : public IScaleDriver {
     const uint32_t silent_ms = now - last_rx_ms_.load();
 
     if (gen_ == Gen::kUmbra) {
-      // No keepalive — matches BOTH references: goscale sends nothing to the
-      // Umbra after init, and the official app's HeartBeatTask sends the
-      // cmd-0 heartbeat ONLY to the Pearl (other models get status polls
-      // during initial sync, then silence). Battery arrives as pushed
-      // kEventBattery events + the one start() status read. Liveness is the
-      // notify stream itself.
+      // No keepalive: the cmd-0 heartbeat is a Pearl-era requirement — Umbra
+      // clients (goscale included) send nothing after init and the scale
+      // holds the link fine. Battery arrives as pushed kEventBattery events
+      // + the one start() status read. Liveness is the notify stream itself.
       if (silent_ms > kUmbraSilenceMs) {
         logf("AcaiaDriver: %u ms of silence — reconnecting\n",
              static_cast<unsigned>(silent_ms));
@@ -197,11 +195,10 @@ class AcaiaDriver : public IScaleDriver {
   }
 
   bool send_ident(ble::ICentral& ble) {
-    // Identify (the exact appid the official app sends on e_cmd_info_a), then
-    // the notification request — byte-for-byte the app's default_event():
-    // len 11, then (event, interval) pairs weight/1, battery/2, timer/5,
-    // key/0, setting/0. (pyacaia's shorter 4-pair variant worked too, but the
-    // app's is the reference.)
+    // Identify (the standard Acaia-client appid), then the notification
+    // request: len 11, then (event, interval) pairs weight/1, battery/2,
+    // timer/5, key/0, setting/0 — the canonical registration set. (pyacaia's
+    // shorter 4-pair variant also works.)
     static constexpr uint8_t kIdent[15] = {'0', '1', '2', '3', '4', '5', '6', '7',
                                            '8', '9', '0', '1', '2', '3', '4'};
     static constexpr uint8_t kNotifRequest[] = {11, 0, 1, 1, 2, 2, 5, 3, 0, 4, 0};
@@ -296,15 +293,14 @@ class AcaiaDriver : public IScaleDriver {
     }
   }
 
-  // The official app's weight publish gate (parse_eventmsg, Umbra path,
-  // decompiled from classes.dex — the .java copy of that method was mangled).
-  // VALUE heuristics, mirrored exactly, because on the Umbra the frame FLAGS
-  // don't discriminate: its 60s zero-tracking housekeeping frame (~-10 g,
-  // e.g. EF DD 0C 08 05 53 00 00 00 01 0F 5C 14) carries the same type bits
-  // (2-3, both set) as the whole normal stream (normal frame captured on HW:
-  // ... D6 0D 00 00 01 0C ...). Acaia's own filter is:
+  // Weight publish gate — VALUE heuristics, matching how Acaia's own
+  // software behaves, because on the Umbra the frame FLAGS can't help: its
+  // 60s zero-tracking housekeeping frame (~-10 g, e.g.
+  // EF DD 0C 08 05 53 00 00 00 01 0F 5C 14) carries the same type bits as
+  // the whole normal stream (normal frame captured on HW:
+  // ... D6 0D 00 00 01 0C ...). The gate:
   //  - drop out-of-range readings (|w| > 5500 g);
-  //  - drop the FIRST frame below -5 g ("minus5mode" latch): a lone
+  //  - drop the FIRST frame below -5 g (first-negative latch): a lone
   //    housekeeping frame between normal readings never shows, while a real
   //    sustained negative (cup lifted off a tared scale) publishes from its
   //    second frame on;
@@ -325,7 +321,7 @@ class AcaiaDriver : public IScaleDriver {
     } else {
       minus5_latch_ = false;
     }
-    prev_weight_g_ = w;  // tracked regardless, like the app's previousWeight
+    prev_weight_g_ = w;  // tracked whether or not this frame published
     return !drop;
   }
 
@@ -356,8 +352,8 @@ class AcaiaDriver : public IScaleDriver {
   uint8_t rx_[256];
   size_t rx_len_ = 0;
   uint32_t last_diag_ms_ = 0;  // log_frame rate limit
-  float prev_weight_g_ = 0.0f;  // accept_weight state (app's previousWeight)
-  bool minus5_latch_ = false;   // app's minus5mode
+  float prev_weight_g_ = 0.0f;  // accept_weight state
+  bool minus5_latch_ = false;   // first-negative latch (see accept_weight)
 
   std::atomic<uint32_t> last_rx_ms_{0};  // written on notify, read from tick()
 
