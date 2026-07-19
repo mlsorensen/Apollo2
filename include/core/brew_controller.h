@@ -24,6 +24,11 @@ class BrewController : public IBrewController {
       : paddle_(paddle), scale_(scale) {}
 
   // Wire before the loop starts (all optional).
+  // Returns true when the machine is KNOWN to be connected and not brewing-
+  // capable (standby/off). The Micra treats a paddle flip in that state as its
+  // wake switch — it powers on, no water moves — so the controller passes the
+  // level through to the machine but skips the shot timer + automation.
+  void set_standby_provider(std::function<bool()> p) { standby_ = std::move(p); }
   void set_target_persister(std::function<void(float)> p) { persist_target_ = std::move(p); }
   void set_shot_mode_persister(std::function<void(bool)> p) { persist_mode_ = std::move(p); }
   void set_overshoot_persister(std::function<void(float)> p) { persist_overshoot_ = std::move(p); }
@@ -51,6 +56,7 @@ class BrewController : public IBrewController {
   IPaddle& paddle_;
   IScale& scale_;
   ShotTimer timer_;
+  std::function<bool()> standby_;  // machine known-in-standby (see setter)
   std::function<void(float)> persist_target_;
   std::function<void(bool)> persist_mode_;
   std::function<void(float)> persist_overshoot_;
