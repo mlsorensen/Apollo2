@@ -282,7 +282,24 @@ class AcaiaDriver : public IScaleDriver {
 
     if (event == kEventWeight && n >= 6) {
       const float w = decode_weight(p);
-      if (accept_weight(w)) sink.on_weight(w);
+      // Burst diagnostic (bounded, NOT rate-limited — the earlier 1/s limit
+      // hid that the 60s anomaly is a ~0.5s BURST of frames, so a
+      // first-frame latch can't kill it): log every suspicious frame with
+      // the decode + the gate's verdict, until the budget runs out.
+      const bool suspicious =
+          w < -5.0f || w - prev_weight_g_ > 3.0f || prev_weight_g_ - w > 3.0f;
+      const bool ok = accept_weight(w);
+      if (suspicious && anomaly_dump_left_ > 0) {
+        --anomaly_dump_left_;
+        const uint32_t saved = last_diag_ms_;
+        last_diag_ms_ = 0;
+        char tag[48];
+        std::snprintf(tag, sizeof(tag), "w=%.1f %s", static_cast<double>(w),
+                      ok ? "PUB" : "DROP");
+        log_frame(tag, f, total);
+        last_diag_ms_ = saved;
+      }
+      if (ok) sink.on_weight(w);
     } else if (event == kEventBattery && n >= 1) {
       sink.on_battery(p[0] & 0x7F);  // pushed by the scale (notif request id 1)
     } else if (event == kEventTimer && n >= 3) {
@@ -354,6 +371,7 @@ class AcaiaDriver : public IScaleDriver {
   uint32_t last_diag_ms_ = 0;  // log_frame rate limit
   float prev_weight_g_ = 0.0f;  // accept_weight state
   bool minus5_latch_ = false;   // first-negative latch (see accept_weight)
+  uint8_t anomaly_dump_left_ = 40;  // burst diagnostic budget (see on weight)
 
   std::atomic<uint32_t> last_rx_ms_{0};  // written on notify, read from tick()
 
