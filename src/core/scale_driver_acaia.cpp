@@ -120,7 +120,13 @@ class AcaiaDriver : public IScaleDriver {
     last_rx_ms_.store(now);
     next_beat_ms_ = now + kHeartbeatMs;
     next_status_ms_ = now + kStatusPollMs;
-    return send_ident(ble);
+    if (!send_ident(ble)) return false;
+    // One status request up front (the official app polls status through its
+    // initial sync): guarantees an early battery reading without waiting for
+    // a pushed battery event. Exonerated as a blip cause — the 60s type-3
+    // frame arrives with or without polls.
+    send_get_status(ble);
+    return true;
   }
 
   void on_notify(const uint8_t* data, size_t len, IScaleSink& sink) override {
@@ -139,11 +145,12 @@ class AcaiaDriver : public IScaleDriver {
     const uint32_t silent_ms = now - last_rx_ms_.load();
 
     if (gen_ == Gen::kUmbra) {
-      // No heartbeat AND no polling — goscale sends NOTHING to the Umbra after
-      // init, and neither do we. A 60 s get-status poll here made the scale
-      // blip a bogus constant weight (~-10 g for ~0.5 s, every poll, verified
-      // on HW); battery arrives as pushed kEventBattery events instead.
-      // Liveness is the notify stream itself.
+      // No keepalive — matches BOTH references: goscale sends nothing to the
+      // Umbra after init, and the official app's HeartBeatTask sends the
+      // cmd-0 heartbeat ONLY to the Pearl (other models get status polls
+      // during initial sync, then silence). Battery arrives as pushed
+      // kEventBattery events + the one start() status read. Liveness is the
+      // notify stream itself.
       if (silent_ms > kUmbraSilenceMs) {
         logf("AcaiaDriver: %u ms of silence — reconnecting\n",
              static_cast<unsigned>(silent_ms));
@@ -190,11 +197,14 @@ class AcaiaDriver : public IScaleDriver {
   }
 
   bool send_ident(ble::ICentral& ble) {
-    // Pyxis-style identify (used by goscale for Umbra + new Lunar), then the
-    // notification request: weight, battery, timer-every-5, key, setting.
+    // Identify (the exact appid the official app sends on e_cmd_info_a), then
+    // the notification request — byte-for-byte the app's default_event():
+    // len 11, then (event, interval) pairs weight/1, battery/2, timer/5,
+    // key/0, setting/0. (pyacaia's shorter 4-pair variant worked too, but the
+    // app's is the reference.)
     static constexpr uint8_t kIdent[15] = {'0', '1', '2', '3', '4', '5', '6', '7',
                                            '8', '9', '0', '1', '2', '3', '4'};
-    static constexpr uint8_t kNotifRequest[] = {9, 0, 1, 1, 2, 2, 5, 3, 4};
+    static constexpr uint8_t kNotifRequest[] = {11, 0, 1, 1, 2, 2, 5, 3, 0, 4, 0};
     uint8_t buf[24];
     if (!send(ble, buf, encode(kMsgIdentify, kIdent, sizeof(kIdent), buf))) return false;
     return send(ble, buf, encode(kMsgEvent, kNotifRequest, sizeof(kNotifRequest), buf));
