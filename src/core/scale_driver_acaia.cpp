@@ -284,15 +284,22 @@ class AcaiaDriver : public IScaleDriver {
     const size_t n = content_len - 1;
 
     if (event == kEventWeight && n >= 6) {
-      // Payload byte 5, per the official Brewmaster app (wt_event_stm32 in
-      // the decompiled SDK): bit0 stable, bit1 negative, and the weight TYPE
-      // is ONLY bits 2-3 (assembled bit3 | bit2<<1; EWEIGHT_TYPE: 0 net,
-      // 1 pw, 2 tare) — bits 4-7 are unrelated flags the Umbra does set on
-      // its normal stream (pyacaia's "bits 2-7 = type" is wrong there; an
-      // allowlist of type 0 read via >>2 silenced ALL weight on HW). The 60s
-      // ~-10 g zero-tracking housekeeping frame is type 3, outside the app's
-      // own enum: drop exactly frames with BOTH type bits set.
-      if ((p[5] & 0x0C) != 0x0C) sink.on_weight(decode_weight(p));
+      // TYPE-FILTER STATUS (in flux): the app's wt_event_stm32 says type =
+      // bits 2-3 of byte 5 — but BOTH a type-0 allowlist AND a type-3
+      // blocklist killed the Umbra's normal stream on HW, so its normal
+      // frames apparently carry type bits too and the 60s housekeeping frame
+      // (EF DD 0C 08 05 53 00 00 00 01 0F 5C 14, ~-10 g zero-tracking) must
+      // differ some other way. Publish everything for now (the blip is
+      // cosmetic; no weight is not) and dump the first frames per connection
+      // to learn what normal frames really look like.
+      if (weight_dump_left_ > 0) {
+        --weight_dump_left_;
+        const uint32_t saved = last_diag_ms_;
+        last_diag_ms_ = 0;  // bypass the rate limit for this bounded dump
+        log_frame("weight frame", f, total);
+        last_diag_ms_ = saved > now_ms() ? saved : now_ms();
+      }
+      sink.on_weight(decode_weight(p));
     } else if (event == kEventBattery && n >= 1) {
       sink.on_battery(p[0] & 0x7F);  // pushed by the scale (notif request id 1)
     } else if (event == kEventTimer && n >= 3) {
@@ -328,7 +335,8 @@ class AcaiaDriver : public IScaleDriver {
   // BLE notify thread only.
   uint8_t rx_[256];
   size_t rx_len_ = 0;
-  uint32_t last_diag_ms_ = 0;  // log_frame rate limit
+  uint32_t last_diag_ms_ = 0;   // log_frame rate limit
+  uint8_t weight_dump_left_ = 8;  // hex-dump the first weight frames (diagnosis)
 
   std::atomic<uint32_t> last_rx_ms_{0};  // written on notify, read from tick()
 
