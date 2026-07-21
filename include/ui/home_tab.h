@@ -16,7 +16,7 @@
 // build time):
 //   - no scale: the two big temperature cards + power button (the classic Home).
 //   - scale:    smaller brew/boiler temps + the live scale (weight, target, tare,
-//               paddle status), plus a flow-rate graph on the larger screens.
+//               shot timer/button), plus a flow-rate graph on the larger screens.
 // ui::App owns it and rebuilds when a scale is paired/forgotten.
 
 namespace ui {
@@ -70,16 +70,15 @@ struct HomeWidgets {
   // rebuild/teardown. flash_shot_button() (re)arms the pulse.
   lv_timer_t* shot_flash_timer = nullptr;
   int shot_flash_count = 0;
-  // Stop-early flash on the paddle pill (unwired shots: BrewSnapshot::stop_hint
-  // fired — flip the paddle now). Same ownership rules as shot_flash_timer;
-  // update_home leaves the pill alone while stop_flash_count > 0.
+  // Stop-early flash on the shot button (unwired shots: BrewSnapshot::stop_hint
+  // fired — flip the paddle now; the button is disabled mid-shot, so its slot
+  // is free to carry the signal). Same ownership rules as shot_flash_timer;
+  // update_home leaves the button alone while stop_flash_count > 0.
   lv_timer_t* stop_flash_timer = nullptr;
   int stop_flash_count = 0;
   // Scale battery icon in the SCALE header, right of the status text (icon-only
   // level estimate; hidden unless the connected scale reports a level).
   lv_obj_t* scale_batt_label = nullptr;
-  lv_obj_t* paddle_pill = nullptr;    // paddle/brew status chip (bg = state color)
-  lv_obj_t* paddle_label = nullptr;
   // Flow-rate strip chart (large screens only). A self-managed lv_canvas: newest
   // sample at the right, the plot scrolls right->left by wall-clock time (see
   // flow_graph_tick) so older data trails off the left. Each step memmoves the
