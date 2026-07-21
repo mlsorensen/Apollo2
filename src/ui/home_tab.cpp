@@ -654,9 +654,10 @@ void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_t* tcol = make_panel_column(body, "TIMER", cap_font, big_font, &out.shot_timer_label);
   lv_obj_set_flex_align(tcol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  // Shot button in the stepper's slot under the timer: shot-mode toggle, or
-  // Reset while a finished shot is up for review. Hidden unless the board has
-  // paddle hardware (update_home shows it); sized to line up with the stepper.
+  // Shot button in the stepper's slot under the timer: shot-mode toggle
+  // (Auto shot / Detect / Manual), or Reset while a finished shot is up for
+  // review. Always shown — every board has shot machinery now (paddle relay
+  // or detector); sized to line up with the stepper.
   out.shot_btn = ui::make_button(tcol);
   lv_obj_set_size(out.shot_btn, LV_SIZE_CONTENT, btn_size);
   lv_obj_set_style_pad_hor(out.shot_btn, 14, 0);
@@ -673,7 +674,6 @@ void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_set_style_text_color(out.shot_btn_label, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(out.shot_btn_label, set_font, 0);
   lv_obj_center(out.shot_btn_label);
-  lv_obj_add_flag(out.shot_btn, LV_OBJ_FLAG_HIDDEN);  // update_home reveals it
 
   // Connect/Disconnect + Tare side by side at the card's bottom. For a
   // sleep-capable scale (Umbra) the connect toggle doubles as sleep/wake:
@@ -794,7 +794,6 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   out.tare_btn = out.tare_label = nullptr;
   out.scale_connect_btn = out.scale_connect_label = nullptr;
   out.scale_batt_label = nullptr;
-  out.paddle_pill = out.paddle_label = nullptr;
   out.status_dot = out.status_label = nullptr;
   out.micra_status_dot = out.micra_status_label = nullptr;
   out.scale_status_dot = out.scale_status_label = nullptr;
@@ -1052,7 +1051,8 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     // DISABLED while a shot runs/settles — a mid-shot mode flip wouldn't cancel
     // the running automation (the paddle is the mid-shot escape), and a tap
     // during settling could land on Reset the instant it appears.
-    if (w.shot_btn != nullptr) {
+    if (w.shot_btn != nullptr && w.stop_flash_count <= 0) {
+      // (While the stop-early flash runs, it owns the button's look.)
       const bool review = brew.phase == core::ShotPhase::kReview;
       const bool active = brew.phase == core::ShotPhase::kBrewing ||
                           brew.phase == core::ShotPhase::kSettling;
@@ -1076,26 +1076,6 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
         lv_obj_add_state(w.shot_btn, LV_STATE_DISABLED);
       } else {
         lv_obj_remove_state(w.shot_btn, LV_STATE_DISABLED);
-      }
-    }
-
-    // Paddle/brew pill. Wired: the line/paddle state. Unwired: the detector's
-    // verdict — "Brewing" once a shot is confirmed, "Ready" otherwise (kSettling
-    // shows Ready too; the shot is over, drips are just landing).
-    if (w.paddle_pill != nullptr) {
-      if (w.stop_flash_count > 0) {
-        // The stop-early flash owns the pill until its countdown ends.
-      } else {
-        const bool brewing = brew.paddle_wired
-                                 ? brew.brewing
-                                 : brew.phase == core::ShotPhase::kBrewing;
-        const bool paddle = brew.paddle_wired && brew.paddle_pressed;
-        const char* txt = brewing ? "Brewing" : paddle ? "Paddle" : "Ready";
-        uint32_t col = brewing   ? ui::theme::ok()
-                       : paddle  ? ui::theme::accent()
-                                 : ui::theme::rail();
-        lv_label_set_text(w.paddle_label, txt);
-        lv_obj_set_style_bg_color(w.paddle_pill, lv_color_hex(col), 0);
       }
     }
 
@@ -1299,19 +1279,23 @@ void shot_flash_cb(lv_timer_t* t) {
   }
 }
 
-// One pulse of the stop-early flash: the pill alternates warn ("Stop") and its
-// normal brewing look. A click per lit pulse makes it audible on sound boards
+// One pulse of the stop-early flash: the shot button (disabled mid-shot, so
+// its slot is otherwise idle) alternates a warn "Stop" fill and its normal
+// card look. A click per lit pulse makes it audible on sound boards
 // (play_button_press respects the "Button sounds" setting). update_home skips
-// the pill while the countdown runs, so the pulses aren't overwritten.
+// the button's styling while the countdown runs, so the pulses aren't
+// overwritten; its next pass after the countdown repaints the normal state.
 void stop_flash_cb(lv_timer_t* t) {
   auto* w = static_cast<ui::HomeWidgets*>(lv_timer_get_user_data(t));
-  const bool dead = w->paddle_pill == nullptr || w->stop_flash_count <= 0;
+  const bool dead = w->shot_btn == nullptr || w->stop_flash_count <= 0;
   if (!dead) {
     --w->stop_flash_count;
     const bool lit = (w->stop_flash_count & 1) != 0;
-    lv_label_set_text(w->paddle_label, "Stop");
+    lv_label_set_text(w->shot_btn_label, "Stop");
     lv_obj_set_style_bg_color(
-        w->paddle_pill, lv_color_hex(lit ? ui::theme::warn() : ui::theme::rail()), 0);
+        w->shot_btn, lv_color_hex(lit ? ui::theme::warn() : ui::theme::card()), 0);
+    lv_obj_set_style_text_color(
+        w->shot_btn_label, lv_color_hex(lit ? ui::theme::bg() : ui::theme::warn()), 0);
     if (lit) ui::play_button_press();
   }
   if (dead || w->stop_flash_count == 0) {
@@ -1330,7 +1314,7 @@ void flash_shot_button(HomeWidgets& w) {
 }
 
 void flash_stop_hint(HomeWidgets& w) {
-  if (w.paddle_pill == nullptr) return;
+  if (w.shot_btn == nullptr) return;
   w.stop_flash_count = 12;  // 6 warn pulses over ~3s — unmissable but bounded
   if (w.stop_flash_timer == nullptr)
     w.stop_flash_timer = lv_timer_create(stop_flash_cb, 250, &w);
