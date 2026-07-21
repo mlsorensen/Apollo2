@@ -244,6 +244,14 @@ void setup() {
   // — which each guard on isInitialized() — share one host without racing init.
   NimBLEDevice::init("micra-remote");
 
+  // Radio arbitration: the host refuses to scan while ANY connect is pending,
+  // so each link's scan preempts the OTHER link's connect attempts (cancels an
+  // in-flight one, holds new ones off until the scan finishes). Without this,
+  // a Settings scan silently returned nothing whenever the other device sat in
+  // "Connecting" (user-reported on the 4.3C).
+  g_micra.set_scan_peer_pauser([](bool on) { g_scale.pause_connects(on); });
+  g_scale.set_scan_peer_pauser([](bool on) { g_micra.pause_connects(on); });
+
   // Seed the link from saved config, then start the background BLE task. With
   // no MAC -> Unconfigured; MAC but no token -> NeedsToken (Settings "Setup").
   const std::string mac = g_config.mac();

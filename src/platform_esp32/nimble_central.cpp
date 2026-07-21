@@ -64,6 +64,12 @@ void NimbleCentral::disconnect() {
   if (client_ != nullptr) client_->disconnect();
 }
 
+void NimbleCentral::cancel_connect() {
+  // Aborts a pending client_->connect(); the blocked call returns false. Safe
+  // cross-thread (posts a cancel into the NimBLE host). No-op when idle.
+  if (client_ != nullptr) client_->cancelConnect();
+}
+
 bool NimbleCentral::connected() {
   return client_ != nullptr && client_->isConnected();
 }
