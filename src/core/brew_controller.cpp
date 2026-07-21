@@ -229,18 +229,18 @@ void BrewController::poll_unwired(uint32_t now_ms) {
   }
   if (st.event == ShotDetector::Event::kEnded) {
     timer_.stop(st.end_ms);  // the shot ended when flow ceased, not at confirm
-    const uint32_t dur = timer_.elapsed_ms(now_ms);
     const float net = st.end_weight_g - start_g_;
-    if (dur >= kUnwiredMinShotMs && net >= kUnwiredMinShotG) {
+    if (net >= kUnwiredMinShotG) {
       logf("Brew: unwired shot ended (%.1fs, %.1fg)\n",
-           static_cast<double>(dur) / 1000.0, static_cast<double>(net));
-      end_shot(now_ms);
+           static_cast<double>(timer_.elapsed_ms(now_ms)) / 1000.0,
+           static_cast<double>(net));
+      end_shot(now_ms);  // duration gate (kMinShotMs) applies in there
     } else {
-      // Under the review gates: a rinse/splash, not a shot. Silent idle. The
-      // timer resets (not stops) so the display doesn't advertise the discarded
-      // detection's duration as a real shot time.
-      logf("Brew: unwired detection under gates (%.1fs, %.1fg) -> discarded\n",
-           static_cast<double>(dur) / 1000.0, static_cast<double>(net));
+      // A splash/bump, not espresso. Silent idle; the timer resets (not
+      // stops) so the display doesn't advertise the discarded detection's
+      // duration as a real shot time.
+      logf("Brew: unwired detection under %.1fg -> discarded\n",
+           static_cast<double>(net));
       phase_ = ShotPhase::kIdle;
       timer_.reset();
       stop_hint_ = false;
@@ -253,9 +253,21 @@ void BrewController::poll_unwired(uint32_t now_ms) {
 }
 
 void BrewController::end_shot(uint32_t now_ms) {
+  stop_hint_ = false;  // the shot is over; the signal must not outlive it
+  // Universal flush gate: a run this short — manual paddle cut, auto-stop, or
+  // detector-ended alike — is the user flushing/rinsing, not pulling a shot.
+  // No settle, no review, no overshoot learning; the timer resets so the
+  // discarded run's time doesn't display as a real shot's.
+  const uint32_t dur = timer_.elapsed_ms(now_ms);
+  if (dur < kMinShotMs) {
+    logf("Brew: %.1fs run under the shot minimum -> discarded (flush?)\n",
+         static_cast<double>(dur) / 1000.0);
+    phase_ = ShotPhase::kIdle;
+    timer_.reset();
+    return;
+  }
   phase_ = ShotPhase::kSettling;
   settle_until_ms_ = now_ms + kSettleMs;
-  stop_hint_ = false;  // the shot is over; the signal must not outlive it
 }
 
 BrewSnapshot BrewController::snapshot() const {

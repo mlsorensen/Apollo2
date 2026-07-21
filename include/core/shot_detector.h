@@ -13,7 +13,7 @@
 //                      The candidate's retroactive start time / baseline weight
 //                      are the OLDEST sample of the flow window, so the eventual
 //                      timer start predates the confirm delay (honest duration).
-//   Candidate -> Started (event) after the flow sustains ~2.5s AND >= ~2g net.
+//   Candidate -> Started (event) after the flow sustains ~5s AND >= ~2g net.
 //                      A single-sample step > ~5g aborts (a cup was placed).
 //   Started -> Ended (event) when flow stays < ~0.2 g/s for ~2s (the reported
 //                      end time is the flow-cease moment, not the confirm), or
@@ -92,7 +92,7 @@ class ShotDetector {
   // Thresholds — HW-tuning guesses (see the class comment).
   static constexpr float kStartFlowGps = 0.4f;   // Idle -> Candidate
   static constexpr float kKeepFlowGps = 0.3f;    // candidate dies below this
-  static constexpr uint32_t kSustainMs = 2500;   // candidate confirm delay
+  static constexpr uint32_t kSustainMs = 5000;   // candidate confirm delay
   static constexpr float kConfirmNetG = 2.0f;    // net gain required to confirm
   static constexpr float kStepAbortG = 5.0f;     // single-sample step = cup placed
   static constexpr float kEndFlowGps = 0.2f;     // active -> ending below this
