@@ -271,6 +271,11 @@ void on_auto_connect_switch(lv_event_t* e) {
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
   app->set_auto_connect(lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
+void on_wired_paddle_switch(lv_event_t* e) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  app->set_wired_paddle(lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
 void on_smooth_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_flow_smooth();
 }
@@ -435,6 +440,7 @@ namespace ui {
 App::~App() {
   if (screensaver_timer_ != nullptr) lv_timer_delete(screensaver_timer_);
   if (home_.shot_flash_timer != nullptr) lv_timer_delete(home_.shot_flash_timer);
+  if (home_.stop_flash_timer != nullptr) lv_timer_delete(home_.stop_flash_timer);
   if (home_.flow_buf != nullptr) lv_free(home_.flow_buf);
   if (home_.flow_weights != nullptr) lv_free(home_.flow_weights);
   if (home_.flow_flows != nullptr) lv_free(home_.flow_flows);
@@ -480,6 +486,11 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     lv_timer_delete(home_.shot_flash_timer);
     home_.shot_flash_timer = nullptr;
     home_.shot_flash_count = 0;
+  }
+  if (home_.stop_flash_timer != nullptr) {
+    lv_timer_delete(home_.stop_flash_timer);
+    home_.stop_flash_timer = nullptr;
+    home_.stop_flash_count = 0;
   }
   if (home_.flow_buf != nullptr) {
     lv_free(home_.flow_buf);
@@ -591,7 +602,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   update_battery_runtime(battery_state_);
 
   build_settings_tab(settings, screen, display_->supports_brightness(),
-                     sound_->available(), settings_);
+                     sound_->available(), brew_->snapshot().paddle_hw, settings_);
   // lv_menu handles page navigation (root <-> Micra/Scale/Device) itself.
   // Micra connection:
   lv_obj_add_event_cb(settings_.scan_btn, on_scan_clicked, LV_EVENT_CLICKED, this);
@@ -643,6 +654,12 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     if (provisioner_ != nullptr && provisioner_->auto_connect())
       lv_obj_add_state(settings_.auto_connect_switch, LV_STATE_CHECKED);
     lv_obj_add_event_cb(settings_.auto_connect_switch, on_auto_connect_switch,
+                        LV_EVENT_VALUE_CHANGED, this);
+  }
+  if (settings_.wired_paddle_switch != nullptr) {  // paddle-capable boards only
+    if (brew_ != nullptr && brew_->snapshot().paddle_wired)
+      lv_obj_add_state(settings_.wired_paddle_switch, LV_STATE_CHECKED);
+    lv_obj_add_event_cb(settings_.wired_paddle_switch, on_wired_paddle_switch,
                         LV_EVENT_VALUE_CHANGED, this);
   }
   lv_obj_add_event_cb(settings_.perf_overlay_switch, on_perf_overlay_switch,
@@ -1102,6 +1119,14 @@ void App::shot_button() {
   refresh();  // reflect the new button label/color immediately, not at the next 2 Hz
 }
 
+void App::set_wired_paddle(bool on) {
+  if (brew_ == nullptr) return;
+  brew_->set_wired_paddle(on);  // cancels any in-flight shot to kIdle
+  // pump_scale_chart's phase tracking then returns a mid-shot/frozen plot to
+  // the live sweep on its next pass; nothing else to clean up here.
+  refresh();
+}
+
 void App::toggle_flow_units() { ui::toggle_flow_mode(home_); }
 
 void App::pump_scale_chart() {
@@ -1126,19 +1151,57 @@ void App::pump_scale_chart() {
       brew_reject_seen_ = bsnap.review_reject_seq;
       ui::flash_shot_button(home_);
     }
+    // Unwired stop-early signal: fire the pill flash once per shot, on the
+    // controller's latch going high (see BrewSnapshot::stop_hint).
+    if (bsnap.stop_hint && !stop_hint_seen_) ui::flash_stop_hint(home_);
+    stop_hint_seen_ = bsnap.stop_hint;
     const bool entering_brew =
         bsnap.phase == core::ShotPhase::kBrewing && shot_phase_ != core::ShotPhase::kBrewing;
     if (entering_brew) {
-      ui::begin_shot_plot(home_);  // dynamic-X plot owns the canvas for the shot
-      // A tare was sent only if the baseline isn't already confirmed (the scale
-      // wasn't pre-tared): the old weight samples are then in pre-tare units and
-      // must go. Pre-tared shots keep the history -> rate is live from t=0.
-      if (!bsnap.baseline_set) ui::reset_flow_history(home_);
+      if (bsnap.paddle_wired) {
+        ui::begin_shot_plot(home_);  // dynamic-X plot owns the canvas for the shot
+        // A tare was sent only if the baseline isn't already confirmed (the scale
+        // wasn't pre-tared): the old weight samples are then in pre-tare units and
+        // must go. Pre-tared shots keep the history -> rate is live from t=0.
+        if (!bsnap.baseline_set) ui::reset_flow_history(home_);
+      } else {
+        // Unwired: the live view stays untouched mid-shot (the detector confirmed
+        // retroactively — the plot would open with a hole). Just pin the shot's
+        // retro start on the UI clock; the review repaint replays from the ring.
+        // shot_ms is running, so now - shot_ms IS the detector's t_start.
+        unwired_shot_t0_ = lv_tick_get() - bsnap.shot_ms;
+      }
     } else if (home_.flow_shot_plot && bsnap.phase == core::ShotPhase::kIdle) {
       ui::end_shot_plot(home_);  // review dismissed/timed out -> live sweep
     } else if (bsnap.phase == core::ShotPhase::kReview &&
                shot_phase_ != core::ShotPhase::kReview) {
-      ui::finish_shot_plot(home_);  // flush the display lag before the freeze
+      if (bsnap.paddle_wired) {
+        ui::finish_shot_plot(home_);  // flush the display lag before the freeze
+      } else {
+        // Unwired review entry: one-shot, shot-aligned repaint from the ring
+        // (through now, so the settle plateau shows), never a wrapped sweep.
+        ui::review_shot_plot(home_, unwired_shot_t0_, lv_tick_get(),
+                             bsnap.start_weight_g);
+        // The frozen weight readout must agree with the repainted plot: unwired
+        // shots never tare, so the raw reading includes the cup — show the shot
+        // grams (net of the detector's baseline) instead. The sentinel forces
+        // the live writer to repaint the raw value on dismiss even if the scale
+        // reading hasn't moved since the freeze.
+        if (home_.scale_weight != nullptr && snap.connected) {
+          char wb[16];
+          std::snprintf(wb, sizeof(wb), "%.1f g",
+                        static_cast<double>(snap.weight_g - bsnap.start_weight_g));
+          lv_label_set_text(home_.scale_weight, wb);
+          last_weight_g_ = -10000.0f;
+        }
+      }
+    }
+    // The stop-early flash must not outlive the shot it belongs to: the user
+    // already flipped the paddle (that's what ended it) — kill any remaining
+    // pulses the moment the phase leaves kBrewing.
+    if (shot_phase_ == core::ShotPhase::kBrewing &&
+        bsnap.phase != core::ShotPhase::kBrewing) {
+      ui::cancel_stop_flash(home_);
     }
     shot_phase_ = bsnap.phase;
     // Hold until the post-tare baseline is confirmed (the tare window's readings
@@ -1155,6 +1218,9 @@ void App::pump_scale_chart() {
       ui::shot_plot_tick(home_, snap);
     } else {
       ui::flow_graph_tick(home_, snap);
+      // Unwired: keep the always-on capture ring fed alongside the live sweep —
+      // a detected shot's samples must already exist when review replays them.
+      if (have_brew && !bsnap.paddle_wired) ui::unwired_ring_tick(home_, snap);
     }
   }
 
@@ -1177,7 +1243,9 @@ void App::pump_scale_chart() {
 
   // Shot timer: continuous (ms) value, so redraw on a fixed ~10 Hz cadence that
   // matches its 0.1 s display resolution — faster would render invisible changes.
-  if (have_brew && bsnap.available && home_.shot_timer_label != nullptr) {
+  // Only while the ESP timer is the source (core::esp_shot_timer, shared with
+  // update_home — unwired with detection off shows the scale's own timer).
+  if (have_brew && core::esp_shot_timer(bsnap) && home_.shot_timer_label != nullptr) {
     const uint32_t t = lv_tick_get();
     if (t - scale_readout_tick_ >= 100) {
       scale_readout_tick_ = t;

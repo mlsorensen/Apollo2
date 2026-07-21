@@ -90,6 +90,11 @@ int main() {
   scale_provisioner.set_connect_enabled(true);
   scale.set_connected(true);
   scale.set_umbra(false);
+  // Unwired mode (paddle harness not in use): the shot button arms the weight-
+  // stream detector ("Detect") instead of the auto-stop, pill shows Ready.
+  brew.set_wired_paddle(false);
+  ok &= r({800, 480}, "renders/home_unwired_800x480.png");
+  brew.set_wired_paddle(true);
   // No-scale Home (classic layout) — toggle the fake to "no scale saved".
   scale_provisioner.set_saved(false);
   ok &= r({320, 240}, "renders/home_noscale_320x240.png");
