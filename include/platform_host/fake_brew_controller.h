@@ -13,34 +13,39 @@ class FakeBrewController : public core::IBrewController {
  public:
   core::BrewSnapshot snapshot() const override {
     return core::BrewSnapshot{
-        .available = available_,
+        .paddle_hw = paddle_hw_,
+        .paddle_wired = paddle_hw_ && wired_,
         .paddle_pressed = paddle_,
         .brewing = brewing_,
         .phase = phase_,
         .shot_mode = shot_mode_,
         .shot_ms = shot_ms_,
         .baseline_set = true,
+        .start_weight_g = 0.0f,
         .target_weight_g = target_g_,
         .overshoot_g = 2.0f,
         .review_hold_s = review_hold_s_,
         .review_reject_seq = 0,
+        .stop_hint = false,
     };
   }
   void set_target_weight_g(float grams) override { target_g_ = grams; }
   void set_shot_mode(bool on) override { shot_mode_ = on; }
   void set_review_hold_s(int seconds) override { review_hold_s_ = seconds; }
+  void set_wired_paddle(bool on) override { wired_ = on; }
   void dismiss_review() override {
     if (phase_ == core::ShotPhase::kReview) phase_ = core::ShotPhase::kIdle;
   }
 
-  void set_available(bool a) { available_ = a; }
+  void set_paddle_hw(bool hw) { paddle_hw_ = hw; }
   void set_paddle(bool p) { paddle_ = p; }
   void set_brewing(bool b) { brewing_ = b; }
   void set_phase(core::ShotPhase ph) { phase_ = ph; }
   void set_shot_ms(uint32_t ms) { shot_ms_ = ms; }
 
  private:
-  bool available_ = true;
+  bool paddle_hw_ = true;  // board has the paddle harness (wired-capable)
+  bool wired_ = true;      // the "Wired paddle" user setting
   bool paddle_ = false;
   bool brewing_ = false;
   bool shot_mode_ = true;

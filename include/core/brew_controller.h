@@ -6,6 +6,7 @@
 #include "core/brew.h"
 #include "core/paddle.h"
 #include "core/scale.h"
+#include "core/shot_detector.h"
 #include "core/shot_timer.h"
 
 namespace core {
@@ -33,13 +34,16 @@ class BrewController : public IBrewController {
   void set_shot_mode_persister(std::function<void(bool)> p) { persist_mode_ = std::move(p); }
   void set_overshoot_persister(std::function<void(float)> p) { persist_overshoot_ = std::move(p); }
   void set_review_hold_persister(std::function<void(int)> p) { persist_review_ = std::move(p); }
+  void set_wired_paddle_persister(std::function<void(bool)> p) { persist_wired_ = std::move(p); }
 
   // Seed from persisted config at boot (does not re-persist).
-  void seed(float target_g, bool shot_mode, float overshoot_g, int review_hold_s) {
+  void seed(float target_g, bool shot_mode, float overshoot_g, int review_hold_s,
+            bool wired_paddle) {
     target_g_ = target_g;
     shot_mode_ = shot_mode;
     overshoot_g_ = overshoot_g;
     review_hold_s_ = review_hold_s;
+    wired_paddle_ = wired_paddle;
   }
 
   void poll(uint32_t now_ms);
@@ -49,21 +53,32 @@ class BrewController : public IBrewController {
   void set_shot_mode(bool on) override;
   void dismiss_review() override;
   void set_review_hold_s(int seconds) override;
+  void set_wired_paddle(bool on) override;
 
  private:
   void end_shot(uint32_t now_ms);  // Brewing -> Review
+  bool wired() const { return paddle_.available() && wired_paddle_; }
+  void poll_wired(uint32_t now_ms);    // paddle relay + weight automation
+  void poll_unwired(uint32_t now_ms);  // detector-driven phases
+  void cancel_shot();                  // any phase -> kIdle, line opened, timer cleared
 
   IPaddle& paddle_;
   IScale& scale_;
   ShotTimer timer_;
+  ShotDetector detector_;  // unwired mode's start/stop source
   std::function<bool()> standby_;  // machine known-in-standby (see setter)
   std::function<void(float)> persist_target_;
   std::function<void(bool)> persist_mode_;
   std::function<void(float)> persist_overshoot_;
   std::function<void(int)> persist_review_;
+  std::function<void(bool)> persist_wired_;
 
   ShotPhase phase_ = ShotPhase::kIdle;
   bool shot_mode_ = true;
+  bool wired_paddle_ = true;  // user setting; effective only with paddle hardware
+  bool stop_hint_ = false;    // unwired: manual-stop point reached (see BrewSnapshot)
+  uint8_t stop_hint_over_ = 0;   // consecutive scale updates past the hint threshold
+  uint32_t stop_hint_seq_ = 0;   // last scale update judged (one vote per notify)
   bool paddle_on_ = false;    // last ACCEPTED level (edge detection)
   bool sensed_once_ = false;  // no edge until the first stable read (boot safety)
   bool sense_candidate_ = false;  // raw level being debounced toward acceptance
@@ -102,6 +117,14 @@ class BrewController : public IBrewController {
   static constexpr uint32_t kBlindGraceMs = 4000;     // tolerated mid-shot scale blackout
   static constexpr float kOvershootLearnRate = 0.5f;  // fraction of the error absorbed per shot
   static constexpr float kOvershootMaxG = 8.0f;       // sanity clamp (0..max)
+  // Unwired review gates: a detected "shot" below these never reaches review —
+  // it drops silently back to idle (a rinse, a splash, a bump).
+  static constexpr uint32_t kUnwiredMinShotMs = 8000;
+  static constexpr float kUnwiredMinShotG = 5.0f;
+  // Stop-early hint (unwired): fire the "flip the paddle now" signal this much
+  // BEFORE the auto-stop point, in grams of current flow — the user's reaction
+  // time stands in for the relay's instant cut.
+  static constexpr float kStopHintLeadS = 0.25f;
 };
 
 }  // namespace core

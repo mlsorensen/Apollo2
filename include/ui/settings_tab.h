@@ -82,6 +82,9 @@ struct SettingsWidgets {
   lv_obj_t* perf_overlay_switch = nullptr;   // on = show LVGL FPS/CPU overlay
   lv_obj_t* restart_btn = nullptr;           // soft reboot (display-glitch escape hatch)
   lv_obj_t* auto_connect_switch = nullptr;   // Micra: connect to saved machine at boot
+  lv_obj_t* wired_paddle_switch = nullptr;   // Micra: paddle harness in use (off =
+                                             // detector-driven "unwired" shots);
+                                             // only built on paddle-capable boards
 
   // --- Brew temp stepper (continuous, tenths) ------------------------------
   lv_obj_t* brew_minus = nullptr;
@@ -138,8 +141,11 @@ struct SettingsWidgets {
   lv_obj_t* click_sound_switch = nullptr;  // button-press click (audio boards only)
 };
 
+// with_wired_paddle: build the Micra "Wired paddle" switch (paddle-capable
+// boards only — elsewhere unwired mode isn't a choice, it's all there is).
 void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
-                        bool with_brightness, bool with_sound, SettingsWidgets& out);
+                        bool with_brightness, bool with_sound,
+                        bool with_wired_paddle, SettingsWidgets& out);
 
 // Navigate to a section's page (kSectionMicra / kSectionScale / kSectionDevice).
 void settings_select_section(SettingsWidgets& w, int section);

@@ -1014,8 +1014,7 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   // the held final weight with the live reading every 500ms, which broke the
   // freeze the moment the cup came off the scale.
   if (w.scale_weight != nullptr) {
-    const bool weight_frozen =
-        brew.available && brew.phase == core::ShotPhase::kReview;
+    const bool weight_frozen = brew.phase == core::ShotPhase::kReview;
     if (!weight_frozen) {
       char wb[16];
       if (scale.connected) {
@@ -1031,12 +1030,12 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     std::snprintf(tb, sizeof(tb), "%.0f g", static_cast<double>(brew.target_weight_g));
     lv_label_set_text(w.scale_target, tb);
 
-    // Shot timer (scale panel). Paddle boards use the ESP-side shot timer (works
-    // with any scale, keeps counting after the scale's own timer resets); boards
-    // without paddle hardware fall back to the scale's built-in timer.
+    // Shot timer (scale panel): the ESP-side timer when it is the authoritative
+    // source (core::esp_shot_timer — shared with pump_scale_chart's 10Hz
+    // writer), else the scale's built-in timer.
     if (w.shot_timer_label != nullptr) {
       char sb[16];
-      if (brew.available) {
+      if (core::esp_shot_timer(brew)) {
         std::snprintf(sb, sizeof(sb), "%.1f s",
                       static_cast<double>(brew.shot_ms) / 1000.0);
       } else if (scale.connected) {
@@ -1054,47 +1053,47 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     // the running automation (the paddle is the mid-shot escape), and a tap
     // during settling could land on Reset the instant it appears.
     if (w.shot_btn != nullptr) {
-      if (!brew.available) {
-        lv_obj_add_flag(w.shot_btn, LV_OBJ_FLAG_HIDDEN);
+      const bool review = brew.phase == core::ShotPhase::kReview;
+      const bool active = brew.phase == core::ShotPhase::kBrewing ||
+                          brew.phase == core::ShotPhase::kSettling;
+      // Wired arms the auto-STOP ("Auto shot"); unwired arms auto-DETECTION.
+      const char* armed = brew.paddle_wired ? "Auto shot" : "Detect";
+      lv_label_set_text(w.shot_btn_label,
+                        review ? "Reset" : brew.shot_mode ? armed : "Manual");
+      // State lives in the outline + text: accent = auto armed, warn = Reset,
+      // neutral ring = manual/busy (the fill stays card(), see build).
+      const uint32_t ring = review          ? ui::theme::warn()
+                            : active         ? ui::theme::scrollbar()
+                            : brew.shot_mode ? ui::theme::accent()
+                                             : ui::theme::scrollbar();
+      lv_obj_set_style_border_color(w.shot_btn, lv_color_hex(ring), 0);
+      const uint32_t txt = review          ? ui::theme::warn()
+                           : active         ? ui::theme::muted()
+                           : brew.shot_mode ? ui::theme::accent()
+                                            : ui::theme::text();
+      lv_obj_set_style_text_color(w.shot_btn_label, lv_color_hex(txt), 0);
+      if (active) {
+        lv_obj_add_state(w.shot_btn, LV_STATE_DISABLED);
       } else {
-        lv_obj_remove_flag(w.shot_btn, LV_OBJ_FLAG_HIDDEN);
-        const bool review = brew.phase == core::ShotPhase::kReview;
-        const bool active = brew.phase == core::ShotPhase::kBrewing ||
-                            brew.phase == core::ShotPhase::kSettling;
-        lv_label_set_text(w.shot_btn_label,
-                          review ? "Reset" : brew.shot_mode ? "Auto shot" : "Manual");
-        // State lives in the outline + text: accent = auto armed, warn = Reset,
-        // neutral ring = manual/busy (the fill stays card(), see build).
-        const uint32_t ring = review          ? ui::theme::warn()
-                              : active         ? ui::theme::scrollbar()
-                              : brew.shot_mode ? ui::theme::accent()
-                                               : ui::theme::scrollbar();
-        lv_obj_set_style_border_color(w.shot_btn, lv_color_hex(ring), 0);
-        const uint32_t txt = review          ? ui::theme::warn()
-                             : active         ? ui::theme::muted()
-                             : brew.shot_mode ? ui::theme::accent()
-                                              : ui::theme::text();
-        lv_obj_set_style_text_color(w.shot_btn_label, lv_color_hex(txt), 0);
-        if (active) {
-          lv_obj_add_state(w.shot_btn, LV_STATE_DISABLED);
-        } else {
-          lv_obj_remove_state(w.shot_btn, LV_STATE_DISABLED);
-        }
+        lv_obj_remove_state(w.shot_btn, LV_STATE_DISABLED);
       }
     }
 
-    // Paddle/brew pill: only meaningful when paddle hardware is present.
+    // Paddle/brew pill. Wired: the line/paddle state. Unwired: the detector's
+    // verdict — "Brewing" once a shot is confirmed, "Ready" otherwise (kSettling
+    // shows Ready too; the shot is over, drips are just landing).
     if (w.paddle_pill != nullptr) {
-      if (!brew.available) {
-        lv_obj_add_flag(w.paddle_pill, LV_OBJ_FLAG_HIDDEN);
+      if (w.stop_flash_count > 0) {
+        // The stop-early flash owns the pill until its countdown ends.
       } else {
-        lv_obj_remove_flag(w.paddle_pill, LV_OBJ_FLAG_HIDDEN);
-        const char* txt = brew.brewing ? "Brewing"
-                          : brew.paddle_pressed ? "Paddle"
-                                                : "Ready";
-        uint32_t col = brew.brewing ? ui::theme::ok()
-                       : brew.paddle_pressed ? ui::theme::accent()
-                                             : ui::theme::rail();
+        const bool brewing = brew.paddle_wired
+                                 ? brew.brewing
+                                 : brew.phase == core::ShotPhase::kBrewing;
+        const bool paddle = brew.paddle_wired && brew.paddle_pressed;
+        const char* txt = brewing ? "Brewing" : paddle ? "Paddle" : "Ready";
+        uint32_t col = brewing   ? ui::theme::ok()
+                       : paddle  ? ui::theme::accent()
+                                 : ui::theme::rail();
         lv_label_set_text(w.paddle_label, txt);
         lv_obj_set_style_bg_color(w.paddle_pill, lv_color_hex(col), 0);
       }
@@ -1300,6 +1299,27 @@ void shot_flash_cb(lv_timer_t* t) {
   }
 }
 
+// One pulse of the stop-early flash: the pill alternates warn ("Stop") and its
+// normal brewing look. A click per lit pulse makes it audible on sound boards
+// (play_button_press respects the "Button sounds" setting). update_home skips
+// the pill while the countdown runs, so the pulses aren't overwritten.
+void stop_flash_cb(lv_timer_t* t) {
+  auto* w = static_cast<ui::HomeWidgets*>(lv_timer_get_user_data(t));
+  const bool dead = w->paddle_pill == nullptr || w->stop_flash_count <= 0;
+  if (!dead) {
+    --w->stop_flash_count;
+    const bool lit = (w->stop_flash_count & 1) != 0;
+    lv_label_set_text(w->paddle_label, "Stop");
+    lv_obj_set_style_bg_color(
+        w->paddle_pill, lv_color_hex(lit ? ui::theme::warn() : ui::theme::rail()), 0);
+    if (lit) ui::play_button_press();
+  }
+  if (dead || w->stop_flash_count == 0) {
+    if (w->stop_flash_timer == t) w->stop_flash_timer = nullptr;
+    lv_timer_delete(t);
+  }
+}
+
 }  // namespace
 
 void flash_shot_button(HomeWidgets& w) {
@@ -1307,6 +1327,21 @@ void flash_shot_button(HomeWidgets& w) {
   w.shot_flash_count = 6;  // 3 warn pulses
   if (w.shot_flash_timer == nullptr)
     w.shot_flash_timer = lv_timer_create(shot_flash_cb, 130, &w);
+}
+
+void flash_stop_hint(HomeWidgets& w) {
+  if (w.paddle_pill == nullptr) return;
+  w.stop_flash_count = 12;  // 6 warn pulses over ~3s — unmissable but bounded
+  if (w.stop_flash_timer == nullptr)
+    w.stop_flash_timer = lv_timer_create(stop_flash_cb, 250, &w);
+}
+
+void cancel_stop_flash(HomeWidgets& w) {
+  w.stop_flash_count = 0;
+  if (w.stop_flash_timer != nullptr) {
+    lv_timer_delete(w.stop_flash_timer);
+    w.stop_flash_timer = nullptr;
+  }
 }
 
 void reset_flow_graph(HomeWidgets& w) {
@@ -1402,12 +1437,18 @@ static uint32_t shot_tstart_of(uint32_t elapsed, uint32_t window) {
          kShotSlideStepMs;  // sliding (past the cap) also snaps
 }
 
+// Physical slot of logical shot sample i (0 = oldest stored, shot_n-1 =
+// newest). THE ring-index convention — every reader goes through this so a
+// layout change can't drift one code path out of sync with the others.
+static int shot_sample_idx(const HomeWidgets& w, int i) {
+  return (w.shot_head - w.shot_n + i + 2 * ui::HomeWidgets::kShotCap) %
+         ui::HomeWidgets::kShotCap;
+}
+
 // The newest stored sample's shot-time (0 when empty).
 static uint32_t shot_t_last(const HomeWidgets& w) {
   if (w.shot_n == 0) return 0;
-  const int idx = (w.shot_head - 1 + ui::HomeWidgets::kShotCap) %
-                  ui::HomeWidgets::kShotCap;
-  return w.shot_ts[idx];
+  return w.shot_ts[shot_sample_idx(w, w.shot_n - 1)];
 }
 
 // Logical sample i (0..shot_n-1) of `vals`, smoothed by the draw-time 3-point
@@ -1416,14 +1457,10 @@ static uint32_t shot_t_last(const HomeWidgets& w) {
 // guarantees a painted sample's next neighbor already exists, so the
 // smoothing is stable — painted columns never need revisiting.
 static float shot_val(const HomeWidgets& w, const float* vals, int i) {
-  auto idx = [&w](int j) {
-    return (w.shot_head - w.shot_n + j + 2 * ui::HomeWidgets::kShotCap) %
-           ui::HomeWidgets::kShotCap;
-  };
-  const float c = vals[idx(i)];
+  const float c = vals[shot_sample_idx(w, i)];
   if (w.shot_smooth_k <= 0.0f) return c;
-  const float p = vals[idx(i > 0 ? i - 1 : i)];
-  const float n = vals[idx(i + 1 < w.shot_n ? i + 1 : i)];
+  const float p = vals[shot_sample_idx(w, i > 0 ? i - 1 : i)];
+  const float n = vals[shot_sample_idx(w, i + 1 < w.shot_n ? i + 1 : i)];
   return c * (1.0f - 2.0f * w.shot_smooth_k) + (p + n) * w.shot_smooth_k;
 }
 
@@ -1434,10 +1471,7 @@ static float shot_val(const HomeWidgets& w, const float* vals, int i) {
 static void shot_plot_paint_columns(HomeWidgets& w, int x0, int x1, uint32_t window,
                                     uint32_t t_start, uint32_t t_limit) {
   const float* vals = (w.flow_mode == 1) ? w.shot_weights : w.shot_flows;
-  auto sample_idx = [&w](int i) {
-    return (w.shot_head - w.shot_n + i + 2 * ui::HomeWidgets::kShotCap) %
-           ui::HomeWidgets::kShotCap;
-  };
+  auto sample_idx = [&w](int i) { return shot_sample_idx(w, i); };
   const uint16_t bright = flow_bright_color();
   uint32_t t_last = w.shot_n > 0 ? w.shot_ts[sample_idx(w.shot_n - 1)] : 0;
   if (t_last > t_limit) t_last = t_limit;
@@ -1532,10 +1566,7 @@ static void shot_plot_redraw_full(HomeWidgets& w, uint32_t t_limit) {
   w.shot_map_tstart_ms = t_start;
 
   const float* vals = (w.flow_mode == 1) ? w.shot_weights : w.shot_flows;
-  auto sample_idx = [&w](int i) {
-    return (w.shot_head - w.shot_n + i + 2 * ui::HomeWidgets::kShotCap) %
-           ui::HomeWidgets::kShotCap;
-  };
+  auto sample_idx = [&w](int i) { return shot_sample_idx(w, i); };
   // Y range over the visible samples (grow immediately, shrink with the same
   // half-scale hysteresis as the sweep so the axis doesn't pulse).
   float wmax = 0.0f;
@@ -1570,6 +1601,7 @@ void begin_shot_plot(HomeWidgets& w) {
   if (w.flow_canvas == nullptr) return;
   reset_flow_graph(w);
   w.flow_shot_plot = true;
+  w.unwired_ring = false;  // wired shot takes the arrays (relative stamps)
   w.shot_n = 0;
   w.shot_head = 0;
   w.shot_t0 = lv_tick_get();
@@ -1675,6 +1707,89 @@ void finish_shot_plot(HomeWidgets& w) {
   if (!w.flow_shot_plot) return;
   // The edge runs one event interval behind while live — flush the trailing
   // sliver so the frozen review plot shows the complete shot.
+  shot_plot_redraw_full(w, UINT32_MAX);
+}
+
+void unwired_ring_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
+  if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_w <= 1) return;
+  if (w.flow_shot_plot) return;  // review owns the arrays (rebased) — don't feed
+  const uint32_t now = lv_tick_get();
+  if (!w.unwired_ring) {
+    // (Re)start the capture: after a review the arrays hold rebased leftovers.
+    w.unwired_ring = true;
+    w.shot_n = 0;
+    w.shot_head = 0;
+    w.shot_last_sample_ms = 0;
+  }
+  if (!scale.connected) return;  // gap in the ring; the detector aborts long ones
+  // Event-locked storage at <=kShotSampleMs, exactly like shot_plot_tick. The
+  // rate is computed only when a sample is actually stored (<=10Hz) — the live
+  // sweep already fed the shared history this pass, so an every-call
+  // recomputation would be pure redundancy at loop() rate.
+  if (scale.seq == w.shot_seq_seen) return;
+  w.shot_seq_seen = scale.seq;
+  if (w.shot_n > 0 && now - w.shot_last_sample_ms < kShotSampleMs) return;
+  const float rf = update_flow_rate(w, scale, now);
+  w.shot_last_sample_ms = now;
+  w.shot_weights[w.shot_head] = scale.weight_g;
+  w.shot_flows[w.shot_head] = rf;
+  w.shot_ts[w.shot_head] = now;  // ABSOLUTE — review_shot_plot rebases
+  w.shot_head = (w.shot_head + 1) % ui::HomeWidgets::kShotCap;
+  if (w.shot_n < ui::HomeWidgets::kShotCap) ++w.shot_n;
+}
+
+void review_shot_plot(HomeWidgets& w, uint32_t t_start, uint32_t t_end,
+                      float baseline_g) {
+  if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_w <= 1) return;
+  // A little pre-shot context so the trace shows the quiet baseline before the
+  // first-drip ramp (the detector's t_start is the flow onset).
+  constexpr uint32_t kLeadInMs = 3000;
+  const uint32_t t0 = t_start - kLeadInMs;
+
+  // Trim the ring to [t0, t_end] and rebase in place: the kept samples are a
+  // chronological suffix, so dropping the old ones is just shrinking shot_n —
+  // the head stays put and the (head - n + i) indexing still works.
+  auto sample_idx = [&w](int i) { return shot_sample_idx(w, i); };
+  int first = w.shot_n;  // first kept logical index
+  for (int i = 0; i < w.shot_n; ++i) {
+    if (static_cast<int32_t>(w.shot_ts[sample_idx(i)] - t0) >= 0) {
+      first = i;
+      break;
+    }
+  }
+  int kept = 0;
+  for (int i = first; i < w.shot_n; ++i) {
+    const int idx = sample_idx(i);
+    if (static_cast<int32_t>(w.shot_ts[idx] - t_end) > 0) break;
+    w.shot_ts[idx] -= t0;                // absolute -> shot-relative
+    w.shot_weights[idx] -= baseline_g;   // untared baseline -> shot grams
+    ++kept;
+  }
+  // Head sits after the last KEPT sample now (anything newer than t_end is
+  // discarded by walking the head back over it). kept == 0 (scale dark the
+  // whole shot) still freezes — a bare grid — so the review UX stays coherent.
+  if (kept > 0)
+    w.shot_head = (sample_idx(first + kept - 1) + 1) % ui::HomeWidgets::kShotCap;
+  w.shot_n = kept;
+  w.unwired_ring = false;  // arrays are shot-relative until the next ring start
+
+  // Enter the frozen shot-plot state and paint once, complete (no display lag).
+  w.flow_shot_plot = true;
+  w.shot_t0 = t0;
+  w.shot_elapsed_ms = t_end - t0;
+  w.shot_si = 0;
+  w.shot_x_painted = -1;
+  w.shot_map_window_ms = 0;
+  w.shot_map_tstart_ms = 0;
+  w.shot_stall_since = 0;
+  for (lv_obj_t* l : w.flow_xlabels)
+    if (l != nullptr) lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN);
+  if (w.flow_xspan_label != nullptr)
+    lv_obj_remove_flag(w.flow_xspan_label, LV_OBJ_FLAG_HIDDEN);
+  // Re-fit the axis from scratch: the live sweep may have left it elevated,
+  // and redraw_full's shrink hysteresis would otherwise keep that scale.
+  w.flow_ymax = flow_default_max(w.flow_mode);
+  set_flow_ylabels(w);
   shot_plot_redraw_full(w, UINT32_MAX);
 }
 

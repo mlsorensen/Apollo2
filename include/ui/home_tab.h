@@ -70,6 +70,11 @@ struct HomeWidgets {
   // rebuild/teardown. flash_shot_button() (re)arms the pulse.
   lv_timer_t* shot_flash_timer = nullptr;
   int shot_flash_count = 0;
+  // Stop-early flash on the paddle pill (unwired shots: BrewSnapshot::stop_hint
+  // fired — flip the paddle now). Same ownership rules as shot_flash_timer;
+  // update_home leaves the pill alone while stop_flash_count > 0.
+  lv_timer_t* stop_flash_timer = nullptr;
+  int stop_flash_count = 0;
   // Scale battery icon in the SCALE header, right of the status text (icon-only
   // level estimate; hidden unless the connected scale reports a level).
   lv_obj_t* scale_batt_label = nullptr;
@@ -165,6 +170,13 @@ struct HomeWidgets {
   float shot_store_interval_ms = 150.0f;
   float shot_smooth_k = 0.15f;          // 3-point kernel neighbor weight (0 = off);
                                         // set by App from IDisplaySettings::flow_smooth
+  // Unwired mode: the shot_* arrays double as an ALWAYS-ON sample ring
+  // (absolute lv_tick stamps, ~60s at <=10Hz) fed by unwired_ring_tick while
+  // the live sweep runs — a shot is detected retroactively, so the data must
+  // already exist. review_shot_plot() rebases it in place (absolute ->
+  // shot-relative) for the frozen review paint; this flag records which
+  // convention the arrays currently hold.
+  bool unwired_ring = false;
 };
 
 // Build the Home widgets into `parent`, sized for `screen`. `scale_enabled`
@@ -241,6 +253,23 @@ void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale);
 // shot freezes into review so the frozen plot shows the complete tail.
 void finish_shot_plot(HomeWidgets& w);
 
+// Unwired mode's always-on capture: sample (t, weight, flow) into the shot ring
+// with ABSOLUTE tick stamps while the live sweep runs, so a retroactively
+// detected shot's data already exists at review time. Call from the same fast
+// path as flow_graph_tick whenever brew mode is unwired and the plot is live;
+// it self-resets when resuming after a review consumed the ring.
+void unwired_ring_tick(HomeWidgets& w, const core::ScaleSnapshot& scale);
+
+// Unwired review: one-shot repaint of the ring as a shot-aligned frozen plot —
+// x spans t_start (minus a small lead-in) to t_end (absolute ticks), snapped to
+// the same 15/30/45/60s windows as the wired shot plot. baseline_g (the
+// detector's untared start weight) is subtracted so weight mode shows shot
+// grams. Enters the frozen shot-plot state; leave it via end_shot_plot() as
+// usual. The live view is intentionally untouched mid-shot — this repaint at
+// review entry is the only place the unwired shot takes over the canvas.
+void review_shot_plot(HomeWidgets& w, uint32_t t_start, uint32_t t_end,
+                      float baseline_g);
+
 // Apply a smoothing-kernel weight (0/0.15/0.25/0.33); repaints the shot plot
 // if one is on screen (live or frozen in review) so the change shows at once.
 void set_shot_smoothing(HomeWidgets& w, float k);
@@ -249,5 +278,15 @@ void set_shot_smoothing(HomeWidgets& w, float k);
 // Used when a paddle flip is swallowed during shot review (the button says
 // Reset and must be dealt with before the next shot). No-op without a button.
 void flash_shot_button(HomeWidgets& w);
+
+// Unwired stop-early signal: pulse the paddle pill "Stop" in the warn color for
+// a couple of seconds (with audible clicks on boards that have sound) — the
+// running shot has reached the point where the auto-stop would fire; flip the
+// physical paddle now. No-op without a pill.
+void flash_stop_hint(HomeWidgets& w);
+
+// Kill a stop-early flash mid-countdown (the shot ended — the signal must not
+// keep telling the user to stop it). The next update_home repaints the pill.
+void cancel_stop_flash(HomeWidgets& w);
 
 }  // namespace ui

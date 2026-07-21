@@ -319,7 +319,8 @@ void root_entry(lv_obj_t* menu, lv_obj_t* root_page, lv_obj_t* target,
 namespace ui {
 
 void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
-                        bool with_brightness, bool with_sound, SettingsWidgets& out) {
+                        bool with_brightness, bool with_sound,
+                        bool with_wired_paddle, SettingsWidgets& out) {
   const bool compact = is_compact(screen);
   const bool xl = is_xl(screen);
   const lv_font_t* font =
@@ -427,6 +428,16 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_t* ra = make_setting_row(out.micra_settings_page, "Auto connect", font);
     out.auto_connect_switch = lv_switch_create(ra);
     lv_obj_set_size(out.auto_connect_switch, btn_size + 8, btn_size / 2 + 6);
+    // Paddle harness in use. OFF = "unwired": shots are detected from the
+    // scale's weight stream instead of paddle edges. Only offered where the
+    // paddle hardware exists — other boards are permanently unwired.
+    if (with_wired_paddle) {
+      lv_obj_t* rw = make_setting_row(out.micra_settings_page, "Wired paddle", font);
+      out.wired_paddle_switch = lv_switch_create(rw);
+      lv_obj_set_size(out.wired_paddle_switch, btn_size + 8, btn_size / 2 + 6);
+    } else {
+      out.wired_paddle_switch = nullptr;
+    }
   }
   section_label(out.micra_settings_page, "Brew", font);
   {
