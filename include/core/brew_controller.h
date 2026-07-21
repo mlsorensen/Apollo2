@@ -117,9 +117,12 @@ class BrewController : public IBrewController {
   static constexpr uint32_t kBlindGraceMs = 4000;     // tolerated mid-shot scale blackout
   static constexpr float kOvershootLearnRate = 0.5f;  // fraction of the error absorbed per shot
   static constexpr float kOvershootMaxG = 8.0f;       // sanity clamp (0..max)
-  // Unwired review gates: a detected "shot" below these never reaches review —
-  // it drops silently back to idle (a rinse, a splash, a bump).
-  static constexpr uint32_t kUnwiredMinShotMs = 8000;
+  // Minimum-shot gate, ALL modes (end_shot): a run shorter than this never
+  // reaches settle/review — it's a flush/rinse, not a shot, whether it came
+  // from a manual paddle cut, the auto-stop, or the detector.
+  static constexpr uint32_t kMinShotMs = 8000;
+  // Unwired-only extra gate: a detected "shot" that gained less than this is
+  // a splash/bump, not espresso.
   static constexpr float kUnwiredMinShotG = 5.0f;
   // Stop-early hint (unwired): fire the "flip the paddle now" signal this much
   // BEFORE the auto-stop point, in grams of current flow — the user's reaction

@@ -32,8 +32,11 @@
 // The UNWIRED lifecycle drives the SAME phases from the detector: a confirmed
 // detection enters kBrewing with a retroactive timer start (honest duration
 // despite the confirm delay); flow-cease stops the timer and enters kSettling
-// -> kReview exactly like a paddle cut. Shots that end under the review gates
-// (too short / too light) drop silently back to kIdle.
+// -> kReview exactly like a paddle cut.
+//
+// In EVERY mode, a run shorter than the minimum-shot gate (~8s) never reaches
+// settle/review — that's a flush/rinse, not a shot, and it drops silently back
+// to kIdle (unwired additionally requires a few grams of net gain).
 
 namespace core {
 
