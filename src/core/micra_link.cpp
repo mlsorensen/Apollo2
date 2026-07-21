@@ -26,7 +26,11 @@ constexpr char kDisSoftware[] = "2a28";
 
 constexpr uint32_t kPollIntervalMs = 3000;
 constexpr uint32_t kReconnectBackoffMs = 3000;
-constexpr uint32_t kConnectTimeoutMs = 30000;  // per address-type attempt
+// Per address-type attempt. A present, advertising Micra connects in ~1-2s;
+// the retry loop covers the rest, so failing fast beats camping on the radio —
+// a pending connect blocks the host from scanning (see pause_connects), and a
+// 30s value here made Settings scans unusable while "Connecting".
+constexpr uint32_t kConnectTimeoutMs = 8000;
 
 bool write_with_nul(core::ble::ICentral& ble, const char* uuid,
                     const std::string& payload) {
@@ -158,6 +162,15 @@ void MicraLink::run() {
     if (reconnect_requested_.exchange(false) && connected) {
       ble_.disconnect();
       connected = false;
+    }
+
+    // Peer link is scanning: the host can't scan with a connect pending, so
+    // hold off on new attempts until it releases us. Established connections
+    // are untouched — only the (re)connect loop yields.
+    if (!connected && connects_paused_.load()) {
+      set_link(Link::Connecting);  // still trying — just yielding the radio
+      sleep_ms(200);
+      continue;
     }
 
     if (!connected) {
@@ -376,17 +389,28 @@ std::vector<ScanResult> MicraLink::scan_results() const {
 }
 
 void MicraLink::do_scan() {
+  // Take the radio: the peer link cancels any in-flight connect and holds off
+  // (the host refuses to scan while a connect is pending — without this, a
+  // scan during the scale's connect window returned nothing). The short sleep
+  // lets the cancel land before the scan starts.
+  if (peer_pause_) { peer_pause_(true); sleep_ms(300); }
   std::vector<ScanResult> found;
   for (const ScanResult& r : ble_.scan(5000)) {
     if (std::strncmp(r.name, "MICRA", 5) != 0) continue;  // La Marzocco name prefix
     found.push_back(r);
   }
+  if (peer_pause_) peer_pause_(false);
 
   {
     std::lock_guard<std::mutex> lk(mutex_);
     scan_results_ = std::move(found);
   }
   scanning_.store(false);
+}
+
+void MicraLink::pause_connects(bool on) {
+  connects_paused_.store(on);
+  if (on) ble_.cancel_connect();  // abort an in-flight attempt right now
 }
 
 std::string MicraLink::do_read_pairing_token(const std::string& address) {

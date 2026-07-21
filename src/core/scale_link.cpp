@@ -85,6 +85,13 @@ void ScaleLink::run() {
       set_connected(false);
     }
 
+    // Peer link is scanning: hold off on new connect attempts (the host can't
+    // scan with a connect pending). Established links are untouched.
+    if (!connected && connects_paused_.load()) {
+      sleep_ms(200);
+      continue;
+    }
+
     if (!connected) {
       if (!do_connect(addr)) {
         set_connected(false);
@@ -201,17 +208,28 @@ std::vector<ScanResult> ScaleLink::scan_results() const {
 }
 
 void ScaleLink::do_scan() {
+  // Take the radio: cancel + pause the peer's (Micra's) connect attempts —
+  // the host refuses to scan while any connect is pending, which made scale
+  // scans come back empty whenever the Micra sat in "Connecting". The short
+  // sleep lets the cancel land before the scan starts.
+  if (peer_pause_) { peer_pause_(true); sleep_ms(300); }
   std::vector<ScanResult> found;
   for (const ScanResult& r : ble_.scan(5000)) {
     if (!scale_name_supported(r.name)) continue;  // Bookoo + Acaia families
     found.push_back(r);
   }
+  if (peer_pause_) peer_pause_(false);
 
   {
     std::lock_guard<std::mutex> lk(mutex_);
     scan_results_ = std::move(found);
   }
   scanning_.store(false);
+}
+
+void ScaleLink::pause_connects(bool on) {
+  connects_paused_.store(on);
+  if (on) ble_.cancel_connect();  // abort an in-flight attempt right now
 }
 
 }  // namespace core

@@ -41,6 +41,12 @@ class ICentral {
   virtual void disconnect() = 0;
   virtual bool connected() = 0;
 
+  // Abort an IN-FLIGHT connect() attempt (makes the blocked call return false
+  // promptly). Safe to call from another thread — this is how a link about to
+  // scan preempts its peer's pending connect, since most stacks refuse to scan
+  // while any connect is in progress. No-op when nothing is connecting.
+  virtual void cancel_connect() {}
+
   // Characteristic operations on the current connection. All return false when
   // disconnected or when the UUID wasn't discovered.
   virtual bool has_characteristic(const char* uuid) = 0;
