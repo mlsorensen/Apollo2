@@ -1325,9 +1325,11 @@ void flash_stop_hint(HomeWidgets& w) {
   // its first pass after the countdown ends.
   lv_obj_remove_state(w.shot_btn, LV_STATE_DISABLED);
   ui::play_button_press();  // one audible cue; the pulses themselves are silent
-  w.stop_flash_count = 12;  // 6 warn pulses over ~3s — unmissable but bounded
+  // A strobe, not a blink: ~5Hz for ~3s reads as urgent in peripheral vision
+  // (the whole point — the user is watching the cup, not the screen).
+  w.stop_flash_count = 30;  // 15 warn strobes over ~3s
   if (w.stop_flash_timer == nullptr)
-    w.stop_flash_timer = lv_timer_create(stop_flash_cb, 250, &w);
+    w.stop_flash_timer = lv_timer_create(stop_flash_cb, 100, &w);
 }
 
 void cancel_stop_flash(HomeWidgets& w) {
