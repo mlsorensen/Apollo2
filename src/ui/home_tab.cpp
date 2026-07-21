@@ -1279,12 +1279,12 @@ void shot_flash_cb(lv_timer_t* t) {
   }
 }
 
-// One pulse of the stop-early flash: the shot button (disabled mid-shot, so
-// its slot is otherwise idle) alternates a warn "Stop" fill and its normal
-// card look. A click per lit pulse makes it audible on sound boards
-// (play_button_press respects the "Button sounds" setting). update_home skips
-// the button's styling while the countdown runs, so the pulses aren't
-// overwritten; its next pass after the countdown repaints the normal state.
+// One pulse of the stop-early flash: the shot button (idle mid-shot) alternates
+// a warn "Stop" fill and its normal card look. Silent — flash_stop_hint plays
+// the one audible cue up front (a click per pulse read as nagging beeps).
+// update_home skips the button's styling while the countdown runs, so the
+// pulses aren't overwritten; its next pass after the countdown repaints (and
+// re-disables) the normal state.
 void stop_flash_cb(lv_timer_t* t) {
   auto* w = static_cast<ui::HomeWidgets*>(lv_timer_get_user_data(t));
   const bool dead = w->shot_btn == nullptr || w->stop_flash_count <= 0;
@@ -1296,7 +1296,6 @@ void stop_flash_cb(lv_timer_t* t) {
         w->shot_btn, lv_color_hex(lit ? ui::theme::warn() : ui::theme::card()), 0);
     lv_obj_set_style_text_color(
         w->shot_btn_label, lv_color_hex(lit ? ui::theme::bg() : ui::theme::warn()), 0);
-    if (lit) ui::play_button_press();
   }
   if (dead || w->stop_flash_count == 0) {
     if (w->stop_flash_timer == t) w->stop_flash_timer = nullptr;
@@ -1315,6 +1314,12 @@ void flash_shot_button(HomeWidgets& w) {
 
 void flash_stop_hint(HomeWidgets& w) {
   if (w.shot_btn == nullptr) return;
+  // Mid-shot the button sits DISABLED, whose 40% style opacity muted the warn
+  // pulses badly — lift the state for the flash. Taps stay inert either way
+  // (App::shot_button ignores kBrewing/kSettling); update_home re-disables on
+  // its first pass after the countdown ends.
+  lv_obj_remove_state(w.shot_btn, LV_STATE_DISABLED);
+  ui::play_button_press();  // one audible cue; the pulses themselves are silent
   w.stop_flash_count = 12;  // 6 warn pulses over ~3s — unmissable but bounded
   if (w.stop_flash_timer == nullptr)
     w.stop_flash_timer = lv_timer_create(stop_flash_cb, 250, &w);
@@ -1544,8 +1549,19 @@ static uint32_t shot_display_time(const HomeWidgets& w) {
 // t_limit caps how far the trace draws (the display lag); UINT32_MAX = all.
 static void shot_plot_redraw_full(HomeWidgets& w, uint32_t t_limit) {
   if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_w <= 1) return;
-  const uint32_t window = shot_window_of(w.shot_elapsed_ms);
-  const uint32_t t_start = shot_tstart_of(w.shot_elapsed_ms, window);
+  uint32_t window, t_start;
+  if (w.shot_exact_fit) {
+    // Frozen review: the window IS the shot (plus lead-in/settle), so the
+    // trace fills the width — no snapping, no dead-grid tail. Past the ring's
+    // coverage the window pins to the cap and the start slides, unsnapped.
+    window = w.shot_elapsed_ms;
+    if (window < 1000) window = 1000;
+    if (window > kShotMaxWindowMs) window = kShotMaxWindowMs;
+    t_start = w.shot_elapsed_ms > window ? w.shot_elapsed_ms - window : 0;
+  } else {
+    window = shot_window_of(w.shot_elapsed_ms);
+    t_start = shot_tstart_of(w.shot_elapsed_ms, window);
+  }
   w.shot_map_window_ms = window;
   w.shot_map_tstart_ms = t_start;
 
@@ -1585,7 +1601,8 @@ void begin_shot_plot(HomeWidgets& w) {
   if (w.flow_canvas == nullptr) return;
   reset_flow_graph(w);
   w.flow_shot_plot = true;
-  w.unwired_ring = false;  // wired shot takes the arrays (relative stamps)
+  w.shot_exact_fit = false;  // live plot: back to the snapped windows
+  w.unwired_ring = false;    // wired shot takes the arrays (relative stamps)
   w.shot_n = 0;
   w.shot_head = 0;
   w.shot_t0 = lv_tick_get();
@@ -1612,6 +1629,7 @@ void begin_shot_plot(HomeWidgets& w) {
 void end_shot_plot(HomeWidgets& w) {
   if (!w.flow_shot_plot) return;
   w.flow_shot_plot = false;
+  w.shot_exact_fit = false;
   reset_flow_graph(w);  // back to the live sweep on a fresh grid
   if (w.flow_xspan_label != nullptr)
     lv_label_set_text_fmt(w.flow_xspan_label, "%d s window", kFlowWindowS);
@@ -1690,7 +1708,9 @@ void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
 void finish_shot_plot(HomeWidgets& w) {
   if (!w.flow_shot_plot) return;
   // The edge runs one event interval behind while live — flush the trailing
-  // sliver so the frozen review plot shows the complete shot.
+  // sliver so the frozen review plot shows the complete shot, window fitted
+  // to the shot instead of the live snaps.
+  w.shot_exact_fit = true;
   shot_plot_redraw_full(w, UINT32_MAX);
 }
 
@@ -1759,6 +1779,7 @@ void review_shot_plot(HomeWidgets& w, uint32_t t_start, uint32_t t_end,
 
   // Enter the frozen shot-plot state and paint once, complete (no display lag).
   w.flow_shot_plot = true;
+  w.shot_exact_fit = true;  // window = the shot, not the live snaps
   w.shot_t0 = t0;
   w.shot_elapsed_ms = t_end - t0;
   w.shot_si = 0;

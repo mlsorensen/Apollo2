@@ -153,6 +153,12 @@ struct HomeWidgets {
   uint32_t shot_t0 = 0;                 // lv_tick at shot start
   uint32_t shot_elapsed_ms = 0;         // frozen at review; drives the X window
   uint32_t shot_last_sample_ms = 0;
+  // Frozen review: fit the X window to the finished shot exactly instead of
+  // the live plot's 15/30/45/60s snaps (those exist only so the mid-shot
+  // mapping stays stable for cheap incremental painting — a review repaint is
+  // full anyway, and the snapped window left a dead-grid tail). Set by
+  // finish_shot_plot/review_shot_plot, cleared when the plot begins/ends.
+  bool shot_exact_fit = false;
   // Incremental painting state: while the time->x mapping is stable (window
   // snaps in 5s steps), new samples only append right-edge columns; a full
   // repaint happens only on a snap or Y rescale.
