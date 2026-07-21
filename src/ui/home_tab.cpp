@@ -1298,6 +1298,11 @@ void stop_flash_cb(lv_timer_t* t) {
         w->shot_btn_label, lv_color_hex(lit ? ui::theme::bg() : ui::theme::warn()), 0);
   }
   if (dead || w->stop_flash_count == 0) {
+    // Always end on the resting fill: update_home styles the border/text but
+    // NEVER the bg (it assumes card()), so a warn fill left behind here would
+    // stick — and with review's warn text on it, render the label invisible.
+    if (w->shot_btn != nullptr)
+      lv_obj_set_style_bg_color(w->shot_btn, lv_color_hex(ui::theme::card()), 0);
     if (w->stop_flash_timer == t) w->stop_flash_timer = nullptr;
     lv_timer_delete(t);
   }
@@ -1331,6 +1336,11 @@ void cancel_stop_flash(HomeWidgets& w) {
     lv_timer_delete(w.stop_flash_timer);
     w.stop_flash_timer = nullptr;
   }
+  // The cancel can land on a lit frame — restore the resting fill here, since
+  // update_home only ever styles the border/text on top of an assumed card()
+  // bg (a stuck warn fill made review's warn-on-warn label unreadable).
+  if (w.shot_btn != nullptr)
+    lv_obj_set_style_bg_color(w.shot_btn, lv_color_hex(ui::theme::card()), 0);
 }
 
 void reset_flow_graph(HomeWidgets& w) {
