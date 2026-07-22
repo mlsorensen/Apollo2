@@ -109,25 +109,37 @@ jobs:
             esptool.py write_flash 0 apollo2-<board>-${{ env.RELEASE_TAG }}.bin
             ```
 
+  # Each release deploys into its own version directory (vX.Y.Z/firmware +
+  # vX.Y.Z/manifests) and past versions are KEPT (keep_files) — the page's
+  # version dropdown (fed by releases.json) can flash any of them. index.html,
+  # releases.json and version.js are the only root files and are refreshed
+  # every deploy; version.js always names the NEWEST version present (not this
+  # run's tag), so re-running an old tag can't roll the page's default back.
   pages:
     needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
+      - uses: actions/checkout@v7
+        continue-on-error: true  # first deploy: no gh-pages branch yet
+        with:
+          ref: gh-pages
+          path: old
+
       - uses: actions/download-artifact@v8
         with:
           path: fw
           merge-multiple: true
 
-      - name: Assemble site (page + firmware + manifests)
+      - name: Assemble site (page + versioned firmware + manifests)
         run: |
-          mkdir -p public/firmware public/manifests
+          mkdir -p "public/${RELEASE_TAG}/firmware" "public/${RELEASE_TAG}/manifests"
           cp site/index.html public/
-          cp fw/*.bin public/firmware/
+          cp fw/*.bin "public/${RELEASE_TAG}/firmware/"
           python3 - <<'EOF'
-          import json, os, glob
-          version = os.environ["RELEASE_TAG"].lstrip("v")
+          import json, os, glob, re
+          tag = os.environ["RELEASE_TAG"]
           for path in glob.glob("fw/*.bin"):
               name = os.path.basename(path)
               chip = open(path + ".chip").read().strip()
@@ -135,18 +147,31 @@ jobs:
               board = name[len("apollo2-"):name.rindex("-v")]
               manifest = {
                   "name": f"Apollo 2 ({board})",
-                  "version": version,
+                  "version": tag.lstrip("v"),
                   "new_install_prompt_erase": True,
                   "builds": [{
                       "chipFamily": chip,
                       "parts": [{"path": f"../firmware/{name}", "offset": 0}],
                   }],
               }
-              with open(f"public/manifests/{board}.json", "w") as f:
+              with open(f"public/{tag}/manifests/{board}.json", "w") as f:
                   json.dump(manifest, f, indent=2)
-          # the page shows the release it serves
+
+          # releases.json: every version directory already on the site + this
+          # one, newest first (semver sort). keep_files below preserves the old
+          # directories themselves.
+          versions = {tag}
+          if os.path.isdir("old"):
+              for d in os.listdir("old"):
+                  if re.fullmatch(r"v\d+\.\d+\.\d+", d) and os.path.isdir(f"old/{d}"):
+                      versions.add(d)
+          ordered = sorted(versions,
+                           key=lambda v: [int(x) for x in v[1:].split(".")],
+                           reverse=True)
+          with open("public/releases.json", "w") as f:
+              json.dump(ordered, f, indent=2)
           with open("public/version.js", "w") as f:
-              f.write(f'window.APOLLO2_VERSION = "{os.environ["RELEASE_TAG"]}";\n')
+              f.write(f'window.APOLLO2_VERSION = "{ordered[0]}";\n')
           EOF
 
       - name: Deploy to GitHub Pages (gh-pages branch)
@@ -154,3 +179,4 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./public
+          keep_files: true  # past version directories stay flashable
