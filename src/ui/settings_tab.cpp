@@ -434,8 +434,20 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
       lv_obj_t* rw = make_setting_row(out.micra_settings_page, "Wired paddle", font);
       out.wired_paddle_switch = lv_switch_create(rw);
       lv_obj_set_size(out.wired_paddle_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
+      // Post-shot auto-flush: tap cycles Off / 3 s / 6 s. Wired-relay boards
+      // only — it drives the paddle line, so unwired-only boards can't flush.
+      lv_obj_t* rf = make_setting_row(out.micra_settings_page, "Auto flush", font);
+      out.flush_btn = ui::make_button(rf);
+      lv_obj_set_height(out.flush_btn, btn_size);
+      lv_obj_set_style_pad_hor(out.flush_btn, ui::dp(14), 0);
+      lv_obj_set_style_bg_color(out.flush_btn, lv_color_hex(ui::theme::card()), 0);
+      out.flush_value = lv_label_create(out.flush_btn);
+      lv_obj_set_style_text_color(out.flush_value, lv_color_hex(ui::theme::text()), 0);
+      lv_obj_set_style_text_font(out.flush_value, font, 0);
+      lv_obj_center(out.flush_value);
     } else {
       out.wired_paddle_switch = nullptr;
+      out.flush_btn = out.flush_value = nullptr;
     }
   }
   section_label(out.micra_settings_page, "Brew", font);

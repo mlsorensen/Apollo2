@@ -85,6 +85,8 @@ struct SettingsWidgets {
   lv_obj_t* wired_paddle_switch = nullptr;   // Micra: paddle harness in use (off =
                                              // detector-driven "unwired" shots);
                                              // only built on paddle-capable boards
+  lv_obj_t* flush_btn = nullptr;             // Micra: auto-flush cycle (Off / 3 s / 6 s);
+  lv_obj_t* flush_value = nullptr;           // only built on paddle-capable boards
 
   // --- Brew temp stepper (continuous, tenths) ------------------------------
   lv_obj_t* brew_minus = nullptr;

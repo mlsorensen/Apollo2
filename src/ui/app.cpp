@@ -279,6 +279,24 @@ void on_wired_paddle_switch(lv_event_t* e) {
 void on_smooth_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_flow_smooth();
 }
+void on_flush_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_flush();
+}
+
+// Auto-flush run-time choices (seconds; 0 = off).
+constexpr int kFlushChoices[] = {0, 3, 6};
+constexpr int kFlushCount = static_cast<int>(sizeof(kFlushChoices) / sizeof(kFlushChoices[0]));
+
+void set_flush_label(ui::SettingsWidgets& s, int flush_s) {
+  if (s.flush_value == nullptr) return;
+  if (flush_s <= 0) {
+    lv_label_set_text(s.flush_value, "Off");
+  } else {
+    char b[12];
+    std::snprintf(b, sizeof(b), "%d s", flush_s);
+    lv_label_set_text(s.flush_value, b);
+  }
+}
 
 // Shot-graph smoothing levels (IDisplaySettings::flow_smooth 0..3).
 constexpr float kSmoothK[] = {0.0f, 0.15f, 0.25f, 0.33f};
@@ -662,6 +680,10 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
       lv_obj_add_state(settings_.wired_paddle_switch, LV_STATE_CHECKED);
     lv_obj_add_event_cb(settings_.wired_paddle_switch, on_wired_paddle_switch,
                         LV_EVENT_VALUE_CHANGED, this);
+  }
+  if (settings_.flush_btn != nullptr) {  // paddle-capable boards only
+    set_flush_label(settings_, brew_ != nullptr ? brew_->snapshot().flush_s : 0);
+    lv_obj_add_event_cb(settings_.flush_btn, on_flush_clicked, LV_EVENT_CLICKED, this);
   }
   lv_obj_add_event_cb(settings_.perf_overlay_switch, on_perf_overlay_switch,
                       LV_EVENT_VALUE_CHANGED, this);
@@ -1074,6 +1096,16 @@ void App::toggle_power() {
 
 void App::tare_scale() {
   if (scale_ != nullptr) scale_->tare();
+}
+
+void App::cycle_flush() {
+  if (brew_ == nullptr) return;
+  const int cur = brew_->snapshot().flush_s;
+  int i = 0;
+  while (i < kFlushCount && kFlushChoices[i] != cur) ++i;
+  const int next = kFlushChoices[(i + 1) % kFlushCount];  // unknown value -> wraps to Off
+  brew_->set_flush_s(next);
+  set_flush_label(settings_, next);
 }
 
 void App::cycle_flow_smooth() {
@@ -1555,8 +1587,24 @@ void App::update_stats_view() {
 
     // Battery runtime is computed (throttled, ~10-min average) in
     // update_battery_runtime; just display the cached string here.
+    // Uptime is time-since-boot off the LVGL tick (wraps at ~49 days).
+    char up[20];
+    const uint32_t up_s = lv_tick_get() / 1000u;
+    if (up_s >= 86400u)
+      std::snprintf(up, sizeof(up), "%ud %uh", static_cast<unsigned>(up_s / 86400u),
+                    static_cast<unsigned>(up_s % 86400u / 3600u));
+    else if (up_s >= 3600u)
+      std::snprintf(up, sizeof(up), "%uh %um", static_cast<unsigned>(up_s / 3600u),
+                    static_cast<unsigned>(up_s % 3600u / 60u));
+    else if (up_s >= 60u)
+      std::snprintf(up, sizeof(up), "%um %us", static_cast<unsigned>(up_s / 60u),
+                    static_cast<unsigned>(up_s % 60u));
+    else
+      std::snprintf(up, sizeof(up), "%us", static_cast<unsigned>(up_s));
+
     const char* vals[kStatsInfoRows] = {rfw,
                                         batt_runtime_text_,
+                                        up,
                                         snap.manufacturer,
                                         snap.model,
                                         snap.serial,

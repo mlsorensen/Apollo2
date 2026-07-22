@@ -182,7 +182,7 @@ void setup() {
   // paddle rides it). Seed the shot config from NVS and wire the persisters.
   platform::paddle().begin();
   g_brew.seed(g_config.target_weight_g(), g_config.shot_mode(), g_config.overshoot_g(),
-              g_config.review_hold_s(), g_config.wired_paddle());
+              g_config.review_hold_s(), g_config.wired_paddle(), g_config.flush_s());
   // A paddle flip while the connected Micra sits in standby only WAKES it (no
   // water moves) — tell the controller so it passes the flip through without
   // starting a phantom shot. Only a KNOWN not-on state counts; disconnected or
@@ -204,6 +204,7 @@ void setup() {
   g_brew.set_overshoot_persister([](float g) { g_config.set_overshoot_g(g); });
   g_brew.set_review_hold_persister([](int s) { g_config.set_review_hold_s(s); });
   g_brew.set_wired_paddle_persister([](bool on) { g_config.set_wired_paddle(on); });
+  g_brew.set_flush_persister([](int s) { g_config.set_flush_s(s); });
   Serial.printf("Paddle: %s\n",
                 platform::paddle().available() ? "available" : "not wired on this board");
   // Restore saved brightness where dimmable; otherwise hold the backlight at max
