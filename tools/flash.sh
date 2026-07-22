@@ -2,21 +2,22 @@
 # Build + flash the firmware for a connected board.
 #
 # Board selection (which PlatformIO env to flash):
-#   1. explicit:  tools/flash.sh 7b      (or 2inch / 4-3b / an env name) / BOARD=7b
+#   1. explicit:  tools/flash.sh s3-7b   (canonical <chip>-<panel> name, an old
+#                 alias like 7b/p4, or a full env name) / BOARD=s3-7b
 #   2. auto:      if our firmware is already running, read its boot banner over
 #                 serial and match the board; otherwise fall back to the default.
-# The two boards share the same ESP32-S3, so they can't be told apart over USB
+# The S3 boards share the same MCU, so they can't be told apart over USB
 # *before* our firmware is on them — hence the banner probe + a default.
 #
 # The serial port is auto-detected (single board) or taken from $PORT / -p.
 
 board_to_env() {
   case "$1" in
-    2|2inch|lcd2|s3-lcd-2|esp32-s3-micra)        echo "esp32-s3-micra" ;;
-    7|7b|lcd7|s3-lcd-7|7inch|esp32-s3-micra-7b)  echo "esp32-s3-micra-7b" ;;
-    4|43|4-3b|4.3b|43b|lcd43|esp32-s3-micra-4-3b) echo "esp32-s3-micra-4-3b" ;;
-    4-3c|4.3c|43c|esp32-s3-micra-4-3c)            echo "esp32-s3-micra-4-3c" ;;
-    p4|p4-43|p4-wifi6|esp32-p4-micra-43)          echo "esp32-p4-micra-43" ;;
+    s3-2|2|2inch|lcd2|s3-lcd-2|esp32-s3-micra)            echo "esp32-s3-micra" ;;
+    s3-7b|7|7b|lcd7|s3-lcd-7|7inch|esp32-s3-micra-7b)     echo "esp32-s3-micra-7b" ;;
+    s3-4-3b|4|43|4-3b|4.3b|43b|lcd43|esp32-s3-micra-4-3b) echo "esp32-s3-micra-4-3b" ;;
+    s3-4-3c|4-3c|4.3c|43c|esp32-s3-micra-4-3c)            echo "esp32-s3-micra-4-3c" ;;
+    p4-4-3|p4|p4-43|p4-wifi6|esp32-p4-micra-43)           echo "esp32-p4-micra-43" ;;
     *) echo "" ;;
   esac
 }
@@ -64,7 +65,7 @@ ENV=""
 if [ -n "$BOARD" ]; then
   ENV="$(board_to_env "$BOARD")"
   if [ -z "$ENV" ]; then
-    echo "flash: unknown board '$BOARD' (use 2inch | 7b)" >&2
+    echo "flash: unknown board '$BOARD' (use s3-2 | s3-7b | s3-4-3b | s3-4-3c | p4-4-3)" >&2
     exit 2
   fi
 elif [ -n "$PORT" ]; then
@@ -75,11 +76,11 @@ if [ -z "$ENV" ]; then
   echo "flash: couldn't tell which board this is (the two share an MCU, and no" >&2
   echo "       running Micra firmware was detected to read its banner)." >&2
   echo "       Re-run with the board so we don't flash the wrong build:" >&2
-  echo "         make flash-7b        (7\" 1024x600)" >&2
-  echo "         make flash-4-3b      (4.3\" 800x480)" >&2
-  echo "         make flash-4-3c      (4.3\" 800x480, dimmable)" >&2
-  echo "         make flash-2inch     (2\" 320x240)" >&2
-  echo "         make flash-p4        (P4-WIFI6 4.3\" 800x480)" >&2
+  echo "         make flash-s3-7b     (S3 7\" 1024x600)" >&2
+  echo "         make flash-s3-4-3b   (S3 4.3B 800x480)" >&2
+  echo "         make flash-s3-4-3c   (S3 4.3C 800x480, dimmable)" >&2
+  echo "         make flash-s3-2      (S3 2\" 320x240)" >&2
+  echo "         make flash-p4-4-3    (P4-WIFI6 4.3\" 800x480)" >&2
   exit 2
 fi
 
