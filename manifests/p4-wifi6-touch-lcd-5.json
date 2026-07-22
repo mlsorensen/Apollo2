@@ -1,0 +1,16 @@
+{
+  "name": "Apollo 2 (p4-wifi6-touch-lcd-5)",
+  "version": "0.1.0",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-P4",
+      "parts": [
+        {
+          "path": "../firmware/apollo2-p4-wifi6-touch-lcd-5-v0.1.0.bin",
+          "offset": 0
+        }
+      ]
+    }
+  ]
+}
