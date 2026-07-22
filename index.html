@@ -34,14 +34,30 @@
   .board .info { flex: 1; min-width: 240px; }
   .board .name { font-weight: 600; }
   .board .desc { color: var(--muted); font-size: 0.9rem; }
-  esp-web-install-button::part(button) {
+  .note.warn { border-left-color: #e6b04c; }
+  .board button[slot="activate"], .board > button {
     background: var(--accent); color: #fff; border: none; border-radius: 8px;
     padding: 10px 18px; font-size: 0.95rem; cursor: pointer;
+    font: inherit;
   }
+  .board.detect { border: 1px dashed #2c3542; background: var(--rail); }
+  .board.detect > button { background: #2c3542; }
+  .board.matched { outline: 2px solid var(--accent); }
+  #detect-status { margin-top: 6px; }
+  #detect-status.err { color: #e6b04c; }
   h2 { font-size: 1.2rem; margin-top: 40px; }
   a { color: var(--accent); }
   code { background: var(--rail); border-radius: 4px; padding: 1px 6px; }
   footer { margin-top: 48px; color: var(--muted); font-size: 0.85rem; }
+  .verbar {
+    display: flex; align-items: center; gap: 10px; margin: 20px 0 8px;
+    flex-wrap: wrap;
+  }
+  .verbar select {
+    background: var(--rail); color: var(--text); border: 1px solid #2c3542;
+    border-radius: 8px; padding: 6px 10px; font-size: 0.95rem;
+  }
+  #oldwarn { color: #e6b04c; font-size: 0.9rem; }
 </style>
 </head>
 <body>
@@ -56,24 +72,54 @@
 
   <div class="note">
     Flashing happens right here in the browser — no tools to install.
-    <b>Requires Chrome or Edge on a computer</b> (Web Serial isn't available on
-    phones or in Safari/Firefox), and a <b>USB data cable</b> (not charge-only).
+    <b>Requires a computer</b> running Chrome, Edge, or a recent Firefox
+    (phones and Safari don't support Web Serial), and a
+    <b>USB data cable</b> (not charge-only).
+  </div>
+
+  <div class="verbar">
+    <label for="version">Firmware version:</label>
+    <select id="version"><option>loading…</option></select>
+    <span id="oldwarn" hidden>&#9888; older release — latest is <span id="latestver"></span></span>
   </div>
 
   <ol>
     <li>Plug the board into this computer (port notes under each board below).</li>
-    <li>Click <b>Install</b> for <em>your</em> board — the boards look similar but
-        the builds are not interchangeable.</li>
+    <li>Reinstalling or upgrading? Click <b>Detect board</b> and the right image
+        is chosen for you. First install: click <b>Install</b> on <em>your</em>
+        board — they look similar but the builds are not interchangeable.</li>
     <li>Pick the serial port in the popup, then follow the prompts. A first
         install should choose "Erase device" when offered.</li>
   </ol>
+
+  <div class="board detect">
+    <div class="info">
+      <div class="name">Already running Apollo&nbsp;2? Detect your board</div>
+      <div class="desc">Asks the connected device which board it is (firmware
+        v0.1.1+) and selects the right image for you. On a first install the
+        device can't answer — choose from the list below instead.</div>
+      <div class="desc" id="detect-status"></div>
+    </div>
+    <button id="detect">Detect board</button>
+  </div>
+
+  <div class="note warn">
+    <b>&#9888; Pick your exact board.</b> Without detection the flasher cannot
+    tell the boards apart — a mismatched image won't damage anything, but the
+    device will show a <b>black screen until the right image is flashed</b>.
+    The exact model name is printed on the back of the PCB. (Flashing across
+    chip families — an S3 image onto a P4 or vice versa — is detected and
+    refused.)
+  </div>
+
+  <p id="showall-row" hidden><a href="#" id="showall">Not right? Show all boards</a></p>
 
   <div class="board">
     <div class="info">
       <div class="name">ESP32-S3-Touch-LCD-2</div>
       <div class="desc">2.0&quot; 240&times;320 &mdash; the portable, battery-friendly one. Single USB-C port.</div>
     </div>
-    <esp-web-install-button manifest="manifests/s3-touch-lcd-2.json"></esp-web-install-button>
+    <esp-web-install-button data-board="s3-touch-lcd-2"><button slot="activate">Install</button></esp-web-install-button>
   </div>
 
   <div class="board">
@@ -81,7 +127,7 @@
       <div class="name">ESP32-S3-Touch-LCD-4.3B</div>
       <div class="desc">4.3&quot; 800&times;480. Single USB-C port.</div>
     </div>
-    <esp-web-install-button manifest="manifests/s3-touch-lcd-4.3b.json"></esp-web-install-button>
+    <esp-web-install-button data-board="s3-touch-lcd-4.3b"><button slot="activate">Install</button></esp-web-install-button>
   </div>
 
   <div class="board">
@@ -89,7 +135,7 @@
       <div class="name">ESP32-S3-Touch-LCD-4.3C</div>
       <div class="desc">4.3&quot; 800&times;480 with dimmable backlight + battery monitoring. Single USB-C port.</div>
     </div>
-    <esp-web-install-button manifest="manifests/s3-touch-lcd-4.3c.json"></esp-web-install-button>
+    <esp-web-install-button data-board="s3-touch-lcd-4.3c"><button slot="activate">Install</button></esp-web-install-button>
   </div>
 
   <div class="board">
@@ -97,7 +143,7 @@
       <div class="name">ESP32-S3-Touch-LCD-7B</div>
       <div class="desc">7&quot; 1024&times;600. Two USB-C ports &mdash; use the one labeled <b>UART</b>.</div>
     </div>
-    <esp-web-install-button manifest="manifests/s3-touch-lcd-7b.json"></esp-web-install-button>
+    <esp-web-install-button data-board="s3-touch-lcd-7b"><button slot="activate">Install</button></esp-web-install-button>
   </div>
 
   <div class="board">
@@ -105,7 +151,7 @@
       <div class="name">ESP32-P4-WIFI6-Touch-LCD-4.3</div>
       <div class="desc">4.3&quot; 800&times;480, ESP32-P4 + WiFi 6. Two USB-C ports &mdash; use the one labeled <b>UART</b>.</div>
     </div>
-    <esp-web-install-button manifest="manifests/p4-wifi6-touch-lcd-4.3.json"></esp-web-install-button>
+    <esp-web-install-button data-board="p4-wifi6-touch-lcd-4.3"><button slot="activate">Install</button></esp-web-install-button>
   </div>
 
   <div class="board">
@@ -113,7 +159,7 @@
       <div class="name">ESP32-P4-WIFI6-Touch-LCD-5</div>
       <div class="desc">5&quot; 1280&times;720, ESP32-P4 + WiFi 6. Two USB-C ports &mdash; use the one labeled <b>UART</b>.</div>
     </div>
-    <esp-web-install-button manifest="manifests/p4-wifi6-touch-lcd-5.json"></esp-web-install-button>
+    <esp-web-install-button data-board="p4-wifi6-touch-lcd-5"><button slot="activate">Install</button></esp-web-install-button>
   </div>
 
   <h2>After flashing</h2>
@@ -135,7 +181,8 @@
     <li><b>Flash won't start / times out:</b> put the board in download mode —
         hold <b>BOOT</b>, tap <b>RESET</b>, release <b>BOOT</b> — then try again.</li>
     <li><b>Black screen after flashing:</b> press the board's <b>RESET</b>
-        button once.</li>
+        button once. Still black? You may have flashed another board's image —
+        select the right one above and flash again (nothing is damaged).</li>
   </ol>
 
   <footer>
@@ -145,9 +192,160 @@
   </footer>
 </main>
 <script>
-  if (window.APOLLO2_VERSION) {
-    document.getElementById('ver').textContent = window.APOLLO2_VERSION;
+  // version.js (written at deploy) names the newest release; releases.json
+  // lists every version directory kept on this site, newest first. The
+  // install dialog itself also shows the manifest's version before flashing.
+  const sel = document.getElementById('version');
+  const badge = document.getElementById('ver');
+  const warn = document.getElementById('oldwarn');
+  let latest = window.APOLLO2_VERSION || '';
+
+  function apply(version) {
+    document.querySelectorAll('esp-web-install-button').forEach((b) => {
+      b.setAttribute('manifest', `${version}/manifests/${b.dataset.board}.json`);
+    });
+    badge.textContent = version;
+    warn.hidden = version === latest;
   }
+
+  if (latest) {
+    sel.innerHTML = `<option value="${latest}">${latest} (latest)</option>`;
+    apply(latest);
+  }
+  fetch('releases.json').then((r) => r.json()).then((versions) => {
+    latest = versions[0];
+    document.getElementById('latestver').textContent = latest;
+    sel.innerHTML = versions.map((v, i) =>
+      `<option value="${v}">${v}${i === 0 ? ' (latest)' : ''}</option>`).join('');
+    sel.value = latest;
+    apply(latest);
+  }).catch(() => {});
+  sel.addEventListener('change', () => apply(sel.value));
+
+  // Last line of defense against flashing the wrong board's image (the boards
+  // are indistinguishable over USB, so there is no technical check within a
+  // chip family): a capture-phase confirm on the host element runs before
+  // esp-web-tools sees the slotted button's click. Skipped when the board was
+  // just auto-detected — the device itself vouched for the choice.
+  document.querySelectorAll('esp-web-install-button').forEach((host) => {
+    host.addEventListener('click', (e) => {
+      if (!e.target.closest('button')) return;
+      if (host.dataset.ok === '1') { delete host.dataset.ok; return; }
+      if (host.closest('.board').classList.contains('matched')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const name = host.closest('.board').querySelector('.name').textContent;
+      const version = sel.value || latest;
+      if (confirm(`Flash ${name} — ${version}?\n\n` +
+                  `Check that "${name}" matches the model printed on your ` +
+                  `board. A mismatched image won't boot (black screen) until ` +
+                  `the right one is flashed.`)) {
+        host.dataset.ok = '1';
+        e.target.closest('button').click();
+      }
+    }, true);
+  });
+
+  // --- Board auto-detection over Web Serial ---------------------------------
+  // Apollo 2 firmware (v0.1.1+) answers "id?" on its serial port with a line
+  // naming the board; the boot banner carries the same name, which covers the
+  // case where opening the port happens to reset a UART-bridge board. Matched
+  // most-specific-first ("...LCD-5" before "...LCD-4.3" etc.). No DTR/RTS
+  // toggling — a scripted reset dance can strand S3 boards in download mode.
+  const BOARD_PATTERNS = [
+    ['P4-WIFI6-Touch-LCD-5',   'p4-wifi6-touch-lcd-5'],
+    ['P4-WIFI6-Touch-LCD-4.3', 'p4-wifi6-touch-lcd-4.3'],
+    ['S3-Touch-LCD-4.3C',      's3-touch-lcd-4.3c'],
+    ['S3-Touch-LCD-4.3B',      's3-touch-lcd-4.3b'],
+    ['S3-Touch-LCD-7',         's3-touch-lcd-7b'],
+    ['S3-Touch-LCD-2',         's3-touch-lcd-2'],
+  ];
+  const matchBoard = (text) => {
+    for (const [pat, id] of BOARD_PATTERNS) if (text.includes(pat)) return id;
+    return null;
+  };
+
+  const status = document.getElementById('detect-status');
+  const showallRow = document.getElementById('showall-row');
+
+  function selectBoard(id) {
+    document.querySelectorAll('.board:not(.detect)').forEach((card) => {
+      const btn = card.querySelector('esp-web-install-button');
+      const isMatch = btn && btn.dataset.board === id;
+      card.classList.toggle('matched', isMatch);
+      card.hidden = !isMatch;
+    });
+    showallRow.hidden = false;
+  }
+  document.getElementById('showall').addEventListener('click', (e) => {
+    e.preventDefault();
+    document.querySelectorAll('.board').forEach((card) => {
+      card.hidden = false;
+      card.classList.remove('matched');
+    });
+    showallRow.hidden = true;
+  });
+
+  async function queryBoard(port) {
+    await port.open({ baudRate: 115200 });
+    // Leave the control lines alone except parking them low once — some
+    // bridges assert DTR on open, which can hold a board in reset.
+    try { await port.setSignals({ dataTerminalReady: false, requestToSend: false }); } catch (_) {}
+    const reader = port.readable.getReader();
+    const writer = port.writable.getWriter();
+    const query = new TextEncoder().encode('id?\n');
+    const dec = new TextDecoder();
+    let text = '';
+    const poke = setInterval(() => { writer.write(query).catch(() => {}); }, 400);
+    const timeout = setTimeout(() => { reader.cancel().catch(() => {}); }, 4000);
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        text += dec.decode(value, { stream: true });
+        const id = matchBoard(text);
+        if (id) return id;
+      }
+      return matchBoard(text);
+    } finally {
+      clearInterval(poke);
+      clearTimeout(timeout);
+      try { reader.releaseLock(); } catch (_) {}
+      try { writer.releaseLock(); } catch (_) {}
+      try { await port.close(); } catch (_) {}
+    }
+  }
+
+  document.getElementById('detect').addEventListener('click', async () => {
+    if (!('serial' in navigator)) {
+      status.className = 'desc err';
+      status.textContent = 'This browser has no Web Serial — use Chrome, Edge, or a recent Firefox.';
+      return;
+    }
+    status.className = 'desc';
+    let port;
+    try {
+      port = await navigator.serial.requestPort();
+    } catch (_) {
+      return;  // user closed the picker
+    }
+    status.textContent = 'Asking the device which board it is…';
+    try {
+      const id = await queryBoard(port);
+      if (id) {
+        selectBoard(id);
+        const name = document.querySelector(`esp-web-install-button[data-board="${id}"]`)
+                       .closest('.board').querySelector('.name').textContent;
+        status.textContent = `Detected: ${name} — Install below flashes it.`;
+      } else {
+        status.className = 'desc err';
+        status.textContent = 'No answer — likely a first install (or firmware older than v0.1.1). Choose your board from the list below.';
+      }
+    } catch (err) {
+      status.className = 'desc err';
+      status.textContent = `Couldn't read the port (${err.message}). Choose your board manually below.`;
+    }
+  });
 </script>
 </body>
 </html>
