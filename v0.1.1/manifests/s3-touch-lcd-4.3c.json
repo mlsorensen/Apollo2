@@ -1,0 +1,16 @@
+{
+  "name": "Apollo 2 (s3-touch-lcd-4.3c)",
+  "version": "0.1.1",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        {
+          "path": "../firmware/apollo2-s3-touch-lcd-4.3c-v0.1.1.bin",
+          "offset": 0
+        }
+      ]
+    }
+  ]
+}
