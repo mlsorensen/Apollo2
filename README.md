@@ -76,7 +76,13 @@ scale (Bookoo Themis Mini) is optional. Future support for Acaia Umbra coming.
 
 ### 1. Flash the firmware
 
-Requires [PlatformIO](https://platformio.org/) (`pio`) and a USB cable.
+**No-toolchain option:** the [web flasher](https://mlsorensen.github.io/Apollo2/)
+flashes any supported board straight from Chrome/Edge over USB — pick your board,
+click Install. Prebuilt images also live on the
+[Releases](https://github.com/mlsorensen/Apollo2/releases) page.
+
+Building from source requires [PlatformIO](https://platformio.org/) (`pio`) and
+a USB cable.
 
 ```sh
 make flash            # print selection of flash options

@@ -1,0 +1,156 @@
+name: firmware release
+
+# Build the firmware for every supported board and publish the flashable
+# binaries to a GitHub Release + the web flasher on GitHub Pages.
+# Trigger by pushing a tag like `v0.1.0`, or run it manually from the Actions
+# tab (supply the tag). The `v*` prefix is firmware's; the lmtoken tool
+# releases under `lmtoken-v*` (see lmtoken-release.yml).
+#
+# Each board's artifact is its PlatformIO `firmware.factory.bin` — a combined
+# image (bootloader + partition table + app at their proper offsets) flashed
+# at offset 0, which is exactly what ESP Web Tools wants: the Pages site
+# (site/, deployed to the gh-pages branch with the binaries + generated
+# manifests) lets anyone flash a board from Chrome with no toolchain.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to create (e.g. v0.1.0)'
+        required: true
+
+permissions:
+  contents: write  # create the Release + push the gh-pages branch
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # board = user-facing name (Waveshare product, lowercased) used in
+          # the artifact filename; env = the PlatformIO environment.
+          - { env: esp32-s3-micra,       board: s3-touch-lcd-2,          chip: ESP32-S3 }
+          - { env: esp32-s3-micra-7b,    board: s3-touch-lcd-7b,         chip: ESP32-S3 }
+          - { env: esp32-s3-micra-4-3b,  board: s3-touch-lcd-4.3b,       chip: ESP32-S3 }
+          - { env: esp32-s3-micra-4-3c,  board: s3-touch-lcd-4.3c,       chip: ESP32-S3 }
+          - { env: esp32-p4-micra-43,    board: p4-wifi6-touch-lcd-4.3,  chip: ESP32-P4 }
+          - { env: esp32-p4-micra-5,     board: p4-wifi6-touch-lcd-5,    chip: ESP32-P4 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ matrix.env }}-${{ hashFiles('platformio.ini') }}
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Build ${{ matrix.env }}
+        run: pio run -e ${{ matrix.env }}
+
+      - name: Stage artifact
+        run: |
+          mkdir -p out
+          cp .pio/build/${{ matrix.env }}/firmware.factory.bin \
+             "out/apollo2-${{ matrix.board }}-${RELEASE_TAG}.bin"
+          # chip family for the web-flasher manifest generation
+          echo "${{ matrix.chip }}" > "out/apollo2-${{ matrix.board }}-${RELEASE_TAG}.bin.chip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fw-${{ matrix.board }}
+          path: out/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        run: (cd dist && rm -f *.chip && shasum -a 256 *.bin > SHA256SUMS.txt)
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TAG }}
+          files: |
+            dist/*.bin
+            dist/SHA256SUMS.txt
+          body: |
+            Apollo 2 firmware ${{ env.RELEASE_TAG }} — one flashable image per
+            supported Waveshare board (bootloader + partitions + app combined;
+            flash at offset 0).
+
+            **Easiest install: the [web flasher](https://mlsorensen.github.io/Apollo2/)** —
+            plug the board in and flash from Chrome, no tools needed.
+
+            Command-line alternative:
+            ```
+            esptool.py write_flash 0 apollo2-<board>-${{ env.RELEASE_TAG }}.bin
+            ```
+
+  pages:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: fw
+          merge-multiple: true
+
+      - name: Assemble site (page + firmware + manifests)
+        run: |
+          mkdir -p public/firmware public/manifests
+          cp site/index.html public/
+          cp fw/*.bin public/firmware/
+          python3 - <<'EOF'
+          import json, os, glob
+          version = os.environ["RELEASE_TAG"].lstrip("v")
+          for path in glob.glob("fw/*.bin"):
+              name = os.path.basename(path)
+              chip = open(path + ".chip").read().strip()
+              # apollo2-<board>-vX.Y.Z.bin -> board
+              board = name[len("apollo2-"):name.rindex("-v")]
+              manifest = {
+                  "name": f"Apollo 2 ({board})",
+                  "version": version,
+                  "new_install_prompt_erase": True,
+                  "builds": [{
+                      "chipFamily": chip,
+                      "parts": [{"path": f"../firmware/{name}", "offset": 0}],
+                  }],
+              }
+              with open(f"public/manifests/{board}.json", "w") as f:
+                  json.dump(manifest, f, indent=2)
+          # the page shows the release it serves
+          with open("public/version.js", "w") as f:
+              f.write(f'window.APOLLO2_VERSION = "{os.environ["RELEASE_TAG"]}";\n')
+          EOF
+
+      - name: Deploy to GitHub Pages (gh-pages branch)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
