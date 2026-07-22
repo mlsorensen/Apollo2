@@ -49,12 +49,12 @@ constexpr int kBufferLines = 200;    // PSRAM chunk (RGB/DSI) / SPI chunk
 
 uint32_t tick_cb() { return millis(); }
 
-#if defined(BOARD_DISPLAY_DSI)
+#if defined(BOARD_DISPLAY_DSI) && defined(BOARD_DSI_PANEL_ST7701)
 // ST7701 panel init sequence, transcribed verbatim from Waveshare's BSP
 // (esp32_p4_wifi6_touch_lcd_4_3.c, vendor_specific_init_default). Sent over the
 // DSI DCS channel by Arduino_DSI_Display before video mode starts. The final
 // pair is sleep-out (0x11, 120 ms) + display-on (0x29).
-const lcd_init_cmd_t kSt7701Init[] = {
+const lcd_init_cmd_t kDsiPanelInit[] = {
     {0xFF, (uint8_t[]){0x77, 0x01, 0x00, 0x00, 0x13}, 5, 0},
     {0xEF, (uint8_t[]){0x08}, 1, 0},
     {0xFF, (uint8_t[]){0x77, 0x01, 0x00, 0x00, 0x10}, 5, 0},
@@ -102,7 +102,66 @@ const lcd_init_cmd_t kSt7701Init[] = {
     {0x11, (uint8_t[]){0x00}, 0, 120},
     {0x29, (uint8_t[]){0x00}, 0, 0},
 };
+#elif defined(BOARD_DISPLAY_DSI) && defined(BOARD_DSI_PANEL_HX8394)
+// HX8394 panel init (the 5" 720x1280): the esp_lcd_hx8394 driver's sequence,
+// flattened. The driver first sends sleep-out + MADCTL 0x00 (RGB order) +
+// COLMOD 0x55 (RGB565) + the 2-lane MIPI select (0xBA 0x61), then its vendor
+// table (vendor_specific_init_code_default, transcribed verbatim below), which
+// itself re-issues sleep-out (200 ms) and ends with display-on (0x29, 80 ms).
+const lcd_init_cmd_t kDsiPanelInit[] = {
+    {0x11, (uint8_t[]){0x00}, 0, 120},   // SLPOUT
+    {0x36, (uint8_t[]){0x00}, 1, 0},     // MADCTL: RGB order
+    {0x3A, (uint8_t[]){0x55}, 1, 0},     // COLMOD: RGB565
+    {0xBA, (uint8_t[]){0x61}, 1, 0},     // SETMIPI: 2 data lanes
+    // --- vendor table ---
+    {0xB9, (uint8_t[]){0xFF, 0x83, 0x94}, 3, 0},  // SETEXTC: unlock
+    {0xB1, (uint8_t[]){0x48, 0x0A, 0x6A, 0x09, 0x33, 0x54, 0x71, 0x71, 0x2E,
+                       0x45}, 10, 0},
+    {0xBA, (uint8_t[]){0x61, 0x03, 0x68, 0x6B, 0xB2, 0xC0}, 6, 0},
+    {0xB2, (uint8_t[]){0x00, 0x80, 0x64, 0x0C, 0x06, 0x2F}, 6, 0},
+    {0xB4, (uint8_t[]){0x1C, 0x78, 0x1C, 0x78, 0x1C, 0x78, 0x01, 0x0C, 0x86,
+                       0x75, 0x00, 0x3F, 0x1C, 0x78, 0x1C, 0x78, 0x1C, 0x78,
+                       0x01, 0x0C, 0x86}, 21, 0},
+    {0xD3, (uint8_t[]){0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x08, 0x32,
+                       0x10, 0x05, 0x00, 0x05, 0x32, 0x13, 0xC1, 0x00, 0x01,
+                       0x32, 0x10, 0x08, 0x00, 0x00, 0x37, 0x03, 0x07, 0x07,
+                       0x37, 0x05, 0x05, 0x37, 0x0C, 0x40}, 33, 0},
+    {0xD5, (uint8_t[]){0x18, 0x18, 0x18, 0x18, 0x22, 0x23, 0x20, 0x21, 0x04,
+                       0x05, 0x06, 0x07, 0x00, 0x01, 0x02, 0x03, 0x18, 0x18,
+                       0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+                       0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+                       0x18, 0x18, 0x18, 0x18, 0x19, 0x19, 0x19, 0x19}, 44, 0},
+    {0xD6, (uint8_t[]){0x18, 0x18, 0x19, 0x19, 0x21, 0x20, 0x23, 0x22, 0x03,
+                       0x02, 0x01, 0x00, 0x07, 0x06, 0x05, 0x04, 0x18, 0x18,
+                       0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+                       0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+                       0x18, 0x18, 0x18, 0x18, 0x19, 0x19, 0x18, 0x18}, 44, 0},
+    {0xE0, (uint8_t[]){0x07, 0x08, 0x09, 0x0D, 0x10, 0x14, 0x16, 0x13, 0x24,
+                       0x36, 0x48, 0x4A, 0x58, 0x6F, 0x76, 0x80, 0x97, 0xA5,
+                       0xA8, 0xB5, 0xC6, 0x62, 0x63, 0x68, 0x6F, 0x72, 0x78,
+                       0x7F, 0x7F, 0x00, 0x02, 0x08, 0x0D, 0x0C, 0x0E, 0x0F,
+                       0x10, 0x24, 0x36, 0x48, 0x4A, 0x58, 0x6F, 0x78, 0x82,
+                       0x99, 0xA4, 0xA0, 0xB1, 0xC0, 0x5E, 0x5E, 0x64, 0x6B,
+                       0x6C, 0x73, 0x7F, 0x7F}, 58, 0},
+    {0xCC, (uint8_t[]){0x0B}, 1, 0},
+    {0xC0, (uint8_t[]){0x1F, 0x73}, 2, 0},
+    {0xB6, (uint8_t[]){0x6B, 0x6B}, 2, 0},
+    {0xD4, (uint8_t[]){0x02}, 1, 0},
+    {0xBD, (uint8_t[]){0x01}, 1, 0},
+    {0xB1, (uint8_t[]){0x00}, 1, 0},
+    {0xBD, (uint8_t[]){0x00}, 1, 0},
+    {0xBF, (uint8_t[]){0x40, 0x81, 0x50, 0x00, 0x1A, 0xFC, 0x01}, 7, 0},
+    {0x3A, (uint8_t[]){0x50}, 1, 0},
+    {0x11, (uint8_t[]){0x00}, 0, 200},
+    {0xB2, (uint8_t[]){0x00, 0x80, 0x64, 0x0C, 0x06, 0x2F, 0x00, 0x00, 0x00,
+                       0x00, 0xC0, 0x18}, 12, 0},
+    {0x29, (uint8_t[]){0x00}, 0, 80},
+};
+#elif defined(BOARD_DISPLAY_DSI)
+#error "DSI board without a BOARD_DSI_PANEL_* controller macro (see board_config.h)."
+#endif
 
+#if defined(BOARD_DISPLAY_DSI)
 // --- Double-buffered DPI scan-out ---------------------------------------
 // The DPI panel continuously scans a PSRAM framebuffer; blitting LVGL strips
 // into the live buffer mid-scan makes moving content (the flow graph) visibly
@@ -234,13 +293,16 @@ bool Display::begin() {
     return false;
   }
 
-  // Panel reset, then the vendor init table over the DCS (DBI) channel.
+  // Panel reset, then the vendor init table over the DCS (DBI) channel. The
+  // assert level is per-panel: the ST7701 resets LOW, the 5"'s HX8394 HIGH.
+  const int rst_assert = board::kLcdRstActiveHigh ? HIGH : LOW;
+  const int rst_release = board::kLcdRstActiveHigh ? LOW : HIGH;
   pinMode(board::kLcdRst, OUTPUT);
-  digitalWrite(board::kLcdRst, HIGH);
+  digitalWrite(board::kLcdRst, rst_release);
   delay(10);
-  digitalWrite(board::kLcdRst, LOW);
+  digitalWrite(board::kLcdRst, rst_assert);
   delay(10);
-  digitalWrite(board::kLcdRst, HIGH);
+  digitalWrite(board::kLcdRst, rst_release);
   delay(120);
 
   esp_lcd_dbi_io_config_t dbi_cfg = {};
@@ -252,10 +314,10 @@ bool Display::begin() {
     Serial.println("DSI: DBI io create FAILED");
     return false;
   }
-  for (size_t i = 0; i < sizeof(kSt7701Init) / sizeof(kSt7701Init[0]); ++i) {
-    esp_lcd_panel_io_tx_param(dbi_io, kSt7701Init[i].cmd, kSt7701Init[i].data,
-                              kSt7701Init[i].data_bytes);
-    if (kSt7701Init[i].delay_ms) delay(kSt7701Init[i].delay_ms);
+  for (size_t i = 0; i < sizeof(kDsiPanelInit) / sizeof(kDsiPanelInit[0]); ++i) {
+    esp_lcd_panel_io_tx_param(dbi_io, kDsiPanelInit[i].cmd, kDsiPanelInit[i].data,
+                              kDsiPanelInit[i].data_bytes);
+    if (kDsiPanelInit[i].delay_ms) delay(kDsiPanelInit[i].delay_ms);
   }
 
   esp_lcd_dpi_panel_config_t dpi_cfg = {};
@@ -299,13 +361,15 @@ bool Display::begin() {
 
   Serial.printf("DSI: panel up %dx%d, double-buffered\n", board::kLcdNativeH,
                 board::kLcdNativeW);
-  // Backlight after the panel shows black: boost enable high, then PWM full.
-  // NOTE: the PWM is ACTIVE-LOW on this board (see set_brightness) — duty 0
-  // is full brightness.
-  pinMode(board::kLcdBacklightEn, OUTPUT);
-  digitalWrite(board::kLcdBacklightEn, HIGH);
+  // Backlight after the panel shows black: boost enable high (where a board
+  // has one), then PWM full. Polarity is per-board (kBacklightActiveLow): the
+  // 4.3's LEDC is inverted (duty 0 = full bright), the 5"'s is normal.
+  if (board::kLcdBacklightEn >= 0) {
+    pinMode(board::kLcdBacklightEn, OUTPUT);
+    digitalWrite(board::kLcdBacklightEn, HIGH);
+  }
   ledcAttach(board::kLcdBacklight, 5000, 8);  // 5 kHz, 8-bit PWM backlight
-  ledcWrite(board::kLcdBacklight, 0);
+  ledcWrite(board::kLcdBacklight, board::kBacklightActiveLow ? 0 : 255);
 #elif defined(BOARD_DISPLAY_RGB)
   // RGB parallel panel (e.g. 7B). The IO-extension I2C must come up first so we
   // can release the panel reset and turn the backlight on.
@@ -429,10 +493,11 @@ void Display::set_brightness(int percent) {
   // it per change (avoids a redundant write fighting the PWM on the same pin).
   io_extension().set_pwm(static_cast<uint8_t>(percent));
 #elif defined(BOARD_DISPLAY_DSI)
-  // This panel's backlight PWM is ACTIVE-LOW (Waveshare BSP configures LEDC
-  // with output_invert=1): duty 0 = full bright, 255 = off. Verified on
-  // hardware — writing normal-polarity duty leaves the screen black.
-  ledcWrite(board::kLcdBacklight, 255 - percent * 255 / 100);
+  // Polarity per board_config: the 4.3's backlight PWM is ACTIVE-LOW (its BSP
+  // configures LEDC with output_invert=1; verified on hardware — normal-
+  // polarity duty leaves the screen black), the 5"'s is normal.
+  const int duty = percent * 255 / 100;
+  ledcWrite(board::kLcdBacklight, board::kBacklightActiveLow ? 255 - duty : duty);
 #else
   ledcWrite(board::kLcdBacklight, percent * 255 / 100);
 #endif

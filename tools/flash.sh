@@ -18,6 +18,7 @@ board_to_env() {
     s3-4-3b|4|43|4-3b|4.3b|43b|lcd43|esp32-s3-micra-4-3b) echo "esp32-s3-micra-4-3b" ;;
     s3-4-3c|4-3c|4.3c|43c|esp32-s3-micra-4-3c)            echo "esp32-s3-micra-4-3c" ;;
     p4-4-3|p4|p4-43|p4-wifi6|esp32-p4-micra-43)           echo "esp32-p4-micra-43" ;;
+    p4-5|p45|esp32-p4-micra-5)                            echo "esp32-p4-micra-5" ;;
     *) echo "" ;;
   esac
 }
@@ -49,6 +50,7 @@ deadline = time.time() + 3.0
 buf = b""
 while time.time() < deadline:
     buf += s.read(256)
+    if b"P4-WIFI6-Touch-LCD-5" in buf: print("esp32-p4-micra-5"); break  # before the generic P4 match
     if b"P4-WIFI6" in buf: print("esp32-p4-micra-43");  break  # before LCD-4: its banner has "LCD-4.3" too
     if b"LCD-7" in buf:   print("esp32-s3-micra-7b");   break
     if b"LCD-4.3C" in buf: print("esp32-s3-micra-4-3c"); break  # before the generic LCD-4 match
@@ -65,7 +67,7 @@ ENV=""
 if [ -n "$BOARD" ]; then
   ENV="$(board_to_env "$BOARD")"
   if [ -z "$ENV" ]; then
-    echo "flash: unknown board '$BOARD' (use s3-2 | s3-7b | s3-4-3b | s3-4-3c | p4-4-3)" >&2
+    echo "flash: unknown board '$BOARD' (use s3-2 | s3-7b | s3-4-3b | s3-4-3c | p4-4-3 | p4-5)" >&2
     exit 2
   fi
 elif [ -n "$PORT" ]; then
@@ -81,6 +83,7 @@ if [ -z "$ENV" ]; then
   echo "         make flash-s3-4-3c   (S3 4.3C 800x480, dimmable)" >&2
   echo "         make flash-s3-2      (S3 2\" 320x240)" >&2
   echo "         make flash-p4-4-3    (P4-WIFI6 4.3\" 800x480)" >&2
+  echo "         make flash-p4-5      (P4-WIFI6 5\" 1280x720)" >&2
   exit 2
 fi
 

@@ -325,6 +325,7 @@ constexpr int kIoExtPaEnable = 4;  // EXIO4 = PA_CTRL
 // (esp32_p4_wifi6_touch_lcd_4_3.h). UNVERIFIED on hardware yet.
 constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-4.3";
 #define BOARD_DISPLAY_DSI     // MIPI-DSI panel via Arduino_GFX
+#define BOARD_DSI_PANEL_ST7701  // panel controller (selects the DCS init table)
 #define BOARD_TOUCH_GT911     // GT911, 16-bit registers
 constexpr bool kSupportsBrightness = true;  // LEDC PWM backlight (dimmable)
 
@@ -341,7 +342,9 @@ constexpr int  kLcdNativeW = 480;
 constexpr int  kLcdNativeH = 800;
 constexpr int  kLcdRotation = 1;      // 1 => 800x480 landscape
 constexpr int  kLcdRst = 27;          // native GPIO reset (no expander)
+constexpr bool kLcdRstActiveHigh = false;  // ST7701 reset asserts LOW
 constexpr int  kLcdBacklight = 26;    // LEDC PWM (BSP uses 10-bit LEDC here)
+constexpr bool kBacklightActiveLow = true;  // BSP LEDC output_invert=1 (verified on HW)
 constexpr int  kLcdBacklightEn = 33;  // backlight boost enable — drive high
 // 33.4MHz over the 576x870 total raster ≈ 66Hz refresh (BSP default is 30MHz
 // ≈ 60Hz). Raised to shift the panel's faint VCOM/inversion shimmer away from
@@ -415,8 +418,104 @@ constexpr int  kPaddleDrivePin = 52;
 constexpr int  kPaddleSensePin = 51;
 constexpr bool kPaddleActiveHigh = true;
 
+#elif defined(BOARD_WAVESHARE_P4_WIFI6_5)
+
+// Waveshare ESP32-P4-WIFI6-Touch-LCD-5 — electronically the 4.3's board (same
+// P4NRW32, C6-over-SDIO radio, ES8311 audio, battery path, 40-pin header) with
+// a 5" 720x1280 HX8394 panel over the same 2-lane MIPI-DSI. Pins verified
+// against the board schematic + Waveshare's BSP (esp32_p4_wifi6_touch_lcd_5.h).
+// Differences vs the 4.3 worth knowing:
+//   - Panel controller is an HX8394 (not ST7701): different DCS init table,
+//     reset asserts HIGH (BSP: flags.reset_active_high = 1), and the backlight
+//     LEDC PWM is normal polarity (no output_invert in the BSP), with no
+//     separate boost-enable GPIO in the BSP's control path.
+//   - GT911 reset/int are NOT wired to P4 GPIOs (BSP: GPIO_NUM_NC) — the touch
+//     controller comes up on its own; we just probe both addresses.
+// UNVERIFIED on hardware yet.
+constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-5";
+#define BOARD_DISPLAY_DSI
+#define BOARD_DSI_PANEL_HX8394  // panel controller (selects the DCS init table)
+#define BOARD_TOUCH_GT911
+constexpr bool kSupportsBrightness = true;  // LEDC PWM backlight (dimmable)
+// UI: 720x1280 on 5" is ~1.35x the 4.3's pixel density — render the wide
+// (800x480) layout scaled 1.5x so elements come out a touch larger physically
+// on the slightly larger glass, not two-thirds the size. 720 = 480 * 1.5
+// exactly; the extra width (1280 vs 1200) is absorbed by the flex layout.
+#define BOARD_UI_SCALE 1.5f
+
+// --- Shared I2C bus (GT911 touch; also the audio codecs / camera header) ---
+constexpr int kI2cSda = 7;
+constexpr int kI2cScl = 8;
+
+// --- Display: HX8394, 720x1280 native PORTRAIT, 2-lane MIPI-DSI ---
+// Same rotation=1 landscape pattern as the 4.3 => 1280x720. Timing from the
+// vendor driver's HX8394_720_1280_PANEL_30HZ_DPI_CONFIG: 58 MHz pixel clock;
+// HPW 20, HBP 20, HFP 40; VPW 4, VBP 10, VFP 24; 700 Mbps per lane
+// (~55 Hz refresh over the 800x1318 total raster).
+constexpr int  kLcdNativeW = 720;
+constexpr int  kLcdNativeH = 1280;
+constexpr int  kLcdRotation = 1;      // 1 => 1280x720 landscape
+constexpr int  kLcdRst = 27;
+constexpr bool kLcdRstActiveHigh = true;   // HX8394 reset asserts HIGH here
+constexpr int  kLcdBacklight = 26;         // LEDC PWM, normal polarity
+constexpr bool kBacklightActiveLow = false;
+constexpr int  kLcdBacklightEn = -1;       // no boost-enable pin in the BSP path
+constexpr long kDsiDpiClockHz = 58000000;
+constexpr int  kDsiLaneBitRateMbps = 700;
+constexpr int  kDsiHsyncPulse = 20, kDsiHsyncBack = 20, kDsiHsyncFront = 40;
+constexpr int  kDsiVsyncPulse = 4,  kDsiVsyncBack = 10, kDsiVsyncFront = 24;
+
+// --- Touch: GT911 on I2C. No reset/int wiring to the P4 (BSP: NC) — skip the
+//     reset pulse and just probe 0x5D/0x14. Orientation mapping is the same
+//     best-guess as the 4.3 (native portrait, display rotated); flip a flag if
+//     a tap lands wrong (see the one-line-per-press serial log). ---
+constexpr int  kTouchSda = 7;   // == kI2cSda (Touch reads these names)
+constexpr int  kTouchScl = 8;
+constexpr int  kTouchAddr = 0x5D;    // 0x5D (INT low at boot) or 0x14
+constexpr int  kTouchRst = -1;
+constexpr int  kTouchInt = -1;
+constexpr bool kTouchSwapXY = true;
+constexpr bool kTouchMirrorX = false;
+constexpr bool kTouchMirrorY = true;
+
+// --- Battery: same path as the 4.3 — BAT_ADC GPIO20 through a 200K/100K
+//     divider (schematic R12/R15) => ÷3, the ratio confirmed on the 4.3's
+//     hardware (raw*3 matched the pack's 4.20V CV level). ---
+constexpr int   kBatteryAdc = 20;
+constexpr float kBatteryDivider = 3.0f;
+constexpr float kBatteryFullVolts = 4.10f;
+constexpr float kBatteryEmptyVolts = 3.40f;
+constexpr float kBatteryCutoffVolts = 3.40f;
+constexpr float kBatteryResumeVolts = 3.70f;
+constexpr float kUsbPowerVolts = 4.15f;
+
+// --- Audio: ES8311 codec, identical wiring to the 4.3 (BSP pins match). ---
+#define BOARD_HAS_AUDIO
+constexpr int kAudioI2sPort = 1;
+constexpr int kAudioMclk = 13;
+constexpr int kAudioBclk = 12;
+constexpr int kAudioLrclk = 10;
+constexpr int kAudioDout = 9;     // ESP -> ES8311 SDIN (speaker)
+constexpr int kEs8311Addr = 0x18;
+constexpr int kAudioPaPin = 53;   // speaker power-amp enable, active-high
+
+// --- Paddle control (brew-by-weight): same header corner as the 4.3 (GND, 52,
+//     51 adjacent per the PCB silk) — same 3-pin screw terminal + opto module
+//     harness. See the 4.3 block for the wiring details. ---
+constexpr int  kPaddleDrivePin = 52;
+constexpr int  kPaddleSensePin = 51;
+constexpr bool kPaddleActiveHigh = true;
+
 #else
-#error "No board selected. Add -DBOARD_WAVESHARE_S3_LCD_2 (or _7B / _43B / _43C / P4_WIFI6_43) to build_flags in platformio.ini."
+#error "No board selected. Add -DBOARD_WAVESHARE_S3_LCD_2 (or _7B / _43B / _43C / P4_WIFI6_43 / P4_WIFI6_5) to build_flags in platformio.ini."
 #endif
+
+// Proportional UI zoom for high-DPI panels (see ui::ScreenProfile::scale).
+// Boards that want it define BOARD_UI_SCALE in their block; everyone else
+// renders 1:1.
+#ifndef BOARD_UI_SCALE
+#define BOARD_UI_SCALE 1.0f
+#endif
+constexpr float kUiScale = BOARD_UI_SCALE;
 
 }  // namespace board

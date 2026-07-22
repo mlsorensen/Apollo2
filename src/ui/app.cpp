@@ -20,7 +20,7 @@ void style_tab_button(lv_obj_t* btn, const lv_font_t* font) {
   lv_obj_set_style_text_font(btn, font, 0);
   lv_obj_set_style_text_color(btn, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_bg_opa(btn, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_radius(btn, 10, 0);
+  lv_obj_set_style_radius(btn, ui::dp(10), 0);
   lv_obj_set_style_border_width(btn, 0, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);  // kill LVGL's default (blue, unthemed) shadow
 
@@ -95,7 +95,7 @@ lv_obj_t* modal_button(lv_obj_t* parent, const char* label, uint32_t color,
   lv_obj_t* l = lv_label_create(b);
   lv_label_set_text(l, label);
   lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(l, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_font(l, ui::font_dp(14), 0);
   lv_obj_center(l);
   return b;
 }
@@ -463,6 +463,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   network_ = &network;
   sound_ = &sound;
   screen_ = screen;
+  ui::set_scale(screen.scale);  // before any widget: ui::dp/font_dp read this
   const bool compact = is_compact(screen);
   const bool xl = is_xl(screen);
 
@@ -510,14 +511,14 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_set_style_bg_color(scr, lv_color_hex(ui::theme::bg()), 0);
   lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
-  const lv_font_t* tab_font = &lv_font_montserrat_28;  // bigger icons on every tier
-  const int rail_pad = compact ? 4 : xl ? 12 : 8;
+  const lv_font_t* tab_font = ui::font_dp(28);  // bigger icons on every tier
+  const int rail_pad = ui::dp(compact ? 4 : xl ? 12 : 8);
 
   lv_obj_t* tv = lv_tabview_create(scr);
   tabview_ = tv;
   lv_obj_add_event_cb(tv, on_tab_changed, LV_EVENT_VALUE_CHANGED, this);  // commit on tab exit
   lv_tabview_set_tab_bar_position(tv, compact ? LV_DIR_BOTTOM : LV_DIR_LEFT);
-  lv_tabview_set_tab_bar_size(tv, compact ? 44 : xl ? 120 : 96);
+  lv_tabview_set_tab_bar_size(tv, ui::dp(compact ? 44 : xl ? 120 : 96));
   lv_obj_set_style_bg_opa(tv, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(tv, 0, 0);
 
@@ -563,13 +564,13 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   // tray anchors the bottom, not a void). Must precede update_home, which populates
   // home_.clock_label / battery_label.
   if (compact) {
-    ui::build_bottom_tray(rail, &lv_font_montserrat_14, home_);
+    ui::build_bottom_tray(rail, ui::font_dp(14), home_);
   } else {
     lv_obj_set_flex_align(rail, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
     // Font 16 (not 20) so a 2-digit 12h clock ("12:55 PM") + "100%" battery fit the
     // narrow rail without clipping (font metrics differ on-device vs sim).
-    ui::build_rail_tray(rail, &lv_font_montserrat_16, home_);
+    ui::build_rail_tray(rail, ui::font_dp(16), home_);
   }
   lv_obj_add_event_cb(home_.power_btn, on_power_clicked, LV_EVENT_CLICKED, this);
   if (home_.tare_btn != nullptr)
@@ -1305,13 +1306,13 @@ lv_obj_t* App::open_modal(const char* title, const char* body) {
   lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(card, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_all(card, 14, 0);
-  lv_obj_set_style_pad_row(card, 10, 0);
+  lv_obj_set_style_pad_all(card, ui::dp(14), 0);
+  lv_obj_set_style_pad_row(card, ui::dp(10), 0);
 
   lv_obj_t* t = lv_label_create(card);
   lv_label_set_text(t, title);
   lv_obj_set_style_text_color(t, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(t, &lv_font_montserrat_20, 0);
+  lv_obj_set_style_text_font(t, ui::font_dp(20), 0);
 
   lv_obj_t* b = lv_label_create(card);
   lv_label_set_text(b, body);
@@ -1319,7 +1320,7 @@ lv_obj_t* App::open_modal(const char* title, const char* body) {
   lv_label_set_long_mode(b, LV_LABEL_LONG_WRAP);
   lv_obj_set_style_text_align(b, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_text_color(b, lv_color_hex(ui::theme::muted()), 0);
-  lv_obj_set_style_text_font(b, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_font(b, ui::font_dp(14), 0);
   return card;
 }
 
@@ -1337,7 +1338,7 @@ void App::close_modal() {
 void App::show_pairing_modal() {
   lv_obj_t* card = open_modal("Pairing", "Reading the token from the machine...");
   lv_obj_t* spinner = lv_spinner_create(card);
-  lv_obj_set_size(spinner, 44, 44);
+  lv_obj_set_size(spinner, ui::dp(44), ui::dp(44));
   lv_obj_set_style_arc_color(spinner, lv_color_hex(ui::theme::rail()), LV_PART_MAIN);
   lv_obj_set_style_arc_color(spinner, lv_color_hex(ui::theme::accent()), LV_PART_INDICATOR);
   lv_spinner_set_anim_params(spinner, 1000, 60);
@@ -1705,6 +1706,7 @@ void App::update_settings_view() {
     std::snprintf(buf, sizeof(buf), "%s   %d dBm", results[i].name, results[i].rssi);
     lv_label_set_text(lbl, buf);
     lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(lbl, ui::font_dp(14), 0);
     lv_obj_center(lbl);
   }
 }
@@ -1773,6 +1775,7 @@ void App::update_scale_view() {
     std::snprintf(buf, sizeof(buf), "%s   %d dBm", results[i].name, results[i].rssi);
     lv_label_set_text(lbl, buf);
     lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(lbl, ui::font_dp(14), 0);
     lv_obj_center(lbl);
   }
   set_target_label(settings_);

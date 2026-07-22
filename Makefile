@@ -4,13 +4,14 @@
 # (ESP32-S3-Touch-LCD-4.3B -> s3-4-3b, ESP32-P4-WIFI6-Touch-LCD-4.3 -> p4-4-3):
 #
 #   make flash              build + flash the connected board (auto-detect; see below)
-#   make flash BOARD=s3-7b  flash a specific board (s3-2 | s3-7b | s3-4-3b | s3-4-3c | p4-4-3)
-#   make flash-s3-2 / flash-s3-7b / flash-s3-4-3b / flash-s3-4-3c / flash-p4-4-3
+#   make flash BOARD=s3-7b  flash a specific board (s3-2 | s3-7b | s3-4-3b | s3-4-3c | p4-4-3 | p4-5)
+#   make flash-s3-2 / flash-s3-7b / flash-s3-4-3b / flash-s3-4-3c / flash-p4-4-3 / flash-p4-5
 #   make build              compile the default (s3-2, 2" 320x240) firmware
 #   make build-s3-7b        compile the S3 7" (1024x600) firmware
 #   make build-s3-4-3b      compile the S3 4.3B (800x480) firmware
 #   make build-s3-4-3c      compile the S3 4.3C (800x480, dimmable + battery) firmware
 #   make build-p4-4-3       compile the P4-WIFI6 4.3" (DSI 800x480) firmware
+#   make build-p4-5         compile the P4-WIFI6 5" (DSI 1280x720) firmware
 #   make monitor            open the serial monitor
 #   make sim                build + run the host simulator (writes renders/*.png)
 #   make lmtoken            build the cloud token tool (tools/lmtoken)
@@ -26,8 +27,8 @@ BOARD ?=
 
 .DEFAULT_GOAL := build
 .PHONY: flash flash-s3-2 flash-s3-7b flash-s3-4-3b flash-s3-4-3c flash-p4-4-3 \
-        flash-2inch flash-7b flash-4-3b flash-4-3c flash-p4 \
-        build build-s3-7b build-s3-4-3b build-s3-4-3c build-p4-4-3 \
+        flash-p4-5 flash-2inch flash-7b flash-4-3b flash-4-3c flash-p4 \
+        build build-s3-7b build-s3-4-3b build-s3-4-3c build-p4-4-3 build-p4-5 \
         build-7b build-4-3b build-4-3c build-p4 \
         monitor sim lmtoken lmtoken-release lmtoken-publish clean
 
@@ -49,6 +50,9 @@ flash-s3-4-3c:
 flash-p4-4-3:
 	@tools/flash.sh p4-4-3
 
+flash-p4-5:
+	@tools/flash.sh p4-5
+
 build:
 	$(PIO) run -e esp32-s3-micra
 
@@ -63,6 +67,9 @@ build-s3-4-3c:
 
 build-p4-4-3:
 	$(PIO) run -e esp32-p4-micra-43
+
+build-p4-5:
+	$(PIO) run -e esp32-p4-micra-5
 
 # --- Pre-rename aliases (muscle memory + older docs) -------------------------
 flash-2inch: flash-s3-2
