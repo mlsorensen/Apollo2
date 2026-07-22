@@ -97,11 +97,20 @@ lmtoken-release:
 # Cut an lmtoken release: tag the current commit `lmtoken-v$(VERSION)` and push
 # just that tag, which triggers the lmtoken-release workflow (it builds + publishes
 # the binaries). The tag points at the whole repo commit; the `lmtoken-` prefix is
-# what scopes it to this tool — firmware releases will use a different prefix.
+# what scopes it to this tool — firmware releases use the bare `v` prefix below.
 lmtoken-publish:
 	@test -n "$(VERSION)" || { echo "usage: make lmtoken-publish VERSION=1.0.0"; exit 1; }
 	git tag lmtoken-v$(VERSION)
 	git push origin lmtoken-v$(VERSION)
+
+# Cut a FIRMWARE release: tag `v$(VERSION)` + push it -> the firmware-release
+# workflow builds every board env and publishes the flashable images to a
+# GitHub Release + the web flasher (GitHub Pages). Bump include/version.h's
+# fw::kVersion to match in the same commit.
+release-publish:
+	@test -n "$(VERSION)" || { echo "usage: make release-publish VERSION=0.1.0"; exit 1; }
+	git tag v$(VERSION)
+	git push origin v$(VERSION)
 
 clean:
 	$(PIO) run -t clean ; rm -rf .pio/build/sim
