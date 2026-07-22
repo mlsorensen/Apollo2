@@ -43,6 +43,13 @@ void BrewController::poll(uint32_t now_ms) {
       }
       phase_ = ShotPhase::kReview;
       review_until_ms_ = now_ms + static_cast<uint32_t>(review_hold_s_) * 1000u;
+      // Arm the auto-flush on a real shot's freeze: the settled weight is the
+      // reference the cup-off drop is judged against.
+      if (flush_s_ > 0 && wired()) {
+        flush_state_ = FlushState::kArmed;
+        flush_ref_g_ = s.weight_g;
+        flush_armed_ms_ = now_ms;
+      }
     }
   }
 
@@ -50,6 +57,80 @@ void BrewController::poll(uint32_t now_ms) {
   if (phase_ == ShotPhase::kReview && reached(now_ms, review_until_ms_)) {
     phase_ = ShotPhase::kIdle;
   }
+
+  // --- Post-shot auto-flush (wired only; armed on review entry above).
+  poll_flush(now_ms);
+}
+
+void BrewController::poll_flush(uint32_t now_ms) {
+  if (flush_state_ == FlushState::kOff) return;
+  // A new shot starting (any mode), losing the wired relay, or the user
+  // touching the paddle all cancel the sequence — the flush only runs into a
+  // quiet, cup-less drip tray with the human's hands off the controls.
+  if (!wired() || phase_ == ShotPhase::kBrewing || phase_ == ShotPhase::kSettling ||
+      paddle_on_) {
+    cancel_flush();
+    return;
+  }
+
+  switch (flush_state_) {
+    case FlushState::kArmed: {
+      // Watch for the cup coming off — through review and a grace window past
+      // it (the review may time out or be Reset before the cup moves).
+      if (reached(now_ms, flush_armed_ms_ + kFlushWatchMs)) {
+        flush_state_ = FlushState::kOff;
+        return;
+      }
+      const ScaleSnapshot s = scale_.snapshot();
+      if (!s.connected) {
+        flush_state_ = FlushState::kOff;  // blind — can't judge a cup-off
+        return;
+      }
+      if (flush_ref_g_ - s.weight_g >= kFlushCupDropG) {
+        flush_state_ = FlushState::kDelay;
+        flush_at_ms_ = now_ms + kFlushDelayMs;
+        logf("Brew: cup off (-%.0fg) -> flush in %us\n",
+             static_cast<double>(flush_ref_g_ - s.weight_g),
+             static_cast<unsigned>(kFlushDelayMs / 1000u));
+      }
+      break;
+    }
+    case FlushState::kDelay:
+      if (reached(now_ms, flush_at_ms_)) {
+        // A machine known to be in standby would treat the closed line as its
+        // wake switch (no water) — skip rather than surprise-power it on.
+        if (standby_ && standby_()) {
+          flush_state_ = FlushState::kOff;
+          return;
+        }
+        paddle_.drive(true);
+        driving_ = true;
+        flush_state_ = FlushState::kRunning;
+        flush_off_ms_ = now_ms + static_cast<uint32_t>(flush_s_) * 1000u;
+        logf("Brew: auto-flush running (%ds)\n", flush_s_);
+      }
+      break;
+    case FlushState::kRunning:
+      if (reached(now_ms, flush_off_ms_)) {
+        paddle_.drive(false);
+        driving_ = false;
+        flush_state_ = FlushState::kOff;
+        logf("Brew: auto-flush done\n");
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+void BrewController::cancel_flush() {
+  if (flush_state_ == FlushState::kRunning && driving_ && !paddle_on_) {
+    // We closed the line for the flush and the user's paddle is off: open it.
+    // (With the user's paddle ON, the line is theirs now — leave it closed.)
+    paddle_.drive(false);
+    driving_ = false;
+  }
+  flush_state_ = FlushState::kOff;
 }
 
 int BrewController::sense_paddle_edge(uint32_t now_ms) {
@@ -317,6 +398,7 @@ BrewSnapshot BrewController::snapshot() const {
       .review_hold_s = review_hold_s_,
       .review_reject_seq = review_reject_seq_,
       .stop_hint = stop_hint_,
+      .flush_s = flush_s_,
   };
 }
 
@@ -341,7 +423,18 @@ void BrewController::set_review_hold_s(int seconds) {
   if (persist_review_) persist_review_(seconds);
 }
 
+void BrewController::set_flush_s(int seconds) {
+  if (seconds < 0) seconds = 0;
+  if (seconds > 10) seconds = 10;
+  if (seconds == flush_s_) return;
+  flush_s_ = seconds;
+  if (persist_flush_) persist_flush_(seconds);
+  if (seconds == 0) cancel_flush();  // includes stopping an in-flight run
+  logf("Brew: auto-flush %ds\n", seconds);
+}
+
 void BrewController::cancel_shot() {
+  cancel_flush();  // before driving_: a running flush holds the line too
   if (driving_) {
     paddle_.drive(false);  // never leave the machine running across a mode flip
     driving_ = false;

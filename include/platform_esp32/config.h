@@ -39,6 +39,8 @@ class Config {
   void set_auto_connect(bool on);
   bool wired_paddle() const;           // paddle harness in use (default true; only
   void set_wired_paddle(bool on);      // meaningful on boards with the hardware)
+  int flush_s() const;                 // post-shot auto-flush seconds (0 = off; default 0)
+  void set_flush_s(int seconds);
   int flow_smooth() const;             // shot-graph smoothing level 0..3 (default 1)
   void set_flow_smooth(int level);
 

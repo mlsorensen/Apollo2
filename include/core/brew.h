@@ -80,6 +80,10 @@ struct BrewSnapshot {
                           // overshoot, led by ~250ms of current flow for human
                           // reaction time) — the UI flashes "stop the shot now".
                           // Latches true until the shot ends.
+  int   flush_s;          // auto-flush run time in seconds (0 = off). Wired
+                          // only: after a finished shot, when the scale sees
+                          // the cup come off, wait a beat and run the group
+                          // for this long to rinse the puck's surface.
 };
 
 // True when the ESP-side shot timer is the authoritative shot-time source:
@@ -116,6 +120,10 @@ class IBrewController {
   // a no-op elsewhere — they are always unwired). Flipping it mid-shot cancels
   // to kIdle. Persisted.
   virtual void set_wired_paddle(bool on) = 0;
+
+  // Auto-flush run time in seconds (0 = off; the UI offers Off/3s/6s). Wired
+  // only — unwired has no drive line to flush with. Persisted.
+  virtual void set_flush_s(int seconds) = 0;
 };
 
 }  // namespace core

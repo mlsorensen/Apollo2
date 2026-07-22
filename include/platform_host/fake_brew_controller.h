@@ -27,12 +27,14 @@ class FakeBrewController : public core::IBrewController {
         .review_hold_s = review_hold_s_,
         .review_reject_seq = 0,
         .stop_hint = false,
+        .flush_s = flush_s_,
     };
   }
   void set_target_weight_g(float grams) override { target_g_ = grams; }
   void set_shot_mode(bool on) override { shot_mode_ = on; }
   void set_review_hold_s(int seconds) override { review_hold_s_ = seconds; }
   void set_wired_paddle(bool on) override { wired_ = on; }
+  void set_flush_s(int seconds) override { flush_s_ = seconds; }
   void dismiss_review() override {
     if (phase_ == core::ShotPhase::kReview) phase_ = core::ShotPhase::kIdle;
   }
@@ -53,6 +55,7 @@ class FakeBrewController : public core::IBrewController {
   uint32_t shot_ms_ = 27000;  // matches the fake scale's 27.0s render
   float target_g_ = 36.0f;
   int review_hold_s_ = 30;
+  int flush_s_ = 0;
 };
 
 }  // namespace host

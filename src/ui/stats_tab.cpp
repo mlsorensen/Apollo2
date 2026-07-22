@@ -267,18 +267,20 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
   lv_obj_set_style_radius(out.info_box, ui::dp(3), LV_PART_SCROLLBAR);
 
   // Two groups: this remote, then the machine. info_val indices stay aligned with
-  // update_stats_view's vals[] (0 our FW, 1 Runtime, 2..6 Micra DIS fields). The
-  // "Device" header disambiguates, so the firmware row is just "Firmware".
+  // update_stats_view's vals[] (0 our FW, 1 Runtime, 2 Uptime, 3..7 Micra DIS
+  // fields). The "Device" header disambiguates, so the firmware row is just
+  // "Firmware".
   make_info_header(out.info_box, "Device", font);
   out.info_val[0] = make_info_row(out.info_box, "Firmware", font, compact);
   out.info_val[1] =
       make_info_row(out.info_box, LV_SYMBOL_BATTERY_2 " Runtime", font, compact);
+  out.info_val[2] = make_info_row(out.info_box, "Uptime", font, compact);
 
   make_info_header(out.info_box, "Micra", font);
   static const char* kMicraKeys[5] = {"Manufacturer", "Model", "Serial", "Firmware",
                                       "Software"};
   for (int i = 0; i < 5; ++i)
-    out.info_val[2 + i] = make_info_row(out.info_box, kMicraKeys[i], font, compact);
+    out.info_val[3 + i] = make_info_row(out.info_box, kMicraKeys[i], font, compact);
 
   stats_select_section(out, kStatsBrew);
 }
