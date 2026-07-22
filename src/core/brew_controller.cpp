@@ -52,35 +52,45 @@ void BrewController::poll(uint32_t now_ms) {
   }
 }
 
+int BrewController::sense_paddle_edge(uint32_t now_ms) {
+  if (!reached(now_ms, last_sense_ms_ + kSensePeriodMs)) return -1;
+  last_sense_ms_ = now_ms;
+  // Glitch filter: the raw level must hold kSenseStablePolls consecutive
+  // polls before it becomes an edge (see the constant's comment — phantom
+  // edge pairs from machine-wake EMI start unintended shots).
+  const bool raw = paddle_.sensed();
+  if (raw != sense_candidate_) {
+    sense_candidate_ = raw;
+    sense_stable_ = 1;
+  } else if (sense_stable_ < kSenseStablePolls) {
+    ++sense_stable_;
+  }
+  const bool on = (sense_stable_ >= kSenseStablePolls) ? sense_candidate_ : paddle_on_;
+  if (!sensed_once_) {
+    // Boot safety: adopt the first STABLE level WITHOUT acting on it. If the
+    // ESP rebooted mid-shot with the paddle left on, the machine stays off
+    // until the user makes a fresh edge — no surprise auto-start.
+    if (sense_stable_ >= kSenseStablePolls) {
+      sensed_once_ = true;
+      paddle_on_ = on;
+    }
+    return -1;
+  }
+  if (on == paddle_on_) return -1;
+  paddle_on_ = on;
+  // Every ACCEPTED edge is logged (the raw pin is not): a paddle mystery
+  // always comes down to which edges the controller acted on and when.
+  logf("Brew: paddle %s edge (phase %d)\n", on ? "ON" : "OFF",
+       static_cast<int>(phase_));
+  return on ? 1 : 0;
+}
+
 void BrewController::poll_wired(uint32_t now_ms) {
   // --- Paddle relay: edge-triggered, unconditional (the user is in charge).
-  if (reached(now_ms, last_sense_ms_ + kSensePeriodMs)) {
-    last_sense_ms_ = now_ms;
-    // Glitch filter: the raw level must hold kSenseStablePolls consecutive
-    // polls before it becomes an edge (see the constant's comment — phantom
-    // edge pairs from machine-wake EMI start unintended shots).
-    const bool raw = paddle_.sensed();
-    if (raw != sense_candidate_) {
-      sense_candidate_ = raw;
-      sense_stable_ = 1;
-    } else if (sense_stable_ < kSenseStablePolls) {
-      ++sense_stable_;
-    }
-    const bool on = (sense_stable_ >= kSenseStablePolls) ? sense_candidate_ : paddle_on_;
-    if (!sensed_once_) {
-      // Boot safety: adopt the first STABLE level WITHOUT acting on it. If the
-      // ESP rebooted mid-shot with the paddle left on, the machine stays off
-      // until the user makes a fresh edge — no surprise auto-start.
-      if (sense_stable_ >= kSenseStablePolls) {
-        sensed_once_ = true;
-        paddle_on_ = on;
-      }
-    } else if (on != paddle_on_) {
-      paddle_on_ = on;
-      // Every ACCEPTED edge is logged (the raw pin is not): a paddle mystery
-      // always comes down to which edges the controller acted on and when.
-      logf("Brew: paddle %s edge (phase %d)\n", on ? "ON" : "OFF",
-           static_cast<int>(phase_));
+  {
+    const int edge = sense_paddle_edge(now_ms);
+    if (edge >= 0) {
+      const bool on = edge == 1;
       if (on && phase_ == ShotPhase::kReview) {
         // Swallow the ON edge while the frozen review is up: the user almost
         // certainly expects the NEXT (auto) shot, but automation only re-arms
@@ -176,10 +186,31 @@ void BrewController::poll_wired(uint32_t now_ms) {
 }
 
 void BrewController::poll_unwired(uint32_t now_ms) {
-  // No paddle line: the weight-stream detector supplies the start/stop edges
-  // and the shared phase machinery does the rest. The detector only runs while
-  // it can matter — armed-and-idle (looking for a start) or brewing (looking
-  // for the end); settle/review keep it reset so drips can't re-trigger.
+  // Pass-through relay (paddle hardware present, "Wired paddle" OFF): keep
+  // sensing and driving the line so a wired rig can exercise unwired mode by
+  // just toggling the setting — the physical paddle still runs the machine;
+  // only the SHOT PHASES come from the detector instead of the edges. No
+  // timer, no tare, no auto-stop from edges. An ON edge during review
+  // dismisses it (the machine must not be blocked here — the wired path's
+  // swallow protects its armed automation, which doesn't apply); the detector
+  // then re-arms from kIdle and catches the new shot from the weight stream.
+  if (paddle_.available()) {
+    const int edge = sense_paddle_edge(now_ms);
+    if (edge == 1) {
+      if (phase_ == ShotPhase::kReview) phase_ = ShotPhase::kIdle;
+      paddle_.drive(true);
+      driving_ = true;
+    } else if (edge == 0) {
+      paddle_.drive(false);
+      driving_ = false;
+    }
+  }
+
+  // No paddle edges for the shot machinery: the weight-stream detector
+  // supplies start/stop and the shared phase machinery does the rest. The
+  // detector only runs while it can matter — armed-and-idle (looking for a
+  // start) or brewing (looking for the end); settle/review keep it reset so
+  // drips can't re-trigger.
   const bool armed = phase_ == ShotPhase::kIdle && shot_mode_;
   if (!armed && phase_ != ShotPhase::kBrewing) {
     detector_.reset();  // settle/review, or detection disarmed
