@@ -22,9 +22,12 @@ accurate and the layering rules there are hard rules:
 
 ## Boards / build
 
-`make build` (2-inch S3), `build-7b`, `build-4-3b`, `build-4-3c`, `build-p4`;
-matching `flash-*` targets auto-detect the port and can probe a running board's
-serial banner. All envs + `sim` must compile before committing platform changes.
+Board targets are `<chip>-<panel>` after the Waveshare product names:
+`make build` (default, the 2-inch S3), `build-s3-7b`, `build-s3-4-3b`,
+`build-s3-4-3c`, `build-p4-4-3`; matching `flash-*` targets auto-detect the
+port and can probe a running board's serial banner (pre-rename names like
+`build-p4`/`flash-7b` remain as aliases). All envs + `sim` must compile before
+committing platform changes.
 
 ### ESP32-S3-Touch-LCD-4.3C (env `esp32-s3-micra-4-3c`) — verified on HW
 
@@ -62,7 +65,7 @@ landscape), GT911 touch, WiFi6/BLE via on-board ESP32-C6 over SDIO
   enabled (verified in the core's esp32p4/sdkconfig). `lib_compat_mode = off`
   is required. Do not "simplify" the P4 env to NimBLE-Arduino.
 - Hosted SDIO pin defaults match the board exactly — no WiFi.setPins needed.
-- The C6 runs factory esp-hosted slave firmware; `make flash-p4` never
+- The C6 runs factory esp-hosted slave firmware; `make flash-p4-4-3` never
   touches it. Slave updates (if ever needed): esp-hosted OTA from the P4, or
   the board's P1 header + esptool.
 

@@ -79,7 +79,7 @@ Requires [PlatformIO](https://platformio.org/) (`pio`) and a USB cable.
 
 ```sh
 make flash            # print selection of flash options
-make flash-4-3b       # or target a specific board: 2inch | 7b | 4-3b | 4-3c | p4
+make flash-s3-4-3b    # or target a board: s3-2 | s3-7b | s3-4-3b | s3-4-3c | p4-4-3
 make monitor          # open the serial console (115200 baud)
 ```
 
