@@ -14,3 +14,4 @@ managed_components/
 dependencies.lock
 sdkconfig.esp32-p4-micra-43
 sdkconfig.defaults
+.DS_Store

@@ -141,8 +141,9 @@ void fill_flow_below(HomeWidgets& w, int x, float yf, uint16_t trace_color) {
 // line snapping a whole pixel per step.
 void draw_flow_segment(HomeWidgets& w, int x, float yf, uint16_t color) {
   // Line thickness: the trace reads as ~2*halfwidth px (solid core + one
-  // feathered row each side).
-  constexpr float kHalfWidth = 1.25f;
+  // feathered row each side). Scaled so the trace keeps its physical weight on
+  // high-DPI panels.
+  const float kHalfWidth = 1.25f * ui::scale();
   const float y0f = (w.flow_prev_y < 0.0f) ? yf : w.flow_prev_y;
   const float a = (y0f < yf ? y0f : yf) - kHalfWidth;
   const float b = (y0f < yf ? yf : y0f) + kHalfWidth;
@@ -249,11 +250,11 @@ lv_obj_t* make_flow_graph_card(lv_obj_t* parent) {
   lv_obj_set_flex_grow(card, 1);  // hero: take the vertical space left over
   lv_obj_set_style_bg_color(card, lv_color_hex(ui::theme::card()), 0);
   lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(card, 16, 0);
-  lv_obj_set_style_pad_left(card, 30, 0);    // Y labels
-  lv_obj_set_style_pad_bottom(card, 22, 0);  // X labels
-  lv_obj_set_style_pad_top(card, 18, 0);
-  lv_obj_set_style_pad_right(card, 12, 0);
+  lv_obj_set_style_radius(card, ui::dp(16), 0);
+  lv_obj_set_style_pad_left(card, ui::dp(30), 0);    // Y labels
+  lv_obj_set_style_pad_bottom(card, ui::dp(22), 0);  // X labels
+  lv_obj_set_style_pad_top(card, ui::dp(18), 0);
+  lv_obj_set_style_pad_right(card, ui::dp(12), 0);
   return card;
 }
 
@@ -302,14 +303,14 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   lv_obj_remove_style_all(btn);
   lv_obj_set_style_bg_color(btn, lv_color_hex(ui::theme::bg()), 0);
   lv_obj_set_style_bg_opa(btn, LV_OPA_70, 0);
-  lv_obj_set_style_radius(btn, 8, 0);
-  lv_obj_set_style_pad_hor(btn, 12, 0);
-  lv_obj_set_style_pad_ver(btn, 7, 0);
-  lv_obj_align(btn, LV_ALIGN_TOP_LEFT, 6, 6);
+  lv_obj_set_style_radius(btn, ui::dp(8), 0);
+  lv_obj_set_style_pad_hor(btn, ui::dp(12), 0);
+  lv_obj_set_style_pad_ver(btn, ui::dp(7), 0);
+  lv_obj_align(btn, LV_ALIGN_TOP_LEFT, ui::dp(6), ui::dp(6));
   lv_obj_t* blab = lv_label_create(btn);
   lv_label_set_text(blab, flow_unit(out.flow_mode));
   lv_obj_set_style_text_color(blab, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(blab, &lv_font_montserrat_20, 0);
+  lv_obj_set_style_text_font(blab, ui::font_dp(20), 0);
   out.flow_unit_btn = btn;
   out.flow_unit_label = blab;
 
@@ -318,8 +319,8 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   auto make_ylabel = [&](int y) {
     lv_obj_t* l = lv_label_create(card);
     lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::muted()), 0);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_14, 0);
-    lv_obj_align(l, LV_ALIGN_TOP_LEFT, -26, y - 8);
+    lv_obj_set_style_text_font(l, ui::font_dp(14), 0);
+    lv_obj_align(l, LV_ALIGN_TOP_LEFT, ui::dp(-26), y - ui::dp(8));
     return l;
   };
   for (int t = 0; t < 3; ++t) out.flow_ylabels[t] = make_ylabel(ph * t / 3);  // max..max/3
@@ -334,11 +335,11 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
     if (secs == 0) lv_label_set_text(xl, "now");
     else lv_label_set_text_fmt(xl, "%ds", secs);
     lv_obj_set_style_text_color(xl, lv_color_hex(ui::theme::muted()), 0);
-    lv_obj_set_style_text_font(xl, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(xl, ui::font_dp(14), 0);
     int x = pw * t / 3;
-    if (t == 3) x -= 24;
-    else if (t > 0) x -= 12;
-    lv_obj_align(xl, LV_ALIGN_TOP_LEFT, x, ph + 4);
+    if (t == 3) x -= ui::dp(24);
+    else if (t > 0) x -= ui::dp(12);
+    lv_obj_align(xl, LV_ALIGN_TOP_LEFT, x, ph + ui::dp(4));
     out.flow_xlabels[t] = xl;
   }
 
@@ -347,8 +348,8 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   out.flow_xspan_label = lv_label_create(card);
   lv_label_set_text_fmt(out.flow_xspan_label, "%d s window", kFlowWindowS);
   lv_obj_set_style_text_color(out.flow_xspan_label, lv_color_hex(ui::theme::muted()), 0);
-  lv_obj_set_style_text_font(out.flow_xspan_label, &lv_font_montserrat_14, 0);
-  lv_obj_align(out.flow_xspan_label, LV_ALIGN_TOP_LEFT, pw / 2 - 44, ph + 4);
+  lv_obj_set_style_text_font(out.flow_xspan_label, ui::font_dp(14), 0);
+  lv_obj_align(out.flow_xspan_label, LV_ALIGN_TOP_LEFT, pw / 2 - ui::dp(44), ph + ui::dp(4));
   lv_obj_add_flag(out.flow_xspan_label, LV_OBJ_FLAG_HIDDEN);
 
 #ifndef ESP_PLATFORM
@@ -385,7 +386,7 @@ void build_power_button(lv_obj_t* parent, int btn_h, const lv_font_t* btn_font,
   out.power_btn = ui::make_button(parent);
   lv_obj_set_width(out.power_btn, lv_pct(100));
   lv_obj_set_height(out.power_btn, btn_h);
-  lv_obj_set_style_radius(out.power_btn, 14, 0);
+  lv_obj_set_style_radius(out.power_btn, ui::dp(14), 0);
   out.power_label = lv_label_create(out.power_btn);
   lv_obj_set_style_text_color(out.power_label, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(out.power_label, btn_font, 0);
@@ -396,7 +397,7 @@ void build_power_button(lv_obj_t* parent, int btn_h, const lv_font_t* btn_font,
 void build_tare_button(lv_obj_t* parent, const lv_font_t* font, ui::HomeWidgets& out) {
   out.tare_btn = ui::make_button(parent);
   lv_obj_set_style_bg_color(out.tare_btn, lv_color_hex(ui::theme::card()), 0);
-  lv_obj_set_style_radius(out.tare_btn, 14, 0);
+  lv_obj_set_style_radius(out.tare_btn, ui::dp(14), 0);
   lv_obj_set_style_opa(out.tare_btn, LV_OPA_40, LV_STATE_DISABLED);  // scale gone
   out.tare_label = lv_label_create(out.tare_btn);
   lv_label_set_text(out.tare_label, LV_SYMBOL_LOOP "  Tare");
@@ -426,7 +427,7 @@ lv_obj_t* make_panel_card(lv_obj_t* parent, int pad) {
   lv_obj_set_style_pad_row(card, pad, 0);
   lv_obj_set_style_bg_color(card, lv_color_hex(ui::theme::card()), 0);
   lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(card, 16, 0);
+  lv_obj_set_style_radius(card, ui::dp(16), 0);
   return card;
 }
 
@@ -457,11 +458,11 @@ void make_panel_header(lv_obj_t* card, const char* caption, const lv_font_t* cap
   lv_obj_set_flex_flow(sg, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(sg, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(sg, 8, 0);
+  lv_obj_set_style_pad_column(sg, ui::dp(8), 0);
 
   lv_obj_t* dot = lv_obj_create(sg);
   lv_obj_remove_style_all(dot);
-  lv_obj_set_size(dot, 12, 12);
+  lv_obj_set_size(dot, ui::dp(12), ui::dp(12));
   lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
   lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
   *out_dot = dot;
@@ -486,12 +487,12 @@ void make_stepper_group(lv_obj_t* parent, int btn_size, const lv_font_t* symbol_
   lv_obj_set_flex_flow(g, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(g, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(g, 3, 0);
+  lv_obj_set_style_pad_column(g, ui::dp(3), 0);
   *out_minus = ui::make_step_button(g, LV_SYMBOL_MINUS, btn_size, symbol_font);
   lv_obj_t* lbl = lv_label_create(g);
   // Fixed (not btn-relative) so the buttons hug the value at 14pt instead of
   // floating out; wide enough for the widest set value ("120 g" / "93.0°").
-  lv_obj_set_width(lbl, 46);  // stable width so the buttons don't shift on digit changes
+  lv_obj_set_width(lbl, ui::dp(46));  // stable width so the buttons don't shift on digit changes
   lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(lbl, label_font, 0);
@@ -525,7 +526,7 @@ lv_obj_t* make_panel_column(lv_obj_t* body, const char* caption, const lv_font_t
   lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_row(col, 6, 0);
+  lv_obj_set_style_pad_row(col, ui::dp(6), 0);
   lv_obj_t* cap = lv_label_create(col);
   lv_label_set_text(cap, caption);
   lv_obj_set_style_text_color(cap, lv_color_hex(ui::theme::muted()), 0);
@@ -660,13 +661,13 @@ void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   // or detector); sized to line up with the stepper.
   out.shot_btn = ui::make_button(tcol);
   lv_obj_set_size(out.shot_btn, LV_SIZE_CONTENT, btn_size);
-  lv_obj_set_style_pad_hor(out.shot_btn, 14, 0);
+  lv_obj_set_style_pad_hor(out.shot_btn, ui::dp(14), 0);
   lv_obj_set_style_radius(out.shot_btn, btn_size / 2, 0);
   // Outlined like the step buttons sharing this row (card fill + ring), so the
   // stepper slot reads as one family; update_home colors the ring + text by
   // state instead of flooding the fill.
   lv_obj_set_style_bg_color(out.shot_btn, lv_color_hex(ui::theme::card()), 0);
-  lv_obj_set_style_border_width(out.shot_btn, 2, 0);
+  lv_obj_set_style_border_width(out.shot_btn, ui::dp(2), 0);
   lv_obj_set_style_border_color(out.shot_btn, lv_color_hex(ui::theme::scrollbar()), 0);
   lv_obj_set_style_opa(out.shot_btn, LV_OPA_40, LV_STATE_DISABLED);
   out.shot_btn_label = lv_label_create(out.shot_btn);
@@ -690,7 +691,7 @@ void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_set_height(out.scale_connect_btn, action_h);
   lv_obj_set_width(out.scale_connect_btn, 0);
   lv_obj_set_flex_grow(out.scale_connect_btn, 1);
-  lv_obj_set_style_radius(out.scale_connect_btn, 14, 0);
+  lv_obj_set_style_radius(out.scale_connect_btn, ui::dp(14), 0);
   out.scale_connect_label = lv_label_create(out.scale_connect_btn);
   lv_obj_set_style_text_color(out.scale_connect_label, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(out.scale_connect_label, action_font, 0);
@@ -723,7 +724,7 @@ void build_rail_tray(lv_obj_t* rail, const lv_font_t* font, HomeWidgets& out) {
   lv_obj_set_flex_flow(tray, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(tray, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_row(tray, 4, 0);
+  lv_obj_set_style_pad_row(tray, ui::dp(4), 0);
 
   out.clock_label = lv_label_create(tray);
   lv_obj_set_style_text_color(out.clock_label, lv_color_hex(ui::theme::text()), 0);
@@ -765,7 +766,7 @@ void build_bottom_tray(lv_obj_t* bar, const lv_font_t* font, HomeWidgets& out) {
   lv_obj_set_flex_flow(icons, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(icons, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(icons, 6, 0);
+  lv_obj_set_style_pad_column(icons, ui::dp(6), 0);
 
   out.wifi_label = lv_label_create(icons);  // WiFi glyph; update_home shows/hides + colors it
   lv_obj_set_style_text_font(out.wifi_label, font, 0);
@@ -808,14 +809,12 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   for (lv_obj_t*& yl : out.flow_ylabels) yl = nullptr;
   for (lv_obj_t*& xl : out.flow_xlabels) xl = nullptr;
 
-  const int pad = compact ? 8 : xl ? 28 : 20;
-  const int gap = compact ? 6 : xl ? 22 : 16;
-  const int card_pad = compact ? 8 : xl ? 24 : 16;
-  const int btn_h = compact ? 40 : xl ? 92 : 64;
-  const lv_font_t* sub_font =
-      compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
-  const lv_font_t* btn_font =
-      compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
+  const int pad = ui::dp(compact ? 8 : xl ? 28 : 20);
+  const int gap = ui::dp(compact ? 6 : xl ? 22 : 16);
+  const int card_pad = ui::dp(compact ? 8 : xl ? 24 : 16);
+  const int btn_h = ui::dp(compact ? 40 : xl ? 92 : 64);
+  const lv_font_t* sub_font = ui::font_dp(compact ? 14 : xl ? 28 : 20);
+  const lv_font_t* btn_font = ui::font_dp(compact ? 14 : xl ? 28 : 20);
 
   lv_obj_remove_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_pad_all(parent, pad, 0);
@@ -830,7 +829,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   // --- Compact Home: MICRA (+ SCALE) card(s) + actions; clock/battery live in the
   // bottom-bar tray. No on-Home steppers — temp/target adjust stay in Settings. ---
   if (compact) {
-    const lv_font_t* c_cap = &lv_font_montserrat_14;
+    const lv_font_t* c_cap = ui::font_dp(14);
     lv_obj_t* cards = lv_obj_create(parent);
     lv_obj_remove_style_all(cards);
     lv_obj_remove_flag(cards, LV_OBJ_FLAG_SCROLLABLE);
@@ -841,8 +840,8 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
 
     if (scale_enabled) {
       // Two half-width cards with stacked readout rows (narrow -> smaller value).
-      build_compact_micra_card(cards, card_pad, c_cap, &lv_font_montserrat_20, out);
-      build_compact_scale_card(cards, card_pad, c_cap, &lv_font_montserrat_20, out);
+      build_compact_micra_card(cards, card_pad, c_cap, ui::font_dp(20), out);
+      build_compact_scale_card(cards, card_pad, c_cap, ui::font_dp(20), out);
     } else {
       // One full-width MICRA card: BREW / STEAM columns, each with the set point in
       // small grey beneath the value (room for a bigger value at full width).
@@ -850,12 +849,12 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
       make_panel_header(card, "MICRA", c_cap, sub_font, &out.micra_status_dot,
                         &out.micra_status_label);
       lv_obj_t* body = make_panel_body(card);
-      lv_obj_t* bcol = make_panel_column(body, "BREW", c_cap, &lv_font_montserrat_28,
+      lv_obj_t* bcol = make_panel_column(body, "BREW", c_cap, ui::font_dp(28),
                                          &out.brew_value);
       lv_obj_set_flex_align(bcol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                             LV_FLEX_ALIGN_CENTER);  // center the cluster vertically
       out.brew_set = add_sub_label(bcol, c_cap);
-      lv_obj_t* scol = make_panel_column(body, "STEAM", c_cap, &lv_font_montserrat_28,
+      lv_obj_t* scol = make_panel_column(body, "STEAM", c_cap, ui::font_dp(28),
                                          &out.boiler_value);
       lv_obj_set_flex_align(scol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                             LV_FLEX_ALIGN_CENTER);
@@ -883,25 +882,25 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   }
 
   // Shared large-screen panel sizing (the MICRA / SCALE cards + their steppers).
-  const lv_font_t* panel_cap = &lv_font_montserrat_14;
+  const lv_font_t* panel_cap = ui::font_dp(14);
   const lv_font_t* panel_status = sub_font;                       // 20 wide / 28 xl
   // One value size for BOTH panels so the value rows + steppers line up across
   // MICRA and SCALE (weight/timer are not a bigger "hero" — they match the temps).
-  const lv_font_t* panel_val = xl ? &lv_font_montserrat_28 : &lv_font_montserrat_24;
-  const lv_font_t* panel_set = &lv_font_montserrat_14;
-  const int panel_btn = xl ? 54 : 42;
-  const lv_font_t* panel_sym = xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
+  const lv_font_t* panel_val = ui::font_dp(xl ? 28 : 24);
+  const lv_font_t* panel_set = ui::font_dp(14);
+  const int panel_btn = ui::dp(xl ? 54 : 42);
+  const lv_font_t* panel_sym = ui::font_dp(xl ? 28 : 20);
 
   if (!scale_enabled) {
     // --- Large no-scale Home: one MICRA card as the hero, filling the whole space
     // (no second card to share it), then Power. Bigger value + steppers than the
     // scale-aware panels, and the BREW/STEAM clusters are centered vertically so the
     // card doesn't read as a small strip floating in dead space. ---
-    const lv_font_t* hero_val = xl ? &lv_font_montserrat_48 : &lv_font_montserrat_40;
-    const lv_font_t* hero_cap = xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
-    const lv_font_t* hero_set = xl ? &lv_font_montserrat_24 : &lv_font_montserrat_20;
-    const int hero_btn = xl ? 64 : 54;
-    const lv_font_t* hero_sym = &lv_font_montserrat_28;
+    const lv_font_t* hero_val = ui::font_dp(xl ? 48 : 40);
+    const lv_font_t* hero_cap = ui::font_dp(xl ? 28 : 20);
+    const lv_font_t* hero_set = ui::font_dp(xl ? 24 : 20);
+    const int hero_btn = ui::dp(xl ? 64 : 54);
+    const lv_font_t* hero_sym = ui::font_dp(28);
 
     lv_obj_t* row = lv_obj_create(parent);
     lv_obj_remove_style_all(row);
@@ -919,17 +918,17 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
     lv_obj_t* bcol = make_panel_column(body, "BREW", hero_cap, hero_val, &out.brew_value);
     lv_obj_set_flex_align(bcol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(bcol, xl ? 18 : 12, 0);
+    lv_obj_set_style_pad_row(bcol, ui::dp(xl ? 18 : 12), 0);
     make_stepper_group(bcol, hero_btn, hero_sym, hero_set, &out.brew_set,
                        &out.brew_minus, &out.brew_plus);
-    lv_obj_set_width(out.brew_set, xl ? 96 : 78);
+    lv_obj_set_width(out.brew_set, ui::dp(xl ? 96 : 78));
     lv_obj_t* scol = make_panel_column(body, "STEAM", hero_cap, hero_val, &out.boiler_value);
     lv_obj_set_flex_align(scol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(scol, xl ? 18 : 12, 0);
+    lv_obj_set_style_pad_row(scol, ui::dp(xl ? 18 : 12), 0);
     make_stepper_group(scol, hero_btn, hero_sym, hero_set, &out.boiler_set,
                        &out.boiler_minus, &out.boiler_plus);
-    lv_obj_set_width(out.boiler_set, xl ? 96 : 78);
+    lv_obj_set_width(out.boiler_set, ui::dp(xl ? 96 : 78));
 
     build_power_button(parent, btn_h, btn_font, out);
     return;
@@ -939,10 +938,10 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   // SCALE), each carrying its own status + controls — power inside MICRA,
   // Connect/Tare inside SCALE (no bottom action bar) — and the flow graph is
   // the entire lower half. Clock/battery live in the rail tray (build_rail_tray).
-  const int action_h = xl ? 56 : 48;  // in-card action buttons (power/connect/tare)
+  const int action_h = ui::dp(xl ? 56 : 48);  // in-card action buttons (power/connect/tare)
   // Tighter padding than the generic card_pad: each card now stacks header +
   // value/stepper body + an action button inside its half of the screen.
-  const int panel_pad = xl ? 16 : 12;
+  const int panel_pad = ui::dp(xl ? 16 : 12);
   lv_obj_t* panels = lv_obj_create(parent);
   lv_obj_remove_style_all(panels);
   lv_obj_remove_flag(panels, LV_OBJ_FLAG_SCROLLABLE);

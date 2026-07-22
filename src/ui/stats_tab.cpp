@@ -16,7 +16,7 @@ lv_obj_t* make_box(lv_obj_t* parent) {
   lv_obj_set_width(box, lv_pct(100));
   lv_obj_set_flex_grow(box, 1);  // fill the height below the selector
   lv_obj_set_flex_flow(box, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_style_pad_row(box, 6, 0);
+  lv_obj_set_style_pad_row(box, ui::dp(6), 0);
   return box;
 }
 
@@ -73,7 +73,7 @@ void chart_overlay_cb(lv_event_t* e) {
     lv_draw_line_dsc_t line;
     lv_draw_line_dsc_init(&line);
     line.color = lv_color_hex(ui::theme::warn());
-    line.width = 2;
+    line.width = ui::dp(2);
     line.p1.x = plot.x1;
     line.p1.y = y;
     line.p2.x = plot.x2;
@@ -94,7 +94,7 @@ void chart_overlay_cb(lv_event_t* e) {
   lv_draw_label_dsc_t lbl;
   lv_draw_label_dsc_init(&lbl);
   lbl.color = lv_color_hex(ui::theme::muted());
-  lbl.font = &lv_font_montserrat_14;
+  lbl.font = ui::font_dp(14);
   char buf[8];
 
   // Y labels (left margin): 5 ticks, top = y_max .. bottom = y_min. The chart math
@@ -105,8 +105,8 @@ void chart_overlay_cb(lv_event_t* e) {
     lv_snprintf(buf, sizeof(buf), "%d", static_cast<int>(v + (v < 0 ? -0.5f : 0.5f)));
     lbl.text = buf;
     const int32_t y = plot.y1 + h_px * t / 4;
-    lv_area_t la = {obj.x1 + 2, static_cast<int32_t>(y - 9), plot.x1 - 4,
-                    static_cast<int32_t>(y + 9)};
+    lv_area_t la = {obj.x1 + ui::dp(2), static_cast<int32_t>(y - ui::dp(9)),
+                    plot.x1 - ui::dp(4), static_cast<int32_t>(y + ui::dp(9))};
     lv_draw_label(layer, &lbl, &la);
   }
 
@@ -119,13 +119,13 @@ void chart_overlay_cb(lv_event_t* e) {
     lv_area_t la;
     if (t == 0) {
       lbl.align = LV_TEXT_ALIGN_LEFT;
-      la = {plot.x1, plot.y2 + 4, plot.x1 + 60, plot.y2 + 20};
+      la = {plot.x1, plot.y2 + ui::dp(4), plot.x1 + ui::dp(60), plot.y2 + ui::dp(20)};
     } else if (t == 3) {
       lbl.align = LV_TEXT_ALIGN_RIGHT;
-      la = {plot.x2 - 60, plot.y2 + 4, plot.x2, plot.y2 + 20};
+      la = {plot.x2 - ui::dp(60), plot.y2 + ui::dp(4), plot.x2, plot.y2 + ui::dp(20)};
     } else {
       lbl.align = LV_TEXT_ALIGN_CENTER;
-      la = {x - 30, plot.y2 + 4, x + 30, plot.y2 + 20};
+      la = {x - ui::dp(30), plot.y2 + ui::dp(4), x + ui::dp(30), plot.y2 + ui::dp(20)};
     }
     lv_draw_label(layer, &lbl, &la);
   }
@@ -142,7 +142,7 @@ lv_obj_t* make_info_row(lv_obj_t* parent, const char* key, const lv_font_t* font
   lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_ver(row, compact ? 6 : 10, 0);
+  lv_obj_set_style_pad_ver(row, ui::dp(compact ? 6 : 10), 0);
   lv_obj_set_style_border_side(row, LV_BORDER_SIDE_BOTTOM, 0);
   lv_obj_set_style_border_width(row, 1, 0);
   lv_obj_set_style_border_color(row, lv_color_hex(ui::theme::rail()), 0);
@@ -165,8 +165,8 @@ void make_info_header(lv_obj_t* parent, const char* text, const lv_font_t* font)
   lv_label_set_text(h, text);
   lv_obj_set_style_text_color(h, lv_color_hex(ui::theme::accent()), 0);
   lv_obj_set_style_text_font(h, font, 0);
-  lv_obj_set_style_pad_top(h, 10, 0);  // breathing room above the group
-  lv_obj_set_style_pad_bottom(h, 2, 0);
+  lv_obj_set_style_pad_top(h, ui::dp(10), 0);  // breathing room above the group
+  lv_obj_set_style_pad_bottom(h, ui::dp(2), 0);
 }
 
 }  // namespace
@@ -174,13 +174,12 @@ void make_info_header(lv_obj_t* parent, const char* text, const lv_font_t* font)
 void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets& out) {
   const bool compact = is_compact(screen);
   const bool xl = is_xl(screen);
-  const lv_font_t* font =
-      compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
+  const lv_font_t* font = ui::font_dp(compact ? 14 : xl ? 28 : 20);
 
   lv_obj_remove_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_style_pad_all(parent, compact ? 8 : xl ? 24 : 16, 0);
+  lv_obj_set_style_pad_all(parent, ui::dp(compact ? 8 : xl ? 24 : 16), 0);
   lv_obj_set_flex_flow(parent, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_style_pad_row(parent, 8, 0);
+  lv_obj_set_style_pad_row(parent, ui::dp(8), 0);
 
   // --- Segmented selector: Brew / Boiler / Info ---------------------------
   lv_obj_t* seg_row = lv_obj_create(parent);
@@ -188,13 +187,13 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
   lv_obj_set_width(seg_row, lv_pct(100));
   lv_obj_set_height(seg_row, LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(seg_row, LV_FLEX_FLOW_ROW);
-  lv_obj_set_style_pad_column(seg_row, 6, 0);
+  lv_obj_set_style_pad_column(seg_row, ui::dp(6), 0);
 
   const char* labels[kStatsCount] = {"Brew", "Boiler", "Info"};
   for (int i = 0; i < kStatsCount; ++i) {
     out.seg[i] = ui::make_button(seg_row);
     lv_obj_set_flex_grow(out.seg[i], 1);
-    lv_obj_set_style_radius(out.seg[i], 8, 0);
+    lv_obj_set_style_radius(out.seg[i], ui::dp(8), 0);
     lv_obj_t* l = lv_label_create(out.seg[i]);
     lv_label_set_text(l, labels[i]);
     lv_obj_set_style_text_font(l, font, 0);
@@ -215,15 +214,21 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
   lv_obj_set_style_bg_color(out.chart, lv_color_hex(ui::theme::card()), 0);
   lv_obj_set_style_bg_opa(out.chart, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(out.chart, 0, 0);
-  lv_obj_set_style_radius(out.chart, 12, 0);
+  lv_obj_set_style_radius(out.chart, ui::dp(12), 0);
   // Gridlines in scrollbar() (a mid-tone) — rail() is darker than the card bg and
   // was nearly invisible.
   lv_obj_set_style_line_color(out.chart, lv_color_hex(ui::theme::scrollbar()), LV_PART_MAIN);
   // Reserve margins for the drawn axes: left for Y temperature labels, bottom for
   // the time scale, a little top room so the top Y label isn't clipped.
-  lv_obj_set_style_pad_left(out.chart, compact ? 34 : 48, 0);
-  lv_obj_set_style_pad_bottom(out.chart, 22, 0);
-  lv_obj_set_style_pad_top(out.chart, 10, 0);
+  lv_obj_set_style_pad_left(out.chart, ui::dp(compact ? 34 : 48), 0);
+  lv_obj_set_style_pad_bottom(out.chart, ui::dp(22), 0);
+  lv_obj_set_style_pad_top(out.chart, ui::dp(10), 0);
+  // The theme's series line/point sizes are DPI-fixed; thicken them on scaled
+  // boards so the trace keeps its weight. Untouched at scale 1 (theme default).
+  if (ui::scale() > 1.0f) {
+    lv_obj_set_style_line_width(out.chart, ui::dp(3), LV_PART_ITEMS);
+    lv_obj_set_style_size(out.chart, ui::dp(8), ui::dp(8), LV_PART_INDICATOR);
+  }
   out.series = lv_chart_add_series(out.chart, lv_color_hex(ui::theme::accent()),
                                    LV_CHART_AXIS_PRIMARY_Y);
   // MAIN_END (not POST): draw the overlay over the series but UNDER the chart's
@@ -232,12 +237,12 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
   lv_obj_add_event_cb(out.chart, chart_overlay_cb, LV_EVENT_DRAW_MAIN_END, &out);
 
   // Overlaid +/- to zoom the time (X) axis, tucked in the chart's top-right.
-  const int zsz = compact ? 30 : 42;
-  const lv_font_t* zglyph = compact ? &lv_font_montserrat_20 : &lv_font_montserrat_28;
+  const int zsz = ui::dp(compact ? 30 : 42);
+  const lv_font_t* zglyph = ui::font_dp(compact ? 20 : 28);
   out.zoom_out = ui::make_step_button(out.chart, LV_SYMBOL_MINUS, zsz, zglyph);
-  lv_obj_align(out.zoom_out, LV_ALIGN_BOTTOM_RIGHT, -(zsz + 6), -6);
+  lv_obj_align(out.zoom_out, LV_ALIGN_BOTTOM_RIGHT, -(zsz + ui::dp(6)), ui::dp(-6));
   out.zoom_in = ui::make_step_button(out.chart, LV_SYMBOL_PLUS, zsz, zglyph);
-  lv_obj_align(out.zoom_in, LV_ALIGN_BOTTOM_RIGHT, -2, -6);
+  lv_obj_align(out.zoom_in, LV_ALIGN_BOTTOM_RIGHT, ui::dp(-2), ui::dp(-6));
 
   // Centered "No data yet" overlay, shown when the whole window is empty.
   out.empty_label = lv_label_create(out.chart);
@@ -254,12 +259,12 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
   lv_obj_add_flag(out.info_box, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_scroll_dir(out.info_box, LV_DIR_VER);
   lv_obj_set_scrollbar_mode(out.info_box, LV_SCROLLBAR_MODE_ON);  // always visible
-  lv_obj_set_style_pad_right(out.info_box, 6, 0);  // gutter so rows clear the bar
+  lv_obj_set_style_pad_right(out.info_box, ui::dp(6), 0);  // gutter so rows clear the bar
   lv_obj_set_style_bg_color(out.info_box, lv_color_hex(ui::theme::scrollbar()),
                             LV_PART_SCROLLBAR);
   lv_obj_set_style_bg_opa(out.info_box, LV_OPA_COVER, LV_PART_SCROLLBAR);
-  lv_obj_set_style_width(out.info_box, 5, LV_PART_SCROLLBAR);
-  lv_obj_set_style_radius(out.info_box, 3, LV_PART_SCROLLBAR);
+  lv_obj_set_style_width(out.info_box, ui::dp(5), LV_PART_SCROLLBAR);
+  lv_obj_set_style_radius(out.info_box, ui::dp(3), LV_PART_SCROLLBAR);
 
   // Two groups: this remote, then the machine. info_val indices stay aligned with
   // update_stats_view's vals[] (0 our FW, 1 Runtime, 2..6 Micra DIS fields). The

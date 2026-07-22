@@ -24,10 +24,23 @@ accurate and the layering rules there are hard rules:
 
 Board targets are `<chip>-<panel>` after the Waveshare product names:
 `make build` (default, the 2-inch S3), `build-s3-7b`, `build-s3-4-3b`,
-`build-s3-4-3c`, `build-p4-4-3`; matching `flash-*` targets auto-detect the
-port and can probe a running board's serial banner (pre-rename names like
-`build-p4`/`flash-7b` remain as aliases). All envs + `sim` must compile before
-committing platform changes.
+`build-s3-4-3c`, `build-p4-4-3`, `build-p4-5`; matching `flash-*` targets
+auto-detect the port and can probe a running board's serial banner (pre-rename
+names like `build-p4`/`flash-7b` remain as aliases). All envs + `sim` must
+compile before committing platform changes.
+
+### ESP32-P4-WIFI6-Touch-LCD-5 (env `esp32-p4-micra-5`) — NOT yet HW-verified
+
+Electronically the P4 4.3 (same radio/audio/battery/paddle wiring — everything
+in that section applies, including the rev v1.x chip_variant); only the panel
+differs: 5" 720x1280 HX8394 over the same 2-lane DSI. Panel deltas, all from
+Waveshare's BSP (esp32_p4_wifi6_touch_lcd_5 + esp_lcd_hx8394): different DCS
+init table (display.cpp, selected by BOARD_DSI_PANEL_HX8394), reset asserts
+HIGH (kLcdRstActiveHigh), backlight LEDC is normal polarity (kBacklightActiveLow
+= false) with NO boost-enable pin, GT911 rst/int not wired to the P4 (probe
+only), 58 MHz DPI / 700 Mbps lanes. UI: `BOARD_UI_SCALE 1.5f` renders the wide
+800x480 layout at 1.5x via ui::dp()/ui::font_dp() (see include/ui/screen.h) —
+scale 1.0 boards are bit-identical, verified against baseline renders.
 
 ### ESP32-S3-Touch-LCD-4.3C (env `esp32-s3-micra-4-3c`) — verified on HW
 

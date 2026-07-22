@@ -218,7 +218,8 @@ void setup() {
   if (g_config.click_sound()) platform::sound_begin();
 
   // Build the UI bound to the machine + provisioner + battery + display.
-  const ui::ScreenProfile screen{g_display.width(), g_display.height()};
+  const ui::ScreenProfile screen{g_display.width(), g_display.height(),
+                                 board::kUiScale};
   g_app.build(g_micra, g_provisioner, g_battery, g_display_settings, g_clock, g_history,
               g_scale, g_scale_provisioner, g_brew, g_network, platform::sound(), screen);
 
