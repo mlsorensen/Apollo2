@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apollo 2 — web flasher</title>
+<!-- ESP Web Tools: browser flashing over Web Serial (Chrome/Edge). -->
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+<script src="version.js"></script>
+<style>
+  :root {
+    --bg: #0e1116; --card: #171c24; --rail: #1f2630;
+    --text: #e8edf4; --muted: #93a0b2; --accent: #2196f3;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 780px; margin: 0 auto; padding: 40px 20px 80px; }
+  h1 { font-size: 2rem; margin: 0 0 4px; }
+  h1 small { color: var(--muted); font-size: 1rem; font-weight: normal; margin-left: 8px; }
+  .sub { color: var(--muted); margin: 0 0 28px; }
+  .note {
+    background: var(--rail); border-left: 3px solid var(--accent);
+    border-radius: 6px; padding: 10px 14px; margin: 20px 0; color: var(--muted);
+  }
+  .note b { color: var(--text); }
+  ol { padding-left: 22px; }
+  .board {
+    background: var(--card); border-radius: 12px; padding: 16px 18px;
+    margin: 12px 0; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .board .info { flex: 1; min-width: 240px; }
+  .board .name { font-weight: 600; }
+  .board .desc { color: var(--muted); font-size: 0.9rem; }
+  esp-web-install-button::part(button) {
+    background: var(--accent); color: #fff; border: none; border-radius: 8px;
+    padding: 10px 18px; font-size: 0.95rem; cursor: pointer;
+  }
+  h2 { font-size: 1.2rem; margin-top: 40px; }
+  a { color: var(--accent); }
+  code { background: var(--rail); border-radius: 4px; padding: 1px 6px; }
+  footer { margin-top: 48px; color: var(--muted); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Apollo 2 <small id="ver"></small></h1>
+  <p class="sub">
+    An open-source Bluetooth remote for the La Marzocco Linea Micra — live
+    temperatures, remote power, and brew-by-weight with a Bluetooth scale, on
+    Waveshare ESP32 touch displays.
+    <a href="https://github.com/mlsorensen/Apollo2">Source &amp; docs on GitHub</a>.
+  </p>
+
+  <div class="note">
+    Flashing happens right here in the browser — no tools to install.
+    <b>Requires Chrome or Edge on a computer</b> (Web Serial isn't available on
+    phones or in Safari/Firefox), and a <b>USB data cable</b> (not charge-only).
+  </div>
+
+  <ol>
+    <li>Plug the board into this computer (port notes under each board below).</li>
+    <li>Click <b>Install</b> for <em>your</em> board — the boards look similar but
+        the builds are not interchangeable.</li>
+    <li>Pick the serial port in the popup, then follow the prompts. A first
+        install should choose "Erase device" when offered.</li>
+  </ol>
+
+  <div class="board">
+    <div class="info">
+      <div class="name">ESP32-S3-Touch-LCD-2</div>
+      <div class="desc">2.0&quot; 240&times;320 &mdash; the portable, battery-friendly one. Single USB-C port.</div>
+    </div>
+    <esp-web-install-button manifest="manifests/s3-touch-lcd-2.json"></esp-web-install-button>
+  </div>
+
+  <div class="board">
+    <div class="info">
+      <div class="name">ESP32-S3-Touch-LCD-4.3B</div>
+      <div class="desc">4.3&quot; 800&times;480. Single USB-C port.</div>
+    </div>
+    <esp-web-install-button manifest="manifests/s3-touch-lcd-4.3b.json"></esp-web-install-button>
+  </div>
+
+  <div class="board">
+    <div class="info">
+      <div class="name">ESP32-S3-Touch-LCD-4.3C</div>
+      <div class="desc">4.3&quot; 800&times;480 with dimmable backlight + battery monitoring. Single USB-C port.</div>
+    </div>
+    <esp-web-install-button manifest="manifests/s3-touch-lcd-4.3c.json"></esp-web-install-button>
+  </div>
+
+  <div class="board">
+    <div class="info">
+      <div class="name">ESP32-S3-Touch-LCD-7B</div>
+      <div class="desc">7&quot; 1024&times;600. Two USB-C ports &mdash; use the one labeled <b>UART</b>.</div>
+    </div>
+    <esp-web-install-button manifest="manifests/s3-touch-lcd-7b.json"></esp-web-install-button>
+  </div>
+
+  <div class="board">
+    <div class="info">
+      <div class="name">ESP32-P4-WIFI6-Touch-LCD-4.3</div>
+      <div class="desc">4.3&quot; 800&times;480, ESP32-P4 + WiFi 6. Two USB-C ports &mdash; use the one labeled <b>UART</b>.</div>
+    </div>
+    <esp-web-install-button manifest="manifests/p4-wifi6-touch-lcd-4.3.json"></esp-web-install-button>
+  </div>
+
+  <div class="board">
+    <div class="info">
+      <div class="name">ESP32-P4-WIFI6-Touch-LCD-5</div>
+      <div class="desc">5&quot; 1280&times;720, ESP32-P4 + WiFi 6. Two USB-C ports &mdash; use the one labeled <b>UART</b>.</div>
+    </div>
+    <esp-web-install-button manifest="manifests/p4-wifi6-touch-lcd-5.json"></esp-web-install-button>
+  </div>
+
+  <h2>After flashing</h2>
+  <ol>
+    <li>On the device: <b>Settings &rarr; Micra &rarr; Bluetooth &rarr; Scan</b>, then tap your machine.</li>
+    <li>If the machine was never paired with the La Marzocco app, pairing works
+        right away. Otherwise the remote needs the machine's Bluetooth token —
+        the on-screen setup walks you through it (see the
+        <a href="https://github.com/mlsorensen/Apollo2#readme">README</a>).</li>
+    <li>Optional: pair a Bluetooth scale (Bookoo Themis Mini, Acaia Umbra) under
+        <b>Settings &rarr; Scale</b> for shot graphs and brew-by-weight.</li>
+  </ol>
+
+  <h2>Troubleshooting</h2>
+  <ol>
+    <li><b>No port shows up:</b> use a data-capable cable; on the two-port
+        boards, the <b>UART</b> port. Windows may need the
+        <a href="https://www.wch-ic.com/downloads/CH343SER_ZIP.html">CH343 driver</a>.</li>
+    <li><b>Flash won't start / times out:</b> put the board in download mode —
+        hold <b>BOOT</b>, tap <b>RESET</b>, release <b>BOOT</b> — then try again.</li>
+    <li><b>Black screen after flashing:</b> press the board's <b>RESET</b>
+        button once.</li>
+  </ol>
+
+  <footer>
+    Firmware images are built and published by
+    <a href="https://github.com/mlsorensen/Apollo2/actions">GitHub Actions</a>
+    from tagged releases. Not affiliated with La Marzocco.
+  </footer>
+</main>
+<script>
+  if (window.APOLLO2_VERSION) {
+    document.getElementById('ver').textContent = window.APOLLO2_VERSION;
+  }
+</script>
+</body>
+</html>

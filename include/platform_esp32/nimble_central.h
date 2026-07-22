@@ -24,6 +24,7 @@ class NimbleCentral : public core::ble::ICentral {
                uint32_t timeout_ms) override;
   void disconnect() override;
   bool connected() override;
+  void cancel_connect() override;
 
   bool has_characteristic(const char* uuid) override;
   bool read(const char* uuid, std::string& out) override;

@@ -182,7 +182,7 @@ void setup() {
   // paddle rides it). Seed the shot config from NVS and wire the persisters.
   platform::paddle().begin();
   g_brew.seed(g_config.target_weight_g(), g_config.shot_mode(), g_config.overshoot_g(),
-              g_config.review_hold_s());
+              g_config.review_hold_s(), g_config.wired_paddle(), g_config.flush_s());
   // A paddle flip while the connected Micra sits in standby only WAKES it (no
   // water moves) — tell the controller so it passes the flip through without
   // starting a phantom shot. Only a KNOWN not-on state counts; disconnected or
@@ -203,6 +203,8 @@ void setup() {
   g_brew.set_shot_mode_persister([](bool on) { g_config.set_shot_mode(on); });
   g_brew.set_overshoot_persister([](float g) { g_config.set_overshoot_g(g); });
   g_brew.set_review_hold_persister([](int s) { g_config.set_review_hold_s(s); });
+  g_brew.set_wired_paddle_persister([](bool on) { g_config.set_wired_paddle(on); });
+  g_brew.set_flush_persister([](int s) { g_config.set_flush_s(s); });
   Serial.printf("Paddle: %s\n",
                 platform::paddle().available() ? "available" : "not wired on this board");
   // Restore saved brightness where dimmable; otherwise hold the backlight at max
@@ -217,7 +219,8 @@ void setup() {
   if (g_config.click_sound()) platform::sound_begin();
 
   // Build the UI bound to the machine + provisioner + battery + display.
-  const ui::ScreenProfile screen{g_display.width(), g_display.height()};
+  const ui::ScreenProfile screen{g_display.width(), g_display.height(),
+                                 board::kUiScale};
   g_app.build(g_micra, g_provisioner, g_battery, g_display_settings, g_clock, g_history,
               g_scale, g_scale_provisioner, g_brew, g_network, platform::sound(), screen);
 
@@ -242,6 +245,14 @@ void setup() {
   // Bring up NimBLE once here (single-threaded), so the Micra + scale link tasks
   // — which each guard on isInitialized() — share one host without racing init.
   NimBLEDevice::init("micra-remote");
+
+  // Radio arbitration: the host refuses to scan while ANY connect is pending,
+  // so each link's scan preempts the OTHER link's connect attempts (cancels an
+  // in-flight one, holds new ones off until the scan finishes). Without this,
+  // a Settings scan silently returned nothing whenever the other device sat in
+  // "Connecting" (user-reported on the 4.3C).
+  g_micra.set_scan_peer_pauser([](bool on) { g_scale.pause_connects(on); });
+  g_scale.set_scan_peer_pauser([](bool on) { g_micra.pause_connects(on); });
 
   // Seed the link from saved config, then start the background BLE task. With
   // no MAC -> Unconfigured; MAC but no token -> NeedsToken (Settings "Setup").

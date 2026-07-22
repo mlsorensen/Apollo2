@@ -19,8 +19,8 @@ void section_label(lv_obj_t* parent, const char* text, const lv_font_t* font) {
 // Lay out a menu page as a padded vertical column (the page itself scrolls).
 void page_column(lv_obj_t* page, bool compact) {
   lv_obj_set_flex_flow(page, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_style_pad_all(page, compact ? 8 : 12, 0);
-  lv_obj_set_style_pad_row(page, compact ? 8 : 12, 0);
+  lv_obj_set_style_pad_all(page, ui::dp(compact ? 8 : 12), 0);
+  lv_obj_set_style_pad_row(page, ui::dp(compact ? 8 : 12), 0);
   // OPAQUE page background (same color as the screen, so visually identical):
   // a transparent scrollable forces LVGL to re-render every layer beneath it
   // on each scroll frame — the bulk of the settings-scroll CPU cost.
@@ -46,7 +46,7 @@ void build_connection_panel(lv_obj_t* panel, const lv_font_t* font, int btn_h,
   lv_obj_set_flex_flow(*out_saved_row, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(*out_saved_row, LV_FLEX_ALIGN_SPACE_BETWEEN,
                         LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(*out_saved_row, 6, 0);
+  lv_obj_set_style_pad_column(*out_saved_row, ui::dp(6), 0);
   lv_obj_add_flag(*out_saved_row, LV_OBJ_FLAG_HIDDEN);
 
   *out_saved_label = lv_label_create(*out_saved_row);
@@ -104,7 +104,7 @@ void build_connection_panel(lv_obj_t* panel, const lv_font_t* font, int btn_h,
   lv_obj_set_width(*out_list, lv_pct(100));
   lv_obj_set_height(*out_list, LV_SIZE_CONTENT);  // page scrolls, not the list
   lv_obj_set_flex_flow(*out_list, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_style_pad_row(*out_list, 6, 0);
+  lv_obj_set_style_pad_row(*out_list, ui::dp(6), 0);
 }
 
 // One settings row: a left-aligned label and a right-aligned control slot.
@@ -139,7 +139,7 @@ void make_inline_stepper(lv_obj_t* row, const lv_font_t* text_font,
   lv_obj_set_flex_flow(grp, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(grp, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(grp, 4, 0);
+  lv_obj_set_style_pad_column(grp, ui::dp(4), 0);
 
   *out_minus = ui::make_step_button(grp, LV_SYMBOL_MINUS, btn_size, symbol_font);
 
@@ -185,7 +185,7 @@ void build_device_rows(lv_obj_t* page, const lv_font_t* text_font,
   lv_obj_t* rd = make_setting_row(page, "Screen dim", text_font);
   out.dim_btn = ui::make_button(rd);
   lv_obj_set_height(out.dim_btn, btn_size);
-  lv_obj_set_style_pad_hor(out.dim_btn, 14, 0);
+  lv_obj_set_style_pad_hor(out.dim_btn, ui::dp(14), 0);
   lv_obj_set_style_bg_color(out.dim_btn, lv_color_hex(ui::theme::card()), 0);
   out.dim_value = lv_label_create(out.dim_btn);
   lv_obj_set_style_text_color(out.dim_value, lv_color_hex(ui::theme::text()), 0);
@@ -202,11 +202,11 @@ void build_device_rows(lv_obj_t* page, const lv_font_t* text_font,
 
   lv_obj_t* rc = make_setting_row(page, "24-hour", text_font);
   out.clock_mode_switch = lv_switch_create(rc);
-  lv_obj_set_size(out.clock_mode_switch, btn_size + 8, btn_size / 2 + 6);
+  lv_obj_set_size(out.clock_mode_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 
   lv_obj_t* ru = make_setting_row(page, "Fahrenheit", text_font);
   out.units_switch = lv_switch_create(ru);
-  lv_obj_set_size(out.units_switch, btn_size + 8, btn_size / 2 + 6);
+  lv_obj_set_size(out.units_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 
   lv_obj_t* rt = make_setting_row(page, "Theme", text_font);
   out.theme_btn = ui::make_button(rt);
@@ -218,13 +218,13 @@ void build_device_rows(lv_obj_t* page, const lv_font_t* text_font,
 
   lv_obj_t* rp = make_setting_row(page, "Performance overlay", text_font);
   out.perf_overlay_switch = lv_switch_create(rp);
-  lv_obj_set_size(out.perf_overlay_switch, btn_size + 8, btn_size / 2 + 6);
+  lv_obj_set_size(out.perf_overlay_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 
   // Button-press click, only on boards with a speaker (core::ISound).
   if (with_sound) {
     lv_obj_t* rs = make_setting_row(page, "Button sounds", text_font);
     out.click_sound_switch = lv_switch_create(rs);
-    lv_obj_set_size(out.click_sound_switch, btn_size + 8, btn_size / 2 + 6);
+    lv_obj_set_size(out.click_sound_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
   } else {
     out.click_sound_switch = nullptr;
   }
@@ -234,7 +234,7 @@ void build_device_rows(lv_obj_t* page, const lv_font_t* text_font,
 
   lv_obj_t* rw = make_setting_row(page, "Enable", text_font);
   out.wifi_switch = lv_switch_create(rw);
-  lv_obj_set_size(out.wifi_switch, btn_size + 8, btn_size / 2 + 6);
+  lv_obj_set_size(out.wifi_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 
   lv_obj_t* rst = make_setting_row(page, "Status", text_font);
   out.wifi_status = lv_label_create(rst);
@@ -251,7 +251,7 @@ void build_device_rows(lv_obj_t* page, const lv_font_t* text_font,
   lv_obj_set_flex_flow(rb, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(rb, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(rb, 6, 0);
+  lv_obj_set_style_pad_column(rb, ui::dp(6), 0);
 
   out.wifi_setup_btn = ui::make_button(rb);
   lv_obj_set_flex_grow(out.wifi_setup_btn, 1);
@@ -284,7 +284,7 @@ void build_device_rows(lv_obj_t* page, const lv_font_t* text_font,
 
   lv_obj_t* rnt = make_setting_row(page, "Auto time (NTP)", text_font);
   out.ntp_switch = lv_switch_create(rnt);
-  lv_obj_set_size(out.ntp_switch, btn_size + 8, btn_size / 2 + 6);
+  lv_obj_set_size(out.ntp_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 }
 
 // A root-page navigation entry: a card row "<label>  ›" that drills into `target`.
@@ -293,8 +293,8 @@ void root_entry(lv_obj_t* menu, lv_obj_t* root_page, lv_obj_t* target,
   lv_obj_t* cont = lv_menu_cont_create(root_page);
   lv_obj_set_style_bg_color(cont, lv_color_hex(ui::theme::card()), 0);
   lv_obj_set_style_bg_opa(cont, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(cont, 8, 0);
-  lv_obj_set_style_pad_all(cont, 10, 0);
+  lv_obj_set_style_radius(cont, ui::dp(8), 0);
+  lv_obj_set_style_pad_all(cont, ui::dp(10), 0);
   lv_obj_set_height(cont, btn_h);
 
   lv_obj_t* lbl = lv_label_create(cont);
@@ -319,16 +319,16 @@ void root_entry(lv_obj_t* menu, lv_obj_t* root_page, lv_obj_t* target,
 namespace ui {
 
 void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
-                        bool with_brightness, bool with_sound, SettingsWidgets& out) {
+                        bool with_brightness, bool with_sound,
+                        bool with_wired_paddle, SettingsWidgets& out) {
   const bool compact = is_compact(screen);
   const bool xl = is_xl(screen);
-  const lv_font_t* font =
-      compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
-  const lv_font_t* symbol_font = compact ? &lv_font_montserrat_20 : &lv_font_montserrat_28;
-  const int btn_size = compact ? 36 : xl ? 64 : 50;
+  const lv_font_t* font = ui::font_dp(compact ? 14 : xl ? 28 : 20);
+  const lv_font_t* symbol_font = ui::font_dp(compact ? 20 : 28);
+  const int btn_size = ui::dp(compact ? 36 : xl ? 64 : 50);
   // Match Home's action-button height so nav rows and connection buttons don't
   // read as cramped on the wider boards.
-  const int btn_h = compact ? 40 : xl ? 92 : 64;
+  const int btn_h = ui::dp(compact ? 40 : xl ? 92 : 64);
 
   lv_obj_remove_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_pad_all(parent, 0, 0);
@@ -362,7 +362,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     // The back button is pulled out of the header's layout (IGNORE_LAYOUT below),
     // so it can't grow the header itself — give the header room for a btn_h-tall
     // button plus a little breathing space.
-    lv_obj_set_style_min_height(hdr, btn_h + 16, 0);
+    lv_obj_set_style_min_height(hdr, btn_h + ui::dp(16), 0);
     // The page title is the header's 2nd child ([0]=back button). Center it
     // across the full header (the back button floats over the left, below).
     if (lv_obj_get_child_count(hdr) >= 2) {
@@ -382,15 +382,15 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_align(back, LV_ALIGN_LEFT_MID, 0, 0);
     lv_obj_set_style_bg_color(back, lv_color_hex(ui::theme::accent()), 0);
     lv_obj_set_style_bg_opa(back, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(back, 8, 0);
-    lv_obj_set_style_pad_hor(back, 12, 0);
-    lv_obj_set_style_pad_ver(back, 8, 0);
+    lv_obj_set_style_radius(back, ui::dp(8), 0);
+    lv_obj_set_style_pad_hor(back, ui::dp(12), 0);
+    lv_obj_set_style_pad_ver(back, ui::dp(8), 0);
     // Center the arrow + "Back" label as a row (the button is btn_h tall now, so
     // without this its children sit at the top-left corner).
     lv_obj_set_flex_flow(back, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(back, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(back, 4, 0);
+    lv_obj_set_style_pad_column(back, ui::dp(4), 0);
     // The arrow is an image child; recolor it bright. Add a "Back" label too.
     for (uint32_t i = 0; i < lv_obj_get_child_count(back); ++i) {
       lv_obj_t* ch = lv_obj_get_child(back, i);
@@ -426,7 +426,29 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     // remote occupies the Micra's single BLE slot.
     lv_obj_t* ra = make_setting_row(out.micra_settings_page, "Auto connect", font);
     out.auto_connect_switch = lv_switch_create(ra);
-    lv_obj_set_size(out.auto_connect_switch, btn_size + 8, btn_size / 2 + 6);
+    lv_obj_set_size(out.auto_connect_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
+    // Paddle harness in use. OFF = "unwired": shots are detected from the
+    // scale's weight stream instead of paddle edges. Only offered where the
+    // paddle hardware exists — other boards are permanently unwired.
+    if (with_wired_paddle) {
+      lv_obj_t* rw = make_setting_row(out.micra_settings_page, "Wired paddle", font);
+      out.wired_paddle_switch = lv_switch_create(rw);
+      lv_obj_set_size(out.wired_paddle_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
+      // Post-shot auto-flush: tap cycles Off / 3 s / 6 s. Wired-relay boards
+      // only — it drives the paddle line, so unwired-only boards can't flush.
+      lv_obj_t* rf = make_setting_row(out.micra_settings_page, "Auto flush", font);
+      out.flush_btn = ui::make_button(rf);
+      lv_obj_set_height(out.flush_btn, btn_size);
+      lv_obj_set_style_pad_hor(out.flush_btn, ui::dp(14), 0);
+      lv_obj_set_style_bg_color(out.flush_btn, lv_color_hex(ui::theme::card()), 0);
+      out.flush_value = lv_label_create(out.flush_btn);
+      lv_obj_set_style_text_color(out.flush_value, lv_color_hex(ui::theme::text()), 0);
+      lv_obj_set_style_text_font(out.flush_value, font, 0);
+      lv_obj_center(out.flush_value);
+    } else {
+      out.wired_paddle_switch = nullptr;
+      out.flush_btn = out.flush_value = nullptr;
+    }
   }
   section_label(out.micra_settings_page, "Brew", font);
   {
@@ -438,7 +460,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   {
     lv_obj_t* r1 = make_setting_row(out.micra_settings_page, "Enable", font);
     out.steam_switch = lv_switch_create(r1);
-    lv_obj_set_size(out.steam_switch, btn_size + 8, btn_size / 2 + 6);
+    lv_obj_set_size(out.steam_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
     lv_obj_t* r2 = make_setting_row(out.micra_settings_page, "Temperature", font);
     make_inline_stepper(r2, font, symbol_font, btn_size, &out.boiler_minus,
                         &out.boiler_value, &out.boiler_plus, &out.boiler_sub);
@@ -463,7 +485,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_t* rs2 = make_setting_row(out.scale_settings_page, "Smoothing", font);
     out.smooth_btn = ui::make_button(rs2);
     lv_obj_set_height(out.smooth_btn, btn_size);
-    lv_obj_set_style_pad_hor(out.smooth_btn, 14, 0);
+    lv_obj_set_style_pad_hor(out.smooth_btn, ui::dp(14), 0);
     lv_obj_set_style_bg_color(out.smooth_btn, lv_color_hex(ui::theme::card()), 0);
     out.smooth_value = lv_label_create(out.smooth_btn);
     lv_obj_set_style_text_color(out.smooth_value, lv_color_hex(ui::theme::text()), 0);
@@ -471,10 +493,10 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_center(out.smooth_value);
     lv_obj_t* rn = make_setting_row(out.scale_settings_page, "Drop negative g/s", font);
     out.drop_neg_flow_switch = lv_switch_create(rn);
-    lv_obj_set_size(out.drop_neg_flow_switch, btn_size + 8, btn_size / 2 + 6);
+    lv_obj_set_size(out.drop_neg_flow_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
     lv_obj_t* rs = make_setting_row(out.scale_settings_page, "Oscilloscope graph", font);
     out.scope_graph_switch = lv_switch_create(rs);
-    lv_obj_set_size(out.scope_graph_switch, btn_size + 8, btn_size / 2 + 6);
+    lv_obj_set_size(out.scope_graph_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
   }
 
   // Device (leaf)
@@ -505,8 +527,8 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_t* cont = lv_menu_cont_create(out.root_page);
     lv_obj_set_style_bg_color(cont, lv_color_hex(ui::theme::card()), 0);
     lv_obj_set_style_bg_opa(cont, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(cont, 8, 0);
-    lv_obj_set_style_pad_all(cont, 10, 0);
+    lv_obj_set_style_radius(cont, ui::dp(8), 0);
+    lv_obj_set_style_pad_all(cont, ui::dp(10), 0);
     lv_obj_set_height(cont, btn_h);
     lv_obj_add_flag(cont, LV_OBJ_FLAG_CLICKABLE);
     out.restart_btn = cont;

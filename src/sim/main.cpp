@@ -90,6 +90,11 @@ int main() {
   scale_provisioner.set_connect_enabled(true);
   scale.set_connected(true);
   scale.set_umbra(false);
+  // Unwired mode (paddle harness not in use): the shot button arms the weight-
+  // stream detector ("Detect") instead of the auto-stop, pill shows Ready.
+  brew.set_wired_paddle(false);
+  ok &= r({800, 480}, "renders/home_unwired_800x480.png");
+  brew.set_wired_paddle(true);
   // No-scale Home (classic layout) — toggle the fake to "no scale saved".
   scale_provisioner.set_saved(false);
   ok &= r({320, 240}, "renders/home_noscale_320x240.png");
@@ -113,6 +118,19 @@ int main() {
   ok &= r({1024, 600}, "renders/micra_bt_1024x600.png", 1, ui::kSectionMicraBt);
   ok &= r({1024, 600}, "renders/scale_settings_1024x600.png", 1, ui::kSectionScaleSettings);
   ok &= r({1024, 600}, "renders/device_1024x600.png", 1, ui::kSectionDevice);
+
+  // 5" 1280x720 (ESP32-P4-WIFI6-Touch-LCD-5): the wide (800x480) layout at
+  // 1.5x — high pixel density, so elements keep (slightly exceed) the 4.3"'s
+  // physical size instead of shrinking.
+  const ui::ScreenProfile p5{1280, 720, 1.5f};
+  ok &= r(p5, "renders/home_1280x720.png");
+  ok &= r(p5, "renders/settings_1280x720.png", 1);
+  ok &= r(p5, "renders/micra_bt_1280x720.png", 1, ui::kSectionMicraBt);
+  ok &= r(p5, "renders/device_1280x720.png", 1, ui::kSectionDevice);
+  ok &= r(p5, "renders/stats_brew_1280x720.png", 2, -1, false, 0, ui::kStatsBrew);
+  scale_provisioner.set_saved(false);
+  ok &= r(p5, "renders/home_noscale_1280x720.png");
+  scale_provisioner.set_saved(true);
 
   // Stats tab (tab 2): graph sections + info.
   ok &= r({320, 240}, "renders/stats_brew_320x240.png", 2, -1, false, 0, ui::kStatsBrew);

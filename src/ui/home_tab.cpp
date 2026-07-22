@@ -141,8 +141,9 @@ void fill_flow_below(HomeWidgets& w, int x, float yf, uint16_t trace_color) {
 // line snapping a whole pixel per step.
 void draw_flow_segment(HomeWidgets& w, int x, float yf, uint16_t color) {
   // Line thickness: the trace reads as ~2*halfwidth px (solid core + one
-  // feathered row each side).
-  constexpr float kHalfWidth = 1.25f;
+  // feathered row each side). Scaled so the trace keeps its physical weight on
+  // high-DPI panels.
+  const float kHalfWidth = 1.25f * ui::scale();
   const float y0f = (w.flow_prev_y < 0.0f) ? yf : w.flow_prev_y;
   const float a = (y0f < yf ? y0f : yf) - kHalfWidth;
   const float b = (y0f < yf ? yf : y0f) + kHalfWidth;
@@ -249,11 +250,11 @@ lv_obj_t* make_flow_graph_card(lv_obj_t* parent) {
   lv_obj_set_flex_grow(card, 1);  // hero: take the vertical space left over
   lv_obj_set_style_bg_color(card, lv_color_hex(ui::theme::card()), 0);
   lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(card, 16, 0);
-  lv_obj_set_style_pad_left(card, 30, 0);    // Y labels
-  lv_obj_set_style_pad_bottom(card, 22, 0);  // X labels
-  lv_obj_set_style_pad_top(card, 18, 0);
-  lv_obj_set_style_pad_right(card, 12, 0);
+  lv_obj_set_style_radius(card, ui::dp(16), 0);
+  lv_obj_set_style_pad_left(card, ui::dp(30), 0);    // Y labels
+  lv_obj_set_style_pad_bottom(card, ui::dp(22), 0);  // X labels
+  lv_obj_set_style_pad_top(card, ui::dp(18), 0);
+  lv_obj_set_style_pad_right(card, ui::dp(12), 0);
   return card;
 }
 
@@ -302,14 +303,14 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   lv_obj_remove_style_all(btn);
   lv_obj_set_style_bg_color(btn, lv_color_hex(ui::theme::bg()), 0);
   lv_obj_set_style_bg_opa(btn, LV_OPA_70, 0);
-  lv_obj_set_style_radius(btn, 8, 0);
-  lv_obj_set_style_pad_hor(btn, 12, 0);
-  lv_obj_set_style_pad_ver(btn, 7, 0);
-  lv_obj_align(btn, LV_ALIGN_TOP_LEFT, 6, 6);
+  lv_obj_set_style_radius(btn, ui::dp(8), 0);
+  lv_obj_set_style_pad_hor(btn, ui::dp(12), 0);
+  lv_obj_set_style_pad_ver(btn, ui::dp(7), 0);
+  lv_obj_align(btn, LV_ALIGN_TOP_LEFT, ui::dp(6), ui::dp(6));
   lv_obj_t* blab = lv_label_create(btn);
   lv_label_set_text(blab, flow_unit(out.flow_mode));
   lv_obj_set_style_text_color(blab, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(blab, &lv_font_montserrat_20, 0);
+  lv_obj_set_style_text_font(blab, ui::font_dp(20), 0);
   out.flow_unit_btn = btn;
   out.flow_unit_label = blab;
 
@@ -318,8 +319,8 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   auto make_ylabel = [&](int y) {
     lv_obj_t* l = lv_label_create(card);
     lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::muted()), 0);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_14, 0);
-    lv_obj_align(l, LV_ALIGN_TOP_LEFT, -26, y - 8);
+    lv_obj_set_style_text_font(l, ui::font_dp(14), 0);
+    lv_obj_align(l, LV_ALIGN_TOP_LEFT, ui::dp(-26), y - ui::dp(8));
     return l;
   };
   for (int t = 0; t < 3; ++t) out.flow_ylabels[t] = make_ylabel(ph * t / 3);  // max..max/3
@@ -334,11 +335,11 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
     if (secs == 0) lv_label_set_text(xl, "now");
     else lv_label_set_text_fmt(xl, "%ds", secs);
     lv_obj_set_style_text_color(xl, lv_color_hex(ui::theme::muted()), 0);
-    lv_obj_set_style_text_font(xl, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(xl, ui::font_dp(14), 0);
     int x = pw * t / 3;
-    if (t == 3) x -= 24;
-    else if (t > 0) x -= 12;
-    lv_obj_align(xl, LV_ALIGN_TOP_LEFT, x, ph + 4);
+    if (t == 3) x -= ui::dp(24);
+    else if (t > 0) x -= ui::dp(12);
+    lv_obj_align(xl, LV_ALIGN_TOP_LEFT, x, ph + ui::dp(4));
     out.flow_xlabels[t] = xl;
   }
 
@@ -347,8 +348,8 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   out.flow_xspan_label = lv_label_create(card);
   lv_label_set_text_fmt(out.flow_xspan_label, "%d s window", kFlowWindowS);
   lv_obj_set_style_text_color(out.flow_xspan_label, lv_color_hex(ui::theme::muted()), 0);
-  lv_obj_set_style_text_font(out.flow_xspan_label, &lv_font_montserrat_14, 0);
-  lv_obj_align(out.flow_xspan_label, LV_ALIGN_TOP_LEFT, pw / 2 - 44, ph + 4);
+  lv_obj_set_style_text_font(out.flow_xspan_label, ui::font_dp(14), 0);
+  lv_obj_align(out.flow_xspan_label, LV_ALIGN_TOP_LEFT, pw / 2 - ui::dp(44), ph + ui::dp(4));
   lv_obj_add_flag(out.flow_xspan_label, LV_OBJ_FLAG_HIDDEN);
 
 #ifndef ESP_PLATFORM
@@ -385,7 +386,7 @@ void build_power_button(lv_obj_t* parent, int btn_h, const lv_font_t* btn_font,
   out.power_btn = ui::make_button(parent);
   lv_obj_set_width(out.power_btn, lv_pct(100));
   lv_obj_set_height(out.power_btn, btn_h);
-  lv_obj_set_style_radius(out.power_btn, 14, 0);
+  lv_obj_set_style_radius(out.power_btn, ui::dp(14), 0);
   out.power_label = lv_label_create(out.power_btn);
   lv_obj_set_style_text_color(out.power_label, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(out.power_label, btn_font, 0);
@@ -396,7 +397,7 @@ void build_power_button(lv_obj_t* parent, int btn_h, const lv_font_t* btn_font,
 void build_tare_button(lv_obj_t* parent, const lv_font_t* font, ui::HomeWidgets& out) {
   out.tare_btn = ui::make_button(parent);
   lv_obj_set_style_bg_color(out.tare_btn, lv_color_hex(ui::theme::card()), 0);
-  lv_obj_set_style_radius(out.tare_btn, 14, 0);
+  lv_obj_set_style_radius(out.tare_btn, ui::dp(14), 0);
   lv_obj_set_style_opa(out.tare_btn, LV_OPA_40, LV_STATE_DISABLED);  // scale gone
   out.tare_label = lv_label_create(out.tare_btn);
   lv_label_set_text(out.tare_label, LV_SYMBOL_LOOP "  Tare");
@@ -426,7 +427,7 @@ lv_obj_t* make_panel_card(lv_obj_t* parent, int pad) {
   lv_obj_set_style_pad_row(card, pad, 0);
   lv_obj_set_style_bg_color(card, lv_color_hex(ui::theme::card()), 0);
   lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(card, 16, 0);
+  lv_obj_set_style_radius(card, ui::dp(16), 0);
   return card;
 }
 
@@ -457,11 +458,11 @@ void make_panel_header(lv_obj_t* card, const char* caption, const lv_font_t* cap
   lv_obj_set_flex_flow(sg, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(sg, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(sg, 8, 0);
+  lv_obj_set_style_pad_column(sg, ui::dp(8), 0);
 
   lv_obj_t* dot = lv_obj_create(sg);
   lv_obj_remove_style_all(dot);
-  lv_obj_set_size(dot, 12, 12);
+  lv_obj_set_size(dot, ui::dp(12), ui::dp(12));
   lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
   lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
   *out_dot = dot;
@@ -486,12 +487,12 @@ void make_stepper_group(lv_obj_t* parent, int btn_size, const lv_font_t* symbol_
   lv_obj_set_flex_flow(g, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(g, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(g, 3, 0);
+  lv_obj_set_style_pad_column(g, ui::dp(3), 0);
   *out_minus = ui::make_step_button(g, LV_SYMBOL_MINUS, btn_size, symbol_font);
   lv_obj_t* lbl = lv_label_create(g);
   // Fixed (not btn-relative) so the buttons hug the value at 14pt instead of
   // floating out; wide enough for the widest set value ("120 g" / "93.0°").
-  lv_obj_set_width(lbl, 46);  // stable width so the buttons don't shift on digit changes
+  lv_obj_set_width(lbl, ui::dp(46));  // stable width so the buttons don't shift on digit changes
   lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(lbl, label_font, 0);
@@ -525,7 +526,7 @@ lv_obj_t* make_panel_column(lv_obj_t* body, const char* caption, const lv_font_t
   lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_row(col, 6, 0);
+  lv_obj_set_style_pad_row(col, ui::dp(6), 0);
   lv_obj_t* cap = lv_label_create(col);
   lv_label_set_text(cap, caption);
   lv_obj_set_style_text_color(cap, lv_color_hex(ui::theme::muted()), 0);
@@ -654,18 +655,19 @@ void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_t* tcol = make_panel_column(body, "TIMER", cap_font, big_font, &out.shot_timer_label);
   lv_obj_set_flex_align(tcol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  // Shot button in the stepper's slot under the timer: shot-mode toggle, or
-  // Reset while a finished shot is up for review. Hidden unless the board has
-  // paddle hardware (update_home shows it); sized to line up with the stepper.
+  // Shot button in the stepper's slot under the timer: shot-mode toggle
+  // (Auto shot / Detect / Manual), or Reset while a finished shot is up for
+  // review. Always shown — every board has shot machinery now (paddle relay
+  // or detector); sized to line up with the stepper.
   out.shot_btn = ui::make_button(tcol);
   lv_obj_set_size(out.shot_btn, LV_SIZE_CONTENT, btn_size);
-  lv_obj_set_style_pad_hor(out.shot_btn, 14, 0);
+  lv_obj_set_style_pad_hor(out.shot_btn, ui::dp(14), 0);
   lv_obj_set_style_radius(out.shot_btn, btn_size / 2, 0);
   // Outlined like the step buttons sharing this row (card fill + ring), so the
   // stepper slot reads as one family; update_home colors the ring + text by
   // state instead of flooding the fill.
   lv_obj_set_style_bg_color(out.shot_btn, lv_color_hex(ui::theme::card()), 0);
-  lv_obj_set_style_border_width(out.shot_btn, 2, 0);
+  lv_obj_set_style_border_width(out.shot_btn, ui::dp(2), 0);
   lv_obj_set_style_border_color(out.shot_btn, lv_color_hex(ui::theme::scrollbar()), 0);
   lv_obj_set_style_opa(out.shot_btn, LV_OPA_40, LV_STATE_DISABLED);
   out.shot_btn_label = lv_label_create(out.shot_btn);
@@ -673,7 +675,6 @@ void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_set_style_text_color(out.shot_btn_label, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(out.shot_btn_label, set_font, 0);
   lv_obj_center(out.shot_btn_label);
-  lv_obj_add_flag(out.shot_btn, LV_OBJ_FLAG_HIDDEN);  // update_home reveals it
 
   // Connect/Disconnect + Tare side by side at the card's bottom. For a
   // sleep-capable scale (Umbra) the connect toggle doubles as sleep/wake:
@@ -690,7 +691,7 @@ void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_set_height(out.scale_connect_btn, action_h);
   lv_obj_set_width(out.scale_connect_btn, 0);
   lv_obj_set_flex_grow(out.scale_connect_btn, 1);
-  lv_obj_set_style_radius(out.scale_connect_btn, 14, 0);
+  lv_obj_set_style_radius(out.scale_connect_btn, ui::dp(14), 0);
   out.scale_connect_label = lv_label_create(out.scale_connect_btn);
   lv_obj_set_style_text_color(out.scale_connect_label, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(out.scale_connect_label, action_font, 0);
@@ -723,7 +724,7 @@ void build_rail_tray(lv_obj_t* rail, const lv_font_t* font, HomeWidgets& out) {
   lv_obj_set_flex_flow(tray, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(tray, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_row(tray, 4, 0);
+  lv_obj_set_style_pad_row(tray, ui::dp(4), 0);
 
   out.clock_label = lv_label_create(tray);
   lv_obj_set_style_text_color(out.clock_label, lv_color_hex(ui::theme::text()), 0);
@@ -765,7 +766,7 @@ void build_bottom_tray(lv_obj_t* bar, const lv_font_t* font, HomeWidgets& out) {
   lv_obj_set_flex_flow(icons, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(icons, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(icons, 6, 0);
+  lv_obj_set_style_pad_column(icons, ui::dp(6), 0);
 
   out.wifi_label = lv_label_create(icons);  // WiFi glyph; update_home shows/hides + colors it
   lv_obj_set_style_text_font(out.wifi_label, font, 0);
@@ -794,7 +795,6 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   out.tare_btn = out.tare_label = nullptr;
   out.scale_connect_btn = out.scale_connect_label = nullptr;
   out.scale_batt_label = nullptr;
-  out.paddle_pill = out.paddle_label = nullptr;
   out.status_dot = out.status_label = nullptr;
   out.micra_status_dot = out.micra_status_label = nullptr;
   out.scale_status_dot = out.scale_status_label = nullptr;
@@ -809,14 +809,12 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   for (lv_obj_t*& yl : out.flow_ylabels) yl = nullptr;
   for (lv_obj_t*& xl : out.flow_xlabels) xl = nullptr;
 
-  const int pad = compact ? 8 : xl ? 28 : 20;
-  const int gap = compact ? 6 : xl ? 22 : 16;
-  const int card_pad = compact ? 8 : xl ? 24 : 16;
-  const int btn_h = compact ? 40 : xl ? 92 : 64;
-  const lv_font_t* sub_font =
-      compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
-  const lv_font_t* btn_font =
-      compact ? &lv_font_montserrat_14 : xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
+  const int pad = ui::dp(compact ? 8 : xl ? 28 : 20);
+  const int gap = ui::dp(compact ? 6 : xl ? 22 : 16);
+  const int card_pad = ui::dp(compact ? 8 : xl ? 24 : 16);
+  const int btn_h = ui::dp(compact ? 40 : xl ? 92 : 64);
+  const lv_font_t* sub_font = ui::font_dp(compact ? 14 : xl ? 28 : 20);
+  const lv_font_t* btn_font = ui::font_dp(compact ? 14 : xl ? 28 : 20);
 
   lv_obj_remove_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_style_pad_all(parent, pad, 0);
@@ -831,7 +829,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   // --- Compact Home: MICRA (+ SCALE) card(s) + actions; clock/battery live in the
   // bottom-bar tray. No on-Home steppers — temp/target adjust stay in Settings. ---
   if (compact) {
-    const lv_font_t* c_cap = &lv_font_montserrat_14;
+    const lv_font_t* c_cap = ui::font_dp(14);
     lv_obj_t* cards = lv_obj_create(parent);
     lv_obj_remove_style_all(cards);
     lv_obj_remove_flag(cards, LV_OBJ_FLAG_SCROLLABLE);
@@ -842,8 +840,8 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
 
     if (scale_enabled) {
       // Two half-width cards with stacked readout rows (narrow -> smaller value).
-      build_compact_micra_card(cards, card_pad, c_cap, &lv_font_montserrat_20, out);
-      build_compact_scale_card(cards, card_pad, c_cap, &lv_font_montserrat_20, out);
+      build_compact_micra_card(cards, card_pad, c_cap, ui::font_dp(20), out);
+      build_compact_scale_card(cards, card_pad, c_cap, ui::font_dp(20), out);
     } else {
       // One full-width MICRA card: BREW / STEAM columns, each with the set point in
       // small grey beneath the value (room for a bigger value at full width).
@@ -851,12 +849,12 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
       make_panel_header(card, "MICRA", c_cap, sub_font, &out.micra_status_dot,
                         &out.micra_status_label);
       lv_obj_t* body = make_panel_body(card);
-      lv_obj_t* bcol = make_panel_column(body, "BREW", c_cap, &lv_font_montserrat_28,
+      lv_obj_t* bcol = make_panel_column(body, "BREW", c_cap, ui::font_dp(28),
                                          &out.brew_value);
       lv_obj_set_flex_align(bcol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                             LV_FLEX_ALIGN_CENTER);  // center the cluster vertically
       out.brew_set = add_sub_label(bcol, c_cap);
-      lv_obj_t* scol = make_panel_column(body, "STEAM", c_cap, &lv_font_montserrat_28,
+      lv_obj_t* scol = make_panel_column(body, "STEAM", c_cap, ui::font_dp(28),
                                          &out.boiler_value);
       lv_obj_set_flex_align(scol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                             LV_FLEX_ALIGN_CENTER);
@@ -884,25 +882,25 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   }
 
   // Shared large-screen panel sizing (the MICRA / SCALE cards + their steppers).
-  const lv_font_t* panel_cap = &lv_font_montserrat_14;
+  const lv_font_t* panel_cap = ui::font_dp(14);
   const lv_font_t* panel_status = sub_font;                       // 20 wide / 28 xl
   // One value size for BOTH panels so the value rows + steppers line up across
   // MICRA and SCALE (weight/timer are not a bigger "hero" — they match the temps).
-  const lv_font_t* panel_val = xl ? &lv_font_montserrat_28 : &lv_font_montserrat_24;
-  const lv_font_t* panel_set = &lv_font_montserrat_14;
-  const int panel_btn = xl ? 54 : 42;
-  const lv_font_t* panel_sym = xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
+  const lv_font_t* panel_val = ui::font_dp(xl ? 28 : 24);
+  const lv_font_t* panel_set = ui::font_dp(14);
+  const int panel_btn = ui::dp(xl ? 54 : 42);
+  const lv_font_t* panel_sym = ui::font_dp(xl ? 28 : 20);
 
   if (!scale_enabled) {
     // --- Large no-scale Home: one MICRA card as the hero, filling the whole space
     // (no second card to share it), then Power. Bigger value + steppers than the
     // scale-aware panels, and the BREW/STEAM clusters are centered vertically so the
     // card doesn't read as a small strip floating in dead space. ---
-    const lv_font_t* hero_val = xl ? &lv_font_montserrat_48 : &lv_font_montserrat_40;
-    const lv_font_t* hero_cap = xl ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
-    const lv_font_t* hero_set = xl ? &lv_font_montserrat_24 : &lv_font_montserrat_20;
-    const int hero_btn = xl ? 64 : 54;
-    const lv_font_t* hero_sym = &lv_font_montserrat_28;
+    const lv_font_t* hero_val = ui::font_dp(xl ? 48 : 40);
+    const lv_font_t* hero_cap = ui::font_dp(xl ? 28 : 20);
+    const lv_font_t* hero_set = ui::font_dp(xl ? 24 : 20);
+    const int hero_btn = ui::dp(xl ? 64 : 54);
+    const lv_font_t* hero_sym = ui::font_dp(28);
 
     lv_obj_t* row = lv_obj_create(parent);
     lv_obj_remove_style_all(row);
@@ -920,17 +918,17 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
     lv_obj_t* bcol = make_panel_column(body, "BREW", hero_cap, hero_val, &out.brew_value);
     lv_obj_set_flex_align(bcol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(bcol, xl ? 18 : 12, 0);
+    lv_obj_set_style_pad_row(bcol, ui::dp(xl ? 18 : 12), 0);
     make_stepper_group(bcol, hero_btn, hero_sym, hero_set, &out.brew_set,
                        &out.brew_minus, &out.brew_plus);
-    lv_obj_set_width(out.brew_set, xl ? 96 : 78);
+    lv_obj_set_width(out.brew_set, ui::dp(xl ? 96 : 78));
     lv_obj_t* scol = make_panel_column(body, "STEAM", hero_cap, hero_val, &out.boiler_value);
     lv_obj_set_flex_align(scol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(scol, xl ? 18 : 12, 0);
+    lv_obj_set_style_pad_row(scol, ui::dp(xl ? 18 : 12), 0);
     make_stepper_group(scol, hero_btn, hero_sym, hero_set, &out.boiler_set,
                        &out.boiler_minus, &out.boiler_plus);
-    lv_obj_set_width(out.boiler_set, xl ? 96 : 78);
+    lv_obj_set_width(out.boiler_set, ui::dp(xl ? 96 : 78));
 
     build_power_button(parent, btn_h, btn_font, out);
     return;
@@ -940,10 +938,10 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   // SCALE), each carrying its own status + controls — power inside MICRA,
   // Connect/Tare inside SCALE (no bottom action bar) — and the flow graph is
   // the entire lower half. Clock/battery live in the rail tray (build_rail_tray).
-  const int action_h = xl ? 56 : 48;  // in-card action buttons (power/connect/tare)
+  const int action_h = ui::dp(xl ? 56 : 48);  // in-card action buttons (power/connect/tare)
   // Tighter padding than the generic card_pad: each card now stacks header +
   // value/stepper body + an action button inside its half of the screen.
-  const int panel_pad = xl ? 16 : 12;
+  const int panel_pad = ui::dp(xl ? 16 : 12);
   lv_obj_t* panels = lv_obj_create(parent);
   lv_obj_remove_style_all(panels);
   lv_obj_remove_flag(panels, LV_OBJ_FLAG_SCROLLABLE);
@@ -1014,8 +1012,7 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   // the held final weight with the live reading every 500ms, which broke the
   // freeze the moment the cup came off the scale.
   if (w.scale_weight != nullptr) {
-    const bool weight_frozen =
-        brew.available && brew.phase == core::ShotPhase::kReview;
+    const bool weight_frozen = brew.phase == core::ShotPhase::kReview;
     if (!weight_frozen) {
       char wb[16];
       if (scale.connected) {
@@ -1031,12 +1028,12 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     std::snprintf(tb, sizeof(tb), "%.0f g", static_cast<double>(brew.target_weight_g));
     lv_label_set_text(w.scale_target, tb);
 
-    // Shot timer (scale panel). Paddle boards use the ESP-side shot timer (works
-    // with any scale, keeps counting after the scale's own timer resets); boards
-    // without paddle hardware fall back to the scale's built-in timer.
+    // Shot timer (scale panel): the ESP-side timer when it is the authoritative
+    // source (core::esp_shot_timer — shared with pump_scale_chart's 10Hz
+    // writer), else the scale's built-in timer.
     if (w.shot_timer_label != nullptr) {
       char sb[16];
-      if (brew.available) {
+      if (core::esp_shot_timer(brew)) {
         std::snprintf(sb, sizeof(sb), "%.1f s",
                       static_cast<double>(brew.shot_ms) / 1000.0);
       } else if (scale.connected) {
@@ -1053,50 +1050,31 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     // DISABLED while a shot runs/settles — a mid-shot mode flip wouldn't cancel
     // the running automation (the paddle is the mid-shot escape), and a tap
     // during settling could land on Reset the instant it appears.
-    if (w.shot_btn != nullptr) {
-      if (!brew.available) {
-        lv_obj_add_flag(w.shot_btn, LV_OBJ_FLAG_HIDDEN);
+    if (w.shot_btn != nullptr && w.stop_flash_count <= 0) {
+      // (While the stop-early flash runs, it owns the button's look.)
+      const bool review = brew.phase == core::ShotPhase::kReview;
+      const bool active = brew.phase == core::ShotPhase::kBrewing ||
+                          brew.phase == core::ShotPhase::kSettling;
+      // Wired arms the auto-STOP ("Auto shot"); unwired arms auto-DETECTION.
+      const char* armed = brew.paddle_wired ? "Auto shot" : "Detect";
+      lv_label_set_text(w.shot_btn_label,
+                        review ? "Reset" : brew.shot_mode ? armed : "Manual");
+      // State lives in the outline + text: accent = auto armed, warn = Reset,
+      // neutral ring = manual/busy (the fill stays card(), see build).
+      const uint32_t ring = review          ? ui::theme::warn()
+                            : active         ? ui::theme::scrollbar()
+                            : brew.shot_mode ? ui::theme::accent()
+                                             : ui::theme::scrollbar();
+      lv_obj_set_style_border_color(w.shot_btn, lv_color_hex(ring), 0);
+      const uint32_t txt = review          ? ui::theme::warn()
+                           : active         ? ui::theme::muted()
+                           : brew.shot_mode ? ui::theme::accent()
+                                            : ui::theme::text();
+      lv_obj_set_style_text_color(w.shot_btn_label, lv_color_hex(txt), 0);
+      if (active) {
+        lv_obj_add_state(w.shot_btn, LV_STATE_DISABLED);
       } else {
-        lv_obj_remove_flag(w.shot_btn, LV_OBJ_FLAG_HIDDEN);
-        const bool review = brew.phase == core::ShotPhase::kReview;
-        const bool active = brew.phase == core::ShotPhase::kBrewing ||
-                            brew.phase == core::ShotPhase::kSettling;
-        lv_label_set_text(w.shot_btn_label,
-                          review ? "Reset" : brew.shot_mode ? "Auto shot" : "Manual");
-        // State lives in the outline + text: accent = auto armed, warn = Reset,
-        // neutral ring = manual/busy (the fill stays card(), see build).
-        const uint32_t ring = review          ? ui::theme::warn()
-                              : active         ? ui::theme::scrollbar()
-                              : brew.shot_mode ? ui::theme::accent()
-                                               : ui::theme::scrollbar();
-        lv_obj_set_style_border_color(w.shot_btn, lv_color_hex(ring), 0);
-        const uint32_t txt = review          ? ui::theme::warn()
-                             : active         ? ui::theme::muted()
-                             : brew.shot_mode ? ui::theme::accent()
-                                              : ui::theme::text();
-        lv_obj_set_style_text_color(w.shot_btn_label, lv_color_hex(txt), 0);
-        if (active) {
-          lv_obj_add_state(w.shot_btn, LV_STATE_DISABLED);
-        } else {
-          lv_obj_remove_state(w.shot_btn, LV_STATE_DISABLED);
-        }
-      }
-    }
-
-    // Paddle/brew pill: only meaningful when paddle hardware is present.
-    if (w.paddle_pill != nullptr) {
-      if (!brew.available) {
-        lv_obj_add_flag(w.paddle_pill, LV_OBJ_FLAG_HIDDEN);
-      } else {
-        lv_obj_remove_flag(w.paddle_pill, LV_OBJ_FLAG_HIDDEN);
-        const char* txt = brew.brewing ? "Brewing"
-                          : brew.paddle_pressed ? "Paddle"
-                                                : "Ready";
-        uint32_t col = brew.brewing ? ui::theme::ok()
-                       : brew.paddle_pressed ? ui::theme::accent()
-                                             : ui::theme::rail();
-        lv_label_set_text(w.paddle_label, txt);
-        lv_obj_set_style_bg_color(w.paddle_pill, lv_color_hex(col), 0);
+        lv_obj_remove_state(w.shot_btn, LV_STATE_DISABLED);
       }
     }
 
@@ -1300,6 +1278,35 @@ void shot_flash_cb(lv_timer_t* t) {
   }
 }
 
+// One pulse of the stop-early flash: the shot button (idle mid-shot) alternates
+// a warn "Stop" fill and its normal card look. Silent — flash_stop_hint plays
+// the one audible cue up front (a click per pulse read as nagging beeps).
+// update_home skips the button's styling while the countdown runs, so the
+// pulses aren't overwritten; its next pass after the countdown repaints (and
+// re-disables) the normal state.
+void stop_flash_cb(lv_timer_t* t) {
+  auto* w = static_cast<ui::HomeWidgets*>(lv_timer_get_user_data(t));
+  const bool dead = w->shot_btn == nullptr || w->stop_flash_count <= 0;
+  if (!dead) {
+    --w->stop_flash_count;
+    const bool lit = (w->stop_flash_count & 1) != 0;
+    lv_label_set_text(w->shot_btn_label, "Stop");
+    lv_obj_set_style_bg_color(
+        w->shot_btn, lv_color_hex(lit ? ui::theme::warn() : ui::theme::card()), 0);
+    lv_obj_set_style_text_color(
+        w->shot_btn_label, lv_color_hex(lit ? ui::theme::bg() : ui::theme::warn()), 0);
+  }
+  if (dead || w->stop_flash_count == 0) {
+    // Always end on the resting fill: update_home styles the border/text but
+    // NEVER the bg (it assumes card()), so a warn fill left behind here would
+    // stick — and with review's warn text on it, render the label invisible.
+    if (w->shot_btn != nullptr)
+      lv_obj_set_style_bg_color(w->shot_btn, lv_color_hex(ui::theme::card()), 0);
+    if (w->stop_flash_timer == t) w->stop_flash_timer = nullptr;
+    lv_timer_delete(t);
+  }
+}
+
 }  // namespace
 
 void flash_shot_button(HomeWidgets& w) {
@@ -1307,6 +1314,34 @@ void flash_shot_button(HomeWidgets& w) {
   w.shot_flash_count = 6;  // 3 warn pulses
   if (w.shot_flash_timer == nullptr)
     w.shot_flash_timer = lv_timer_create(shot_flash_cb, 130, &w);
+}
+
+void flash_stop_hint(HomeWidgets& w) {
+  if (w.shot_btn == nullptr) return;
+  // Mid-shot the button sits DISABLED, whose 40% style opacity muted the warn
+  // pulses badly — lift the state for the flash. Taps stay inert either way
+  // (App::shot_button ignores kBrewing/kSettling); update_home re-disables on
+  // its first pass after the countdown ends.
+  lv_obj_remove_state(w.shot_btn, LV_STATE_DISABLED);
+  ui::play_button_press();  // one audible cue; the pulses themselves are silent
+  // A strobe, not a blink: ~5Hz for ~3s reads as urgent in peripheral vision
+  // (the whole point — the user is watching the cup, not the screen).
+  w.stop_flash_count = 30;  // 15 warn strobes over ~3s
+  if (w.stop_flash_timer == nullptr)
+    w.stop_flash_timer = lv_timer_create(stop_flash_cb, 100, &w);
+}
+
+void cancel_stop_flash(HomeWidgets& w) {
+  w.stop_flash_count = 0;
+  if (w.stop_flash_timer != nullptr) {
+    lv_timer_delete(w.stop_flash_timer);
+    w.stop_flash_timer = nullptr;
+  }
+  // The cancel can land on a lit frame — restore the resting fill here, since
+  // update_home only ever styles the border/text on top of an assumed card()
+  // bg (a stuck warn fill made review's warn-on-warn label unreadable).
+  if (w.shot_btn != nullptr)
+    lv_obj_set_style_bg_color(w.shot_btn, lv_color_hex(ui::theme::card()), 0);
 }
 
 void reset_flow_graph(HomeWidgets& w) {
@@ -1402,12 +1437,18 @@ static uint32_t shot_tstart_of(uint32_t elapsed, uint32_t window) {
          kShotSlideStepMs;  // sliding (past the cap) also snaps
 }
 
+// Physical slot of logical shot sample i (0 = oldest stored, shot_n-1 =
+// newest). THE ring-index convention — every reader goes through this so a
+// layout change can't drift one code path out of sync with the others.
+static int shot_sample_idx(const HomeWidgets& w, int i) {
+  return (w.shot_head - w.shot_n + i + 2 * ui::HomeWidgets::kShotCap) %
+         ui::HomeWidgets::kShotCap;
+}
+
 // The newest stored sample's shot-time (0 when empty).
 static uint32_t shot_t_last(const HomeWidgets& w) {
   if (w.shot_n == 0) return 0;
-  const int idx = (w.shot_head - 1 + ui::HomeWidgets::kShotCap) %
-                  ui::HomeWidgets::kShotCap;
-  return w.shot_ts[idx];
+  return w.shot_ts[shot_sample_idx(w, w.shot_n - 1)];
 }
 
 // Logical sample i (0..shot_n-1) of `vals`, smoothed by the draw-time 3-point
@@ -1416,14 +1457,10 @@ static uint32_t shot_t_last(const HomeWidgets& w) {
 // guarantees a painted sample's next neighbor already exists, so the
 // smoothing is stable — painted columns never need revisiting.
 static float shot_val(const HomeWidgets& w, const float* vals, int i) {
-  auto idx = [&w](int j) {
-    return (w.shot_head - w.shot_n + j + 2 * ui::HomeWidgets::kShotCap) %
-           ui::HomeWidgets::kShotCap;
-  };
-  const float c = vals[idx(i)];
+  const float c = vals[shot_sample_idx(w, i)];
   if (w.shot_smooth_k <= 0.0f) return c;
-  const float p = vals[idx(i > 0 ? i - 1 : i)];
-  const float n = vals[idx(i + 1 < w.shot_n ? i + 1 : i)];
+  const float p = vals[shot_sample_idx(w, i > 0 ? i - 1 : i)];
+  const float n = vals[shot_sample_idx(w, i + 1 < w.shot_n ? i + 1 : i)];
   return c * (1.0f - 2.0f * w.shot_smooth_k) + (p + n) * w.shot_smooth_k;
 }
 
@@ -1434,10 +1471,7 @@ static float shot_val(const HomeWidgets& w, const float* vals, int i) {
 static void shot_plot_paint_columns(HomeWidgets& w, int x0, int x1, uint32_t window,
                                     uint32_t t_start, uint32_t t_limit) {
   const float* vals = (w.flow_mode == 1) ? w.shot_weights : w.shot_flows;
-  auto sample_idx = [&w](int i) {
-    return (w.shot_head - w.shot_n + i + 2 * ui::HomeWidgets::kShotCap) %
-           ui::HomeWidgets::kShotCap;
-  };
+  auto sample_idx = [&w](int i) { return shot_sample_idx(w, i); };
   const uint16_t bright = flow_bright_color();
   uint32_t t_last = w.shot_n > 0 ? w.shot_ts[sample_idx(w.shot_n - 1)] : 0;
   if (t_last > t_limit) t_last = t_limit;
@@ -1526,16 +1560,24 @@ static uint32_t shot_display_time(const HomeWidgets& w) {
 // t_limit caps how far the trace draws (the display lag); UINT32_MAX = all.
 static void shot_plot_redraw_full(HomeWidgets& w, uint32_t t_limit) {
   if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_w <= 1) return;
-  const uint32_t window = shot_window_of(w.shot_elapsed_ms);
-  const uint32_t t_start = shot_tstart_of(w.shot_elapsed_ms, window);
+  uint32_t window, t_start;
+  if (w.shot_exact_fit) {
+    // Frozen review: the window IS the shot (plus lead-in/settle), so the
+    // trace fills the width — no snapping, no dead-grid tail. Past the ring's
+    // coverage the window pins to the cap and the start slides, unsnapped.
+    window = w.shot_elapsed_ms;
+    if (window < 1000) window = 1000;
+    if (window > kShotMaxWindowMs) window = kShotMaxWindowMs;
+    t_start = w.shot_elapsed_ms > window ? w.shot_elapsed_ms - window : 0;
+  } else {
+    window = shot_window_of(w.shot_elapsed_ms);
+    t_start = shot_tstart_of(w.shot_elapsed_ms, window);
+  }
   w.shot_map_window_ms = window;
   w.shot_map_tstart_ms = t_start;
 
   const float* vals = (w.flow_mode == 1) ? w.shot_weights : w.shot_flows;
-  auto sample_idx = [&w](int i) {
-    return (w.shot_head - w.shot_n + i + 2 * ui::HomeWidgets::kShotCap) %
-           ui::HomeWidgets::kShotCap;
-  };
+  auto sample_idx = [&w](int i) { return shot_sample_idx(w, i); };
   // Y range over the visible samples (grow immediately, shrink with the same
   // half-scale hysteresis as the sweep so the axis doesn't pulse).
   float wmax = 0.0f;
@@ -1570,6 +1612,8 @@ void begin_shot_plot(HomeWidgets& w) {
   if (w.flow_canvas == nullptr) return;
   reset_flow_graph(w);
   w.flow_shot_plot = true;
+  w.shot_exact_fit = false;  // live plot: back to the snapped windows
+  w.unwired_ring = false;    // wired shot takes the arrays (relative stamps)
   w.shot_n = 0;
   w.shot_head = 0;
   w.shot_t0 = lv_tick_get();
@@ -1596,6 +1640,7 @@ void begin_shot_plot(HomeWidgets& w) {
 void end_shot_plot(HomeWidgets& w) {
   if (!w.flow_shot_plot) return;
   w.flow_shot_plot = false;
+  w.shot_exact_fit = false;
   reset_flow_graph(w);  // back to the live sweep on a fresh grid
   if (w.flow_xspan_label != nullptr)
     lv_label_set_text_fmt(w.flow_xspan_label, "%d s window", kFlowWindowS);
@@ -1674,7 +1719,93 @@ void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
 void finish_shot_plot(HomeWidgets& w) {
   if (!w.flow_shot_plot) return;
   // The edge runs one event interval behind while live — flush the trailing
-  // sliver so the frozen review plot shows the complete shot.
+  // sliver so the frozen review plot shows the complete shot, window fitted
+  // to the shot instead of the live snaps.
+  w.shot_exact_fit = true;
+  shot_plot_redraw_full(w, UINT32_MAX);
+}
+
+void unwired_ring_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
+  if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_w <= 1) return;
+  if (w.flow_shot_plot) return;  // review owns the arrays (rebased) — don't feed
+  const uint32_t now = lv_tick_get();
+  if (!w.unwired_ring) {
+    // (Re)start the capture: after a review the arrays hold rebased leftovers.
+    w.unwired_ring = true;
+    w.shot_n = 0;
+    w.shot_head = 0;
+    w.shot_last_sample_ms = 0;
+  }
+  if (!scale.connected) return;  // gap in the ring; the detector aborts long ones
+  // Event-locked storage at <=kShotSampleMs, exactly like shot_plot_tick. The
+  // rate is computed only when a sample is actually stored (<=10Hz) — the live
+  // sweep already fed the shared history this pass, so an every-call
+  // recomputation would be pure redundancy at loop() rate.
+  if (scale.seq == w.shot_seq_seen) return;
+  w.shot_seq_seen = scale.seq;
+  if (w.shot_n > 0 && now - w.shot_last_sample_ms < kShotSampleMs) return;
+  const float rf = update_flow_rate(w, scale, now);
+  w.shot_last_sample_ms = now;
+  w.shot_weights[w.shot_head] = scale.weight_g;
+  w.shot_flows[w.shot_head] = rf;
+  w.shot_ts[w.shot_head] = now;  // ABSOLUTE — review_shot_plot rebases
+  w.shot_head = (w.shot_head + 1) % ui::HomeWidgets::kShotCap;
+  if (w.shot_n < ui::HomeWidgets::kShotCap) ++w.shot_n;
+}
+
+void review_shot_plot(HomeWidgets& w, uint32_t t_start, uint32_t t_end,
+                      float baseline_g) {
+  if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_w <= 1) return;
+  // A little pre-shot context so the trace shows the quiet baseline before the
+  // first-drip ramp (the detector's t_start is the flow onset).
+  constexpr uint32_t kLeadInMs = 3000;
+  const uint32_t t0 = t_start - kLeadInMs;
+
+  // Trim the ring to [t0, t_end] and rebase in place: the kept samples are a
+  // chronological suffix, so dropping the old ones is just shrinking shot_n —
+  // the head stays put and the (head - n + i) indexing still works.
+  auto sample_idx = [&w](int i) { return shot_sample_idx(w, i); };
+  int first = w.shot_n;  // first kept logical index
+  for (int i = 0; i < w.shot_n; ++i) {
+    if (static_cast<int32_t>(w.shot_ts[sample_idx(i)] - t0) >= 0) {
+      first = i;
+      break;
+    }
+  }
+  int kept = 0;
+  for (int i = first; i < w.shot_n; ++i) {
+    const int idx = sample_idx(i);
+    if (static_cast<int32_t>(w.shot_ts[idx] - t_end) > 0) break;
+    w.shot_ts[idx] -= t0;                // absolute -> shot-relative
+    w.shot_weights[idx] -= baseline_g;   // untared baseline -> shot grams
+    ++kept;
+  }
+  // Head sits after the last KEPT sample now (anything newer than t_end is
+  // discarded by walking the head back over it). kept == 0 (scale dark the
+  // whole shot) still freezes — a bare grid — so the review UX stays coherent.
+  if (kept > 0)
+    w.shot_head = (sample_idx(first + kept - 1) + 1) % ui::HomeWidgets::kShotCap;
+  w.shot_n = kept;
+  w.unwired_ring = false;  // arrays are shot-relative until the next ring start
+
+  // Enter the frozen shot-plot state and paint once, complete (no display lag).
+  w.flow_shot_plot = true;
+  w.shot_exact_fit = true;  // window = the shot, not the live snaps
+  w.shot_t0 = t0;
+  w.shot_elapsed_ms = t_end - t0;
+  w.shot_si = 0;
+  w.shot_x_painted = -1;
+  w.shot_map_window_ms = 0;
+  w.shot_map_tstart_ms = 0;
+  w.shot_stall_since = 0;
+  for (lv_obj_t* l : w.flow_xlabels)
+    if (l != nullptr) lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN);
+  if (w.flow_xspan_label != nullptr)
+    lv_obj_remove_flag(w.flow_xspan_label, LV_OBJ_FLAG_HIDDEN);
+  // Re-fit the axis from scratch: the live sweep may have left it elevated,
+  // and redraw_full's shrink hysteresis would otherwise keep that scale.
+  w.flow_ymax = flow_default_max(w.flow_mode);
+  set_flow_ylabels(w);
   shot_plot_redraw_full(w, UINT32_MAX);
 }
 

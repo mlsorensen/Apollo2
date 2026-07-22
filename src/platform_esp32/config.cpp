@@ -25,6 +25,8 @@ constexpr char kShotModeKey[] = "shotmode";
 constexpr char kOvershootKey[] = "ovshoot";
 constexpr char kReviewHoldKey[] = "revhold";
 constexpr char kAutoConnectKey[] = "autoconn";
+constexpr char kWiredPaddleKey[] = "wiredpad";
+constexpr char kFlushKey[] = "flushs";  // post-shot auto-flush seconds (0 = off)
 constexpr char kFlowSmoothKey[] = "flowsmth";
 constexpr char kWifiEnKey[] = "wifi_en";
 constexpr char kWifiSsidKey[] = "ssid";
@@ -160,6 +162,36 @@ void Config::set_auto_connect(bool on) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putBool(kAutoConnectKey, on);
+  p.end();
+}
+
+bool Config::wired_paddle() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return true;
+  const bool v = p.isKey(kWiredPaddleKey) ? p.getBool(kWiredPaddleKey, true) : true;
+  p.end();
+  return v;
+}
+
+void Config::set_wired_paddle(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kWiredPaddleKey, on);
+  p.end();
+}
+
+int Config::flush_s() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 0;
+  const int v = p.isKey(kFlushKey) ? p.getInt(kFlushKey, 0) : 0;
+  p.end();
+  return v;
+}
+
+void Config::set_flush_s(int seconds) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putInt(kFlushKey, seconds);
   p.end();
 }
 
