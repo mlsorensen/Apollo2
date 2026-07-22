@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <NimBLEDevice.h>
+
+#include <cstring>
 #include <Wire.h>
 #if defined(CONFIG_ESP_HOSTED_ENABLE_BT_NIMBLE)
 #include <esp32-hal-hosted.h>  // hostedInitBLE(): SDIO link to the radio co-processor
@@ -30,6 +32,7 @@
 #include "platform_esp32/token_setup.h"
 #include "platform_esp32/touch.h"
 #include "ui/app.h"
+#include "version.h"
 
 // Device entry. Brings up the panel + touch, builds the UI bound to the BLE
 // machine, and starts MicraLink's background connection task. The main loop only
@@ -279,7 +282,36 @@ void setup() {
   g_network.begin();
 }
 
+namespace {
+
+// Serial identity query: the web flasher (site/) writes "id?" down the serial
+// port to learn which board it's talking to before offering a firmware image
+// (the boards are indistinguishable over USB otherwise). Keep the reply a
+// single stable line — the page substring-matches the board name out of it,
+// exactly like tools/flash.sh does with the boot banner.
+void poll_serial_id() {
+  static char buf[16];
+  static size_t n = 0;
+  while (Serial.available() > 0) {
+    const char c = static_cast<char>(Serial.read());
+    if (c == '\n' || c == '\r') {
+      buf[n] = '\0';
+      if (n == 3 && std::strcmp(buf, "id?") == 0) {
+        Serial.printf("APOLLO2 BOARD=\"%s\" FW=%s\n", board::kName, fw::kVersion);
+      }
+      n = 0;
+    } else if (n < sizeof(buf) - 1) {
+      buf[n++] = c;
+    } else {
+      n = 0;  // overlong line: not our query
+    }
+  }
+}
+
+}  // namespace
+
 void loop() {
+  poll_serial_id();          // web-flasher "which board is this?" responder
   g_brew.poll(millis());     // paddle relay + shot state machine (edge-critical)
   g_app.pump_scale_chart();  // drain the scale's flow stream into the graph (fast)
   lv_timer_handler();        // LVGL render/input
