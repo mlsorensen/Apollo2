@@ -10,11 +10,14 @@
 //   WIRED — the device sits in the Micra's paddle circuit (the 4.3C's isolated
 //   DO/DI, or a relay on plain-GPIO boards; core::IPaddle) and shots start/stop
 //   on paddle edges, with weight-triggered auto-stop.
-//   UNWIRED — no paddle harness (boards without the hardware, or the "Wired
-//   paddle" setting off): a weight-stream detector (core::ShotDetector) infers
-//   shot start/end from the scale alone. No drive line, so no auto-stop, no
-//   overshoot learning, no review-reject flash; the target weight is
-//   informational only.
+//   UNWIRED — no paddle harness in the shot machinery (boards without the
+//   hardware, or the "Wired paddle" setting off): a weight-stream detector
+//   (core::ShotDetector) infers shot start/end from the scale alone. No
+//   auto-stop, no overshoot learning, no review-reject flash; the target
+//   weight is informational only (the stop_hint flash stands in for the
+//   auto-stop). Where the paddle HARDWARE exists, unwired mode still relays
+//   it pass-through — sense + drive, no timer/phase involvement — so a wired
+//   rig can test unwired mode by just flipping the setting.
 //
 // The WIRED shot lifecycle (core::BrewController):
 //   Idle -> (paddle ON edge, shot mode armed, scale connected) Brewing: tare,

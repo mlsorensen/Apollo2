@@ -59,7 +59,11 @@ class BrewController : public IBrewController {
   void end_shot(uint32_t now_ms);  // Brewing -> Review
   bool wired() const { return paddle_.available() && wired_paddle_; }
   void poll_wired(uint32_t now_ms);    // paddle relay + weight automation
-  void poll_unwired(uint32_t now_ms);  // detector-driven phases
+  void poll_unwired(uint32_t now_ms);  // detector-driven phases (+ pass-through relay)
+  // Debounced paddle edge since the last call: -1 none, 0 OFF, 1 ON. Shared by
+  // the wired shot path and the unwired pass-through relay (same glitch filter
+  // and boot safety either way).
+  int sense_paddle_edge(uint32_t now_ms);
   void cancel_shot();                  // any phase -> kIdle, line opened, timer cleared
 
   IPaddle& paddle_;
