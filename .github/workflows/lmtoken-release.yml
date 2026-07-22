@@ -25,9 +25,9 @@ jobs:
       run:
         working-directory: tools/lmtoken
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: 'stable'
           cache: false  # lmtoken is stdlib-only (no go.sum) — nothing to cache
@@ -42,7 +42,7 @@ jobs:
         run: (cd dist && shasum -a 256 *.zip > SHA256SUMS.txt)
 
       - name: Publish release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
