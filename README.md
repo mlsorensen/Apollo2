@@ -65,6 +65,7 @@ build time.
 | **ESP32‑S3‑Touch‑LCD‑4.3C** | 4.3" 800×480, RGB parallel | 4.3B variant with a dimmable (PWM) backlight and battery monitoring. Has a PCF85063 RTC. |
 | **ESP32‑S3‑Touch‑LCD‑7B** | 7" 1024×600, RGB parallel | Largest panel. |
 | **ESP32‑P4‑WIFI6‑Touch‑LCD‑4.3** | 4.3" 800×480, MIPI‑DSI (ST7701) | ESP32‑P4 (32 MB flash / 32 MB PSRAM); WiFi 6 + BLE via on‑board ESP32‑C6. Bring‑up in progress. |
+| **ESP32‑P4‑WIFI6‑Touch‑LCD‑5** | 5" 1280×720, MIPI‑DSI (HX8394) | Same electronics as the P4 4.3; higher‑density panel — the UI renders the 800×480 layout scaled 1.5×. Not yet hardware‑verified. |
 
 The S3 boards use the ESP32‑S3R8 (16 MB flash, 8 MB octal PSRAM). A supported
 scale (Bookoo Themis Mini) is optional. Future support for Acaia Umbra coming.
@@ -75,11 +76,17 @@ scale (Bookoo Themis Mini) is optional. Future support for Acaia Umbra coming.
 
 ### 1. Flash the firmware
 
-Requires [PlatformIO](https://platformio.org/) (`pio`) and a USB cable.
+**No-toolchain option:** the [web flasher](https://mlsorensen.github.io/Apollo2/)
+flashes any supported board straight from Chrome/Edge over USB — pick your board,
+click Install. Prebuilt images also live on the
+[Releases](https://github.com/mlsorensen/Apollo2/releases) page.
+
+Building from source requires [PlatformIO](https://platformio.org/) (`pio`) and
+a USB cable.
 
 ```sh
 make flash            # print selection of flash options
-make flash-4-3b       # or target a specific board: 2inch | 7b | 4-3b | 4-3c | p4
+make flash-s3-4-3b    # or target a board: s3-2 | s3-7b | s3-4-3b | s3-4-3c | p4-4-3 | p4-5
 make monitor          # open the serial console (115200 baud)
 ```
 

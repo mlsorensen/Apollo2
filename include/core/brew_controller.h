@@ -6,6 +6,7 @@
 #include "core/brew.h"
 #include "core/paddle.h"
 #include "core/scale.h"
+#include "core/shot_detector.h"
 #include "core/shot_timer.h"
 
 namespace core {
@@ -33,13 +34,18 @@ class BrewController : public IBrewController {
   void set_shot_mode_persister(std::function<void(bool)> p) { persist_mode_ = std::move(p); }
   void set_overshoot_persister(std::function<void(float)> p) { persist_overshoot_ = std::move(p); }
   void set_review_hold_persister(std::function<void(int)> p) { persist_review_ = std::move(p); }
+  void set_wired_paddle_persister(std::function<void(bool)> p) { persist_wired_ = std::move(p); }
+  void set_flush_persister(std::function<void(int)> p) { persist_flush_ = std::move(p); }
 
   // Seed from persisted config at boot (does not re-persist).
-  void seed(float target_g, bool shot_mode, float overshoot_g, int review_hold_s) {
+  void seed(float target_g, bool shot_mode, float overshoot_g, int review_hold_s,
+            bool wired_paddle, int flush_s) {
     target_g_ = target_g;
     shot_mode_ = shot_mode;
     overshoot_g_ = overshoot_g;
     review_hold_s_ = review_hold_s;
+    wired_paddle_ = wired_paddle;
+    flush_s_ = flush_s;
   }
 
   void poll(uint32_t now_ms);
@@ -49,21 +55,40 @@ class BrewController : public IBrewController {
   void set_shot_mode(bool on) override;
   void dismiss_review() override;
   void set_review_hold_s(int seconds) override;
+  void set_wired_paddle(bool on) override;
+  void set_flush_s(int seconds) override;
 
  private:
   void end_shot(uint32_t now_ms);  // Brewing -> Review
+  bool wired() const { return paddle_.available() && wired_paddle_; }
+  void poll_wired(uint32_t now_ms);    // paddle relay + weight automation
+  void poll_unwired(uint32_t now_ms);  // detector-driven phases (+ pass-through relay)
+  void poll_flush(uint32_t now_ms);    // post-shot auto-flush (cup-off -> run the group)
+  void cancel_flush();                 // any flush state -> idle, line opened if we held it
+  // Debounced paddle edge since the last call: -1 none, 0 OFF, 1 ON. Shared by
+  // the wired shot path and the unwired pass-through relay (same glitch filter
+  // and boot safety either way).
+  int sense_paddle_edge(uint32_t now_ms);
+  void cancel_shot();                  // any phase -> kIdle, line opened, timer cleared
 
   IPaddle& paddle_;
   IScale& scale_;
   ShotTimer timer_;
+  ShotDetector detector_;  // unwired mode's start/stop source
   std::function<bool()> standby_;  // machine known-in-standby (see setter)
   std::function<void(float)> persist_target_;
   std::function<void(bool)> persist_mode_;
   std::function<void(float)> persist_overshoot_;
   std::function<void(int)> persist_review_;
+  std::function<void(bool)> persist_wired_;
+  std::function<void(int)> persist_flush_;
 
   ShotPhase phase_ = ShotPhase::kIdle;
   bool shot_mode_ = true;
+  bool wired_paddle_ = true;  // user setting; effective only with paddle hardware
+  bool stop_hint_ = false;    // unwired: manual-stop point reached (see BrewSnapshot)
+  uint8_t stop_hint_over_ = 0;   // consecutive scale updates past the hint threshold
+  uint32_t stop_hint_seq_ = 0;   // last scale update judged (one vote per notify)
   bool paddle_on_ = false;    // last ACCEPTED level (edge detection)
   bool sensed_once_ = false;  // no edge until the first stable read (boot safety)
   bool sense_candidate_ = false;  // raw level being debounced toward acceptance
@@ -75,6 +100,18 @@ class BrewController : public IBrewController {
   // auto-stopped shot's settled final weight nudges the estimate (learned, NVS).
   float overshoot_g_ = 2.0f;
   int review_hold_s_ = 30;  // review linger before auto-dismiss (user setting)
+  int flush_s_ = 0;         // auto-flush run seconds (0 = off; user setting)
+
+  // Auto-flush sequencing (wired only). Armed when a real shot freezes into
+  // review; a cup-off weight drop starts the delay; then the line runs for
+  // flush_s_ and opens again. Any user paddle activity cancels it — the human
+  // always outranks the automation on the drive line.
+  enum class FlushState : uint8_t { kOff, kArmed, kDelay, kRunning };
+  FlushState flush_state_ = FlushState::kOff;
+  float flush_ref_g_ = 0.0f;      // review-entry weight the drop is judged against
+  uint32_t flush_armed_ms_ = 0;   // arming time (bounds the post-review watch)
+  uint32_t flush_at_ms_ = 0;      // when the delay ends and the run starts
+  uint32_t flush_off_ms_ = 0;     // when the run ends
 
   // Brewing bookkeeping: the baseline weight is (re)read ~1.2s after the tare
   // command so a dropped tare can't fake progress ("confirm starting weight").
@@ -102,6 +139,25 @@ class BrewController : public IBrewController {
   static constexpr uint32_t kBlindGraceMs = 4000;     // tolerated mid-shot scale blackout
   static constexpr float kOvershootLearnRate = 0.5f;  // fraction of the error absorbed per shot
   static constexpr float kOvershootMaxG = 8.0f;       // sanity clamp (0..max)
+  // Minimum-shot gate, ALL modes (end_shot): a run shorter than this never
+  // reaches settle/review — it's a flush/rinse, not a shot, whether it came
+  // from a manual paddle cut, the auto-stop, or the detector.
+  static constexpr uint32_t kMinShotMs = 8000;
+  // Unwired-only extra gate: a detected "shot" that gained less than this is
+  // a splash/bump, not espresso.
+  static constexpr float kUnwiredMinShotG = 5.0f;
+  // Stop-early hint (unwired): fire the "flip the paddle now" signal this much
+  // BEFORE the auto-stop point, in grams of current flow — the user's reaction
+  // time stands in for the relay's instant cut.
+  static constexpr float kStopHintLeadS = 0.25f;
+  // Auto-flush: the weight drop (vs the review-entry weight) that reads as
+  // "cup removed" — well past scale noise, under any cup + espresso.
+  static constexpr float kFlushCupDropG = 30.0f;
+  // Pause between the cup coming off and the run (clear the drip path), and
+  // how long past review entry a cup-off can still trigger the flush (the
+  // review may auto-dismiss or be Reset first; the flush should still run).
+  static constexpr uint32_t kFlushDelayMs = 3000;
+  static constexpr uint32_t kFlushWatchMs = 60000;
 };
 
 }  // namespace core

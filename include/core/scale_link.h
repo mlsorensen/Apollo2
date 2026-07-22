@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -51,6 +52,11 @@ class ScaleLink : public IScale, public IScaleSink {
   bool scanning() const;
   std::vector<ScanResult> scan_results() const;
 
+  // Radio arbitration with a peer link sharing the BLE host (see MicraLink's
+  // twin methods): a link about to scan pauses its peer's connect attempts.
+  void pause_connects(bool on);
+  void set_scan_peer_pauser(std::function<void(bool)> p) { peer_pause_ = std::move(p); }
+
   // core::IScaleSink — called from the transport's notify callback (BLE
   // thread) by the driver. Flow is derived from the weight stream by the UI,
   // so only weight is published; on_weight bumps snapshot.seq.
@@ -87,6 +93,8 @@ class ScaleLink : public IScale, public IScaleSink {
   std::atomic<bool> scan_requested_{false};
   std::atomic<bool> scanning_{false};
   std::atomic<bool> pending_tare_{false};
+  std::atomic<bool> connects_paused_{false};  // peer is scanning — hold off
+  std::function<void(bool)> peer_pause_;      // set once before the loop
 };
 
 }  // namespace core

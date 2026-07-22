@@ -2,6 +2,7 @@
 
 #include <utility>
 
+#include "ui/screen.h"
 #include "ui/theme.h"
 
 namespace {
@@ -31,6 +32,29 @@ lv_obj_t* make_button(lv_obj_t* parent) {
   return btn;
 }
 
+const lv_font_t* font_dp(int px) {
+  struct Face {
+    int size;
+    const lv_font_t* font;
+  };
+  // Must mirror the LV_FONT_MONTSERRAT_* set enabled in lv_conf.h.
+  static const Face kFaces[] = {
+      {14, &lv_font_montserrat_14}, {16, &lv_font_montserrat_16},
+      {20, &lv_font_montserrat_20}, {24, &lv_font_montserrat_24},
+      {28, &lv_font_montserrat_28}, {32, &lv_font_montserrat_32},
+      {36, &lv_font_montserrat_36}, {40, &lv_font_montserrat_40},
+      {48, &lv_font_montserrat_48},
+  };
+  const float want = px * ui::scale();
+  const Face* best = &kFaces[0];
+  for (const Face& f : kFaces) {
+    const float d = want - f.size;
+    const float bd = want - best->size;
+    if ((d < 0 ? -d : d) <= (bd < 0 ? -bd : bd)) best = &f;  // <=: ties go larger
+  }
+  return best->font;
+}
+
 lv_obj_t* make_step_button(lv_obj_t* parent, const char* symbol, int size,
                            const lv_font_t* font) {
   lv_obj_t* btn = make_button(parent);  // shadow already stripped
@@ -39,7 +63,7 @@ lv_obj_t* make_step_button(lv_obj_t* parent, const char* symbol, int size,
   lv_obj_set_style_bg_color(btn, lv_color_hex(ui::theme::card()), 0);
   // Outline so the circle reads even when the fill matches the surface behind it
   // (e.g. on a card()-colored Home temperature card).
-  lv_obj_set_style_border_width(btn, 2, 0);
+  lv_obj_set_style_border_width(btn, ui::dp(2), 0);
   lv_obj_set_style_border_color(btn, lv_color_hex(ui::theme::scrollbar()), 0);
   lv_obj_set_style_opa(btn, LV_OPA_40, LV_STATE_DISABLED);  // greyed at a min/max limit
   lv_obj_t* l = lv_label_create(btn);

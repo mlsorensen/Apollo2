@@ -106,9 +106,11 @@ class App {
   void restart_device() { if (restart_handler_) restart_handler_(); }
   void review_hold_adjust(int dir);  // Scale settings: review-hold stepper (5s steps)
   void cycle_flow_smooth();          // Scale settings: Off/Light/Medium/Strong
+  void cycle_flush();                // Micra settings "Auto flush": Off / 3 s / 6 s
   void set_auto_connect(bool on) {   // Micra settings: connect to saved machine at boot
     if (provisioner_ != nullptr) provisioner_->set_auto_connect(on);
   }
+  void set_wired_paddle(bool on);    // Micra settings: paddle harness vs shot detector
   void zoom_step(int dir);                // Stats time-axis zoom: -1 in, +1 out
   void commit_temp_edits();              // write pending temp edits (on exit)
 
@@ -159,6 +161,10 @@ class App {
   bool last_scale_connected_ = false;
   core::ShotPhase shot_phase_ = core::ShotPhase::kIdle;  // last seen (graph reset/freeze edges)
   uint32_t brew_reject_seen_ = 0;  // last review_reject_seq (flash Reset on change)
+  uint32_t unwired_shot_t0_ = 0;   // lv_tick of the detected shot's retro start
+                                   // (captured on the kBrewing edge; drives the
+                                   // shot-aligned review repaint)
+  bool stop_hint_seen_ = false;    // last stop_hint (flash the pill on the rise)
   // Screensaver: dims the backlight after the configured idle time; any touch
   // restores it (LVGL's inactivity clock resets on input). Timer survives
   // rebuilds — it belongs to the app, not the widget tree.

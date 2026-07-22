@@ -29,4 +29,10 @@ lv_obj_t* make_button(lv_obj_t* parent);
 lv_obj_t* make_step_button(lv_obj_t* parent, const char* symbol, int size,
                            const lv_font_t* font);
 
+// The compiled-in Montserrat nearest to `px * ui::scale()` (ties round up).
+// Layout code asks for its tier's design size and high-DPI boards (scale > 1)
+// get the next-larger face automatically. Identity at scale 1.0 for the sizes
+// the UI uses (every design size is in the compiled-in set).
+const lv_font_t* font_dp(int px);
+
 }  // namespace ui

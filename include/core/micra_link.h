@@ -67,6 +67,13 @@ class MicraLink : public IMachine {
   bool scanning() const;
   std::vector<ScanResult> scan_results() const;
 
+  // Radio arbitration with a peer link sharing the BLE host: the host refuses
+  // to scan while ANY connect is pending, so a link about to scan pauses its
+  // peer (cancelling an in-flight attempt) and releases it after. The device
+  // wires each link's pauser to the other's pause_connects. Thread-safe.
+  void pause_connects(bool on);
+  void set_scan_peer_pauser(std::function<void(bool)> p) { peer_pause_ = std::move(p); }
+
  private:
   bool do_connect(const std::string& address, const std::string& token);
   bool do_refresh();           // loop thread: read + parse into the cache
@@ -107,6 +114,8 @@ class MicraLink : public IMachine {
   std::atomic<bool> try_pairing_{false};
   std::atomic<bool> token_bad_{false};  // authed but reads rejected -> needs re-entry
   std::atomic<bool> scan_requested_{false};
+  std::atomic<bool> connects_paused_{false};  // peer is scanning — hold off
+  std::function<void(bool)> peer_pause_;      // set once before the loop
   std::function<void(std::string)> token_persister_;  // set once before the loop
   std::atomic<bool> scanning_{false};
   std::vector<ScanResult> scan_results_;  // guarded by mutex_

@@ -20,7 +20,7 @@ void style_tab_button(lv_obj_t* btn, const lv_font_t* font) {
   lv_obj_set_style_text_font(btn, font, 0);
   lv_obj_set_style_text_color(btn, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_bg_opa(btn, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_radius(btn, 10, 0);
+  lv_obj_set_style_radius(btn, ui::dp(10), 0);
   lv_obj_set_style_border_width(btn, 0, 0);
   lv_obj_set_style_shadow_width(btn, 0, 0);  // kill LVGL's default (blue, unthemed) shadow
 
@@ -95,7 +95,7 @@ lv_obj_t* modal_button(lv_obj_t* parent, const char* label, uint32_t color,
   lv_obj_t* l = lv_label_create(b);
   lv_label_set_text(l, label);
   lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(l, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_font(l, ui::font_dp(14), 0);
   lv_obj_center(l);
   return b;
 }
@@ -271,8 +271,31 @@ void on_auto_connect_switch(lv_event_t* e) {
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
   app->set_auto_connect(lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
+void on_wired_paddle_switch(lv_event_t* e) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  app->set_wired_paddle(lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
 void on_smooth_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_flow_smooth();
+}
+void on_flush_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_flush();
+}
+
+// Auto-flush run-time choices (seconds; 0 = off).
+constexpr int kFlushChoices[] = {0, 3, 6};
+constexpr int kFlushCount = static_cast<int>(sizeof(kFlushChoices) / sizeof(kFlushChoices[0]));
+
+void set_flush_label(ui::SettingsWidgets& s, int flush_s) {
+  if (s.flush_value == nullptr) return;
+  if (flush_s <= 0) {
+    lv_label_set_text(s.flush_value, "Off");
+  } else {
+    char b[12];
+    std::snprintf(b, sizeof(b), "%d s", flush_s);
+    lv_label_set_text(s.flush_value, b);
+  }
 }
 
 // Shot-graph smoothing levels (IDisplaySettings::flow_smooth 0..3).
@@ -435,6 +458,7 @@ namespace ui {
 App::~App() {
   if (screensaver_timer_ != nullptr) lv_timer_delete(screensaver_timer_);
   if (home_.shot_flash_timer != nullptr) lv_timer_delete(home_.shot_flash_timer);
+  if (home_.stop_flash_timer != nullptr) lv_timer_delete(home_.stop_flash_timer);
   if (home_.flow_buf != nullptr) lv_free(home_.flow_buf);
   if (home_.flow_weights != nullptr) lv_free(home_.flow_weights);
   if (home_.flow_flows != nullptr) lv_free(home_.flow_flows);
@@ -457,6 +481,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   network_ = &network;
   sound_ = &sound;
   screen_ = screen;
+  ui::set_scale(screen.scale);  // before any widget: ui::dp/font_dp read this
   const bool compact = is_compact(screen);
   const bool xl = is_xl(screen);
 
@@ -481,6 +506,11 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     home_.shot_flash_timer = nullptr;
     home_.shot_flash_count = 0;
   }
+  if (home_.stop_flash_timer != nullptr) {
+    lv_timer_delete(home_.stop_flash_timer);
+    home_.stop_flash_timer = nullptr;
+    home_.stop_flash_count = 0;
+  }
   if (home_.flow_buf != nullptr) {
     lv_free(home_.flow_buf);
     home_.flow_buf = nullptr;
@@ -499,14 +529,14 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_set_style_bg_color(scr, lv_color_hex(ui::theme::bg()), 0);
   lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
-  const lv_font_t* tab_font = &lv_font_montserrat_28;  // bigger icons on every tier
-  const int rail_pad = compact ? 4 : xl ? 12 : 8;
+  const lv_font_t* tab_font = ui::font_dp(28);  // bigger icons on every tier
+  const int rail_pad = ui::dp(compact ? 4 : xl ? 12 : 8);
 
   lv_obj_t* tv = lv_tabview_create(scr);
   tabview_ = tv;
   lv_obj_add_event_cb(tv, on_tab_changed, LV_EVENT_VALUE_CHANGED, this);  // commit on tab exit
   lv_tabview_set_tab_bar_position(tv, compact ? LV_DIR_BOTTOM : LV_DIR_LEFT);
-  lv_tabview_set_tab_bar_size(tv, compact ? 44 : xl ? 120 : 96);
+  lv_tabview_set_tab_bar_size(tv, ui::dp(compact ? 44 : xl ? 120 : 96));
   lv_obj_set_style_bg_opa(tv, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(tv, 0, 0);
 
@@ -552,13 +582,13 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   // tray anchors the bottom, not a void). Must precede update_home, which populates
   // home_.clock_label / battery_label.
   if (compact) {
-    ui::build_bottom_tray(rail, &lv_font_montserrat_14, home_);
+    ui::build_bottom_tray(rail, ui::font_dp(14), home_);
   } else {
     lv_obj_set_flex_align(rail, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
     // Font 16 (not 20) so a 2-digit 12h clock ("12:55 PM") + "100%" battery fit the
     // narrow rail without clipping (font metrics differ on-device vs sim).
-    ui::build_rail_tray(rail, &lv_font_montserrat_16, home_);
+    ui::build_rail_tray(rail, ui::font_dp(16), home_);
   }
   lv_obj_add_event_cb(home_.power_btn, on_power_clicked, LV_EVENT_CLICKED, this);
   if (home_.tare_btn != nullptr)
@@ -591,7 +621,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   update_battery_runtime(battery_state_);
 
   build_settings_tab(settings, screen, display_->supports_brightness(),
-                     sound_->available(), settings_);
+                     sound_->available(), brew_->snapshot().paddle_hw, settings_);
   // lv_menu handles page navigation (root <-> Micra/Scale/Device) itself.
   // Micra connection:
   lv_obj_add_event_cb(settings_.scan_btn, on_scan_clicked, LV_EVENT_CLICKED, this);
@@ -644,6 +674,16 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
       lv_obj_add_state(settings_.auto_connect_switch, LV_STATE_CHECKED);
     lv_obj_add_event_cb(settings_.auto_connect_switch, on_auto_connect_switch,
                         LV_EVENT_VALUE_CHANGED, this);
+  }
+  if (settings_.wired_paddle_switch != nullptr) {  // paddle-capable boards only
+    if (brew_ != nullptr && brew_->snapshot().paddle_wired)
+      lv_obj_add_state(settings_.wired_paddle_switch, LV_STATE_CHECKED);
+    lv_obj_add_event_cb(settings_.wired_paddle_switch, on_wired_paddle_switch,
+                        LV_EVENT_VALUE_CHANGED, this);
+  }
+  if (settings_.flush_btn != nullptr) {  // paddle-capable boards only
+    set_flush_label(settings_, brew_ != nullptr ? brew_->snapshot().flush_s : 0);
+    lv_obj_add_event_cb(settings_.flush_btn, on_flush_clicked, LV_EVENT_CLICKED, this);
   }
   lv_obj_add_event_cb(settings_.perf_overlay_switch, on_perf_overlay_switch,
                       LV_EVENT_VALUE_CHANGED, this);
@@ -1058,6 +1098,16 @@ void App::tare_scale() {
   if (scale_ != nullptr) scale_->tare();
 }
 
+void App::cycle_flush() {
+  if (brew_ == nullptr) return;
+  const int cur = brew_->snapshot().flush_s;
+  int i = 0;
+  while (i < kFlushCount && kFlushChoices[i] != cur) ++i;
+  const int next = kFlushChoices[(i + 1) % kFlushCount];  // unknown value -> wraps to Off
+  brew_->set_flush_s(next);
+  set_flush_label(settings_, next);
+}
+
 void App::cycle_flow_smooth() {
   if (display_ == nullptr) return;
   int level = display_->flow_smooth();
@@ -1102,6 +1152,14 @@ void App::shot_button() {
   refresh();  // reflect the new button label/color immediately, not at the next 2 Hz
 }
 
+void App::set_wired_paddle(bool on) {
+  if (brew_ == nullptr) return;
+  brew_->set_wired_paddle(on);  // cancels any in-flight shot to kIdle
+  // pump_scale_chart's phase tracking then returns a mid-shot/frozen plot to
+  // the live sweep on its next pass; nothing else to clean up here.
+  refresh();
+}
+
 void App::toggle_flow_units() { ui::toggle_flow_mode(home_); }
 
 void App::pump_scale_chart() {
@@ -1126,19 +1184,57 @@ void App::pump_scale_chart() {
       brew_reject_seen_ = bsnap.review_reject_seq;
       ui::flash_shot_button(home_);
     }
+    // Unwired stop-early signal: fire the pill flash once per shot, on the
+    // controller's latch going high (see BrewSnapshot::stop_hint).
+    if (bsnap.stop_hint && !stop_hint_seen_) ui::flash_stop_hint(home_);
+    stop_hint_seen_ = bsnap.stop_hint;
     const bool entering_brew =
         bsnap.phase == core::ShotPhase::kBrewing && shot_phase_ != core::ShotPhase::kBrewing;
     if (entering_brew) {
-      ui::begin_shot_plot(home_);  // dynamic-X plot owns the canvas for the shot
-      // A tare was sent only if the baseline isn't already confirmed (the scale
-      // wasn't pre-tared): the old weight samples are then in pre-tare units and
-      // must go. Pre-tared shots keep the history -> rate is live from t=0.
-      if (!bsnap.baseline_set) ui::reset_flow_history(home_);
+      if (bsnap.paddle_wired) {
+        ui::begin_shot_plot(home_);  // dynamic-X plot owns the canvas for the shot
+        // A tare was sent only if the baseline isn't already confirmed (the scale
+        // wasn't pre-tared): the old weight samples are then in pre-tare units and
+        // must go. Pre-tared shots keep the history -> rate is live from t=0.
+        if (!bsnap.baseline_set) ui::reset_flow_history(home_);
+      } else {
+        // Unwired: the live view stays untouched mid-shot (the detector confirmed
+        // retroactively — the plot would open with a hole). Just pin the shot's
+        // retro start on the UI clock; the review repaint replays from the ring.
+        // shot_ms is running, so now - shot_ms IS the detector's t_start.
+        unwired_shot_t0_ = lv_tick_get() - bsnap.shot_ms;
+      }
     } else if (home_.flow_shot_plot && bsnap.phase == core::ShotPhase::kIdle) {
       ui::end_shot_plot(home_);  // review dismissed/timed out -> live sweep
     } else if (bsnap.phase == core::ShotPhase::kReview &&
                shot_phase_ != core::ShotPhase::kReview) {
-      ui::finish_shot_plot(home_);  // flush the display lag before the freeze
+      if (bsnap.paddle_wired) {
+        ui::finish_shot_plot(home_);  // flush the display lag before the freeze
+      } else {
+        // Unwired review entry: one-shot, shot-aligned repaint from the ring
+        // (through now, so the settle plateau shows), never a wrapped sweep.
+        ui::review_shot_plot(home_, unwired_shot_t0_, lv_tick_get(),
+                             bsnap.start_weight_g);
+        // The frozen weight readout must agree with the repainted plot: unwired
+        // shots never tare, so the raw reading includes the cup — show the shot
+        // grams (net of the detector's baseline) instead. The sentinel forces
+        // the live writer to repaint the raw value on dismiss even if the scale
+        // reading hasn't moved since the freeze.
+        if (home_.scale_weight != nullptr && snap.connected) {
+          char wb[16];
+          std::snprintf(wb, sizeof(wb), "%.1f g",
+                        static_cast<double>(snap.weight_g - bsnap.start_weight_g));
+          lv_label_set_text(home_.scale_weight, wb);
+          last_weight_g_ = -10000.0f;
+        }
+      }
+    }
+    // The stop-early flash must not outlive the shot it belongs to: the user
+    // already flipped the paddle (that's what ended it) — kill any remaining
+    // pulses the moment the phase leaves kBrewing.
+    if (shot_phase_ == core::ShotPhase::kBrewing &&
+        bsnap.phase != core::ShotPhase::kBrewing) {
+      ui::cancel_stop_flash(home_);
     }
     shot_phase_ = bsnap.phase;
     // Hold until the post-tare baseline is confirmed (the tare window's readings
@@ -1155,6 +1251,9 @@ void App::pump_scale_chart() {
       ui::shot_plot_tick(home_, snap);
     } else {
       ui::flow_graph_tick(home_, snap);
+      // Unwired: keep the always-on capture ring fed alongside the live sweep —
+      // a detected shot's samples must already exist when review replays them.
+      if (have_brew && !bsnap.paddle_wired) ui::unwired_ring_tick(home_, snap);
     }
   }
 
@@ -1177,7 +1276,9 @@ void App::pump_scale_chart() {
 
   // Shot timer: continuous (ms) value, so redraw on a fixed ~10 Hz cadence that
   // matches its 0.1 s display resolution — faster would render invisible changes.
-  if (have_brew && bsnap.available && home_.shot_timer_label != nullptr) {
+  // Only while the ESP timer is the source (core::esp_shot_timer, shared with
+  // update_home — unwired with detection off shows the scale's own timer).
+  if (have_brew && core::esp_shot_timer(bsnap) && home_.shot_timer_label != nullptr) {
     const uint32_t t = lv_tick_get();
     if (t - scale_readout_tick_ >= 100) {
       scale_readout_tick_ = t;
@@ -1237,13 +1338,13 @@ lv_obj_t* App::open_modal(const char* title, const char* body) {
   lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(card, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_all(card, 14, 0);
-  lv_obj_set_style_pad_row(card, 10, 0);
+  lv_obj_set_style_pad_all(card, ui::dp(14), 0);
+  lv_obj_set_style_pad_row(card, ui::dp(10), 0);
 
   lv_obj_t* t = lv_label_create(card);
   lv_label_set_text(t, title);
   lv_obj_set_style_text_color(t, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(t, &lv_font_montserrat_20, 0);
+  lv_obj_set_style_text_font(t, ui::font_dp(20), 0);
 
   lv_obj_t* b = lv_label_create(card);
   lv_label_set_text(b, body);
@@ -1251,7 +1352,7 @@ lv_obj_t* App::open_modal(const char* title, const char* body) {
   lv_label_set_long_mode(b, LV_LABEL_LONG_WRAP);
   lv_obj_set_style_text_align(b, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_text_color(b, lv_color_hex(ui::theme::muted()), 0);
-  lv_obj_set_style_text_font(b, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_font(b, ui::font_dp(14), 0);
   return card;
 }
 
@@ -1269,7 +1370,7 @@ void App::close_modal() {
 void App::show_pairing_modal() {
   lv_obj_t* card = open_modal("Pairing", "Reading the token from the machine...");
   lv_obj_t* spinner = lv_spinner_create(card);
-  lv_obj_set_size(spinner, 44, 44);
+  lv_obj_set_size(spinner, ui::dp(44), ui::dp(44));
   lv_obj_set_style_arc_color(spinner, lv_color_hex(ui::theme::rail()), LV_PART_MAIN);
   lv_obj_set_style_arc_color(spinner, lv_color_hex(ui::theme::accent()), LV_PART_INDICATOR);
   lv_spinner_set_anim_params(spinner, 1000, 60);
@@ -1486,8 +1587,24 @@ void App::update_stats_view() {
 
     // Battery runtime is computed (throttled, ~10-min average) in
     // update_battery_runtime; just display the cached string here.
+    // Uptime is time-since-boot off the LVGL tick (wraps at ~49 days).
+    char up[20];
+    const uint32_t up_s = lv_tick_get() / 1000u;
+    if (up_s >= 86400u)
+      std::snprintf(up, sizeof(up), "%ud %uh", static_cast<unsigned>(up_s / 86400u),
+                    static_cast<unsigned>(up_s % 86400u / 3600u));
+    else if (up_s >= 3600u)
+      std::snprintf(up, sizeof(up), "%uh %um", static_cast<unsigned>(up_s / 3600u),
+                    static_cast<unsigned>(up_s % 3600u / 60u));
+    else if (up_s >= 60u)
+      std::snprintf(up, sizeof(up), "%um %us", static_cast<unsigned>(up_s / 60u),
+                    static_cast<unsigned>(up_s % 60u));
+    else
+      std::snprintf(up, sizeof(up), "%us", static_cast<unsigned>(up_s));
+
     const char* vals[kStatsInfoRows] = {rfw,
                                         batt_runtime_text_,
+                                        up,
                                         snap.manufacturer,
                                         snap.model,
                                         snap.serial,
@@ -1637,6 +1754,7 @@ void App::update_settings_view() {
     std::snprintf(buf, sizeof(buf), "%s   %d dBm", results[i].name, results[i].rssi);
     lv_label_set_text(lbl, buf);
     lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(lbl, ui::font_dp(14), 0);
     lv_obj_center(lbl);
   }
 }
@@ -1705,6 +1823,7 @@ void App::update_scale_view() {
     std::snprintf(buf, sizeof(buf), "%s   %d dBm", results[i].name, results[i].rssi);
     lv_label_set_text(lbl, buf);
     lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(lbl, ui::font_dp(14), 0);
     lv_obj_center(lbl);
   }
   set_target_label(settings_);
