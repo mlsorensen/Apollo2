@@ -42,6 +42,15 @@
   a { color: var(--accent); }
   code { background: var(--rail); border-radius: 4px; padding: 1px 6px; }
   footer { margin-top: 48px; color: var(--muted); font-size: 0.85rem; }
+  .verbar {
+    display: flex; align-items: center; gap: 10px; margin: 20px 0 8px;
+    flex-wrap: wrap;
+  }
+  .verbar select {
+    background: var(--rail); color: var(--text); border: 1px solid #2c3542;
+    border-radius: 8px; padding: 6px 10px; font-size: 0.95rem;
+  }
+  #oldwarn { color: #e6b04c; font-size: 0.9rem; }
 </style>
 </head>
 <body>
@@ -56,8 +65,15 @@
 
   <div class="note">
     Flashing happens right here in the browser — no tools to install.
-    <b>Requires Chrome or Edge on a computer</b> (Web Serial isn't available on
-    phones or in Safari/Firefox), and a <b>USB data cable</b> (not charge-only).
+    <b>Requires a computer</b> running Chrome, Edge, or a recent Firefox
+    (phones and Safari don't support Web Serial), and a
+    <b>USB data cable</b> (not charge-only).
+  </div>
+
+  <div class="verbar">
+    <label for="version">Firmware version:</label>
+    <select id="version"><option>loading…</option></select>
+    <span id="oldwarn" hidden>&#9888; older release — latest is <span id="latestver"></span></span>
   </div>
 
   <ol>
@@ -73,7 +89,7 @@
       <div class="name">ESP32-S3-Touch-LCD-2</div>
       <div class="desc">2.0&quot; 240&times;320 &mdash; the portable, battery-friendly one. Single USB-C port.</div>
     </div>
-    <esp-web-install-button manifest="manifests/s3-touch-lcd-2.json"></esp-web-install-button>
+    <esp-web-install-button data-board="s3-touch-lcd-2"></esp-web-install-button>
   </div>
 
   <div class="board">
@@ -81,7 +97,7 @@
       <div class="name">ESP32-S3-Touch-LCD-4.3B</div>
       <div class="desc">4.3&quot; 800&times;480. Single USB-C port.</div>
     </div>
-    <esp-web-install-button manifest="manifests/s3-touch-lcd-4.3b.json"></esp-web-install-button>
+    <esp-web-install-button data-board="s3-touch-lcd-4.3b"></esp-web-install-button>
   </div>
 
   <div class="board">
@@ -89,7 +105,7 @@
       <div class="name">ESP32-S3-Touch-LCD-4.3C</div>
       <div class="desc">4.3&quot; 800&times;480 with dimmable backlight + battery monitoring. Single USB-C port.</div>
     </div>
-    <esp-web-install-button manifest="manifests/s3-touch-lcd-4.3c.json"></esp-web-install-button>
+    <esp-web-install-button data-board="s3-touch-lcd-4.3c"></esp-web-install-button>
   </div>
 
   <div class="board">
@@ -97,7 +113,7 @@
       <div class="name">ESP32-S3-Touch-LCD-7B</div>
       <div class="desc">7&quot; 1024&times;600. Two USB-C ports &mdash; use the one labeled <b>UART</b>.</div>
     </div>
-    <esp-web-install-button manifest="manifests/s3-touch-lcd-7b.json"></esp-web-install-button>
+    <esp-web-install-button data-board="s3-touch-lcd-7b"></esp-web-install-button>
   </div>
 
   <div class="board">
@@ -105,7 +121,7 @@
       <div class="name">ESP32-P4-WIFI6-Touch-LCD-4.3</div>
       <div class="desc">4.3&quot; 800&times;480, ESP32-P4 + WiFi 6. Two USB-C ports &mdash; use the one labeled <b>UART</b>.</div>
     </div>
-    <esp-web-install-button manifest="manifests/p4-wifi6-touch-lcd-4.3.json"></esp-web-install-button>
+    <esp-web-install-button data-board="p4-wifi6-touch-lcd-4.3"></esp-web-install-button>
   </div>
 
   <div class="board">
@@ -113,7 +129,7 @@
       <div class="name">ESP32-P4-WIFI6-Touch-LCD-5</div>
       <div class="desc">5&quot; 1280&times;720, ESP32-P4 + WiFi 6. Two USB-C ports &mdash; use the one labeled <b>UART</b>.</div>
     </div>
-    <esp-web-install-button manifest="manifests/p4-wifi6-touch-lcd-5.json"></esp-web-install-button>
+    <esp-web-install-button data-board="p4-wifi6-touch-lcd-5"></esp-web-install-button>
   </div>
 
   <h2>After flashing</h2>
@@ -145,9 +161,35 @@
   </footer>
 </main>
 <script>
-  if (window.APOLLO2_VERSION) {
-    document.getElementById('ver').textContent = window.APOLLO2_VERSION;
+  // version.js (written at deploy) names the newest release; releases.json
+  // lists every version directory kept on this site, newest first. The
+  // install dialog itself also shows the manifest's version before flashing.
+  const sel = document.getElementById('version');
+  const badge = document.getElementById('ver');
+  const warn = document.getElementById('oldwarn');
+  let latest = window.APOLLO2_VERSION || '';
+
+  function apply(version) {
+    document.querySelectorAll('esp-web-install-button').forEach((b) => {
+      b.setAttribute('manifest', `${version}/manifests/${b.dataset.board}.json`);
+    });
+    badge.textContent = version;
+    warn.hidden = version === latest;
   }
+
+  if (latest) {
+    sel.innerHTML = `<option value="${latest}">${latest} (latest)</option>`;
+    apply(latest);
+  }
+  fetch('releases.json').then((r) => r.json()).then((versions) => {
+    latest = versions[0];
+    document.getElementById('latestver').textContent = latest;
+    sel.innerHTML = versions.map((v, i) =>
+      `<option value="${v}">${v}${i === 0 ? ' (latest)' : ''}</option>`).join('');
+    sel.value = latest;
+    apply(latest);
+  }).catch(() => {});
+  sel.addEventListener('change', () => apply(sel.value));
 </script>
 </body>
 </html>
