@@ -218,21 +218,49 @@ const uint16_t* g_dma_src = nullptr;
 size_t g_dma_bytes = 0;
 
 volatile bool g_dma_ok = false;        // last kicked copy actually queued
+volatile esp_err_t g_dma_err = ESP_OK; // why the last kick failed (diagnosis)
+SemaphoreHandle_t g_dma_chunk_sem = nullptr;  // per-chunk completion (ISR -> task)
 
-bool dma_done_cb(async_memcpy_handle_t, async_memcpy_event_t*, void*) {
+bool dma_chunk_done_cb(async_memcpy_handle_t, async_memcpy_event_t*, void*) {
   BaseType_t woken = pdFALSE;
-  xSemaphoreGiveFromISR(g_dma_done_sem, &woken);
+  xSemaphoreGiveFromISR(g_dma_chunk_sem, &woken);
   return woken == pdTRUE;
 }
 
 void dma_copy_task(void*) {
   for (;;) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);  // refresh ISR: boundary passed
-    g_dma_ok = esp_async_memcpy(g_mcp, g_dma_dst, const_cast<uint16_t*>(g_dma_src),
-                                g_dma_bytes, dma_done_cb, nullptr) == ESP_OK;
-    // On a queue failure (should not happen with the backlog headroom) unblock
-    // the waiter, which sees !g_dma_ok and does the CPU copy itself.
-    if (!g_dma_ok) xSemaphoreGive(g_dma_done_sem);
+    // Chunked kicks: the driver allocates its descriptor list per call from
+    // internal DMA heap, ~1/64th of the copy size for TX plus the same for RX
+    // — a full-frame dirty box (~1.5MB on the 5") wants ~23KB x2 CONTIGUOUS,
+    // which the fragmented runtime heap reliably lacks (measured: largest free
+    // block ~31KB mid-scroll -> ESP_ERR_NO_MEM on every full-screen frame,
+    // CPU fallback each time). ~128KB ops keep each transient list ~2KB.
+    // Serialized chunks still run at DMA speed, overlapped with LVGL's render.
+    constexpr size_t kChunkBytes = 128 * 1024;
+    xSemaphoreTake(g_dma_chunk_sem, 0);  // drain a stale completion
+    const uint8_t* src = reinterpret_cast<const uint8_t*>(g_dma_src);
+    uint8_t* dst = reinterpret_cast<uint8_t*>(g_dma_dst);
+    size_t left = g_dma_bytes;
+    g_dma_err = ESP_OK;
+    while (left > 0) {
+      const size_t n = left < kChunkBytes ? left : kChunkBytes;
+      g_dma_err = esp_async_memcpy(g_mcp, dst, const_cast<uint8_t*>(src), n,
+                                   dma_chunk_done_cb, nullptr);
+      if (g_dma_err != ESP_OK) break;
+      if (xSemaphoreTake(g_dma_chunk_sem, pdMS_TO_TICKS(100)) != pdTRUE) {
+        g_dma_err = ESP_ERR_TIMEOUT;
+        break;
+      }
+      src += n;
+      dst += n;
+      left -= n;
+    }
+    g_dma_ok = g_dma_err == ESP_OK;
+    // Success or failure, unblock the waiter; on failure it sees !g_dma_ok and
+    // does the CPU copy itself (a partial chunked copy is harmless — the
+    // fallback rewrites the whole box).
+    xSemaphoreGive(g_dma_done_sem);
   }
 }
 
@@ -248,9 +276,23 @@ void dsi_sync_back_buffer() {
       return;
     }
     // Timeout or queue failure (transient descriptor-alloc no-mem under heap
-    // contention — routine, self-healing): fall through to the CPU copy
-    // (correct either way — the front buffer is stable until the next present).
-    Serial.println("DSI: DMA sync missed — CPU copy fallback");
+    // contention): fall through to the CPU copy (correct either way — the
+    // front buffer is stable until the next present). Rate-limited diagnosis:
+    // the blocking UART write alone costs ms/frame when this fires every frame.
+    static uint32_t miss_count = 0, last_report_ms = 0;
+    ++miss_count;
+    const uint32_t now = millis();
+    if (now - last_report_ms >= 1000) {
+      Serial.printf("DSI: DMA sync missed x%u — err=%s bytes=%u free=%u largest=%u\n",
+                    static_cast<unsigned>(miss_count),
+                    g_dma_ok ? "TIMEOUT" : esp_err_to_name(g_dma_err),
+                    static_cast<unsigned>(g_dma_bytes),
+                    static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)),
+                    static_cast<unsigned>(
+                        heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)));
+      last_report_ms = now;
+      miss_count = 0;
+    }
   }
   // The flip is latched at the frame boundary; make sure one has passed so the
   // buffer we're about to write is genuinely off-glass.
@@ -486,6 +528,7 @@ bool Display::begin() {
   // DMA-overlapped dirty sync (see the g_mcp comment block). AXI backend —
   // the P4 GDMA flavor that reaches PSRAM.
   g_dma_done_sem = xSemaphoreCreateBinary();
+  g_dma_chunk_sem = xSemaphoreCreateBinary();
   async_memcpy_config_t mcp_cfg = {};
   mcp_cfg.backlog = 4;
   mcp_cfg.dma_burst_size = 64;
@@ -494,10 +537,11 @@ bool Display::begin() {
     Serial.println("DSI: DMA-overlapped dirty sync enabled");
     // The driver allocates its descriptor list per transaction from internal
     // heap; under momentary contention that alloc fails and it error-logs.
-    // We fall back to the CPU copy for that frame (logged above) — routine and
-    // self-healing, so silence the driver's own per-occurrence spam.
-    esp_log_level_set("gdma-link", ESP_LOG_NONE);
-    esp_log_level_set("async_mcp.gdma", ESP_LOG_NONE);
+    // We fall back to the CPU copy for that frame (logged above).
+    // DIAGNOSIS ROUND (was ESP_LOG_NONE): full-screen scrolls report a miss
+    // every frame — let the driver say why before we silence it again.
+    esp_log_level_set("gdma-link", ESP_LOG_ERROR);
+    esp_log_level_set("async_mcp.gdma", ESP_LOG_ERROR);
   } else {
     g_mcp = nullptr;
     Serial.println("DSI: async-memcpy unavailable — CPU dirty sync");
@@ -606,17 +650,30 @@ bool Display::begin() {
   // (esp-hosted), so the S3's "internal buffer starves WiFi" ceiling doesn't
   // apply — but still gate on generous headroom and fall back to PSRAM.
   {
-    const int internal_lines = 120;  // 1280*120*2 = 300KB on the 5"
-    const size_t internal_bytes =
-        static_cast<size_t>(w) * internal_lines * sizeof(lv_color_t);
+    // Take whatever the internal heap can spare rather than demanding a fixed
+    // strip count: even a ~32-line internal buffer measured ~2.5x on render-
+    // bound full-screen work (settings scroll — see the kBufferLines history
+    // note), so a modest buffer is far better than none. Headroom must cover
+    // everything internal that inits after the display (NimBLE-hosted host,
+    // sound DMA, link-task stacks, the setup portal's WebServer) — the LVGL
+    // widget pool is PSRAM (lv_conf.h) and doesn't count.
+    constexpr size_t kHeadroom = 128 * 1024;
+    constexpr int kMinLines = 24;  // below this the per-flush overhead wins
+    const size_t line_bytes = static_cast<size_t>(w) * sizeof(lv_color_t);
     const size_t free_internal = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
-    if (free_internal > internal_bytes + 200 * 1024) {
+    const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
+    size_t budget = free_internal > kHeadroom ? free_internal - kHeadroom : 0;
+    if (budget > largest) budget = largest;
+    int lines = static_cast<int>(budget / line_bytes);
+    if (lines > kBufferLines) lines = kBufferLines;
+    if (lines >= kMinLines) {
+      const size_t internal_bytes = line_bytes * static_cast<size_t>(lines);
       g_draw_buf =
           static_cast<lv_color_t*>(heap_caps_malloc(internal_bytes, MALLOC_CAP_INTERNAL));
       if (g_draw_buf != nullptr) buf_bytes = internal_bytes;
     }
-    Serial.printf("DSI: LVGL draw buffer %s (%u bytes; internal free was %u)\n",
-                  g_draw_buf ? "INTERNAL" : "PSRAM (internal too tight)",
+    Serial.printf("DSI: LVGL draw buffer %s (%d lines, %u bytes; internal free was %u)\n",
+                  g_draw_buf ? "INTERNAL" : "PSRAM (internal too tight)", lines,
                   static_cast<unsigned>(g_draw_buf ? buf_bytes : 0),
                   static_cast<unsigned>(free_internal));
   }
