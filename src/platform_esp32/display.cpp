@@ -16,6 +16,10 @@
 #include <esp_ldo_regulator.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
+#include <soc/soc_caps.h>
+#if SOC_PPA_SUPPORTED
+#include <driver/ppa.h>  // P4 Pixel Processing Accelerator: hardware rotate
+#endif
 #endif
 #if defined(BOARD_HAS_IO_EXTENSION)
 #include <Wire.h>
@@ -186,11 +190,97 @@ SemaphoreHandle_t g_dsi_refresh_sem = nullptr;
 bool g_sync_pending = false;
 int g_sync_r1 = 0, g_sync_r2 = -1;
 
+constexpr size_t kDsiFbBytes =
+    static_cast<size_t>(board::kLcdNativeW) * board::kLcdNativeH * sizeof(uint16_t);
+
+#if SOC_PPA_SUPPORTED
+// P4: the PPA (Pixel Processing Accelerator) does the landscape->portrait
+// rotate AND the dirty-row front->back copy in hardware — both are pure PSRAM
+// pixel traffic, and on the 5" (2.4x the 4.3's pixels) the software versions
+// dominated the frame (~45ms of a ~50ms refresh measured on HW). null =
+// register failed at begin(); every call site falls back to the software path.
+ppa_client_handle_t g_ppa = nullptr;
+
+// One-shot demotion: if an operation the validator accepted at begin() starts
+// failing, drop to software permanently rather than logging per frame.
+void ppa_demote(const char* what, esp_err_t err) {
+  Serial.printf("DSI: PPA %s failed (%d) — falling back to software\n", what, err);
+  g_ppa = nullptr;
+}
+
+// Rotate an LVGL strip (landscape) into the portrait framebuffer — the same
+// mapping as the software loop in dsi_flush_cb: portrait row = landscape x,
+// portrait col = native_w-1 - landscape y. That is a 90° CLOCKWISE rotation;
+// the PPA's angles are counter-clockwise, hence ANGLE_270. The driver does all
+// cache maintenance (writeback of the strip, invalidation of the touched fb
+// rows) itself. NOTE if hardware shows the strip upside-down, the fix is
+// ANGLE_90 here — the geometry below is derivation-verified but not yet
+// HW-verified.
+bool ppa_rotate_strip(const lv_area_t* area, const uint8_t* px_map, uint16_t* fb) {
+  if (g_ppa == nullptr) return false;
+  ppa_srm_oper_config_t o = {};
+  o.in.buffer = px_map;
+  o.in.pic_w = static_cast<uint32_t>(lv_area_get_width(area));
+  o.in.pic_h = static_cast<uint32_t>(lv_area_get_height(area));
+  o.in.block_w = o.in.pic_w;
+  o.in.block_h = o.in.pic_h;
+  o.in.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
+  o.out.buffer = fb;
+  o.out.buffer_size = kDsiFbBytes;  // esp_lcd's DMA buffers are cache-aligned
+  o.out.pic_w = board::kLcdNativeW;
+  o.out.pic_h = board::kLcdNativeH;
+  o.out.block_offset_x = static_cast<uint32_t>(board::kLcdNativeW - 1 - area->y2);
+  o.out.block_offset_y = static_cast<uint32_t>(area->x1);
+  o.out.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
+  o.rotation_angle = PPA_SRM_ROTATION_ANGLE_270;
+  o.scale_x = 1.0f;
+  o.scale_y = 1.0f;
+  o.mode = PPA_TRANS_MODE_BLOCKING;
+  const esp_err_t err = ppa_do_scale_rotate_mirror(g_ppa, &o);
+  if (err != ESP_OK) ppa_demote("rotate", err);
+  return err == ESP_OK;
+}
+
+// Copy full-width portrait rows r1..r2 front->back (the deferred dirty sync)
+// as a 0°, 1:1 SRM — i.e. a DMA blit, replacing the CPU memcpy + writeback.
+bool ppa_copy_rows(const uint16_t* src, uint16_t* dst, int r1, int r2) {
+  if (g_ppa == nullptr) return false;
+  ppa_srm_oper_config_t o = {};
+  o.in.buffer = src;
+  o.in.pic_w = board::kLcdNativeW;
+  o.in.pic_h = board::kLcdNativeH;
+  o.in.block_w = board::kLcdNativeW;
+  o.in.block_h = static_cast<uint32_t>(r2 - r1 + 1);
+  o.in.block_offset_y = static_cast<uint32_t>(r1);
+  o.in.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
+  o.out.buffer = dst;
+  o.out.buffer_size = kDsiFbBytes;
+  o.out.pic_w = board::kLcdNativeW;
+  o.out.pic_h = board::kLcdNativeH;
+  o.out.block_offset_y = static_cast<uint32_t>(r1);
+  o.out.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
+  o.rotation_angle = PPA_SRM_ROTATION_ANGLE_0;
+  o.scale_x = 1.0f;
+  o.scale_y = 1.0f;
+  o.mode = PPA_TRANS_MODE_BLOCKING;
+  const esp_err_t err = ppa_do_scale_rotate_mirror(g_ppa, &o);
+  if (err != ESP_OK) ppa_demote("row copy", err);
+  return err == ESP_OK;
+}
+#endif  // SOC_PPA_SUPPORTED
+
 void dsi_sync_back_buffer() {
   if (!g_sync_pending) return;
   // The flip is latched at the frame boundary; make sure one has passed so the
   // buffer we're about to write is genuinely off-glass.
   xSemaphoreTake(g_dsi_refresh_sem, pdMS_TO_TICKS(50));
+#if SOC_PPA_SUPPORTED
+  if (ppa_copy_rows(g_dsi_fb[g_dsi_back ^ 1], g_dsi_fb[g_dsi_back], g_sync_r1,
+                    g_sync_r2)) {
+    g_sync_pending = false;
+    return;
+  }
+#endif
   const size_t off = static_cast<size_t>(g_sync_r1) * board::kLcdNativeW;
   const size_t bytes = static_cast<size_t>(g_sync_r2 - g_sync_r1 + 1) *
                        board::kLcdNativeW * sizeof(uint16_t);
@@ -221,12 +311,18 @@ void dsi_flush_cb(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map) {
   // the previously presented frame (usually free — see dsi_sync_back_buffer).
   dsi_sync_back_buffer();
   uint16_t* fb = g_dsi_fb[g_dsi_back];
-  for (int j = 0; j < h; ++j) {
-    uint16_t* p = fb + static_cast<size_t>(area->x1) * fbw + (fbw - 1 - (area->y1 + j));
-    const uint16_t* s = src + static_cast<size_t>(j) * w;
-    for (int i = 0; i < w; ++i) {
-      *p = s[i];
-      p += fbw;
+  bool rotated = false;
+#if SOC_PPA_SUPPORTED
+  rotated = ppa_rotate_strip(area, px_map, fb);
+#endif
+  if (!rotated) {
+    for (int j = 0; j < h; ++j) {
+      uint16_t* p = fb + static_cast<size_t>(area->x1) * fbw + (fbw - 1 - (area->y1 + j));
+      const uint16_t* s = src + static_cast<size_t>(j) * w;
+      for (int i = 0; i < w; ++i) {
+        *p = s[i];
+        p += fbw;
+      }
     }
   }
   if (area->x1 < g_dirty_r1) g_dirty_r1 = area->x1;
@@ -358,6 +454,19 @@ bool Display::begin() {
   esp_lcd_dpi_panel_event_callbacks_t cbs = {};
   cbs.on_refresh_done = dsi_refresh_done_cb;
   esp_lcd_dpi_panel_register_event_callbacks(g_dpi_panel, &cbs, nullptr);
+
+#if SOC_PPA_SUPPORTED
+  {
+    ppa_client_config_t ppa_cfg = {};
+    ppa_cfg.oper_type = PPA_OPERATION_SRM;
+    if (ppa_register_client(&ppa_cfg, &g_ppa) == ESP_OK) {
+      Serial.println("DSI: PPA hardware rotate/blit enabled");
+    } else {
+      g_ppa = nullptr;
+      Serial.println("DSI: PPA unavailable — software rotate");
+    }
+  }
+#endif
 
   Serial.printf("DSI: panel up %dx%d, double-buffered\n", board::kLcdNativeH,
                 board::kLcdNativeW);
