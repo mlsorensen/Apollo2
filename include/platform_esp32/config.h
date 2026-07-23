@@ -35,9 +35,9 @@ class Config {
   void set_overshoot_g(float grams);
   int review_hold_s() const;           // shot-review linger before auto-reset (default 30)
   void set_review_hold_s(int seconds);
-  bool auto_connect() const;           // connect to the saved Micra at boot (default false)
+  bool auto_connect() const;           // connect to the saved Micra at boot (default true)
   void set_auto_connect(bool on);
-  bool wired_paddle() const;           // paddle harness in use (default true; only
+  bool wired_paddle() const;           // paddle harness in use (default false; only
   void set_wired_paddle(bool on);      // meaningful on boards with the hardware)
   int flush_s() const;                 // post-shot auto-flush seconds (0 = off; default 0)
   void set_flush_s(int seconds);

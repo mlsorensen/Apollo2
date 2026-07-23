@@ -167,7 +167,7 @@ void make_inline_stepper(lv_obj_t* row, const lv_font_t* text_font,
 
 // Device rows: Brightness + clock (Hour/Minute) + 24-hour + Fahrenheit + Theme.
 void build_device_rows(lv_obj_t* page, const lv_font_t* text_font,
-                       const lv_font_t* symbol_font, int btn_size,
+                       const lv_font_t* symbol_font, int btn_size, bool compact,
                        bool with_brightness, bool with_sound,
                        ui::SettingsWidgets& out) {
   // Brightness only where the backlight can dim; else the row is omitted and the
@@ -281,6 +281,17 @@ void build_device_rows(lv_obj_t* page, const lv_font_t* text_font,
   }
   lv_dropdown_set_options(out.tz_dropdown, opts.c_str());
   lv_obj_set_style_text_font(out.tz_dropdown, text_font, 0);
+  // The dropdown's default width comes from LVGL's DPI constant (not dp-scaled)
+  // — on the scaled 5" the selected label ran under the arrow. Size it for the
+  // widest label ("Athens / Helsinki") at this tier's font.
+  lv_obj_set_width(out.tz_dropdown, ui::dp(compact ? 170 : 240));
+  // The popup LIST is a separate object that does NOT inherit the button's
+  // style — unstyled it renders at the 14px default (tiny at 1.5x). Give it
+  // the tier font and enough height that a good stretch of zones shows.
+  if (lv_obj_t* tz_list = lv_dropdown_get_list(out.tz_dropdown)) {
+    lv_obj_set_style_text_font(tz_list, text_font, 0);
+    lv_obj_set_style_max_height(tz_list, ui::dp(compact ? 180 : 360), 0);
+  }
 
   lv_obj_t* rnt = make_setting_row(page, "Auto time (NTP)", text_font);
   out.ntp_switch = lv_switch_create(rnt);
@@ -422,8 +433,9 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
                          &out.status, &out.list, "Tap Scan to find your machine");
   // Micra > Settings: connection behavior + brew + steam boiler
   {
-    // Connect to the saved machine at power-up. Off by default: a connected
-    // remote occupies the Micra's single BLE slot.
+    // Connect to the saved machine at power-up. ON by default (the natural
+    // expectation for a dedicated remote); turn off when another controller
+    // needs the Micra's single BLE slot.
     lv_obj_t* ra = make_setting_row(out.micra_settings_page, "Auto connect", font);
     out.auto_connect_switch = lv_switch_create(ra);
     lv_obj_set_size(out.auto_connect_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
@@ -500,7 +512,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   }
 
   // Device (leaf)
-  build_device_rows(out.device_page, font, symbol_font, btn_size, with_brightness,
+  build_device_rows(out.device_page, font, symbol_font, btn_size, compact, with_brightness,
                     with_sound, out);
 
   // --- Chooser pages: Bluetooth | Settings under each device ---------------
