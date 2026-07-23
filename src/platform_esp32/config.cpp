@@ -152,8 +152,8 @@ void Config::set_flow_smooth(int level) {
 
 bool Config::auto_connect() const {
   Preferences p;
-  if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
-  const bool v = p.isKey(kAutoConnectKey) ? p.getBool(kAutoConnectKey, false) : false;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return true;
+  const bool v = p.isKey(kAutoConnectKey) ? p.getBool(kAutoConnectKey, true) : true;
   p.end();
   return v;
 }
@@ -167,8 +167,8 @@ void Config::set_auto_connect(bool on) {
 
 bool Config::wired_paddle() const {
   Preferences p;
-  if (!p.begin(kNamespace, /*readOnly=*/true)) return true;
-  const bool v = p.isKey(kWiredPaddleKey) ? p.getBool(kWiredPaddleKey, true) : true;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
+  const bool v = p.isKey(kWiredPaddleKey) ? p.getBool(kWiredPaddleKey, false) : false;
   p.end();
   return v;
 }

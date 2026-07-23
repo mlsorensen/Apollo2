@@ -47,7 +47,10 @@ class FakeBrewController : public core::IBrewController {
 
  private:
   bool paddle_hw_ = true;  // board has the paddle harness (wired-capable)
-  bool wired_ = true;      // the "Wired paddle" user setting
+  bool wired_ = true;      // the "Wired paddle" user setting. NOTE: the DEVICE
+                           // default is now OFF (Config::wired_paddle); the sim
+                           // keeps true so the standard renders show the wired
+                           // look (main.cpp toggles it for the unwired render)
   bool paddle_ = false;
   bool brewing_ = false;
   bool shot_mode_ = true;

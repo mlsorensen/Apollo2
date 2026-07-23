@@ -128,6 +128,8 @@ int main() {
   ok &= r(p5, "renders/micra_bt_1280x720.png", 1, ui::kSectionMicraBt);
   ok &= r(p5, "renders/device_1280x720.png", 1, ui::kSectionDevice);
   ok &= r(p5, "renders/stats_brew_1280x720.png", 2, -1, false, 0, ui::kStatsBrew);
+  // Token modal over Home (modal over Settings hits a known LVGL draw loop).
+  ok &= r(p5, "renders/token_modal_1280x720.png", 0, -1, true);
   scale_provisioner.set_saved(false);
   ok &= r(p5, "renders/home_noscale_1280x720.png");
   scale_provisioner.set_saved(true);

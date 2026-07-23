@@ -85,7 +85,9 @@ class BrewController : public IBrewController {
 
   ShotPhase phase_ = ShotPhase::kIdle;
   bool shot_mode_ = true;
-  bool wired_paddle_ = true;  // user setting; effective only with paddle hardware
+  bool wired_paddle_ = false;  // user setting; effective only with paddle hardware
+                               // (default OFF — a fresh device must not relay the
+                               // line until the user says the harness is wired)
   bool stop_hint_ = false;    // unwired: manual-stop point reached (see BrewSnapshot)
   uint8_t stop_hint_over_ = 0;   // consecutive scale updates past the hint threshold
   uint32_t stop_hint_seq_ = 0;   // last scale update judged (one vote per notify)

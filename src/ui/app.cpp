@@ -1341,10 +1341,13 @@ lv_obj_t* App::open_modal(const char* title, const char* body) {
   lv_obj_set_style_pad_all(card, ui::dp(14), 0);
   lv_obj_set_style_pad_row(card, ui::dp(10), 0);
 
+  // Larger faces on the non-compact tiers: the WiFi/token instructions carry
+  // an SSID + URL the user has to read across the room while holding a phone.
+  const bool modal_compact = is_compact(screen_);
   lv_obj_t* t = lv_label_create(card);
   lv_label_set_text(t, title);
   lv_obj_set_style_text_color(t, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(t, ui::font_dp(20), 0);
+  lv_obj_set_style_text_font(t, ui::font_dp(modal_compact ? 20 : 24), 0);
 
   lv_obj_t* b = lv_label_create(card);
   lv_label_set_text(b, body);
@@ -1352,7 +1355,7 @@ lv_obj_t* App::open_modal(const char* title, const char* body) {
   lv_label_set_long_mode(b, LV_LABEL_LONG_WRAP);
   lv_obj_set_style_text_align(b, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_text_color(b, lv_color_hex(ui::theme::muted()), 0);
-  lv_obj_set_style_text_font(b, ui::font_dp(14), 0);
+  lv_obj_set_style_text_font(b, ui::font_dp(modal_compact ? 14 : 16), 0);
   return card;
 }
 

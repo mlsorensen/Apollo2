@@ -31,7 +31,7 @@ class FakeProvisioner : public core::IProvisioner {
 
  private:
   bool connect_enabled_ = true;
-  bool auto_connect_ = false;
+  bool auto_connect_ = true;  // mirrors the device default (Config::auto_connect)
 };
 
 }  // namespace host
