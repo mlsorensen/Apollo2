@@ -1470,8 +1470,7 @@ void App::cancel_wifi_setup() {
 
 void App::forget_wifi() {
   if (network_ != nullptr) network_->forget();
-  lv_obj_remove_state(settings_.wifi_switch, LV_STATE_CHECKED);
-  update_settings_view();
+  update_settings_view();  // syncs the enable switch off too
 }
 
 void App::timezone_select(int index) {
@@ -1680,6 +1679,16 @@ void App::update_settings_view() {
 
   // WiFi status line (Device page): reflect the live connection state.
   if (network_ != nullptr && settings_.wifi_status != nullptr) {
+    // The enable switch can change behind the UI's back: the setup portal
+    // turns WiFi on when credentials are saved. Sync it here (guarded — a
+    // programmatic state change fires no VALUE_CHANGED, so no feedback loop).
+    if (settings_.wifi_switch != nullptr) {
+      const bool en = network_->enabled();
+      if (en != lv_obj_has_state(settings_.wifi_switch, LV_STATE_CHECKED)) {
+        if (en) lv_obj_add_state(settings_.wifi_switch, LV_STATE_CHECKED);
+        else lv_obj_remove_state(settings_.wifi_switch, LV_STATE_CHECKED);
+      }
+    }
     char buf[64];
     uint32_t color = ui::theme::muted();
     switch (network_->status()) {
@@ -1698,8 +1707,8 @@ void App::update_settings_view() {
         color = ui::theme::alert();
         break;
     }
-    lv_label_set_text(settings_.wifi_status, buf);
-    lv_obj_set_style_text_color(settings_.wifi_status, lv_color_hex(color), 0);
+    ui::set_text(settings_.wifi_status, buf);
+    ui::set_text_color(settings_.wifi_status, color);
   }
 
   if (provisioner_ == nullptr) return;
@@ -1711,16 +1720,15 @@ void App::update_settings_view() {
     lv_obj_add_flag(settings_.saved_row, LV_OBJ_FLAG_HIDDEN);
   } else {
     lv_obj_remove_flag(settings_.saved_row, LV_OBJ_FLAG_HIDDEN);
-    lv_label_set_text(settings_.saved_label, saved.c_str());
+    ui::set_text(settings_.saved_label, saved.c_str());
     const bool tokened = provisioner_->has_token();
     if (tokened) {
       lv_obj_add_flag(settings_.setup_btn, LV_OBJ_FLAG_HIDDEN);
       lv_obj_remove_flag(settings_.connect_btn, LV_OBJ_FLAG_HIDDEN);
       const bool on = provisioner_->connect_enabled();
-      lv_label_set_text(settings_.connect_label, on ? "Disconnect" : "Connect");
-      lv_obj_set_style_bg_color(
-          settings_.connect_btn,
-          lv_color_hex(on ? ui::theme::rail() : ui::theme::accent()), 0);
+      ui::set_text(settings_.connect_label, on ? "Disconnect" : "Connect");
+      ui::set_bg_color(settings_.connect_btn,
+                       on ? ui::theme::rail() : ui::theme::accent());
     } else {
       lv_obj_remove_flag(settings_.setup_btn, LV_OBJ_FLAG_HIDDEN);
       lv_obj_add_flag(settings_.connect_btn, LV_OBJ_FLAG_HIDDEN);
@@ -1733,11 +1741,11 @@ void App::update_settings_view() {
   const int count = static_cast<int>(results.size());
 
   if (scanning) {
-    lv_label_set_text(settings_.status, "Scanning...");
+    ui::set_text(settings_.status, "Scanning...");
   } else if (count == 0) {
-    lv_label_set_text(settings_.status, "Tap Scan to find your machine");
+    ui::set_text(settings_.status, "Tap Scan to find your machine");
   } else {
-    lv_label_set_text(settings_.status, "Tap a machine to save it");
+    ui::set_text(settings_.status, "Tap a machine to save it");
   }
 
   // Only rebuild the row list when results actually change (avoids flicker).
@@ -1788,13 +1796,12 @@ void App::update_scale_view() {
     lv_obj_add_flag(settings_.scale_saved_row, LV_OBJ_FLAG_HIDDEN);
   } else {
     lv_obj_remove_flag(settings_.scale_saved_row, LV_OBJ_FLAG_HIDDEN);
-    lv_label_set_text(settings_.scale_saved_label, saved.c_str());
+    ui::set_text(settings_.scale_saved_label, saved.c_str());
     lv_obj_remove_flag(settings_.scale_connect_btn, LV_OBJ_FLAG_HIDDEN);
     const bool on = scale_provisioner_->connect_enabled();
-    lv_label_set_text(settings_.scale_connect_label, on ? "Disconnect" : "Connect");
-    lv_obj_set_style_bg_color(
-        settings_.scale_connect_btn,
-        lv_color_hex(on ? ui::theme::rail() : ui::theme::accent()), 0);
+    ui::set_text(settings_.scale_connect_label, on ? "Disconnect" : "Connect");
+    ui::set_bg_color(settings_.scale_connect_btn,
+                     on ? ui::theme::rail() : ui::theme::accent());
   }
 
   const bool scanning = scale_provisioner_->scanning();
@@ -1802,11 +1809,11 @@ void App::update_scale_view() {
   const int count = static_cast<int>(results.size());
 
   if (scanning) {
-    lv_label_set_text(settings_.scale_status, "Scanning...");
+    ui::set_text(settings_.scale_status, "Scanning...");
   } else if (count == 0) {
-    lv_label_set_text(settings_.scale_status, "Tap Scan to find your scale");
+    ui::set_text(settings_.scale_status, "Tap Scan to find your scale");
   } else {
-    lv_label_set_text(settings_.scale_status, "Tap a scale to save it");
+    ui::set_text(settings_.scale_status, "Tap a scale to save it");
   }
 
   if (count == settings_.scale_last_count && scanning == settings_.scale_last_scanning)

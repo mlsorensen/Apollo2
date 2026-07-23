@@ -36,6 +36,14 @@
 #define LV_MEM_SIZE (16 * 1024 * 1024)
 #endif
 
+// NOTE (tried + reverted, 2026-07-23): LV_USE_OS=FREERTOS + 2 sw draw units on
+// the P4. No measured render gain — the draw buffer is PSRAM (internal is too
+// fragmented at display init for the adaptive gate in display.cpp to land),
+// so rendering is PSRAM-bus-bound and a second core just contends for the same
+// bus. It also breaks the perf overlay's CPU% (waiting-for-workers counts as
+// refr-timer busy time -> reads 100% everywhere) and costs 2x8KB internal
+// stacks. Only worth retrying if the draw buffer ever moves to internal RAM.
+
 // Quiet by default; flip to 1 with LV_LOG_LEVEL while debugging.
 #define LV_USE_LOG 0
 
