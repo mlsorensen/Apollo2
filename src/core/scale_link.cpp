@@ -60,6 +60,7 @@ void ScaleLink::on_battery(int pct) {
 
 void ScaleLink::run() {
   bool connected = false;
+  bool retare = false;  // second tare send armed (see the tare block below)
   for (;;) {
     if (scan_requested_.exchange(false)) do_scan();  // works in any state
 
@@ -93,6 +94,8 @@ void ScaleLink::run() {
     }
 
     if (!connected) {
+      retare = false;  // a resend never crosses a link drop: taring whatever
+                       // sits on a freshly relinked scale could zero a mid-shot cup
       if (!do_connect(addr)) {
         set_connected(false);
         sleep_ms(kReconnectBackoffMs);
@@ -109,7 +112,17 @@ void ScaleLink::run() {
       continue;
     }
 
-    if (pending_tare_.exchange(false) && drv) drv->tare(ble_);
+    // Every tare is sent twice, one pass (~100ms) apart: the Lunar drops a
+    // lone tare ~5% of the time (write acked, command ignored — a known
+    // Acaia trait), and taring an undisturbed scale twice is a no-op, so the
+    // resend costs nothing on scales that don't need it.
+    if (pending_tare_.exchange(false) && drv) {
+      drv->tare(ble_);
+      retare = true;
+    } else if (retare && drv) {
+      retare = false;
+      drv->tare(ble_);
+    }
 
     // Driver housekeeping: heartbeats, stream watchdogs. false = link is dead.
     if (drv && !drv->tick(ble_)) {
