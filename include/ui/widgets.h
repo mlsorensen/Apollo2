@@ -35,4 +35,16 @@ lv_obj_t* make_step_button(lv_obj_t* parent, const char* symbol, int size,
 // the UI uses (every design size is in the compiled-in set).
 const lv_font_t* font_dp(int px);
 
+// Change-detecting setters for the periodic update paths. LVGL's setters
+// invalidate UNCONDITIONALLY — lv_label_set_text reallocs + invalidates even
+// for identical text, and style sets mark a refresh even for the same value.
+// The 2Hz App::refresh() re-sets dozens of Home widgets; on the S3's software
+// renderer the resulting no-op invalidations doubled every ~500ms render pass
+// (~130ms vs ~60ms — the visible scroll-graph "pumping", profiled 2026-07).
+// These skip the set when nothing changed. Null-safe (no-op on null).
+void set_text(lv_obj_t* label, const char* text);
+void set_bg_color(lv_obj_t* obj, uint32_t hex);
+void set_text_color(lv_obj_t* obj, uint32_t hex);
+void set_border_color(lv_obj_t* obj, uint32_t hex);
+
 }  // namespace ui

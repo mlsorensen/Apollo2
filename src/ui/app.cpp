@@ -864,24 +864,24 @@ void App::sync_home_setpoints(bool connected) {
   const bool panel = home_.micra_status_label != nullptr;
   char b[16];
   if (!connected) {
-    lv_label_set_text(home_.brew_set, "--");
+    ui::set_text(home_.brew_set, "--");
   } else if (panel) {
     std::snprintf(b, sizeof(b), "%.1f°", ui::temp_disp(settings_.brew_target, f));
-    lv_label_set_text(home_.brew_set, b);
+    ui::set_text(home_.brew_set, b);
   } else {
     std::snprintf(b, sizeof(b), "%.1f %s", ui::temp_disp(settings_.brew_target, f),
                   ui::temp_unit(f));
-    lv_label_set_text(home_.brew_set, b);
+    ui::set_text(home_.brew_set, b);
   }
   if (!connected) {
-    lv_label_set_text(home_.boiler_set, "--");
+    ui::set_text(home_.boiler_set, "--");
   } else if (!steam) {
-    lv_label_set_text(home_.boiler_set, "Off");
+    ui::set_text(home_.boiler_set, "Off");
   } else {
     std::snprintf(b, sizeof(b), panel ? "%.0f°" : "%.0f %s",
                   ui::temp_disp(core::kSteamLevelsC[settings_.boiler_level], f),
                   ui::temp_unit(f));
-    lv_label_set_text(home_.boiler_set, b);
+    ui::set_text(home_.boiler_set, b);
   }
 
   set_clickable(home_.brew_minus, connected && brew_can_dec(settings_));

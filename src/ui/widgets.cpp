@@ -1,5 +1,6 @@
 #include "ui/widgets.h"
 
+#include <cstring>
 #include <utility>
 
 #include "ui/screen.h"
@@ -53,6 +54,34 @@ const lv_font_t* font_dp(int px) {
     if ((d < 0 ? -d : d) <= (bd < 0 ? -bd : bd)) best = &f;  // <=: ties go larger
   }
   return best->font;
+}
+
+void set_text(lv_obj_t* label, const char* text) {
+  if (label == nullptr || text == nullptr) return;
+  const char* cur = lv_label_get_text(label);
+  if (cur != nullptr && std::strcmp(cur, text) == 0) return;
+  lv_label_set_text(label, text);
+}
+
+void set_bg_color(lv_obj_t* obj, uint32_t hex) {
+  if (obj == nullptr) return;
+  const lv_color_t c = lv_color_hex(hex);
+  if (lv_color_eq(lv_obj_get_style_bg_color(obj, LV_PART_MAIN), c)) return;
+  lv_obj_set_style_bg_color(obj, c, 0);
+}
+
+void set_text_color(lv_obj_t* obj, uint32_t hex) {
+  if (obj == nullptr) return;
+  const lv_color_t c = lv_color_hex(hex);
+  if (lv_color_eq(lv_obj_get_style_text_color(obj, LV_PART_MAIN), c)) return;
+  lv_obj_set_style_text_color(obj, c, 0);
+}
+
+void set_border_color(lv_obj_t* obj, uint32_t hex) {
+  if (obj == nullptr) return;
+  const lv_color_t c = lv_color_hex(hex);
+  if (lv_color_eq(lv_obj_get_style_border_color(obj, LV_PART_MAIN), c)) return;
+  lv_obj_set_style_border_color(obj, c, 0);
 }
 
 lv_obj_t* make_step_button(lv_obj_t* parent, const char* symbol, int size,

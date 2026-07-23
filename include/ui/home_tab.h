@@ -94,6 +94,13 @@ struct HomeWidgets {
   float flow_prev_y = -1.0f;  // previous sample's row, fractional (AA); -1 = pen up
   uint32_t flow_tick = 0;    // last advance timestamp (ms); 0 = uninitialized
   uint32_t flow_accum_ms = 0;  // fractional-pixel time bank
+  // Live-sweep pacing, set by populate_flow_graph: ms of wall clock per 1px of
+  // sweep, QUANTIZED to a multiple of LVGL's refresh period where the raw
+  // interval is close to it (see the quantization comment there — kills the
+  // step-vs-refresh aliasing "pumping"), and the ACTUAL window the plot spans
+  // at that pace (feeds the x-axis labels, so they never lie about the pace).
+  uint32_t flow_px_ms = 0;
+  int flow_win_s = 45;
   bool flow_blanked = false;   // true while the plot is cleared (scale disconnected)
   bool flow_drop_negative = true;  // clamp outflow (weight-decreasing) g/s to zero
   // Graph style. false = scroll (whole plot memmoves left each step, newest at the

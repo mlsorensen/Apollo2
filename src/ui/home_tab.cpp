@@ -274,6 +274,26 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   out.flow_accum_ms = 0;
   out.flow_mode = 0;
   out.flow_ymax = flow_default_max(out.flow_mode);
+  // Live-sweep pacing. Raw = the kFlowWindowS design window spread over the
+  // plot width. When that lands NEAR LVGL's refresh period (the 800x480
+  // boards: ~60ms/px vs the 33ms refresh grid), the two clocks alias — the
+  // move/stall pattern of presented frames drifts phase and repeats at ~1Hz,
+  // perceived as rhythmic "pumping" of the scroll. Quantizing the pace to an
+  // exact multiple of the refresh period (1px per N refreshes) removes the
+  // beat entirely; boards whose raw pace is already below 1.5 periods (the
+  // 5"/7B: ~41/47ms) keep it — a forced 33 would visibly change their scroll
+  // speed. The labels are derived from the ACTUAL resulting window below.
+  {
+    const uint32_t raw = static_cast<uint32_t>(kFlowWindowS) * 1000u /
+                         static_cast<uint32_t>(pw);
+    const uint32_t refr = LV_DEF_REFR_PERIOD;
+    uint32_t px_ms = raw;
+    if (raw >= refr + refr / 2)
+      px_ms = ((raw + refr / 2) / refr) * refr;  // nearest multiple of refr
+    out.flow_px_ms = px_ms < 1 ? 1 : px_ms;
+    out.flow_win_s = static_cast<int>(
+        (static_cast<uint64_t>(pw) * out.flow_px_ms + 500) / 1000);
+  }
   out.flow_weights = static_cast<float*>(lv_malloc(static_cast<size_t>(pw) * sizeof(float)));
   out.flow_flows = static_cast<float*>(lv_malloc(static_cast<size_t>(pw) * sizeof(float)));
   if (out.flow_weights == nullptr || out.flow_flows == nullptr) {  // OOM: tick no-ops
@@ -321,7 +341,7 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   // mode, where screen-x maps to a fixed age (right edge = now).
   for (int t = 0; t <= 3; ++t) {
     lv_obj_t* xl = lv_label_create(card);
-    const int secs = kFlowWindowS * (3 - t) / 3;
+    const int secs = out.flow_win_s * (3 - t) / 3;
     if (secs == 0) lv_label_set_text(xl, "now");
     else lv_label_set_text_fmt(xl, "%ds", secs);
     lv_obj_set_style_text_color(xl, lv_color_hex(ui::theme::muted()), 0);
@@ -336,7 +356,7 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   // Scope-mode alternative: a single centered "<window> s" caption (x no longer maps
   // to age there — the sweep gap marks "now"). Hidden until scope mode is active.
   out.flow_xspan_label = lv_label_create(card);
-  lv_label_set_text_fmt(out.flow_xspan_label, "%d s window", kFlowWindowS);
+  lv_label_set_text_fmt(out.flow_xspan_label, "%d s window", out.flow_win_s);
   lv_obj_set_style_text_color(out.flow_xspan_label, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(out.flow_xspan_label, ui::font_dp(14), 0);
   lv_obj_align(out.flow_xspan_label, LV_ALIGN_TOP_LEFT, pw / 2 - ui::dp(44), ph + ui::dp(4));
@@ -972,29 +992,29 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   char buf[24];
   if (connected) {
     format_now(buf, sizeof(buf), state.brew_temp_c, fahrenheit);
-    lv_label_set_text(w.brew_value, buf);
+    ui::set_text(w.brew_value, buf);
     if (w.brew_set != nullptr) {
       std::snprintf(buf, sizeof(buf), "%.1f°",
                     static_cast<double>(ui::temp_disp(state.brew_target_c, fahrenheit)));
-      lv_label_set_text(w.brew_set, buf);
+      ui::set_text(w.brew_set, buf);
     }
     if (state.steam_enabled) {
       format_now(buf, sizeof(buf), state.boiler_temp_c, fahrenheit);
-      lv_label_set_text(w.boiler_value, buf);
+      ui::set_text(w.boiler_value, buf);
       if (w.boiler_set != nullptr) {
         std::snprintf(buf, sizeof(buf), "%.0f°",
                       static_cast<double>(ui::temp_disp(state.boiler_target_c, fahrenheit)));
-        lv_label_set_text(w.boiler_set, buf);
+        ui::set_text(w.boiler_set, buf);
       }
     } else {
-      lv_label_set_text(w.boiler_value, "Off");
-      if (w.boiler_set != nullptr) lv_label_set_text(w.boiler_set, "");
+      ui::set_text(w.boiler_value, "Off");
+      if (w.boiler_set != nullptr) ui::set_text(w.boiler_set, "");
     }
   } else {
-    lv_label_set_text(w.brew_value, "--");
-    if (w.brew_set != nullptr) lv_label_set_text(w.brew_set, "--");
-    lv_label_set_text(w.boiler_value, "--");
-    if (w.boiler_set != nullptr) lv_label_set_text(w.boiler_set, "--");
+    ui::set_text(w.brew_value, "--");
+    if (w.brew_set != nullptr) ui::set_text(w.brew_set, "--");
+    ui::set_text(w.boiler_value, "--");
+    if (w.boiler_set != nullptr) ui::set_text(w.boiler_set, "--");
   }
 
   // Scale readout (scale-aware layout only). Frozen during shot review exactly
@@ -1010,13 +1030,13 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
       } else {
         std::snprintf(wb, sizeof(wb), "-- g");
       }
-      lv_label_set_text(w.scale_weight, wb);
+      ui::set_text(w.scale_weight, wb);
     }
     char tb[16];
     // Every layout now labels this "TARGET" (a stepper's value on large screens, a
     // read-only row on compact), so it's just the number of grams.
     std::snprintf(tb, sizeof(tb), "%.0f g", static_cast<double>(brew.target_weight_g));
-    lv_label_set_text(w.scale_target, tb);
+    ui::set_text(w.scale_target, tb);
 
     // Shot timer (scale panel): the ESP-side timer when it is the authoritative
     // source (core::esp_shot_timer — shared with pump_scale_chart's 10Hz
@@ -1032,7 +1052,7 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
       } else {
         std::snprintf(sb, sizeof(sb), "-- s");
       }
-      lv_label_set_text(w.shot_timer_label, sb);
+      ui::set_text(w.shot_timer_label, sb);
     }
 
     // Shot button (under the timer): Reset while a finished shot is frozen for
@@ -1047,7 +1067,7 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
                           brew.phase == core::ShotPhase::kSettling;
       // Wired arms the auto-STOP ("Auto shot"); unwired arms auto-DETECTION.
       const char* armed = brew.paddle_wired ? "Auto shot" : "Detect";
-      lv_label_set_text(w.shot_btn_label,
+      ui::set_text(w.shot_btn_label,
                         review ? "Reset" : brew.shot_mode ? armed : "Manual");
       // State lives in the outline + text: accent = auto armed, warn = Reset,
       // neutral ring = manual/busy (the fill stays card(), see build).
@@ -1055,12 +1075,12 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
                             : active         ? ui::theme::scrollbar()
                             : brew.shot_mode ? ui::theme::accent()
                                              : ui::theme::scrollbar();
-      lv_obj_set_style_border_color(w.shot_btn, lv_color_hex(ring), 0);
+      ui::set_border_color(w.shot_btn, ring);
       const uint32_t txt = review          ? ui::theme::warn()
                            : active         ? ui::theme::muted()
                            : brew.shot_mode ? ui::theme::accent()
                                             : ui::theme::text();
-      lv_obj_set_style_text_color(w.shot_btn_label, lv_color_hex(txt), 0);
+      ui::set_text_color(w.shot_btn_label, txt);
       if (active) {
         lv_obj_add_state(w.shot_btn, LV_STATE_DISABLED);
       } else {
@@ -1087,17 +1107,17 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
       break;
   }
   if (w.status_label != nullptr) {
-    lv_label_set_text(w.status_label, status);
-    lv_obj_set_style_bg_color(w.status_dot, lv_color_hex(dot), 0);
+    ui::set_text(w.status_label, status);
+    ui::set_bg_color(w.status_dot, dot);
   }
   // Panel/card dots + optional status text. Compact card headers are dot-only
   // (label null), so the dot is set independently of the label.
   if (w.micra_status_dot != nullptr)
-    lv_obj_set_style_bg_color(w.micra_status_dot, lv_color_hex(dot), 0);
+    ui::set_bg_color(w.micra_status_dot, dot);
   if (w.micra_status_label != nullptr) {
     // Header caption is already "MICRA", so drop the wordy Unconfigured hint.
     const char* mtxt = state.link == core::Link::Unconfigured ? "Not set up" : status;
-    lv_label_set_text(w.micra_status_label, mtxt);
+    ui::set_text(w.micra_status_label, mtxt);
   }
   // Scale status, sleep-aware: a deliberately-disconnected sleep-capable scale
   // (Umbra) is dozing but still connectable — show it "Sleeping" (calm, muted),
@@ -1119,20 +1139,18 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     scale_dot = ui::theme::muted();
   }
   if (w.scale_status_dot != nullptr)
-    lv_obj_set_style_bg_color(w.scale_status_dot, lv_color_hex(scale_dot), 0);
+    ui::set_bg_color(w.scale_status_dot, scale_dot);
   if (w.scale_status_label != nullptr)
-    lv_label_set_text(w.scale_status_label, scale_txt);
+    ui::set_text(w.scale_status_label, scale_txt);
 
   // Scale battery: icon-only estimate beside the status, when reported.
   if (w.scale_batt_label != nullptr) {
     if (scale.connected && scale.battery_valid) {
-      lv_obj_remove_flag(w.scale_batt_label, LV_OBJ_FLAG_HIDDEN);
-      lv_label_set_text(w.scale_batt_label, battery_icon(scale.battery_pct));
-      lv_obj_set_style_text_color(
-          w.scale_batt_label,
-          lv_color_hex(scale.battery_pct < 15 ? ui::theme::alert() : ui::theme::muted()),
-          0);
-    } else {
+      if (lv_obj_has_flag(w.scale_batt_label, LV_OBJ_FLAG_HIDDEN))
+        lv_obj_remove_flag(w.scale_batt_label, LV_OBJ_FLAG_HIDDEN);
+      ui::set_text(w.scale_batt_label, battery_icon(scale.battery_pct));
+      ui::set_text_color(w.scale_batt_label, scale.battery_pct < 15 ? ui::theme::alert() : ui::theme::muted());
+    } else if (!lv_obj_has_flag(w.scale_batt_label, LV_OBJ_FLAG_HIDDEN)) {
       lv_obj_add_flag(w.scale_batt_label, LV_OBJ_FLAG_HIDDEN);
     }
   }
@@ -1140,12 +1158,9 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   // In-card scale actions: the connect toggle mirrors the link switch (accent =
   // "will connect/wake"), and Tare only works with a live link.
   if (w.scale_connect_btn != nullptr) {
-    lv_label_set_text(w.scale_connect_label,
+    ui::set_text(w.scale_connect_label,
                       scale_connect_enabled ? "Disconnect" : "Connect");
-    lv_obj_set_style_bg_color(
-        w.scale_connect_btn,
-        lv_color_hex(scale_connect_enabled ? ui::theme::rail() : ui::theme::accent()),
-        0);
+    ui::set_bg_color(w.scale_connect_btn, scale_connect_enabled ? ui::theme::rail() : ui::theme::accent());
     if (scale.connected) {
       lv_obj_remove_state(w.tare_btn, LV_STATE_DISABLED);
     } else {
@@ -1163,9 +1178,9 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
       std::snprintf(cb, sizeof(cb), "%d:%02d %s", h12, clock.minute,
                     clock.hour < 12 ? "AM" : "PM");
     }
-    lv_label_set_text(w.clock_label, cb);
+    ui::set_text(w.clock_label, cb);
   } else {
-    lv_label_set_text(w.clock_label, clock_24h ? "--:--" : "--:-- --");
+    ui::set_text(w.clock_label, clock_24h ? "--:--" : "--:-- --");
   }
 
   // Battery / power (top-right):
@@ -1174,8 +1189,8 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   //   nothing known                                      -> blank
   char bb[24];
   if (battery.usb) {
-    lv_label_set_text(w.battery_label, LV_SYMBOL_USB);
-    lv_obj_set_style_text_color(w.battery_label, lv_color_hex(ui::theme::muted()), 0);
+    ui::set_text(w.battery_label, LV_SYMBOL_USB);
+    ui::set_text_color(w.battery_label, ui::theme::muted());
   } else if (battery.present) {
     // Compact: icon only (space is tight); larger screens also show the percent.
     if (w.compact) {
@@ -1183,26 +1198,26 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     } else {
       std::snprintf(bb, sizeof(bb), "%d%% %s", battery.percent, battery_icon(battery.percent));
     }
-    lv_label_set_text(w.battery_label, bb);
-    lv_obj_set_style_text_color(
-        w.battery_label,
-        lv_color_hex(battery.percent < 15 ? ui::theme::alert() : ui::theme::muted()), 0);
+    ui::set_text(w.battery_label, bb);
+    ui::set_text_color(w.battery_label, battery.percent < 15 ? ui::theme::alert() : ui::theme::muted());
   } else {
-    lv_label_set_text(w.battery_label, "");
+    ui::set_text(w.battery_label, "");
   }
 
   // WiFi glyph: hidden when WiFi is off; muted while connecting, normal when
   // connected, alert-colored on a failed attempt. (Only present in the trays.)
   if (w.wifi_label != nullptr) {
     if (net == core::NetState::Disabled) {
-      lv_obj_add_flag(w.wifi_label, LV_OBJ_FLAG_HIDDEN);
+      if (!lv_obj_has_flag(w.wifi_label, LV_OBJ_FLAG_HIDDEN))
+        lv_obj_add_flag(w.wifi_label, LV_OBJ_FLAG_HIDDEN);
     } else {
-      lv_obj_remove_flag(w.wifi_label, LV_OBJ_FLAG_HIDDEN);
-      lv_label_set_text(w.wifi_label, LV_SYMBOL_WIFI);
+      if (lv_obj_has_flag(w.wifi_label, LV_OBJ_FLAG_HIDDEN))
+        lv_obj_remove_flag(w.wifi_label, LV_OBJ_FLAG_HIDDEN);
+      ui::set_text(w.wifi_label, LV_SYMBOL_WIFI);
       uint32_t color = ui::theme::muted();       // Connecting
       if (net == core::NetState::Connected) color = ui::theme::text();
       else if (net == core::NetState::Failed) color = ui::theme::alert();
-      lv_obj_set_style_text_color(w.wifi_label, lv_color_hex(color), 0);
+      ui::set_text_color(w.wifi_label, color);
     }
   }
 
@@ -1216,31 +1231,30 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   switch (state.link) {
     case core::Link::Connected:
       lv_obj_remove_state(w.power_btn, LV_STATE_DISABLED);
-      lv_obj_set_style_bg_color(
-          w.power_btn, lv_color_hex(on ? pow_neutral : ui::theme::accent()), 0);
-      lv_label_set_text(w.power_label,
+      ui::set_bg_color(w.power_btn, on ? pow_neutral : ui::theme::accent());
+      ui::set_text(w.power_label,
                         on ? LV_SYMBOL_POWER "  Standby" : LV_SYMBOL_POWER "  Turn On");
       break;
     case core::Link::Disconnected:  // configured + tokened, just not connected -> connect
       lv_obj_remove_state(w.power_btn, LV_STATE_DISABLED);
-      lv_obj_set_style_bg_color(w.power_btn, lv_color_hex(ui::theme::accent()), 0);
-      lv_label_set_text(w.power_label, LV_SYMBOL_REFRESH "  Connect");
+      ui::set_bg_color(w.power_btn, ui::theme::accent());
+      ui::set_text(w.power_label, LV_SYMBOL_REFRESH "  Connect");
       break;
     case core::Link::Connecting:
       lv_obj_add_state(w.power_btn, LV_STATE_DISABLED);
-      lv_obj_set_style_bg_color(w.power_btn, lv_color_hex(pow_neutral), 0);
-      lv_label_set_text(w.power_label, LV_SYMBOL_REFRESH "  Connecting...");
+      ui::set_bg_color(w.power_btn, pow_neutral);
+      ui::set_text(w.power_label, LV_SYMBOL_REFRESH "  Connecting...");
       break;
     case core::Link::NeedsToken:
       lv_obj_add_state(w.power_btn, LV_STATE_DISABLED);
-      lv_obj_set_style_bg_color(w.power_btn, lv_color_hex(pow_neutral), 0);
-      lv_label_set_text(w.power_label, LV_SYMBOL_WARNING "  Token needed");
+      ui::set_bg_color(w.power_btn, pow_neutral);
+      ui::set_text(w.power_label, LV_SYMBOL_WARNING "  Token needed");
       break;
     case core::Link::Unconfigured:
     default:
       lv_obj_add_state(w.power_btn, LV_STATE_DISABLED);
-      lv_obj_set_style_bg_color(w.power_btn, lv_color_hex(pow_neutral), 0);
-      lv_label_set_text(w.power_label, LV_SYMBOL_SETTINGS "  Set up in Settings");
+      ui::set_bg_color(w.power_btn, pow_neutral);
+      ui::set_text(w.power_label, LV_SYMBOL_SETTINGS "  Set up in Settings");
       break;
   }
 }
@@ -1633,7 +1647,7 @@ void end_shot_plot(HomeWidgets& w) {
   w.shot_exact_fit = false;
   reset_flow_graph(w);  // back to the live sweep on a fresh grid
   if (w.flow_xspan_label != nullptr)
-    lv_label_set_text_fmt(w.flow_xspan_label, "%d s window", kFlowWindowS);
+    lv_label_set_text_fmt(w.flow_xspan_label, "%d s window", w.flow_win_s);
   apply_flow_xaxis_labels(w);  // restore the labels for the active sweep style
 }
 
@@ -1830,10 +1844,15 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
   w.flow_accum_ms += now - w.flow_tick;
   w.flow_tick = now;
   // One "step" scrolls kFlowStepPx pixels and triggers one whole-plot re-blit, so
-  // its time budget is kFlowStepPx pixels' worth (same average speed, fewer blits).
-  const uint32_t ms_per_step = static_cast<uint32_t>(kFlowStepPx) *
-                               static_cast<uint32_t>(kFlowWindowS) * 1000u /
-                               static_cast<uint32_t>(w.flow_w);
+  // its time budget is kFlowStepPx pixels' worth (same average speed, fewer
+  // blits). Pace comes from populate_flow_graph's refresh-quantized flow_px_ms
+  // (the anti-"pumping" quantization); fall back to the raw computation if a
+  // stale HomeWidgets ever arrives without it.
+  const uint32_t px_ms =
+      w.flow_px_ms > 0 ? w.flow_px_ms
+                       : static_cast<uint32_t>(kFlowWindowS) * 1000u /
+                             static_cast<uint32_t>(w.flow_w);
+  const uint32_t ms_per_step = static_cast<uint32_t>(kFlowStepPx) * px_ms;
   if (ms_per_step == 0) return;
 
   // Flow = trailing-window derivative over the time-stamped weight history
