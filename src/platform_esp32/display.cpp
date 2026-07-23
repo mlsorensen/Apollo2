@@ -9,17 +9,15 @@
 #if defined(BOARD_DISPLAY_DSI)
 #include <cstring>
 
+#include <esp_async_memcpy.h>
 #include <esp_cache.h>
+#include <esp_log.h>
 #include <esp_lcd_mipi_dsi.h>
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_panel_ops.h>
 #include <esp_ldo_regulator.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
-#include <soc/soc_caps.h>
-#if SOC_PPA_SUPPORTED
-#include <driver/ppa.h>  // P4 Pixel Processing Accelerator: hardware rotate
-#endif
 #endif
 #if defined(BOARD_HAS_IO_EXTENSION)
 #include <Wire.h>
@@ -179,8 +177,14 @@ const lcd_init_cmd_t kDsiPanelInit[] = {
 esp_lcd_panel_handle_t g_dpi_panel = nullptr;
 uint16_t* g_dsi_fb[2] = {nullptr, nullptr};
 int g_dsi_back = 1;   // driver scans fb0 after init; we render into fb1 first
-// Dirty portrait-row union of the in-flight frame. Portrait row == landscape x.
+// Dirty portrait bounding box of the in-flight frame. Portrait row ==
+// landscape x; portrait col == native_w-1 - landscape y. The COLUMN span
+// matters as much as the rows: the sync copy below is bounded by this box, and
+// on the 5" the scroll graph dirties ~1050 rows but only ~320 of 720 columns —
+// full-width row copies (the old scheme) moved 2.2x the pixels the frame
+// actually touched (measured 21ms of a 34ms flush).
 int g_dirty_r1 = 1 << 30, g_dirty_r2 = -1;
+int g_dirty_c1 = 1 << 30, g_dirty_c2 = -1;
 SemaphoreHandle_t g_dsi_refresh_sem = nullptr;
 // Deferred back-buffer sync: after presenting a frame we do NOT block for the
 // scan-out flip. The wait + dirty-row copy happen lazily at the start of the
@@ -188,104 +192,90 @@ SemaphoreHandle_t g_dsi_refresh_sem = nullptr;
 // semaphore take is free and the copy overlaps otherwise-idle time instead of
 // sitting in the presented frame's flush path (measured: ~18ms -> ~2ms).
 bool g_sync_pending = false;
-int g_sync_r1 = 0, g_sync_r2 = -1;
+int g_sync_r1 = 0, g_sync_r2 = -1;   // portrait rows to sync (prev frame's box)
+int g_sync_c1 = 0, g_sync_c2 = -1;   // portrait cols of that box
 
-constexpr size_t kDsiFbBytes =
-    static_cast<size_t>(board::kLcdNativeW) * board::kLcdNativeH * sizeof(uint16_t);
+// --- DMA-overlapped dirty sync -------------------------------------------
+// The profiled copy (~12ms/frame with the graph running) sat serially inside
+// the next frame's flush, yet the measured flip wait was ~0 — the boundary
+// passes long before LVGL comes back with strips. So: present ARMS a copy,
+// the refresh-done ISR (the flip boundary — the earliest moment the old front
+// is off-glass) notifies a small task that starts an AXI-DMA memcpy of the
+// dirty rows front->back, and dsi_sync_back_buffer just waits for completion
+// — by which time it normally already finished, overlapped with LVGL's render
+// of the next frame. esp_async_memcpy handles all cache coherency (source
+// writeback, destination invalidation via aligned splits). Full-width rows
+// (not the column-bounded box) because DMA needs one contiguous range —
+// off the critical path, the extra bytes are free. g_mcp == nullptr (install
+// failed / demoted) falls back to the CPU box copy.
+async_memcpy_handle_t g_mcp = nullptr;
+TaskHandle_t g_dma_task = nullptr;
+SemaphoreHandle_t g_dma_done_sem = nullptr;
+volatile bool g_dma_armed = false;     // present happened; kick at next boundary
+bool g_dma_inflight = false;           // sync must wait on g_dma_done_sem
+uint16_t* g_dma_dst = nullptr;
+const uint16_t* g_dma_src = nullptr;
+size_t g_dma_bytes = 0;
 
-#if SOC_PPA_SUPPORTED
-// P4: the PPA (Pixel Processing Accelerator) does the landscape->portrait
-// rotate AND the dirty-row front->back copy in hardware — both are pure PSRAM
-// pixel traffic, and on the 5" (2.4x the 4.3's pixels) the software versions
-// dominated the frame (~45ms of a ~50ms refresh measured on HW). null =
-// register failed at begin(); every call site falls back to the software path.
-ppa_client_handle_t g_ppa = nullptr;
+volatile bool g_dma_ok = false;        // last kicked copy actually queued
 
-// One-shot demotion: if an operation the validator accepted at begin() starts
-// failing, drop to software permanently rather than logging per frame.
-void ppa_demote(const char* what, esp_err_t err) {
-  Serial.printf("DSI: PPA %s failed (%d) — falling back to software\n", what, err);
-  g_ppa = nullptr;
+bool dma_done_cb(async_memcpy_handle_t, async_memcpy_event_t*, void*) {
+  BaseType_t woken = pdFALSE;
+  xSemaphoreGiveFromISR(g_dma_done_sem, &woken);
+  return woken == pdTRUE;
 }
 
-// Rotate an LVGL strip (landscape) into the portrait framebuffer — the same
-// mapping as the software loop in dsi_flush_cb: portrait row = landscape x,
-// portrait col = native_w-1 - landscape y. That is a 90° CLOCKWISE rotation;
-// the PPA's angles are counter-clockwise, hence ANGLE_270. The driver does all
-// cache maintenance (writeback of the strip, invalidation of the touched fb
-// rows) itself. NOTE if hardware shows the strip upside-down, the fix is
-// ANGLE_90 here — the geometry below is derivation-verified but not yet
-// HW-verified.
-bool ppa_rotate_strip(const lv_area_t* area, const uint8_t* px_map, uint16_t* fb) {
-  if (g_ppa == nullptr) return false;
-  ppa_srm_oper_config_t o = {};
-  o.in.buffer = px_map;
-  o.in.pic_w = static_cast<uint32_t>(lv_area_get_width(area));
-  o.in.pic_h = static_cast<uint32_t>(lv_area_get_height(area));
-  o.in.block_w = o.in.pic_w;
-  o.in.block_h = o.in.pic_h;
-  o.in.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
-  o.out.buffer = fb;
-  o.out.buffer_size = kDsiFbBytes;  // esp_lcd's DMA buffers are cache-aligned
-  o.out.pic_w = board::kLcdNativeW;
-  o.out.pic_h = board::kLcdNativeH;
-  o.out.block_offset_x = static_cast<uint32_t>(board::kLcdNativeW - 1 - area->y2);
-  o.out.block_offset_y = static_cast<uint32_t>(area->x1);
-  o.out.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
-  o.rotation_angle = PPA_SRM_ROTATION_ANGLE_270;
-  o.scale_x = 1.0f;
-  o.scale_y = 1.0f;
-  o.mode = PPA_TRANS_MODE_BLOCKING;
-  const esp_err_t err = ppa_do_scale_rotate_mirror(g_ppa, &o);
-  if (err != ESP_OK) ppa_demote("rotate", err);
-  return err == ESP_OK;
+void dma_copy_task(void*) {
+  for (;;) {
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);  // refresh ISR: boundary passed
+    g_dma_ok = esp_async_memcpy(g_mcp, g_dma_dst, const_cast<uint16_t*>(g_dma_src),
+                                g_dma_bytes, dma_done_cb, nullptr) == ESP_OK;
+    // On a queue failure (should not happen with the backlog headroom) unblock
+    // the waiter, which sees !g_dma_ok and does the CPU copy itself.
+    if (!g_dma_ok) xSemaphoreGive(g_dma_done_sem);
+  }
 }
-
-// Copy full-width portrait rows r1..r2 front->back (the deferred dirty sync)
-// as a 0°, 1:1 SRM — i.e. a DMA blit, replacing the CPU memcpy + writeback.
-bool ppa_copy_rows(const uint16_t* src, uint16_t* dst, int r1, int r2) {
-  if (g_ppa == nullptr) return false;
-  ppa_srm_oper_config_t o = {};
-  o.in.buffer = src;
-  o.in.pic_w = board::kLcdNativeW;
-  o.in.pic_h = board::kLcdNativeH;
-  o.in.block_w = board::kLcdNativeW;
-  o.in.block_h = static_cast<uint32_t>(r2 - r1 + 1);
-  o.in.block_offset_y = static_cast<uint32_t>(r1);
-  o.in.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
-  o.out.buffer = dst;
-  o.out.buffer_size = kDsiFbBytes;
-  o.out.pic_w = board::kLcdNativeW;
-  o.out.pic_h = board::kLcdNativeH;
-  o.out.block_offset_y = static_cast<uint32_t>(r1);
-  o.out.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
-  o.rotation_angle = PPA_SRM_ROTATION_ANGLE_0;
-  o.scale_x = 1.0f;
-  o.scale_y = 1.0f;
-  o.mode = PPA_TRANS_MODE_BLOCKING;
-  const esp_err_t err = ppa_do_scale_rotate_mirror(g_ppa, &o);
-  if (err != ESP_OK) ppa_demote("row copy", err);
-  return err == ESP_OK;
-}
-#endif  // SOC_PPA_SUPPORTED
 
 void dsi_sync_back_buffer() {
   if (!g_sync_pending) return;
+  if (g_dma_inflight) {
+    // The DMA copy was kicked at the flip boundary and has been running while
+    // LVGL rendered this frame — usually finished by now; wait out the rest
+    // (measured ~5ms residual on the 5" with the graph streaming).
+    g_dma_inflight = false;
+    if (xSemaphoreTake(g_dma_done_sem, pdMS_TO_TICKS(200)) == pdTRUE && g_dma_ok) {
+      g_sync_pending = false;
+      return;
+    }
+    // Timeout or queue failure (transient descriptor-alloc no-mem under heap
+    // contention — routine, self-healing): fall through to the CPU copy
+    // (correct either way — the front buffer is stable until the next present).
+    Serial.println("DSI: DMA sync missed — CPU copy fallback");
+  }
   // The flip is latched at the frame boundary; make sure one has passed so the
   // buffer we're about to write is genuinely off-glass.
   xSemaphoreTake(g_dsi_refresh_sem, pdMS_TO_TICKS(50));
-#if SOC_PPA_SUPPORTED
-  if (ppa_copy_rows(g_dsi_fb[g_dsi_back ^ 1], g_dsi_fb[g_dsi_back], g_sync_r1,
-                    g_sync_r2)) {
-    g_sync_pending = false;
-    return;
+  // Copy only the previous frame's dirty BOX (rows x cols), not full-width
+  // rows: copying a superset of what that frame's strips touched is always
+  // correct (the front buffer is a complete consistent frame), and the box is
+  // the tight superset we track. Per-row segment copies when the column span
+  // is partial; one msync over the whole contiguous span (clean lines in the
+  // gaps cost nothing to walk).
+  constexpr int fbw = board::kLcdNativeW;
+  const int rows = g_sync_r2 - g_sync_r1 + 1;
+  const int cols = g_sync_c2 - g_sync_c1 + 1;
+  uint16_t* dst0 = g_dsi_fb[g_dsi_back] + static_cast<size_t>(g_sync_r1) * fbw + g_sync_c1;
+  const uint16_t* src0 =
+      g_dsi_fb[g_dsi_back ^ 1] + static_cast<size_t>(g_sync_r1) * fbw + g_sync_c1;
+  if (cols >= fbw) {
+    std::memcpy(dst0, src0, static_cast<size_t>(rows) * fbw * sizeof(uint16_t));
+  } else {
+    const size_t seg = static_cast<size_t>(cols) * sizeof(uint16_t);
+    for (int r = 0; r < rows; ++r)
+      std::memcpy(dst0 + static_cast<size_t>(r) * fbw, src0 + static_cast<size_t>(r) * fbw, seg);
   }
-#endif
-  const size_t off = static_cast<size_t>(g_sync_r1) * board::kLcdNativeW;
-  const size_t bytes = static_cast<size_t>(g_sync_r2 - g_sync_r1 + 1) *
-                       board::kLcdNativeW * sizeof(uint16_t);
-  std::memcpy(g_dsi_fb[g_dsi_back] + off, g_dsi_fb[g_dsi_back ^ 1] + off, bytes);
-  esp_cache_msync(g_dsi_fb[g_dsi_back] + off, bytes,
+  esp_cache_msync(dst0,
+                  (static_cast<size_t>(rows - 1) * fbw + cols) * sizeof(uint16_t),
                   ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
   g_sync_pending = false;
 }
@@ -294,6 +284,14 @@ bool dsi_refresh_done_cb(esp_lcd_panel_handle_t, esp_lcd_dpi_panel_event_data_t*
                          void*) {
   BaseType_t woken = pdFALSE;
   xSemaphoreGiveFromISR(g_dsi_refresh_sem, &woken);
+  if (g_dma_armed) {
+    // First boundary after a present: the old front is off-glass — start the
+    // dirty-sync DMA now so it overlaps the next frame's render.
+    g_dma_armed = false;
+    BaseType_t w2 = pdFALSE;
+    vTaskNotifyGiveFromISR(g_dma_task, &w2);
+    woken = static_cast<BaseType_t>(woken | w2);
+  }
   return woken == pdTRUE;
 }
 
@@ -311,22 +309,38 @@ void dsi_flush_cb(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map) {
   // the previously presented frame (usually free — see dsi_sync_back_buffer).
   dsi_sync_back_buffer();
   uint16_t* fb = g_dsi_fb[g_dsi_back];
-  bool rotated = false;
-#if SOC_PPA_SUPPORTED
-  rotated = ppa_rotate_strip(area, px_map, fb);
-#endif
-  if (!rotated) {
-    for (int j = 0; j < h; ++j) {
-      uint16_t* p = fb + static_cast<size_t>(area->x1) * fbw + (fbw - 1 - (area->y1 + j));
-      const uint16_t* s = src + static_cast<size_t>(j) * w;
-      for (int i = 0; i < w; ++i) {
-        *p = s[i];
-        p += fbw;
+  // CACHE-TILED rotate. The naive rotate (outer loop = source rows) writes one
+  // 2-byte pixel per framebuffer cache line — consecutive writes land a whole
+  // portrait row (fbw*2 bytes) apart, so EVERY pixel write allocates a 64-byte
+  // line (read from PSRAM) and later writes 64 bytes back: ~64x memory-traffic
+  // amplification, which made this loop ~45ms of the 5"'s ~60ms refresh
+  // (measured; the P4's PPA hardware rotate was tried and was NO faster — a
+  // 90° rotate's strided access pattern is bandwidth-bound no matter who
+  // executes it, so don't re-try PPA here). Rotating in 32x32-pixel tiles
+  // makes both the strip reads and the framebuffer writes touch whole 64-byte
+  // lines (32 px RGB565 = one line), reducing the traffic ~to the ideal.
+  constexpr int kTile = 32;
+  for (int ty = 0; ty < h; ty += kTile) {
+    const int th = (h - ty < kTile) ? h - ty : kTile;
+    for (int tx = 0; tx < w; tx += kTile) {
+      const int tw = (w - tx < kTile) ? w - tx : kTile;
+      for (int i = 0; i < tw; ++i) {
+        // One portrait row per i: contiguous th-pixel run, walked backward
+        // (portrait col = fbw-1 - landscape y). Same mapping as the naive
+        // loop — equivalence host-verified pixel-exact. (Pairing adjacent
+        // columns into 32-bit stores was tried and measured IDENTICAL —
+        // this loop is PSRAM-bound, not cycle-bound; don't micro-optimize it.)
+        uint16_t* dst = fb + static_cast<size_t>(area->x1 + tx + i) * fbw +
+                        (fbw - 1 - (area->y1 + ty));
+        const uint16_t* s = src + static_cast<size_t>(ty) * w + tx + i;
+        for (int j = 0; j < th; ++j) dst[-j] = s[static_cast<size_t>(j) * w];
       }
     }
   }
   if (area->x1 < g_dirty_r1) g_dirty_r1 = area->x1;
   if (area->x2 > g_dirty_r2) g_dirty_r2 = area->x2;
+  if (fbw - 1 - area->y2 < g_dirty_c1) g_dirty_c1 = fbw - 1 - area->y2;
+  if (fbw - 1 - area->y1 > g_dirty_c2) g_dirty_c2 = fbw - 1 - area->y1;
 
   if (lv_display_flush_is_last(disp) && g_dirty_r2 >= g_dirty_r1) {
     const int r1 = g_dirty_r1, r2 = g_dirty_r2;
@@ -341,9 +355,23 @@ void dsi_flush_cb(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map) {
     g_dsi_back ^= 1;
     g_sync_r1 = r1;
     g_sync_r2 = r2;
+    g_sync_c1 = g_dirty_c1;
+    g_sync_c2 = g_dirty_c2;
     g_sync_pending = true;
+    if (g_mcp != nullptr) {
+      // Arm the overlapped DMA sync: full-width rows (contiguous range), new
+      // front -> new back. The refresh ISR kicks it at the flip boundary.
+      xSemaphoreTake(g_dma_done_sem, 0);  // drain a stale completion
+      g_dma_src = g_dsi_fb[g_dsi_back ^ 1] + static_cast<size_t>(r1) * fbw;
+      g_dma_dst = g_dsi_fb[g_dsi_back] + static_cast<size_t>(r1) * fbw;
+      g_dma_bytes = static_cast<size_t>(r2 - r1 + 1) * fbw * sizeof(uint16_t);
+      g_dma_inflight = true;
+      g_dma_armed = true;
+    }
     g_dirty_r1 = 1 << 30;
     g_dirty_r2 = -1;
+    g_dirty_c1 = 1 << 30;
+    g_dirty_c2 = -1;
   }
   lv_display_flush_ready(disp);
 }
@@ -455,18 +483,25 @@ bool Display::begin() {
   cbs.on_refresh_done = dsi_refresh_done_cb;
   esp_lcd_dpi_panel_register_event_callbacks(g_dpi_panel, &cbs, nullptr);
 
-#if SOC_PPA_SUPPORTED
-  {
-    ppa_client_config_t ppa_cfg = {};
-    ppa_cfg.oper_type = PPA_OPERATION_SRM;
-    if (ppa_register_client(&ppa_cfg, &g_ppa) == ESP_OK) {
-      Serial.println("DSI: PPA hardware rotate/blit enabled");
-    } else {
-      g_ppa = nullptr;
-      Serial.println("DSI: PPA unavailable — software rotate");
-    }
+  // DMA-overlapped dirty sync (see the g_mcp comment block). AXI backend —
+  // the P4 GDMA flavor that reaches PSRAM.
+  g_dma_done_sem = xSemaphoreCreateBinary();
+  async_memcpy_config_t mcp_cfg = {};
+  mcp_cfg.backlog = 4;
+  mcp_cfg.dma_burst_size = 64;
+  if (esp_async_memcpy_install_gdma_axi(&mcp_cfg, &g_mcp) == ESP_OK &&
+      xTaskCreate(dma_copy_task, "dsi_sync", 3072, nullptr, 4, &g_dma_task) == pdPASS) {
+    Serial.println("DSI: DMA-overlapped dirty sync enabled");
+    // The driver allocates its descriptor list per transaction from internal
+    // heap; under momentary contention that alloc fails and it error-logs.
+    // We fall back to the CPU copy for that frame (logged above) — routine and
+    // self-healing, so silence the driver's own per-occurrence spam.
+    esp_log_level_set("gdma-link", ESP_LOG_NONE);
+    esp_log_level_set("async_mcp.gdma", ESP_LOG_NONE);
+  } else {
+    g_mcp = nullptr;
+    Serial.println("DSI: async-memcpy unavailable — CPU dirty sync");
   }
-#endif
 
   Serial.printf("DSI: panel up %dx%d, double-buffered\n", board::kLcdNativeH,
                 board::kLcdNativeW);
@@ -560,10 +595,35 @@ bool Display::begin() {
   // it here. Viable tear-free routes if revisited: scroll the graph directly
   // inside both framebuffers (cheap: memmove the strip in each), or use an SPI
   // panel that has its own GRAM and self-refreshes.
-  // PSRAM on purpose — see the kBufferLines comment: the internal variant
-  // starved WiFi of its init heap.
+  // PSRAM on purpose on the S3 RGB boards — see the kBufferLines comment: the
+  // internal variant starved WiFi of its init heap.
+#if defined(BOARD_DISPLAY_DSI)
+  // P4: the PSRAM bus is the bottleneck — the DPI scanout alone reads the
+  // framebuffer continuously (~100 MB/s on the 5") and the UI's render +
+  // rotate traffic competes with it. An INTERNAL (L2MEM) draw buffer takes
+  // LVGL's read-modify-write blending and the rotate's source reads off that
+  // bus entirely. Unlike the S3, the P4's radio lives on the remote C6
+  // (esp-hosted), so the S3's "internal buffer starves WiFi" ceiling doesn't
+  // apply — but still gate on generous headroom and fall back to PSRAM.
+  {
+    const int internal_lines = 120;  // 1280*120*2 = 300KB on the 5"
+    const size_t internal_bytes =
+        static_cast<size_t>(w) * internal_lines * sizeof(lv_color_t);
+    const size_t free_internal = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+    if (free_internal > internal_bytes + 200 * 1024) {
+      g_draw_buf =
+          static_cast<lv_color_t*>(heap_caps_malloc(internal_bytes, MALLOC_CAP_INTERNAL));
+      if (g_draw_buf != nullptr) buf_bytes = internal_bytes;
+    }
+    Serial.printf("DSI: LVGL draw buffer %s (%u bytes; internal free was %u)\n",
+                  g_draw_buf ? "INTERNAL" : "PSRAM (internal too tight)",
+                  static_cast<unsigned>(g_draw_buf ? buf_bytes : 0),
+                  static_cast<unsigned>(free_internal));
+  }
+  if (g_draw_buf == nullptr)
+#endif
   g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM));
-  Serial.printf("RGB: LVGL draw buffer PSRAM %s (%u bytes)\n",
+  Serial.printf("RGB: LVGL draw buffer %s (%u bytes)\n",
                 g_draw_buf ? "ok" : "FAILED", static_cast<unsigned>(buf_bytes));
 #else
   // SPI pushes this buffer over the bus via DMA -> must be DMA-capable.

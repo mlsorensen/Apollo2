@@ -166,16 +166,6 @@ void draw_flow_segment(HomeWidgets& w, int x, float yf, uint16_t color) {
   }
 }
 
-// Scroll the whole plot one pixel left (memmove per row) — the cheap half of the
-// strip chart. Horizontal gridlines are invariant under a horizontal shift, so
-// they survive; the vacated right column is repainted by the caller.
-void shift_flow_left(HomeWidgets& w) {
-  for (int y = 0; y < w.flow_h; ++y) {
-    uint16_t* row = w.flow_buf + static_cast<size_t>(y) * w.flow_stride;
-    std::memmove(row, row + 1, static_cast<size_t>(w.flow_w - 1) * sizeof(uint16_t));
-  }
-}
-
 // Update the three dynamic Y labels (max, 2max/3, max/3, top->down) on a rescale.
 void set_flow_ylabels(HomeWidgets& w) {
   for (int i = 0; i < 3; ++i) {
@@ -1858,23 +1848,33 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
   bool scope_wrapped = false;             // a wrap forces a full re-blit (dim redraw)
   int steps = 0;
   if (!w.flow_scope_mode) {
-    // Scroll: memmove the whole plot + both rings one step left, newest at the right.
-    const int rx = w.flow_w - 1;
+    // Scroll: shift the plot + both rings left by ALL accumulated steps in ONE
+    // memmove, then paint the vacated right-edge columns. Per-step shifting
+    // re-moved the whole ~half-MB canvas once per step — at >1 step/frame
+    // (routine at 20fps) that doubled the dominant PSRAM cost of this path
+    // for identical output (profiled on the 5": pump ~6ms/frame, mostly here).
     while (w.flow_accum_ms >= ms_per_step && steps < w.flow_w) {
       w.flow_accum_ms -= ms_per_step;
       ++steps;
-      for (int i = 0; i < kFlowStepPx; ++i) {
-        shift_flow_left(w);
-        std::memmove(w.flow_weights, w.flow_weights + 1,
-                     static_cast<size_t>(w.flow_w - 1) * sizeof(float));
-        std::memmove(w.flow_flows, w.flow_flows + 1,
-                     static_cast<size_t>(w.flow_w - 1) * sizeof(float));
-        w.flow_weights[rx] = rw;
-        w.flow_flows[rx] = rf;
-        const float y = flow_row(raw, w.flow_h, w.flow_ymax);
-        clear_flow_column(w, rx);
-        fill_flow_below(w, rx, y, bright);
-        draw_flow_segment(w, rx, y, bright);
+    }
+    if (steps > 0) {
+      int px = steps * kFlowStepPx;
+      if (px > w.flow_w) px = w.flow_w;
+      for (int y = 0; y < w.flow_h; ++y) {
+        uint16_t* row = w.flow_buf + static_cast<size_t>(y) * w.flow_stride;
+        std::memmove(row, row + px, static_cast<size_t>(w.flow_w - px) * sizeof(uint16_t));
+      }
+      std::memmove(w.flow_weights, w.flow_weights + px,
+                   static_cast<size_t>(w.flow_w - px) * sizeof(float));
+      std::memmove(w.flow_flows, w.flow_flows + px,
+                   static_cast<size_t>(w.flow_w - px) * sizeof(float));
+      const float y = flow_row(raw, w.flow_h, w.flow_ymax);
+      for (int x = w.flow_w - px; x < w.flow_w; ++x) {
+        w.flow_weights[x] = rw;
+        w.flow_flows[x] = rf;
+        clear_flow_column(w, x);
+        fill_flow_below(w, x, y, bright);
+        draw_flow_segment(w, x, y, bright);
         w.flow_prev_y = y;
       }
     }

@@ -460,6 +460,12 @@ constexpr bool kLcdRstActiveHigh = true;   // HX8394 reset asserts HIGH here
 constexpr int  kLcdBacklight = 26;         // LEDC PWM, normal polarity
 constexpr bool kBacklightActiveLow = false;
 constexpr int  kLcdBacklightEn = -1;       // no boost-enable pin in the BSP path
+// Vendor timing: 58 MHz ≈ 55Hz over the 800x1318 raster. A 45 MHz (~43Hz)
+// variant was profiled during the 5" perf hunt: the scanout-bandwidth saving
+// measured ZERO fps difference, but the sparser refresh boundaries directly
+// throttle the flush pipeline — every frame's first framebuffer write gates on
+// the flip boundary (see dsi_sync_back_buffer), so boundary spacing is frame
+// latency. Keep the vendor clock.
 constexpr long kDsiDpiClockHz = 58000000;
 constexpr int  kDsiLaneBitRateMbps = 700;
 constexpr int  kDsiHsyncPulse = 20, kDsiHsyncBack = 20, kDsiHsyncFront = 40;

@@ -335,5 +335,8 @@ void loop() {
     }
   }
 
-  delay(5);
+  // 1ms (was 5): under load the loop runs exactly once per LVGL frame, so the
+  // whole delay lands on every frame's cadence — profiled at ~5ms/frame of
+  // pure idle on the 5". 1ms still yields to lower-priority tasks.
+  delay(1);
 }
