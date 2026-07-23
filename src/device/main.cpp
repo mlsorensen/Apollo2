@@ -319,6 +319,10 @@ void loop() {
   g_network.poll();          // drive the WiFi station state machine + NTP->RTC
 
   // Reflect the latest cached machine state in the UI (cheap; no BLE here).
+  // NOTE this path re-sets many Home widgets — everything it touches must go
+  // through the ui::set_* change-detecting setters (widgets.h): LVGL setters
+  // invalidate even for identical values, and the resulting no-op churn
+  // doubled every ~500ms render pass on the S3 (visible scroll stutter).
   static uint32_t last = 0;
   if (millis() - last > kUiRefreshMs) {
     last = millis();
