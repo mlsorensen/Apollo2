@@ -70,7 +70,7 @@ build time.
 Two platforms are the focus going forward — pick by how hands‑on you want the
 build to be:
 
-- **[Waveshare ESP32‑S3‑Touch‑LCD‑4.3C](https://www.waveshare.com/esp32-s3-touch-lcd-4.3c.htm)
+- **[Waveshare ESP32‑S3‑Touch‑LCD‑4.3C](https://www.waveshare.com/esp32-s3-touch-lcd-4.3c.htm?sku=33630)
   in the **BOX** variant (SKU 33630) — the easy path.** A finished enclosure, ready to sit on the
   counter, and **direct‑wire capable**: its isolated DI/DO terminal block has
   the opto‑isolators built in, so wiring the Micra's paddle circuit for Auto
