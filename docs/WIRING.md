@@ -28,11 +28,18 @@ it), but you will have the machine open — **unplug the Micra first**.
   so everything stays pluggable and reversible.
 - **P4 boards only**: a single‑channel **PC817‑style opto‑isolator module**,
   e.g. [this one](https://a.co/d/03qHqcyM) — anything similar works. (The
-  S3‑4.3C has isolators built in; no module needed.)
+  S3‑4.3C has isolators built in; no module needed.) A
+  [2.54 mm screw‑terminal block](https://a.co/d/0eVdsD4h) that clips onto the
+  P4's GPIO header makes the board‑side connection clean and solder‑free.
+
+Although there are **four** connections at the machine end (Micra white,
+Micra black, and the two paddle‑switch wires), one 3‑conductor cable is all
+you need — **ground is shared**. It just means the ground conductor gets
+**two connectors** at the machine end.
 
 ## Inside the Micra
 
-Remove the Micra's top panel. Toward the back you'll find a **black loom**
+Remove the Micra's top panel. Toward the front you'll find a **black loom**
 carrying a thin **white** and a thin **black** wire, ending in connectors that
 join the paddle switch:
 
@@ -69,6 +76,11 @@ Note: use the **GND** terminal for the paddle return, **not DI COM** — DI COM
 is internally biased on this board, and the paddle must close DI0 to ground to
 be sensed.
 
+A finished 4.3C cable — bare wires for the screw terminals at the board end,
+bullet connectors at the machine end (two on the shared ground conductor):
+
+![Finished 4.3C cable](img/wiring/cable-s3.jpg)
+
 ## ESP32‑P4 boards (external opto module)
 
 On the P4‑WIFI6‑Touch‑LCD‑5 (and the 4.3), the paddle uses three native pins
@@ -88,6 +100,12 @@ Reading that diagram for our setup:
 - **Sense (paddle → Apollo):** one paddle‑switch wire → Apollo **GPIO 51**,
   the other → Apollo **GND**. The physical paddle now touches only Apollo,
   never the Micra.
+
+A finished P4 cable with the opto module spliced in near the machine end
+(shown before wrapping the module in heat‑shrink — do wrap it, so nothing can
+short out inside the machine):
+
+![Finished P4 cable with inline opto module](img/wiring/cable-p4-opto.jpg)
 
 ## Afterwards
 
