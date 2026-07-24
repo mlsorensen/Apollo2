@@ -51,11 +51,12 @@
   <circle cx="950" cy="353" r="6" fill="#ffffff"/>
   <circle cx="950" cy="398" r="6" fill="#ffffff"/>
 
-  <!-- Drive wires: Apollo -> module input -->
+  <!-- Drive wires: Apollo -> module input. Wire colors match the real cable:
+       black = GND, red = GPIO 52 (drive), white = GPIO 51 (sense). -->
   <!-- GND pin -> module input GND, with a junction feeding the paddle branch -->
-  <line x1="250" y1="280" x2="480" y2="320" stroke="#E8912D" stroke-width="5" stroke-linecap="round"/>
-  <circle cx="460" cy="317" r="7" fill="#E8912D"/>
-  <polyline points="460,317 460,368 700,368 700,530" fill="none" stroke="#E8912D" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="250" y1="280" x2="480" y2="320" stroke="#222222" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="460" cy="317" r="7" fill="#222222"/>
+  <polyline points="460,317 460,368 700,368 700,530" fill="none" stroke="#222222" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
   <!-- GPIO 52 -> IO, hopping OVER the GND wire (not connected to it) -->
   <line x1="250" y1="330" x2="301.9" y2="298.4" stroke="#D63E3E" stroke-width="5" stroke-linecap="round"/>
   <path d="M 301.9 298.4 A 14 14 0 0 1 325.8 283.8" fill="none" stroke="#D63E3E" stroke-width="5" stroke-linecap="round"/>
@@ -67,8 +68,9 @@
   <line x1="760" y1="320" x2="950" y2="398" stroke="#222222" stroke-width="6" stroke-linecap="round"/>
 
   <!-- Paddle sense: GPIO 51 and the GND branch meet at the physical paddle switch -->
-  <polyline points="250,385 520,385 520,530 535,530" fill="none" stroke="#3A76D6" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-  <line x1="700" y1="530" x2="685" y2="530" stroke="#E8912D" stroke-width="5" stroke-linecap="round"/>
+  <polyline points="250,385 520,385 520,530 535,530" fill="none" stroke="#777777" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="250,385 520,385 520,530 535,530" fill="none" stroke="#F4F4F4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="700" y1="530" x2="685" y2="530" stroke="#222222" stroke-width="5" stroke-linecap="round"/>
   <circle cx="543" cy="530" r="8" fill="#ffffff" stroke="#444444" stroke-width="4"/>
   <circle cx="677" cy="530" r="8" fill="#ffffff" stroke="#444444" stroke-width="4"/>
   <line x1="549" y1="527" x2="662" y2="490" stroke="#444444" stroke-width="5" stroke-linecap="round"/>
