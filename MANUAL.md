@@ -146,6 +146,30 @@ Plots the live flow rate (or weight) from the scale.
 - **Oscilloscope graph** *(default on)* — the shot graph sweeps left→right and
   wraps, oscilloscope style. Off, it scrolls continuously instead.
 
+### Per‑scale nuances & recommended daily workflow
+
+The supported scales handle power and sleep differently, so the smoothest
+end‑of‑day / morning routine differs by model. In every case, if the Micra has
+an auto‑on schedule, the scale step below is the *only* thing you do — the
+machine is already warming up when you arrive.
+
+- **Acaia Lunar** — stays running for as long as Bluetooth is connected (it
+  won't auto‑sleep on you mid‑connection). Recommended routine: just **power
+  the scale off** when you're done and **power it on** in the morning — Apollo
+  reconnects to it automatically.
+- **Acaia Umbra** — can be used exactly like the Lunar, but it also has a real
+  sleep mode that Apollo can wake it from. Recommended routine: tap
+  **Disconnect** on Apollo's scale card when you're done (the Umbra won't
+  sleep *while connected*, so disconnecting is what lets it doze — the card
+  then shows `Sleeping`), and tap **Connect** in the morning, which wakes the
+  Umbra over Bluetooth. The Umbra's battery lasts about a **week** in sleep
+  mode — and once it's flat, Connect naturally can't wake it, so put it on a
+  charger if it's been sitting.
+- **Bookoo Themis** — has a sleep mode, but it genuinely powers down: Apollo
+  **cannot** wake it with Connect. Treat it like the Lunar: leave Apollo
+  connecting, **turn the scale on** in the morning and you're good; when
+  you're done, just walk away — the scale sleeps on its own from inactivity.
+
 ---
 
 ## Settings → Device
