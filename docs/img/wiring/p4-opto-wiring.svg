@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" font-family="Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="1200" height="680" fill="#ffffff"/>
+  <text x="600" y="58" text-anchor="middle" font-size="28" font-weight="bold" fill="#222222">Apollo P4 &#8594; opto module &#8594; Micra (drive + paddle sense)</text>
+
+  <!-- Apollo P4 box -->
+  <rect x="50" y="130" width="200" height="300" rx="16" fill="#2456C4"/>
+  <text x="150" y="195" text-anchor="middle" font-size="34" font-weight="bold" fill="#ffffff">Apollo</text>
+  <text x="150" y="232" text-anchor="middle" font-size="22" fill="#ffffff">P4 GPIO header</text>
+  <text x="238" y="287" text-anchor="end" font-size="20" font-weight="bold" fill="#ffffff">GPIO 52</text>
+  <text x="238" y="337" text-anchor="end" font-size="20" font-weight="bold" fill="#ffffff">GND</text>
+  <text x="238" y="392" text-anchor="end" font-size="20" font-weight="bold" fill="#ffffff">GPIO 51</text>
+  <circle cx="250" cy="280" r="6" fill="#ffffff"/>
+  <circle cx="250" cy="330" r="6" fill="#ffffff"/>
+  <circle cx="250" cy="385" r="6" fill="#ffffff"/>
+
+  <!-- Opto module -->
+  <text x="620" y="140" text-anchor="middle" font-size="22" font-weight="bold" fill="#222222">PC817-style opto module</text>
+  <rect x="480" y="155" width="280" height="200" rx="10" fill="#3E9E5B"/>
+  <circle cx="565" cy="255" r="12" fill="#D93A2B"/>
+  <rect x="595" y="235" width="66" height="38" rx="4" fill="#1E1E1E"/>
+  <!-- input terminals -->
+  <circle cx="480" cy="190" r="7" fill="#DDF3E4" stroke="#1E5C34" stroke-width="3"/>
+  <circle cx="480" cy="320" r="7" fill="#DDF3E4" stroke="#1E5C34" stroke-width="3"/>
+  <text x="500" y="197" font-size="19" font-weight="bold" fill="#ffffff">IO (input +)</text>
+  <text x="500" y="327" font-size="19" font-weight="bold" fill="#ffffff">GND (input &#8722;)</text>
+  <!-- output terminals -->
+  <circle cx="760" cy="190" r="7" fill="#DDF3E4" stroke="#1E5C34" stroke-width="3"/>
+  <circle cx="760" cy="265" r="7" fill="#DDF3E4" stroke="#1E5C34" stroke-width="3"/>
+  <circle cx="760" cy="320" r="7" fill="#DDF3E4" stroke="#1E5C34" stroke-width="3"/>
+  <text x="740" y="197" text-anchor="end" font-size="19" font-weight="bold" fill="#ffffff">VCC</text>
+  <text x="740" y="272" text-anchor="end" font-size="19" font-weight="bold" fill="#ffffff">OUT</text>
+  <text x="740" y="327" text-anchor="end" font-size="19" font-weight="bold" fill="#ffffff">GND</text>
+
+  <!-- VCC left unconnected -->
+  <line x1="760" y1="190" x2="815" y2="190" stroke="#9A9A9A" stroke-width="4" stroke-dasharray="8,7"/>
+  <line x1="828" y1="177" x2="854" y2="203" stroke="#C43B3B" stroke-width="5" stroke-linecap="round"/>
+  <line x1="854" y1="177" x2="828" y2="203" stroke="#C43B3B" stroke-width="5" stroke-linecap="round"/>
+  <text x="841" y="160" text-anchor="middle" font-size="18" fill="#555555">leave</text>
+  <text x="841" y="225" text-anchor="middle" font-size="18" fill="#555555">unconnected</text>
+
+  <!-- Micra box -->
+  <rect x="950" y="200" width="200" height="230" rx="16" fill="#C4542B"/>
+  <text x="1050" y="262" text-anchor="middle" font-size="34" font-weight="bold" fill="#ffffff">Micra</text>
+  <text x="1050" y="296" text-anchor="middle" font-size="20" fill="#ffffff">paddle circuit</text>
+  <text x="1050" y="322" text-anchor="middle" font-size="20" fill="#ffffff">(thin loom wires)</text>
+  <text x="965" y="360" font-size="20" font-weight="bold" fill="#ffffff">&#8592; white (+5 V)</text>
+  <text x="965" y="405" font-size="20" font-weight="bold" fill="#ffffff">&#8592; black (GND)</text>
+  <circle cx="950" cy="353" r="6" fill="#ffffff"/>
+  <circle cx="950" cy="398" r="6" fill="#ffffff"/>
+
+  <!-- Drive wires: Apollo -> module input -->
+  <line x1="250" y1="280" x2="480" y2="190" stroke="#D63E3E" stroke-width="5" stroke-linecap="round"/>
+  <line x1="250" y1="330" x2="480" y2="320" stroke="#E8912D" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="330" cy="326" r="7" fill="#E8912D"/>
+
+  <!-- Module output -> Micra (isolated dry contact) -->
+  <!-- white wire (light with outline) -->
+  <line x1="760" y1="265" x2="950" y2="353" stroke="#777777" stroke-width="8" stroke-linecap="round"/>
+  <line x1="760" y1="265" x2="950" y2="353" stroke="#F4F4F4" stroke-width="4" stroke-linecap="round"/>
+  <!-- black wire -->
+  <line x1="760" y1="320" x2="950" y2="398" stroke="#222222" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- Paddle sense: GPIO 51 + GND branch to the physical paddle switch -->
+  <polyline points="250,385 560,385 560,530" fill="none" stroke="#3A76D6" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="330,326 330,530" fill="none" stroke="#E8912D" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- switch symbol between x=330 and x=560 at y=530 -->
+  <line x1="330" y1="530" x2="370" y2="530" stroke="#444444" stroke-width="5" stroke-linecap="round"/>
+  <line x1="520" y1="530" x2="560" y2="530" stroke="#444444" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="378" cy="530" r="8" fill="#ffffff" stroke="#444444" stroke-width="4"/>
+  <circle cx="512" cy="530" r="8" fill="#ffffff" stroke="#444444" stroke-width="4"/>
+  <line x1="384" y1="527" x2="500" y2="490" stroke="#444444" stroke-width="5" stroke-linecap="round"/>
+  <text x="445" y="575" text-anchor="middle" font-size="20" font-weight="bold" fill="#333333">Micra paddle switch</text>
+  <text x="445" y="600" text-anchor="middle" font-size="18" fill="#555555">(now connects only to Apollo, never the Micra)</text>
+
+  <!-- caption -->
+  <text x="600" y="650" text-anchor="middle" font-size="20" fill="#444444">GPIO 52 high &#8594; module LED on &#8594; isolated OUT/GND contact closes &#8594; the Micra sees the paddle ON.</text>
+</svg>
