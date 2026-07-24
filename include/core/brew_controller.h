@@ -106,10 +106,13 @@ class BrewController : public IBrewController {
 
   // Auto-flush sequencing (wired only). Armed when a real shot freezes into
   // review; a cup-off weight drop starts the delay; then the line runs for
-  // flush_s_ and opens again. Any user paddle activity cancels it — the human
-  // always outranks the automation on the drive line.
+  // flush_s_ and opens again. User paddle activity cancels it by EDGE, not
+  // level — after a target auto-stop the physical paddle is naturally still
+  // ON when the flush arms, and flipping it back OFF is routine cleanup, not
+  // a takeover. The human still outranks the automation on the drive line.
   enum class FlushState : uint8_t { kOff, kArmed, kDelay, kRunning };
   FlushState flush_state_ = FlushState::kOff;
+  bool flush_paddle_ref_ = false;  // paddle level last seen by the flush (edge detect)
   float flush_ref_g_ = 0.0f;      // review-entry weight the drop is judged against
   uint32_t flush_armed_ms_ = 0;   // arming time (bounds the post-review watch)
   uint32_t flush_at_ms_ = 0;      // when the delay ends and the run starts
