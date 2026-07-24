@@ -21,9 +21,9 @@ to the machine instead of a phone app.
   boiler level + on/off, power / standby, and live status (connecting, ready,
   disconnected) with the real brew and steam temperatures.
 - **Bluetooth scale integration** — pair a supported scale (**Bookoo Themis**,
-  or an **Acaia** — Umbra, Lunar, Pyxis, Prochef) for a live weight readout, an
-  automatic shot timer, a live flow‑rate graph (g/s or g), and tare from the
-  screen.
+  or an **Acaia** — Umbra, Lunar, Prochef, or Pyxis, the last untested) for a
+  live weight readout, an automatic shot timer, a live flow‑rate graph (g/s or
+  g), and tare from the screen.
 - **Brew by weight** — with a scale paired, pick a shot mode from the Home
   screen: **Auto shot** (boards wired into the paddle circuit stop the shot at
   your target weight, learning the drip overshoot per shot), **Shot detect**
@@ -101,8 +101,9 @@ Step‑by‑step wiring instructions (with photos of the Micra's paddle loom) ar
 in the **[wiring guide](docs/WIRING.md)**.
 
 The S3 boards use the ESP32‑S3R8 (16 MB flash, 8 MB octal PSRAM). A supported
-Bluetooth scale (Bookoo Themis, or Acaia Umbra / Lunar / Pyxis / Prochef) is
-optional but unlocks the shot timer, flow graph, and brew‑by‑weight features.
+Bluetooth scale (Bookoo Themis, or Acaia Umbra / Lunar / Prochef / Pyxis —
+Pyxis untested) is optional but unlocks the shot timer, flow graph, and
+brew‑by‑weight features.
 
 ### Power, battery, and RTC
 
