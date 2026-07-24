@@ -119,9 +119,30 @@ black** run to the physical paddle switch:
 
 ![Finished P4 cable with inline opto module](img/wiring/cable-p4-opto.jpg)
 
+## Bench‑test before installing
+
+The whole cable can be validated before it ever touches the machine. Connect
+it to Apollo, power up, and turn on **Settings → Micra → Settings → Wired
+paddle**. Apollo relays the paddle regardless of anything else, so:
+
+1. **Touch the two paddle‑sense wires together** — to Apollo that's the
+   paddle flipping ON. On a P4 build the opto module's **red LED lights**
+   while they're touching.
+2. **Meter the Micra side**: with a multimeter in continuity mode across the
+   two machine‑side connectors (the ones destined for the Micra's white and
+   black), you should read a **closed circuit** while the sense wires touch
+   and **open** when you separate them.
+
+That's the whole contract — paddle closed ⇒ Micra‑side contact closed — so if
+both steps behave, the install will work.
+
+## Closing up
+
+Tuck the finished wiring down into the machine, **reconnect any connectors
+you unplugged** for loom access, and put the top panel back on.
+
 ## Afterwards
 
-Turn on **Settings → Micra → Settings → Wired paddle** so the firmware uses
-the harness — the **Auto shot** mode then appears on the Home shot pill, and
-**Auto flush** becomes available. See the [manual](../MANUAL.md) for what each
-mode does.
+With **Wired paddle** on (from the bench test above), the **Auto shot** mode
+appears on the Home shot pill and **Auto flush** becomes available. See the
+[manual](../MANUAL.md) for what each mode does.
