@@ -4,7 +4,7 @@ namespace ui::theme {
 
 namespace {
 
-// Five cohesive dark schemes. `text` is light in all of them so it stays legible
+// Cohesive dark schemes. `text` is light in all of them so it stays legible
 // on both `card` and the saturated `accent` (button labels use `text`).
 const Palette kPalettes[] = {
     //          name          bg        rail      card      text      muted     accent    scroll    ok        warn      alert
@@ -17,6 +17,21 @@ const Palette kPalettes[] = {
     {"Plum",      0x15111C, 0x1F1829, 0x281F35, 0xF2ECF8, 0x9C8FB0, 0xA663E0, 0x5C4E72, 0x5BC98C, 0xE7B84A, 0xE06A6A},
     {"Forest",    0x0E1411, 0x151E18, 0x1C2A22, 0xEAF3EC, 0x8EA897, 0x2FAE76, 0x4F6657, 0x6FD08D, 0xE3B642, 0xE05D4A},
     {"Rose",      0x17100F, 0x221614, 0x2D1C1A, 0xF6EBE8, 0xB29691, 0xE0577E, 0x6B514C, 0x66C07C, 0xE6AE45, 0xCF4636},
+    // Append-only: the theme setting persists as an INDEX (NVS "theme"), so
+    // reordering or removing entries silently re-themes existing devices.
+    //          name          bg        rail      card      text      muted     accent    scroll    ok        warn      alert
+    // Mono: greyscale chrome; only the ok/warn/alert status roles keep muted
+    // color (the dots/graph encode live machine state — grey would erase it).
+    {"Mono",      0x000000, 0x101010, 0x191919, 0xFFFFFF, 0x9A9A9A, 0xB9B9B9, 0x5E5E5E, 0x8FBF8F, 0xC9A94B, 0xC96A5C},
+    // High contrast: pure black, brighter secondary text, vivid saturated
+    // status colors, thumb bumped so it never vanishes.
+    {"Contrast",  0x000000, 0x000000, 0x141414, 0xFFFFFF, 0xD0D0D0, 0x00A2FF, 0x8A8A8A, 0x00E676, 0xFFD600, 0xFF3D2E},
+    // Rosso corsa accent on a dark warm-red body; giallo modena as warn.
+    {"Ferrari",   0x140607, 0x1E0A0C, 0x2A0E12, 0xFFF4EC, 0xBC8F86, 0xE8112D, 0x84443F, 0x63C74D, 0xFCD116, 0xFF7043},
+    // Sunset: coral accent over warm plum-brown.
+    {"Sunset",    0x1A0F14, 0x241419, 0x301A20, 0xFFEDE3, 0xB58F92, 0xFF7043, 0x6E4A50, 0x66BB6A, 0xFFCA28, 0xEF5350},
+    // Citrus: lime accent over deep olive (yellow-green, vs Forest's cool green).
+    {"Citrus",    0x111704, 0x18210A, 0x202B10, 0xF4F8E8, 0xA3B183, 0x8FB824, 0x53613B, 0x6FD08D, 0xE3B642, 0xE05D4A},
 };
 constexpr int kCount = static_cast<int>(sizeof(kPalettes) / sizeof(kPalettes[0]));
 

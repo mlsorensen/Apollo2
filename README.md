@@ -20,9 +20,16 @@ to the machine instead of a phone app.
 - **Micra control over Bluetooth (BLE)** — brew temperature set‑point, steam
   boiler level + on/off, power / standby, and live status (connecting, ready,
   disconnected) with the real brew and steam temperatures.
-- **Bluetooth scale integration** — pair a supported scale (Bookoo Themis) for a
-  live weight readout, an automatic shot timer, a scrolling flow‑rate graph
-  (g/s or g), and tare from the screen.
+- **Bluetooth scale integration** — pair a supported scale (**Bookoo Themis**,
+  or an **Acaia** — Umbra, Lunar, Pyxis, Prochef) for a live weight readout, an
+  automatic shot timer, a live flow‑rate graph (g/s or g), and tare from the
+  screen.
+- **Brew by weight** — with a scale paired, pick a shot mode from the Home
+  screen: **Auto shot** (boards wired into the paddle circuit stop the shot at
+  your target weight, learning the drip overshoot per shot), **Shot detect**
+  (start/stop inferred from the weight stream alone — works on every board, no
+  wiring), or **Manual**. Finished shots freeze into a review graph, and wired
+  boards can **auto‑flush** the group after you lift the cup.
 - **Automatic time** — optionally join your home Wi‑Fi and the clock keeps itself
   correct over NTP, with a timezone picker that handles daylight saving. Time is
   saved to the on‑board RTC (where present) so it survives a power‑off.
@@ -58,17 +65,40 @@ absent — the UI just shows the relevant part as offline.
 The firmware targets Waveshare ESP32 touch boards. One board is selected at
 build time.
 
-| Board | Display | Notes |
-|-------|---------|-------|
-| **ESP32‑S3‑Touch‑LCD‑2** | 2.0" 240×320, ST7789 (SPI) | A portable, battery‑friendly remote. |
-| **ESP32‑S3‑Touch‑LCD‑4.3B** | 4.3" 800×480, RGB parallel | Larger counter‑top panel, primary dev target. Has a PCF85063 RTC. |
-| **ESP32‑S3‑Touch‑LCD‑4.3C** | 4.3" 800×480, RGB parallel | 4.3B variant with a dimmable (PWM) backlight and battery monitoring. Has a PCF85063 RTC. |
-| **ESP32‑S3‑Touch‑LCD‑7B** | 7" 1024×600, RGB parallel | Largest panel. |
-| **ESP32‑P4‑WIFI6‑Touch‑LCD‑4.3** | 4.3" 800×480, MIPI‑DSI (ST7701) | ESP32‑P4 (32 MB flash / 32 MB PSRAM); WiFi 6 + BLE via on‑board ESP32‑C6. Bring‑up in progress. |
-| **ESP32‑P4‑WIFI6‑Touch‑LCD‑5** | 5" 1280×720, MIPI‑DSI (HX8394) | Same electronics as the P4 4.3; higher‑density panel — the UI renders the 800×480 layout scaled 1.5×. Not yet hardware‑verified. |
+### Recommended boards
+
+Two platforms are the focus going forward — pick by how hands‑on you want the
+build to be:
+
+- **[Waveshare ESP32‑S3‑Touch‑LCD‑4.3C](https://www.waveshare.com/esp32-s3-touch-lcd-4.3c.htm)
+  in the **BOX** variant (SKU 33630) — the easy path.** A finished enclosure, ready to sit on the
+  counter, and **direct‑wire capable**: its isolated DI/DO terminal block has
+  the opto‑isolators built in, so wiring the Micra's paddle circuit for Auto
+  shot is just three wires into screw terminals. The trade‑off is a lower‑end
+  panel (4.3" 800×480 RGB) and less headroom than the P4.
+- **[Waveshare ESP32‑P4‑WIFI6‑Touch‑LCD‑5](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-5.htm)
+  (SKU 33762) — the performance path.** A much faster ESP32‑P4 with a crisp 5"
+  1280×720 DSI panel. More of a project: there is no enclosure (you 3D‑print a
+  case) and the wired paddle needs a small cable you assemble with an external
+  opto‑isolator module.
+
+### All supported boards
+
+| Board | Display | Wired paddle (Auto shot) | Notes |
+|-------|---------|--------------------------|-------|
+| **ESP32‑S3‑Touch‑LCD‑2** | 2.0" 240×320, ST7789 (SPI) | — (Shot detect only) | A portable, battery‑friendly remote. |
+| **ESP32‑S3‑Touch‑LCD‑4.3B** | 4.3" 800×480, RGB parallel | — (Shot detect only) | Counter‑top panel. Has a PCF85063 RTC. |
+| **ESP32‑S3‑Touch‑LCD‑4.3C / 4.3C‑BOX** | 4.3" 800×480, RGB parallel | **Yes — built‑in.** Isolated DI/DO screw terminals (opto‑isolators on board) | **Recommended (easy path).** Dimmable backlight, battery monitoring, PCF85063 RTC, speaker. |
+| **ESP32‑S3‑Touch‑LCD‑7B** | 7" 1024×600, RGB parallel | — (Shot detect only) | Largest panel. |
+| **ESP32‑P4‑WIFI6‑Touch‑LCD‑4.3** | 4.3" 800×480, MIPI‑DSI (ST7701) | **Yes — external opto.** Native GPIOs + a PC817‑style opto module you wire | ESP32‑P4 (32 MB flash / 32 MB PSRAM); WiFi 6 + BLE via on‑board ESP32‑C6. |
+| **ESP32‑P4‑WIFI6‑Touch‑LCD‑5** | 5" 1280×720, MIPI‑DSI (HX8394) | **Yes — external opto.** Same wiring as the P4 4.3 | **Recommended (performance path).** Same electronics as the P4 4.3 with a higher‑density panel (UI scaled 1.5×). No enclosure — 3D‑print a case. |
+
+Boards without paddle wiring still get the full brew‑by‑weight experience via
+**Shot detect** — only the automatic stop at target weight needs the wire.
 
 The S3 boards use the ESP32‑S3R8 (16 MB flash, 8 MB octal PSRAM). A supported
-scale (Bookoo Themis Mini) is optional. Future support for Acaia Umbra coming.
+Bluetooth scale (Bookoo Themis, or Acaia Umbra / Lunar / Pyxis / Prochef) is
+optional but unlocks the shot timer, flow graph, and brew‑by‑weight features.
 
 ---
 
@@ -137,10 +167,14 @@ locked out if your network changes.
 
 - **Home** shows the machine (and scale, if paired). The large action button is
   Standby / Turn On when connected, and becomes a **Connect** button when the
-  machine is disconnected.
+  machine is disconnected. With a scale, the pill under the shot timer cycles
+  the shot mode — **Auto shot** (wired paddle boards) / **Shot detect** /
+  **Manual** — and becomes **Reset** while a finished shot is up for review.
 - **Settings** groups everything under Micra, Scale, and Device (brightness,
   clock, units, theme, Wi‑Fi).
 - **Stats** shows brew/boiler temperature history and device info.
+
+Every screen and setting is described in the **[user manual](MANUAL.md)**.
 
 ---
 

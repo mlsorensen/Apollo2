@@ -6,18 +6,19 @@
 //
 // IMPORTANT: stays free of LVGL/Arduino/BLE/SDL like the other core ports.
 //
-// Two ways into the shot lifecycle, selected by `paddle_wired`:
-//   WIRED — the device sits in the Micra's paddle circuit (the 4.3C's isolated
-//   DO/DI, or a relay on plain-GPIO boards; core::IPaddle) and shots start/stop
-//   on paddle edges, with weight-triggered auto-stop.
-//   UNWIRED — no paddle harness in the shot machinery (boards without the
-//   hardware, or the "Wired paddle" setting off): a weight-stream detector
-//   (core::ShotDetector) infers shot start/end from the scale alone. No
-//   auto-stop, no overshoot learning, no review-reject flash; the target
+// Two ways into the shot lifecycle, selected by ShotMode (+ the wired-paddle
+// setting):
+//   WIRED (mode kAuto/kManual with the harness) — the device sits in the
+//   Micra's paddle circuit (the 4.3C's isolated DO/DI, or a relay on
+//   plain-GPIO boards; core::IPaddle) and shots start/stop on paddle edges,
+//   with weight-triggered auto-stop in kAuto.
+//   DETECTOR (mode kDetect, or any mode without the harness) — a weight-stream
+//   detector (core::ShotDetector) infers shot start/end from the scale alone.
+//   No auto-stop, no overshoot learning, no review-reject flash; the target
 //   weight is informational only (the stop_hint flash stands in for the
-//   auto-stop). Where the paddle HARDWARE exists, unwired mode still relays
-//   it pass-through — sense + drive, no timer/phase involvement — so a wired
-//   rig can test unwired mode by just flipping the setting.
+//   auto-stop). Where the paddle HARDWARE exists, the detector path still
+//   relays it pass-through — sense + drive, no timer/phase involvement — so a
+//   wired rig can use detect mode (or test it) by just flipping the pill.
 //
 // The WIRED shot lifecycle (core::BrewController):
 //   Idle -> (paddle ON edge, shot mode armed, scale connected) Brewing: tare,
@@ -43,9 +44,20 @@
 
 namespace core {
 
+// How shots start/stop (BrewSnapshot::mode; the Home pill cycles it).
+//   kAuto   — wired only: paddle edges run the shot, weight auto-stop.
+//   kDetect — the weight-stream detector infers start/end; no auto-stop (the
+//             stop_hint flash stands in). Works wired (paddle relays pass-
+//             through) and unwired alike.
+//   kManual — nothing armed: wired rigs still relay the paddle + run the ESP
+//             timer on edges; unwired shows the scale's own timer.
+// A wired rig offers all three; without a wired paddle kAuto is unavailable
+// (a persisted kAuto degrades to kDetect, which snapshot() reports).
+enum class ShotMode : uint8_t { kManual = 0, kAuto = 1, kDetect = 2 };
+
 // Where the shot machinery is in its lifecycle (BrewSnapshot::phase).
 enum class ShotPhase : uint8_t {
-  kIdle,      // ready — next paddle ON edge starts a shot (armed if shot_mode)
+  kIdle,      // ready — the next paddle ON edge / detection starts a shot
   kBrewing,   // automated shot running: monitoring weight toward the target
   kSettling,  // shot stopped; graph still live for a few seconds so the drip
               // tail settles to zero before the freeze (no new shot can arm)
@@ -57,12 +69,15 @@ enum class ShotPhase : uint8_t {
 struct BrewSnapshot {
   bool  paddle_hw;        // paddle hardware exists on this board (the Settings
                           // "Wired paddle" toggle is only built when it does)
-  bool  paddle_wired;     // effective mode: paddle_hw && the user setting. False
-                          // = unwired (detector-driven; see the header comment)
+  bool  wired_setting;    // the raw "Wired paddle" user setting (drives the
+                          // Settings switch; paddle_wired below is the effect)
+  bool  paddle_wired;     // paddle edges are the shot-phase source right now:
+                          // paddle_hw && the user setting && mode != kDetect.
+                          // False = detector-driven (see the header comment)
   bool  paddle_pressed;   // the physical paddle is currently engaged (wired only)
   bool  brewing;          // the line is held closed (machine running via us)
   ShotPhase phase;        // shot lifecycle (see above)
-  bool  shot_mode;        // automation armed (tare/timer/graph/auto-stop)
+  ShotMode mode;          // EFFECTIVE start/stop mode (kAuto only when wired)
   uint32_t shot_ms;       // ESP-timed shot duration; holds after stop
   bool  baseline_set;     // starting weight confirmed post-tare (kBrewing only;
                           // the UI re-clears the graph here to shed the
@@ -80,19 +95,20 @@ struct BrewSnapshot {
                           // overshoot, led by ~250ms of current flow for human
                           // reaction time) — the UI flashes "stop the shot now".
                           // Latches true until the shot ends.
-  int   flush_s;          // auto-flush run time in seconds (0 = off). Wired
-                          // only: after a finished shot, when the scale sees
-                          // the cup come off, wait a beat and run the group
-                          // for this long to rinse the puck's surface.
+  int   flush_s;          // auto-flush run time in seconds (0 = off). Needs
+                          // the wired relay: after a finished shot, when the
+                          // scale sees the cup come off, wait a beat and run
+                          // the group for this long to rinse the puck's surface.
+  int   flush_delay_s;    // cup-off -> flush pause (seconds; user setting)
 };
 
 // True when the ESP-side shot timer is the authoritative shot-time source:
-// wired (paddle edges drive it), or unwired with detection armed. Unwired with
-// detection OFF has no edge source at all, so displays fall back to the
-// scale's built-in timer. One definition — the label writer (update_home) and
-// the fast 10Hz writer (pump_scale_chart) must never disagree.
+// wired (paddle edges drive it), or the detector is armed. Manual-unwired has
+// no edge source at all, so displays fall back to the scale's built-in timer.
+// One definition — the label writer (update_home) and the fast 10Hz writer
+// (pump_scale_chart) must never disagree.
 inline bool esp_shot_timer(const BrewSnapshot& b) {
-  return b.paddle_wired || b.shot_mode;
+  return b.paddle_wired || b.mode == ShotMode::kDetect;
 }
 
 class IBrewController {
@@ -106,9 +122,10 @@ class IBrewController {
   // implementation. No-op when !available.
   virtual void set_target_weight_g(float grams) = 0;
 
-  // Arm/disarm the shot automation (a flush shouldn't tare/log a "shot").
-  // Paddle pass-through and the shot timer keep working either way. Persisted.
-  virtual void set_shot_mode(bool on) = 0;
+  // Select how shots start/stop (see ShotMode). kAuto without a wired paddle
+  // behaves as (and reports) kDetect. Paddle pass-through keeps working in
+  // every mode. Persisted.
+  virtual void set_shot_mode(ShotMode mode) = 0;
 
   // Leave kReview early (the UI's Reset button). No-op outside kReview.
   virtual void dismiss_review() = 0;
@@ -121,9 +138,13 @@ class IBrewController {
   // to kIdle. Persisted.
   virtual void set_wired_paddle(bool on) = 0;
 
-  // Auto-flush run time in seconds (0 = off; the UI offers Off/3s/6s). Wired
-  // only — unwired has no drive line to flush with. Persisted.
+  // Auto-flush run time in seconds (0 = off; the UI offers Off/3s/6s). Needs
+  // the wired relay — without it there is no drive line to flush with. Persisted.
   virtual void set_flush_s(int seconds) = 0;
+
+  // How long after the cup comes off before the flush runs (seconds; the UI
+  // offers 3/6/9/15). Persisted.
+  virtual void set_flush_delay_s(int seconds) = 0;
 };
 
 }  // namespace core

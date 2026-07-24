@@ -12,13 +12,19 @@ namespace host {
 class FakeBrewController : public core::IBrewController {
  public:
   core::BrewSnapshot snapshot() const override {
+    // Same degradation rule as the real controller: kAuto without the wired
+    // relay reports (and behaves as) kDetect.
+    const bool relay = paddle_hw_ && wired_;
+    const core::ShotMode eff =
+        (mode_ == core::ShotMode::kAuto && !relay) ? core::ShotMode::kDetect : mode_;
     return core::BrewSnapshot{
         .paddle_hw = paddle_hw_,
-        .paddle_wired = paddle_hw_ && wired_,
+        .wired_setting = wired_,
+        .paddle_wired = relay && eff != core::ShotMode::kDetect,
         .paddle_pressed = paddle_,
         .brewing = brewing_,
         .phase = phase_,
-        .shot_mode = shot_mode_,
+        .mode = eff,
         .shot_ms = shot_ms_,
         .baseline_set = true,
         .start_weight_g = 0.0f,
@@ -28,13 +34,15 @@ class FakeBrewController : public core::IBrewController {
         .review_reject_seq = 0,
         .stop_hint = false,
         .flush_s = flush_s_,
+        .flush_delay_s = flush_delay_s_,
     };
   }
   void set_target_weight_g(float grams) override { target_g_ = grams; }
-  void set_shot_mode(bool on) override { shot_mode_ = on; }
+  void set_shot_mode(core::ShotMode mode) override { mode_ = mode; }
   void set_review_hold_s(int seconds) override { review_hold_s_ = seconds; }
   void set_wired_paddle(bool on) override { wired_ = on; }
   void set_flush_s(int seconds) override { flush_s_ = seconds; }
+  void set_flush_delay_s(int seconds) override { flush_delay_s_ = seconds; }
   void dismiss_review() override {
     if (phase_ == core::ShotPhase::kReview) phase_ = core::ShotPhase::kIdle;
   }
@@ -53,12 +61,13 @@ class FakeBrewController : public core::IBrewController {
                            // look (main.cpp toggles it for the unwired render)
   bool paddle_ = false;
   bool brewing_ = false;
-  bool shot_mode_ = true;
+  core::ShotMode mode_ = core::ShotMode::kAuto;  // wired renders show "Auto shot"
   core::ShotPhase phase_ = core::ShotPhase::kIdle;
   uint32_t shot_ms_ = 27000;  // matches the fake scale's 27.0s render
   float target_g_ = 36.0f;
   int review_hold_s_ = 30;
   int flush_s_ = 0;
+  int flush_delay_s_ = 3;
 };
 
 }  // namespace host

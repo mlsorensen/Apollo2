@@ -51,6 +51,7 @@ struct SettingsWidgets {
   lv_obj_t* list = nullptr;  // container the result rows are added to
   int last_count = -1;       // change detection so the list only rebuilds on change
   bool last_scanning = false;
+  bool scan_done = false;    // a scan has finished (shows "none found" vs the hint)
 
   // --- Scale connection (mirrors the Micra rows; no token) -----------------
   lv_obj_t* scale_saved_row = nullptr;
@@ -63,6 +64,7 @@ struct SettingsWidgets {
   lv_obj_t* scale_list = nullptr;
   int scale_last_count = -1;
   bool scale_last_scanning = false;
+  bool scale_scan_done = false;
 
   // Scale target weight stepper (grams)
   lv_obj_t* target_minus = nullptr;
@@ -87,6 +89,9 @@ struct SettingsWidgets {
                                              // only built on paddle-capable boards
   lv_obj_t* flush_btn = nullptr;             // Micra: auto-flush cycle (Off / 3 s / 6 s);
   lv_obj_t* flush_value = nullptr;           // only built on paddle-capable boards
+  lv_obj_t* flush_delay_row = nullptr;       // Micra: cup-off -> flush pause cycle
+  lv_obj_t* flush_delay_btn = nullptr;       // (3/6/9/15 s); row hidden while the
+  lv_obj_t* flush_delay_value = nullptr;     // flush itself is Off
 
   // --- Brew temp stepper (continuous, tenths) ------------------------------
   lv_obj_t* brew_minus = nullptr;

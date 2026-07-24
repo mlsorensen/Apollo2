@@ -351,8 +351,10 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   // default "Text" forever. Reset so the first update repopulates everything.
   out.last_count = -1;
   out.last_scanning = false;
+  out.scan_done = false;
   out.scale_last_count = -1;
   out.scale_last_scanning = false;
+  out.scale_scan_done = false;
 
   lv_obj_t* menu = lv_menu_create(parent);
   out.menu = menu;
@@ -457,9 +459,21 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
       lv_obj_set_style_text_color(out.flush_value, lv_color_hex(ui::theme::text()), 0);
       lv_obj_set_style_text_font(out.flush_value, font, 0);
       lv_obj_center(out.flush_value);
+      // Cup-off -> flush pause: tap cycles 3 / 6 / 9 / 15 s. Only meaningful
+      // (and only shown — App manages the HIDDEN flag) while the flush is on.
+      out.flush_delay_row = make_setting_row(out.micra_settings_page, "Flush delay", font);
+      out.flush_delay_btn = ui::make_button(out.flush_delay_row);
+      lv_obj_set_height(out.flush_delay_btn, btn_size);
+      lv_obj_set_style_pad_hor(out.flush_delay_btn, ui::dp(14), 0);
+      lv_obj_set_style_bg_color(out.flush_delay_btn, lv_color_hex(ui::theme::card()), 0);
+      out.flush_delay_value = lv_label_create(out.flush_delay_btn);
+      lv_obj_set_style_text_color(out.flush_delay_value, lv_color_hex(ui::theme::text()), 0);
+      lv_obj_set_style_text_font(out.flush_delay_value, font, 0);
+      lv_obj_center(out.flush_delay_value);
     } else {
       out.wired_paddle_switch = nullptr;
       out.flush_btn = out.flush_value = nullptr;
+      out.flush_delay_row = out.flush_delay_btn = out.flush_delay_value = nullptr;
     }
   }
   section_label(out.micra_settings_page, "Brew", font);
