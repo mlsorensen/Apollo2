@@ -87,9 +87,9 @@ On the P4‑WIFI6‑Touch‑LCD‑5 (and the 4.3), the paddle uses three native 
 on the corner of the header — **GND, GPIO 52, GPIO 51** — which fit a 3‑pin
 screw terminal, plus the opto module for isolation:
 
-![Opto module wiring — "MCU" is Apollo, "Device Controlled" is the Micra](img/wiring/opto-module-wiring.jpg)
+![Apollo P4 → opto module → Micra wiring](img/wiring/p4-opto-wiring.svg)
 
-Reading that diagram for our setup:
+In detail:
 
 - **Drive (Apollo → Micra):** Apollo **GPIO 52** → opto module input **IO**,
   and Apollo **GND** → the module's input **GND**. On the output side leave
@@ -103,7 +103,10 @@ Reading that diagram for our setup:
 
 A finished P4 cable with the opto module spliced in near the machine end
 (shown before wrapping the module in heat‑shrink — do wrap it, so nothing can
-short out inside the machine):
+short out inside the machine). Of the cable's conductors, **red + black feed
+the opto module's input** — that pair carries Apollo's drive and becomes the
+Micra's paddle signal on the isolated side — while **white + the second
+black** run to the physical paddle switch:
 
 ![Finished P4 cable with inline opto module](img/wiring/cable-p4-opto.jpg)
 
