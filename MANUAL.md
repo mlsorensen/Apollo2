@@ -232,5 +232,5 @@ machine is already warming up when you arrive.
 | Review graph + frozen weight | Yes | Yes | No |
 | Auto flush eligible | Yes | Yes (wired boards) | No |
 
-Wiring the paddle harness is described per board in the
-[README's hardware section](README.md#supported-hardware).
+Wiring the paddle harness — parts, photos of the Micra's paddle loom, and
+per‑board terminals — is covered in the [wiring guide](docs/WIRING.md).

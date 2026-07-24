@@ -74,13 +74,15 @@ build to be:
   in the **BOX** variant (SKU 33630) — the easy path.** A finished enclosure, ready to sit on the
   counter, and **direct‑wire capable**: its isolated DI/DO terminal block has
   the opto‑isolators built in, so wiring the Micra's paddle circuit for Auto
-  shot is just three wires into screw terminals. The trade‑off is a lower‑end
+  shot is just three wires into screw terminals (see the
+  [wiring guide](docs/WIRING.md)). The trade‑off is a lower‑end
   panel (4.3" 800×480 RGB) and less headroom than the P4.
 - **[Waveshare ESP32‑P4‑WIFI6‑Touch‑LCD‑5](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-5.htm)
   (SKU 33762) — the performance path.** A much faster ESP32‑P4 with a crisp 5"
   1280×720 DSI panel. More of a project: there is no enclosure (print the
   [shell provided in this repo](hardware/3d-prints/)) and the wired paddle
-  needs a small cable you assemble with an external opto‑isolator module.
+  needs a small cable you assemble with an external opto‑isolator module
+  (see the [wiring guide](docs/WIRING.md)).
 
 ### All supported boards
 
@@ -95,6 +97,8 @@ build to be:
 
 Boards without paddle wiring still get the full brew‑by‑weight experience via
 **Shot detect** — only the automatic stop at target weight needs the wire.
+Step‑by‑step wiring instructions (with photos of the Micra's paddle loom) are
+in the **[wiring guide](docs/WIRING.md)**.
 
 The S3 boards use the ESP32‑S3R8 (16 MB flash, 8 MB octal PSRAM). A supported
 Bluetooth scale (Bookoo Themis, or Acaia Umbra / Lunar / Pyxis / Prochef) is
