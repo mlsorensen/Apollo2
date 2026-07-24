@@ -49,6 +49,10 @@ void BrewController::poll(uint32_t now_ms) {
         flush_state_ = FlushState::kArmed;
         flush_ref_g_ = s.weight_g;
         flush_armed_ms_ = now_ms;
+        // After a target auto-stop the physical paddle is typically still ON
+        // (the relay opened, not the user) — snapshot the level so poll_flush
+        // cancels on a fresh edge, not on the leftover level.
+        flush_paddle_ref_ = paddle_on_;
       }
     }
   }
@@ -64,13 +68,26 @@ void BrewController::poll(uint32_t now_ms) {
 
 void BrewController::poll_flush(uint32_t now_ms) {
   if (flush_state_ == FlushState::kOff) return;
-  // A new shot starting (any mode), losing the wired relay, or the user
-  // touching the paddle all cancel the sequence — the flush only runs into a
-  // quiet, cup-less drip tray with the human's hands off the controls.
-  if (!wired() || phase_ == ShotPhase::kBrewing || phase_ == ShotPhase::kSettling ||
-      paddle_on_) {
+  // A new shot starting (any mode) or losing the wired relay cancels the
+  // sequence — the flush only runs into a quiet, cup-less drip tray.
+  if (!wired() || phase_ == ShotPhase::kBrewing || phase_ == ShotPhase::kSettling) {
     cancel_flush();
     return;
+  }
+  // Paddle activity cancels by EDGE against the level snapshotted at arming
+  // (after a target auto-stop the paddle is naturally still ON — the level
+  // alone says nothing). Flipping that leftover paddle back OFF is routine
+  // cleanup, tolerated while armed/waiting. An OFF->ON flip is the user
+  // reaching for the machine — cancel explicitly, because the review swallows
+  // that edge so the kBrewing check above never sees it. Any flip mid-run
+  // cancels: an OFF edge already opened the line in poll_wired, and an ON
+  // flip makes cancel_flush leave the closed line to the user.
+  if (paddle_on_ != flush_paddle_ref_) {
+    flush_paddle_ref_ = paddle_on_;
+    if (paddle_on_ || flush_state_ == FlushState::kRunning) {
+      cancel_flush();
+      return;
+    }
   }
 
   switch (flush_state_) {
