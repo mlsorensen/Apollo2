@@ -127,8 +127,8 @@ Plots the live flow rate (or weight) from the scale.
 ### Bluetooth
 
 - **Scan** — searches for supported scales (Bookoo Themis, Acaia Umbra /
-  Lunar / Pyxis / Prochef). Wake the scale first — most sleep their Bluetooth
-  quickly.
+  Lunar / Prochef / Pyxis — Pyxis untested). Wake the scale first — most
+  sleep their Bluetooth quickly.
 - **Saved scale row** — **Connect / Disconnect** and **Forget** (no token
   needed for scales).
 
