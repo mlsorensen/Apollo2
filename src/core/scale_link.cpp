@@ -98,7 +98,12 @@ void ScaleLink::run() {
                        // sits on a freshly relinked scale could zero a mid-shot cup
       if (!do_connect(addr)) {
         set_connected(false);
-        sleep_ms(kReconnectBackoffMs);
+        // Sliced so a scan requested mid-backoff (this link's own Scan button
+        // cancels the failed attempt above) runs promptly, not seconds later.
+        for (uint32_t waited = 0;
+             waited < kReconnectBackoffMs && !scan_requested_.load(); waited += 100) {
+          sleep_ms(100);
+        }
         continue;
       }
       connected = true;
@@ -211,6 +216,8 @@ void ScaleLink::tare() { pending_tare_.store(true); }
 void ScaleLink::request_scan() {
   scanning_.store(true);        // reflect immediately in the UI
   scan_requested_.store(true);  // the loop performs the actual scan
+  ble_.cancel_connect();        // if OUR loop is camped in a connect attempt,
+                                // unblock it so the scan runs now, not in ~10s
 }
 
 bool ScaleLink::scanning() const { return scanning_.load(); }
@@ -242,7 +249,10 @@ void ScaleLink::do_scan() {
 
 void ScaleLink::pause_connects(bool on) {
   connects_paused_.store(on);
-  if (on) ble_.cancel_connect();  // abort an in-flight attempt right now
+  // Level-held at the transport: aborts the in-flight attempt AND blocks new
+  // ones (incl. the second address-type try inside a cancelled connect()) —
+  // a plain cancel left those to grab the radio back before the peer's scan.
+  ble_.hold_connects(on);
 }
 
 }  // namespace core

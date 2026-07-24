@@ -282,11 +282,19 @@ void on_smooth_clicked(lv_event_t* e) {
 void on_flush_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_flush();
 }
+void on_flush_delay_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_flush_delay();
+}
 
 // Auto-flush run-time choices (seconds; 0 = off).
 constexpr int kFlushChoices[] = {0, 3, 6};
 constexpr int kFlushCount = static_cast<int>(sizeof(kFlushChoices) / sizeof(kFlushChoices[0]));
+// Cup-off -> flush pause choices (seconds).
+constexpr int kFlushDelayChoices[] = {3, 6, 9, 15};
+constexpr int kFlushDelayCount =
+    static_cast<int>(sizeof(kFlushDelayChoices) / sizeof(kFlushDelayChoices[0]));
 
+// The delay row only matters (and only shows) while the flush itself is on.
 void set_flush_label(ui::SettingsWidgets& s, int flush_s) {
   if (s.flush_value == nullptr) return;
   if (flush_s <= 0) {
@@ -296,6 +304,20 @@ void set_flush_label(ui::SettingsWidgets& s, int flush_s) {
     std::snprintf(b, sizeof(b), "%d s", flush_s);
     lv_label_set_text(s.flush_value, b);
   }
+  if (s.flush_delay_row != nullptr) {
+    if (flush_s > 0) {
+      lv_obj_remove_flag(s.flush_delay_row, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_add_flag(s.flush_delay_row, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
+}
+
+void set_flush_delay_label(ui::SettingsWidgets& s, int delay_s) {
+  if (s.flush_delay_value == nullptr) return;
+  char b[12];
+  std::snprintf(b, sizeof(b), "%d s", delay_s);
+  lv_label_set_text(s.flush_delay_value, b);
 }
 
 // Shot-graph smoothing levels (IDisplaySettings::flow_smooth 0..3).
@@ -676,7 +698,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                         LV_EVENT_VALUE_CHANGED, this);
   }
   if (settings_.wired_paddle_switch != nullptr) {  // paddle-capable boards only
-    if (brew_ != nullptr && brew_->snapshot().paddle_wired)
+    if (brew_ != nullptr && brew_->snapshot().wired_setting)
       lv_obj_add_state(settings_.wired_paddle_switch, LV_STATE_CHECKED);
     lv_obj_add_event_cb(settings_.wired_paddle_switch, on_wired_paddle_switch,
                         LV_EVENT_VALUE_CHANGED, this);
@@ -684,6 +706,11 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   if (settings_.flush_btn != nullptr) {  // paddle-capable boards only
     set_flush_label(settings_, brew_ != nullptr ? brew_->snapshot().flush_s : 0);
     lv_obj_add_event_cb(settings_.flush_btn, on_flush_clicked, LV_EVENT_CLICKED, this);
+  }
+  if (settings_.flush_delay_btn != nullptr) {
+    set_flush_delay_label(settings_, brew_ != nullptr ? brew_->snapshot().flush_delay_s : 3);
+    lv_obj_add_event_cb(settings_.flush_delay_btn, on_flush_delay_clicked,
+                        LV_EVENT_CLICKED, this);
   }
   lv_obj_add_event_cb(settings_.perf_overlay_switch, on_perf_overlay_switch,
                       LV_EVENT_VALUE_CHANGED, this);
@@ -1105,7 +1132,17 @@ void App::cycle_flush() {
   while (i < kFlushCount && kFlushChoices[i] != cur) ++i;
   const int next = kFlushChoices[(i + 1) % kFlushCount];  // unknown value -> wraps to Off
   brew_->set_flush_s(next);
-  set_flush_label(settings_, next);
+  set_flush_label(settings_, next);  // also shows/hides the delay row
+}
+
+void App::cycle_flush_delay() {
+  if (brew_ == nullptr) return;
+  const int cur = brew_->snapshot().flush_delay_s;
+  int i = 0;
+  while (i < kFlushDelayCount && kFlushDelayChoices[i] != cur) ++i;
+  const int next = kFlushDelayChoices[(i + 1) % kFlushDelayCount];
+  brew_->set_flush_delay_s(next);
+  set_flush_delay_label(settings_, next);
 }
 
 void App::cycle_flow_smooth() {
@@ -1147,7 +1184,17 @@ void App::shot_button() {
   if (b.phase == core::ShotPhase::kReview) {
     brew_->dismiss_review();  // back to live monitoring; graph resumes next tick
   } else {
-    brew_->set_shot_mode(!b.shot_mode);
+    // Cycle the shot mode: Auto shot -> Shot detect -> Manual -> ... Auto is
+    // only offered where the wired relay exists (elsewhere the snapshot's mode
+    // never reads kAuto, so the cycle is just Detect <-> Manual).
+    const bool auto_ok = b.paddle_hw && b.wired_setting;
+    core::ShotMode next;
+    switch (b.mode) {
+      case core::ShotMode::kAuto:   next = core::ShotMode::kDetect; break;
+      case core::ShotMode::kDetect: next = core::ShotMode::kManual; break;
+      default:  next = auto_ok ? core::ShotMode::kAuto : core::ShotMode::kDetect; break;
+    }
+    brew_->set_shot_mode(next);
   }
   refresh();  // reflect the new button label/color immediately, not at the next 2 Hz
 }
@@ -1739,11 +1786,19 @@ void App::update_settings_view() {
   const bool scanning = provisioner_->scanning();
   const std::vector<core::ScanResult> results = provisioner_->scan_results();
   const int count = static_cast<int>(results.size());
+  if (settings_.last_scanning && !scanning) settings_.scan_done = true;
 
   if (scanning) {
     ui::set_text(settings_.status, "Scanning...");
   } else if (count == 0) {
-    ui::set_text(settings_.status, "Tap Scan to find your machine");
+    // A finished-but-empty scan needs to say so — silently reverting to the
+    // idle hint reads as "the scan never ran" (user-reported while the scale
+    // link had the radio; the scan preempts it now, but the answer can still
+    // honestly be "nothing found").
+    ui::set_text(settings_.status, settings_.scan_done
+                                       ? "No machines found - make sure it's powered "
+                                         "on nearby, then Scan again"
+                                       : "Tap Scan to find your machine");
   } else {
     ui::set_text(settings_.status, "Tap a machine to save it");
   }
@@ -1807,11 +1862,15 @@ void App::update_scale_view() {
   const bool scanning = scale_provisioner_->scanning();
   const std::vector<core::ScanResult> results = scale_provisioner_->scan_results();
   const int count = static_cast<int>(results.size());
+  if (settings_.scale_last_scanning && !scanning) settings_.scale_scan_done = true;
 
   if (scanning) {
     ui::set_text(settings_.scale_status, "Scanning...");
   } else if (count == 0) {
-    ui::set_text(settings_.scale_status, "Tap Scan to find your scale");
+    ui::set_text(settings_.scale_status, settings_.scale_scan_done
+                                             ? "No scales found - wake the scale, "
+                                               "then Scan again"
+                                             : "Tap Scan to find your scale");
   } else {
     ui::set_text(settings_.scale_status, "Tap a scale to save it");
   }

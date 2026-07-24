@@ -177,7 +177,12 @@ void MicraLink::run() {
       set_link(Link::Connecting);
       if (!do_connect(addr, token)) {
         set_link(Link::Disconnected);  // unreachable -> back off and retry
-        sleep_ms(kReconnectBackoffMs);
+        // Sliced so a scan requested mid-backoff (this link's own Scan button
+        // cancels the failed attempt above) runs promptly, not seconds later.
+        for (uint32_t waited = 0;
+             waited < kReconnectBackoffMs && !scan_requested_.load(); waited += 100) {
+          sleep_ms(100);
+        }
         continue;
       }
       // Connected over BLE; the auth WRITE always "succeeds", so verify the token
@@ -379,6 +384,8 @@ void MicraLink::do_set_steam_enabled(bool enabled) {
 void MicraLink::request_scan() {
   scanning_.store(true);        // reflect immediately in the UI
   scan_requested_.store(true);  // the loop performs the actual scan
+  ble_.cancel_connect();        // if OUR loop is camped in a connect attempt,
+                                // unblock it so the scan runs now, not in ~10s
 }
 
 bool MicraLink::scanning() const { return scanning_.load(); }
@@ -410,7 +417,10 @@ void MicraLink::do_scan() {
 
 void MicraLink::pause_connects(bool on) {
   connects_paused_.store(on);
-  if (on) ble_.cancel_connect();  // abort an in-flight attempt right now
+  // Level-held at the transport: aborts the in-flight attempt AND blocks new
+  // ones (incl. the second address-type try inside a cancelled connect()) —
+  // a plain cancel left those to grab the radio back before the peer's scan.
+  ble_.hold_connects(on);
 }
 
 std::string MicraLink::do_read_pairing_token(const std::string& address) {

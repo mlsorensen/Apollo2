@@ -44,8 +44,9 @@ void BrewController::poll(uint32_t now_ms) {
       phase_ = ShotPhase::kReview;
       review_until_ms_ = now_ms + static_cast<uint32_t>(review_hold_s_) * 1000u;
       // Arm the auto-flush on a real shot's freeze: the settled weight is the
-      // reference the cup-off drop is judged against.
-      if (flush_s_ > 0 && wired()) {
+      // reference the cup-off drop is judged against. Any mode with the relay
+      // qualifies — a detect-mode shot on a wired rig still has the drive line.
+      if (flush_s_ > 0 && relay()) {
         flush_state_ = FlushState::kArmed;
         flush_ref_g_ = s.weight_g;
         flush_armed_ms_ = now_ms;
@@ -62,7 +63,7 @@ void BrewController::poll(uint32_t now_ms) {
     phase_ = ShotPhase::kIdle;
   }
 
-  // --- Post-shot auto-flush (wired only; armed on review entry above).
+  // --- Post-shot auto-flush (needs the relay; armed on review entry above).
   poll_flush(now_ms);
 }
 
@@ -70,7 +71,7 @@ void BrewController::poll_flush(uint32_t now_ms) {
   if (flush_state_ == FlushState::kOff) return;
   // A new shot starting (any mode) or losing the wired relay cancels the
   // sequence — the flush only runs into a quiet, cup-less drip tray.
-  if (!wired() || phase_ == ShotPhase::kBrewing || phase_ == ShotPhase::kSettling) {
+  if (!relay() || phase_ == ShotPhase::kBrewing || phase_ == ShotPhase::kSettling) {
     cancel_flush();
     return;
   }
@@ -105,10 +106,9 @@ void BrewController::poll_flush(uint32_t now_ms) {
       }
       if (flush_ref_g_ - s.weight_g >= kFlushCupDropG) {
         flush_state_ = FlushState::kDelay;
-        flush_at_ms_ = now_ms + kFlushDelayMs;
-        logf("Brew: cup off (-%.0fg) -> flush in %us\n",
-             static_cast<double>(flush_ref_g_ - s.weight_g),
-             static_cast<unsigned>(kFlushDelayMs / 1000u));
+        flush_at_ms_ = now_ms + static_cast<uint32_t>(flush_delay_s_) * 1000u;
+        logf("Brew: cup off (-%.0fg) -> flush in %ds\n",
+             static_cast<double>(flush_ref_g_ - s.weight_g), flush_delay_s_);
       }
       break;
     }
@@ -211,7 +211,7 @@ void BrewController::poll_wired(uint32_t now_ms) {
         driving_ = true;
         timer_.start(now_ms);  // ESP times every shot, automated or not
         logf("Brew: shot timer started\n");
-        if (phase_ == ShotPhase::kIdle && shot_mode_) {
+        if (phase_ == ShotPhase::kIdle && eff_mode() == ShotMode::kAuto) {
           const ScaleSnapshot s0 = scale_.snapshot();
           if (s0.connected) {
             phase_ = ShotPhase::kBrewing;
@@ -284,14 +284,14 @@ void BrewController::poll_wired(uint32_t now_ms) {
 }
 
 void BrewController::poll_unwired(uint32_t now_ms) {
-  // Pass-through relay (paddle hardware present, "Wired paddle" OFF): keep
-  // sensing and driving the line so a wired rig can exercise unwired mode by
-  // just toggling the setting — the physical paddle still runs the machine;
-  // only the SHOT PHASES come from the detector instead of the edges. No
-  // timer, no tare, no auto-stop from edges. An ON edge during review
-  // dismisses it (the machine must not be blocked here — the wired path's
-  // swallow protects its armed automation, which doesn't apply); the detector
-  // then re-arms from kIdle and catches the new shot from the weight stream.
+  // Pass-through relay (paddle hardware present; kDetect mode, or the "Wired
+  // paddle" setting off): keep sensing and driving the line so the physical
+  // paddle still runs the machine; only the SHOT PHASES come from the
+  // detector instead of the edges. No timer, no tare, no auto-stop from
+  // edges. An ON edge during review dismisses it (the machine must not be
+  // blocked here — the wired path's swallow protects its armed automation,
+  // which doesn't apply); the detector then re-arms from kIdle and catches
+  // the new shot from the weight stream.
   if (paddle_.available()) {
     const int edge = sense_paddle_edge(now_ms);
     if (edge == 1) {
@@ -309,7 +309,7 @@ void BrewController::poll_unwired(uint32_t now_ms) {
   // detector only runs while it can matter — armed-and-idle (looking for a
   // start) or brewing (looking for the end); settle/review keep it reset so
   // drips can't re-trigger.
-  const bool armed = phase_ == ShotPhase::kIdle && shot_mode_;
+  const bool armed = phase_ == ShotPhase::kIdle && eff_mode() == ShotMode::kDetect;
   if (!armed && phase_ != ShotPhase::kBrewing) {
     detector_.reset();  // settle/review, or detection disarmed
     return;
@@ -402,11 +402,12 @@ void BrewController::end_shot(uint32_t now_ms) {
 BrewSnapshot BrewController::snapshot() const {
   return BrewSnapshot{
       .paddle_hw = paddle_.available(),
+      .wired_setting = wired_paddle_,
       .paddle_wired = wired(),
       .paddle_pressed = paddle_on_,
       .brewing = driving_,
       .phase = phase_,
-      .shot_mode = shot_mode_,
+      .mode = eff_mode(),
       .shot_ms = timer_.elapsed_ms(last_now_ms_),
       .baseline_set = baseline_set_,
       .start_weight_g = start_g_,
@@ -416,6 +417,7 @@ BrewSnapshot BrewController::snapshot() const {
       .review_reject_seq = review_reject_seq_,
       .stop_hint = stop_hint_,
       .flush_s = flush_s_,
+      .flush_delay_s = flush_delay_s_,
   };
 }
 
@@ -424,9 +426,17 @@ void BrewController::set_target_weight_g(float grams) {
   if (persist_target_) persist_target_(grams);
 }
 
-void BrewController::set_shot_mode(bool on) {
-  shot_mode_ = on;
-  if (persist_mode_) persist_mode_(on);
+void BrewController::set_shot_mode(ShotMode mode) {
+  if (mode == mode_) return;
+  // Switching between the paddle-edge path and the detector path mid-anything
+  // cancels to idle, same as flipping the wired-paddle setting — the two
+  // paths' in-flight state doesn't translate. Mode flips within one path
+  // (kAuto <-> kManual) leave a manual relay shot running untouched.
+  const bool was_wired = wired();
+  mode_ = mode;
+  if (persist_mode_) persist_mode_(static_cast<int>(mode));
+  if (was_wired != wired() && (phase_ != ShotPhase::kIdle || driving_)) cancel_shot();
+  logf("Brew: shot mode %d\n", static_cast<int>(mode));
 }
 
 void BrewController::dismiss_review() {
@@ -448,6 +458,15 @@ void BrewController::set_flush_s(int seconds) {
   if (persist_flush_) persist_flush_(seconds);
   if (seconds == 0) cancel_flush();  // includes stopping an in-flight run
   logf("Brew: auto-flush %ds\n", seconds);
+}
+
+void BrewController::set_flush_delay_s(int seconds) {
+  if (seconds < 1) seconds = 1;
+  if (seconds > 60) seconds = 60;
+  if (seconds == flush_delay_s_) return;
+  flush_delay_s_ = seconds;
+  if (persist_flush_delay_) persist_flush_delay_(seconds);
+  logf("Brew: auto-flush delay %ds\n", seconds);
 }
 
 void BrewController::cancel_shot() {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <string>
 #include <vector>
 
@@ -25,6 +26,7 @@ class NimbleCentral : public core::ble::ICentral {
   void disconnect() override;
   bool connected() override;
   void cancel_connect() override;
+  void hold_connects(bool on) override;
 
   bool has_characteristic(const char* uuid) override;
   bool read(const char* uuid, std::string& out) override;
@@ -34,6 +36,13 @@ class NimbleCentral : public core::ble::ICentral {
 
  private:
   NimBLEClient* client_ = nullptr;  // created lazily; reused across connects
+  // While set, connect() fails fast (checked before EACH address-type attempt)
+  // and the in-flight attempt was cancelled — see ICentral::hold_connects.
+  std::atomic<bool> hold_{false};
+  // One-shot: cancel_connect() aborts the whole in-flight connect() (both
+  // address-type attempts), not just the current GAP attempt. Cleared at the
+  // start of each connect() call.
+  std::atomic<bool> cancelled_{false};
 };
 
 }  // namespace platform

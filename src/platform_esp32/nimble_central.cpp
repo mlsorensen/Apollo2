@@ -46,11 +46,17 @@ bool NimbleCentral::connect(const std::string& mac, bool prefer_random,
   if (timeout_ms > 0) client_->setConnectTimeout(timeout_ms);
 
   // The address type isn't persisted, so try both, preferred type first.
+  // hold_ is checked before EACH attempt: a peer link about to scan cancels
+  // the in-flight try, and without this gate the cancelled first attempt
+  // would fall straight through into the second one — camping on the radio
+  // for another full timeout and starving the scan it just yielded to.
   const uint8_t first = prefer_random ? BLE_ADDR_RANDOM : BLE_ADDR_PUBLIC;
   const uint8_t second = prefer_random ? BLE_ADDR_PUBLIC : BLE_ADDR_RANDOM;
-  if (!client_->connect(NimBLEAddress(mac, first)) &&
-      !client_->connect(NimBLEAddress(mac, second))) {
-    return false;
+  if (hold_.load()) return false;
+  cancelled_.store(false);  // a stale one-shot cancel must not kill this attempt
+  if (!client_->connect(NimBLEAddress(mac, first))) {
+    if (hold_.load() || cancelled_.load()) return false;
+    if (!client_->connect(NimBLEAddress(mac, second))) return false;
   }
 
   // Discover everything now so the by-UUID lookups below hit the cache.
@@ -67,7 +73,16 @@ void NimbleCentral::disconnect() {
 void NimbleCentral::cancel_connect() {
   // Aborts a pending client_->connect(); the blocked call returns false. Safe
   // cross-thread (posts a cancel into the NimBLE host). No-op when idle.
+  // The flag makes the cancel cover the WHOLE connect() call — without it the
+  // aborted first address-type attempt falls through to the second, and the
+  // "cancelled" connect keeps the radio for another full timeout.
+  cancelled_.store(true);
   if (client_ != nullptr) client_->cancelConnect();
+}
+
+void NimbleCentral::hold_connects(bool on) {
+  hold_.store(on);
+  if (on) cancel_connect();  // the level gates NEW attempts; this kills the current one
 }
 
 bool NimbleCentral::connected() {

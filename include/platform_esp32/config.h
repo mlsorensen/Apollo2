@@ -29,8 +29,8 @@ class Config {
   // Brew-by-weight target (grams) — persisted so it survives reboots.
   float target_weight_g() const;       // default 36
   void set_target_weight_g(float grams);
-  bool shot_mode() const;              // brew-by-weight automation armed (default true)
-  void set_shot_mode(bool on);
+  int shot_mode() const;               // core::ShotMode as int (0=Manual 1=Auto
+  void set_shot_mode(int mode);        // 2=Detect); migrates the legacy bool key
   float overshoot_g() const;           // learned drip/lag compensation (default 2.0)
   void set_overshoot_g(float grams);
   int review_hold_s() const;           // shot-review linger before auto-reset (default 30)
@@ -41,6 +41,8 @@ class Config {
   void set_wired_paddle(bool on);      // meaningful on boards with the hardware)
   int flush_s() const;                 // post-shot auto-flush seconds (0 = off; default 0)
   void set_flush_s(int seconds);
+  int flush_delay_s() const;           // cup-off -> flush pause seconds (default 3)
+  void set_flush_delay_s(int seconds);
   int flow_smooth() const;             // shot-graph smoothing level 0..3 (default 1)
   void set_flow_smooth(int level);
 

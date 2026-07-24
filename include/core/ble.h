@@ -47,6 +47,14 @@ class ICentral {
   // while any connect is in progress. No-op when nothing is connecting.
   virtual void cancel_connect() {}
 
+  // LEVEL version of the above: while held, connect() fails fast — the current
+  // attempt is aborted AND no new attempt may start (including the second
+  // address-type try inside one connect() call). A one-shot cancel is not
+  // enough for scan preemption: the cancelled connect() would fall through to
+  // its other-address-type attempt, or the owning task could start a fresh
+  // connect in the gap before the scan grabs the radio. Cross-thread safe.
+  virtual void hold_connects(bool on) { if (on) cancel_connect(); }
+
   // Characteristic operations on the current connection. All return false when
   // disconnected or when the UUID wasn't discovered.
   virtual bool has_characteristic(const char* uuid) = 0;

@@ -665,10 +665,11 @@ void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_t* tcol = make_panel_column(body, "TIMER", cap_font, big_font, &out.shot_timer_label);
   lv_obj_set_flex_align(tcol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  // Shot button in the stepper's slot under the timer: shot-mode toggle
-  // (Auto shot / Detect / Manual), or Reset while a finished shot is up for
-  // review. Always shown — every board has shot machinery now (paddle relay
-  // or detector); sized to line up with the stepper.
+  // Shot button in the stepper's slot under the timer: shot-mode cycle
+  // (Auto shot / Shot detect / Manual — Auto only with a wired paddle), or
+  // Reset while a finished shot is up for review. Always shown — every board
+  // has shot machinery now (paddle relay or detector); sized to line up with
+  // the stepper.
   out.shot_btn = ui::make_button(tcol);
   lv_obj_set_size(out.shot_btn, LV_SIZE_CONTENT, btn_size);
   lv_obj_set_style_pad_hor(out.shot_btn, ui::dp(14), 0);
@@ -681,7 +682,7 @@ void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_set_style_border_color(out.shot_btn, lv_color_hex(ui::theme::scrollbar()), 0);
   lv_obj_set_style_opa(out.shot_btn, LV_OPA_40, LV_STATE_DISABLED);
   out.shot_btn_label = lv_label_create(out.shot_btn);
-  lv_label_set_text(out.shot_btn_label, "Auto Shot");
+  lv_label_set_text(out.shot_btn_label, "Auto shot");
   lv_obj_set_style_text_color(out.shot_btn_label, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(out.shot_btn_label, set_font, 0);
   lv_obj_center(out.shot_btn_label);
@@ -1065,21 +1066,24 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
       const bool review = brew.phase == core::ShotPhase::kReview;
       const bool active = brew.phase == core::ShotPhase::kBrewing ||
                           brew.phase == core::ShotPhase::kSettling;
-      // Wired arms the auto-STOP ("Auto shot"); unwired arms auto-DETECTION.
-      const char* armed = brew.paddle_wired ? "Auto shot" : "Detect";
-      ui::set_text(w.shot_btn_label,
-                        review ? "Reset" : brew.shot_mode ? armed : "Manual");
-      // State lives in the outline + text: accent = auto armed, warn = Reset,
-      // neutral ring = manual/busy (the fill stays card(), see build).
-      const uint32_t ring = review          ? ui::theme::warn()
-                            : active         ? ui::theme::scrollbar()
-                            : brew.shot_mode ? ui::theme::accent()
-                                             : ui::theme::scrollbar();
+      // The mode pill: "Auto shot" (paddle edges + weight auto-stop, wired
+      // rigs only), "Shot detect" (weight-stream detection), or "Manual".
+      const bool armed = brew.mode != core::ShotMode::kManual;
+      const char* label = brew.mode == core::ShotMode::kAuto     ? "Auto shot"
+                          : brew.mode == core::ShotMode::kDetect ? "Shot detect"
+                                                                 : "Manual";
+      ui::set_text(w.shot_btn_label, review ? "Reset" : label);
+      // State lives in the outline + text: accent = automation armed, warn =
+      // Reset, neutral ring = manual/busy (the fill stays card(), see build).
+      const uint32_t ring = review   ? ui::theme::warn()
+                            : active ? ui::theme::scrollbar()
+                            : armed  ? ui::theme::accent()
+                                     : ui::theme::scrollbar();
       ui::set_border_color(w.shot_btn, ring);
-      const uint32_t txt = review          ? ui::theme::warn()
-                           : active         ? ui::theme::muted()
-                           : brew.shot_mode ? ui::theme::accent()
-                                            : ui::theme::text();
+      const uint32_t txt = review   ? ui::theme::warn()
+                           : active ? ui::theme::muted()
+                           : armed  ? ui::theme::accent()
+                                    : ui::theme::text();
       ui::set_text_color(w.shot_btn_label, txt);
       if (active) {
         lv_obj_add_state(w.shot_btn, LV_STATE_DISABLED);

@@ -21,12 +21,14 @@ constexpr char kClickSoundKey[] = "clicksnd";
 constexpr char kScaleMacKey[] = "smac";
 constexpr char kScaleNameKey[] = "sname";
 constexpr char kTargetKey[] = "tgtg";
-constexpr char kShotModeKey[] = "shotmode";
+constexpr char kShotModeKey[] = "shotmode";  // LEGACY bool (armed) — migration only
+constexpr char kShotMode3Key[] = "shotmd";   // tri-state core::ShotMode as int
 constexpr char kOvershootKey[] = "ovshoot";
 constexpr char kReviewHoldKey[] = "revhold";
 constexpr char kAutoConnectKey[] = "autoconn";
 constexpr char kWiredPaddleKey[] = "wiredpad";
 constexpr char kFlushKey[] = "flushs";  // post-shot auto-flush seconds (0 = off)
+constexpr char kFlushDelayKey[] = "flushd";  // cup-off -> flush pause seconds
 constexpr char kFlowSmoothKey[] = "flowsmth";
 constexpr char kWifiEnKey[] = "wifi_en";
 constexpr char kWifiSsidKey[] = "ssid";
@@ -195,6 +197,21 @@ void Config::set_flush_s(int seconds) {
   p.end();
 }
 
+int Config::flush_delay_s() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 3;
+  const int v = p.isKey(kFlushDelayKey) ? p.getInt(kFlushDelayKey, 3) : 3;
+  p.end();
+  return v;
+}
+
+void Config::set_flush_delay_s(int seconds) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putInt(kFlushDelayKey, seconds);
+  p.end();
+}
+
 int Config::review_hold_s() const {
   Preferences p;
   if (!p.begin(kNamespace, /*readOnly=*/true)) return 30;
@@ -210,18 +227,27 @@ void Config::set_review_hold_s(int seconds) {
   p.end();
 }
 
-bool Config::shot_mode() const {
+int Config::shot_mode() const {
   Preferences p;
-  if (!p.begin(kNamespace, /*readOnly=*/true)) return true;
-  const bool v = p.isKey(kShotModeKey) ? p.getBool(kShotModeKey, true) : true;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 2;  // kDetect
+  int v;
+  if (p.isKey(kShotMode3Key)) {
+    v = p.getInt(kShotMode3Key, 2);
+  } else {
+    // Migrate the legacy bool: armed meant kAuto on a wired rig, kDetect
+    // otherwise; off meant kManual. Written back on the next set_shot_mode.
+    const bool armed = p.isKey(kShotModeKey) ? p.getBool(kShotModeKey, true) : true;
+    const bool wired = p.isKey(kWiredPaddleKey) ? p.getBool(kWiredPaddleKey, false) : false;
+    v = armed ? (wired ? 1 : 2) : 0;
+  }
   p.end();
-  return v;
+  return (v < 0 || v > 2) ? 2 : v;
 }
 
-void Config::set_shot_mode(bool on) {
+void Config::set_shot_mode(int mode) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
-  p.putBool(kShotModeKey, on);
+  p.putInt(kShotMode3Key, mode);
   p.end();
 }
 

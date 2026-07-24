@@ -31,36 +31,51 @@ class BrewController : public IBrewController {
   // level through to the machine but skips the shot timer + automation.
   void set_standby_provider(std::function<bool()> p) { standby_ = std::move(p); }
   void set_target_persister(std::function<void(float)> p) { persist_target_ = std::move(p); }
-  void set_shot_mode_persister(std::function<void(bool)> p) { persist_mode_ = std::move(p); }
+  void set_shot_mode_persister(std::function<void(int)> p) { persist_mode_ = std::move(p); }
   void set_overshoot_persister(std::function<void(float)> p) { persist_overshoot_ = std::move(p); }
   void set_review_hold_persister(std::function<void(int)> p) { persist_review_ = std::move(p); }
   void set_wired_paddle_persister(std::function<void(bool)> p) { persist_wired_ = std::move(p); }
   void set_flush_persister(std::function<void(int)> p) { persist_flush_ = std::move(p); }
+  void set_flush_delay_persister(std::function<void(int)> p) { persist_flush_delay_ = std::move(p); }
 
-  // Seed from persisted config at boot (does not re-persist).
-  void seed(float target_g, bool shot_mode, float overshoot_g, int review_hold_s,
-            bool wired_paddle, int flush_s) {
+  // Seed from persisted config at boot (does not re-persist). `mode` is the
+  // persisted ShotMode as an int (clamped here so a stale NVS value is safe).
+  void seed(float target_g, int mode, float overshoot_g, int review_hold_s,
+            bool wired_paddle, int flush_s, int flush_delay_s) {
     target_g_ = target_g;
-    shot_mode_ = shot_mode;
+    mode_ = (mode < 0 || mode > 2) ? ShotMode::kDetect : static_cast<ShotMode>(mode);
     overshoot_g_ = overshoot_g;
     review_hold_s_ = review_hold_s;
     wired_paddle_ = wired_paddle;
     flush_s_ = flush_s;
+    flush_delay_s_ = (flush_delay_s < 1) ? 3 : flush_delay_s;
   }
 
   void poll(uint32_t now_ms);
 
   BrewSnapshot snapshot() const override;
   void set_target_weight_g(float grams) override;
-  void set_shot_mode(bool on) override;
+  void set_shot_mode(ShotMode mode) override;
   void dismiss_review() override;
   void set_review_hold_s(int seconds) override;
   void set_wired_paddle(bool on) override;
   void set_flush_s(int seconds) override;
+  void set_flush_delay_s(int seconds) override;
 
  private:
   void end_shot(uint32_t now_ms);  // Brewing -> Review
-  bool wired() const { return paddle_.available() && wired_paddle_; }
+  // The wired relay exists and the user says the harness is in use. Gates the
+  // pass-through drive line, the auto-flush, and offering kAuto at all.
+  bool relay() const { return paddle_.available() && wired_paddle_; }
+  // Effective mode: a persisted kAuto without the relay degrades to kDetect
+  // (the closest armed intent) — snapshot() reports the same, so the UI and
+  // the state machine can never disagree about what's armed.
+  ShotMode eff_mode() const {
+    return (mode_ == ShotMode::kAuto && !relay()) ? ShotMode::kDetect : mode_;
+  }
+  // Paddle edges are the shot-phase source (kAuto's automation or kManual's
+  // relay+timer). kDetect always runs the detector path, relay or not.
+  bool wired() const { return relay() && eff_mode() != ShotMode::kDetect; }
   void poll_wired(uint32_t now_ms);    // paddle relay + weight automation
   void poll_unwired(uint32_t now_ms);  // detector-driven phases (+ pass-through relay)
   void poll_flush(uint32_t now_ms);    // post-shot auto-flush (cup-off -> run the group)
@@ -77,14 +92,15 @@ class BrewController : public IBrewController {
   ShotDetector detector_;  // unwired mode's start/stop source
   std::function<bool()> standby_;  // machine known-in-standby (see setter)
   std::function<void(float)> persist_target_;
-  std::function<void(bool)> persist_mode_;
+  std::function<void(int)> persist_mode_;
   std::function<void(float)> persist_overshoot_;
   std::function<void(int)> persist_review_;
   std::function<void(bool)> persist_wired_;
   std::function<void(int)> persist_flush_;
+  std::function<void(int)> persist_flush_delay_;
 
   ShotPhase phase_ = ShotPhase::kIdle;
-  bool shot_mode_ = true;
+  ShotMode mode_ = ShotMode::kDetect;
   bool wired_paddle_ = false;  // user setting; effective only with paddle hardware
                                // (default OFF — a fresh device must not relay the
                                // line until the user says the harness is wired)
@@ -103,8 +119,9 @@ class BrewController : public IBrewController {
   float overshoot_g_ = 2.0f;
   int review_hold_s_ = 30;  // review linger before auto-dismiss (user setting)
   int flush_s_ = 0;         // auto-flush run seconds (0 = off; user setting)
+  int flush_delay_s_ = 3;   // cup-off -> flush pause seconds (user setting)
 
-  // Auto-flush sequencing (wired only). Armed when a real shot freezes into
+  // Auto-flush sequencing (needs the relay; any shot mode). Armed when a real shot freezes into
   // review; a cup-off weight drop starts the delay; then the line runs for
   // flush_s_ and opens again. User paddle activity cancels it by EDGE, not
   // level — after a target auto-stop the physical paddle is naturally still
@@ -158,10 +175,9 @@ class BrewController : public IBrewController {
   // Auto-flush: the weight drop (vs the review-entry weight) that reads as
   // "cup removed" — well past scale noise, under any cup + espresso.
   static constexpr float kFlushCupDropG = 30.0f;
-  // Pause between the cup coming off and the run (clear the drip path), and
-  // how long past review entry a cup-off can still trigger the flush (the
+  // How long past review entry a cup-off can still trigger the flush (the
   // review may auto-dismiss or be Reset first; the flush should still run).
-  static constexpr uint32_t kFlushDelayMs = 3000;
+  // The cup-off -> run pause itself is flush_delay_s_ (user setting).
   static constexpr uint32_t kFlushWatchMs = 60000;
 };
 
