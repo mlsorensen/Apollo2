@@ -78,9 +78,9 @@ build to be:
   panel (4.3" 800×480 RGB) and less headroom than the P4.
 - **[Waveshare ESP32‑P4‑WIFI6‑Touch‑LCD‑5](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-5.htm)
   (SKU 33762) — the performance path.** A much faster ESP32‑P4 with a crisp 5"
-  1280×720 DSI panel. More of a project: there is no enclosure (you 3D‑print a
-  case) and the wired paddle needs a small cable you assemble with an external
-  opto‑isolator module.
+  1280×720 DSI panel. More of a project: there is no enclosure (print the
+  [shell provided in this repo](hardware/3d-prints/)) and the wired paddle
+  needs a small cable you assemble with an external opto‑isolator module.
 
 ### All supported boards
 
@@ -91,7 +91,7 @@ build to be:
 | **ESP32‑S3‑Touch‑LCD‑4.3C / 4.3C‑BOX** | 4.3" 800×480, RGB parallel | **Yes — built‑in.** Isolated DI/DO screw terminals (opto‑isolators on board) | **Recommended (easy path).** Dimmable backlight, battery monitoring, PCF85063 RTC, speaker. |
 | **ESP32‑S3‑Touch‑LCD‑7B** | 7" 1024×600, RGB parallel | — (Shot detect only) | Largest panel. |
 | **ESP32‑P4‑WIFI6‑Touch‑LCD‑4.3** | 4.3" 800×480, MIPI‑DSI (ST7701) | **Yes — external opto.** Native GPIOs + a PC817‑style opto module you wire | ESP32‑P4 (32 MB flash / 32 MB PSRAM); WiFi 6 + BLE via on‑board ESP32‑C6. |
-| **ESP32‑P4‑WIFI6‑Touch‑LCD‑5** | 5" 1280×720, MIPI‑DSI (HX8394) | **Yes — external opto.** Same wiring as the P4 4.3 | **Recommended (performance path).** Same electronics as the P4 4.3 with a higher‑density panel (UI scaled 1.5×). No enclosure — 3D‑print a case. |
+| **ESP32‑P4‑WIFI6‑Touch‑LCD‑5** | 5" 1280×720, MIPI‑DSI (HX8394) | **Yes — external opto.** Same wiring as the P4 4.3 | **Recommended (performance path).** Same electronics as the P4 4.3 with a higher‑density panel (UI scaled 1.5×). No enclosure — a printable shell is [in the repo](hardware/3d-prints/). |
 
 Boards without paddle wiring still get the full brew‑by‑weight experience via
 **Shot detect** — only the automatic stop at target weight needs the wire.
@@ -99,6 +99,25 @@ Boards without paddle wiring still get the full brew‑by‑weight experience vi
 The S3 boards use the ESP32‑S3R8 (16 MB flash, 8 MB octal PSRAM). A supported
 Bluetooth scale (Bookoo Themis, or Acaia Umbra / Lunar / Pyxis / Prochef) is
 optional but unlocks the shot timer, flow graph, and brew‑by‑weight features.
+
+### 3D‑printed stand and shells
+
+Ready‑to‑print 3MF files live in [`hardware/3d-prints/`](hardware/3d-prints/):
+
+| File | What it is |
+|------|------------|
+| [`apollo2-stand.3mf`](hardware/3d-prints/apollo2-stand.3mf) | Counter‑top **stand**. Mounts the S3‑4.3C‑BOX directly (it has the matching holes), and every shell below mounts to it the same way. |
+| [`esp32-s3-4.3c-shell.3mf`](hardware/3d-prints/esp32-s3-4.3c-shell.3mf) | Shell for the bare **ESP32‑S3‑Touch‑LCD‑4.3C** (no‑enclosure variant). |
+| [`esp32-p4-5-shell.3mf`](hardware/3d-prints/esp32-p4-5-shell.3mf) | Shell for the **ESP32‑P4‑WIFI6‑Touch‑LCD‑5**. |
+| [`esp32-p4-4.3-shell.3mf`](hardware/3d-prints/esp32-p4-4.3-shell.3mf) | Shell for the **ESP32‑P4‑WIFI6‑Touch‑LCD‑4.3**. |
+| [`esp32-s3-2-shell.3mf`](hardware/3d-prints/esp32-s3-2-shell.3mf) | Shell for the pocket **ESP32‑S3‑Touch‑LCD‑2**. |
+
+Fasteners:
+
+- **Shells**: 8 × **M2.5×0.45, 5 mm** screws each — 4 fasten the board into
+  the shell, 4 fasten the shell cover.
+- **Stand mount**: 2 × **M4‑0.7×8 mm** screws — same spec whether you're
+  mounting the S3‑4.3C‑BOX or any of the printed shells.
 
 ---
 
@@ -265,6 +284,7 @@ include/platform_host/  Host fakes
 include/ui/             UI headers (widgets, screen profiles, timezones)
 include/vendor/         Vendored third-party headers (stb_image_write)
 src/                    Implementations (see Architecture above)
+hardware/3d-prints/     Printable stand + board shells (3MF)
 tools/                  sim.sh, flash.sh, lmtoken (Go), PlatformIO helper scripts
 renders/                Simulator output (PNG)
 ```
