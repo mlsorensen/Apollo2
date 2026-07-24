@@ -8,8 +8,17 @@ paddle on the Micra's controller. Nothing else about the machine changes, and
 **Shot detect** works fine without any of this.
 
 The paddle circuit itself is low‑voltage (the Micra's controller puts ~5 V on
-it), but you will have the machine open — **unplug the Micra first**, and
-proceed at your own risk.
+it), but you will have the machine open — **unplug the Micra first**.
+
+> **Disclaimer:** this is a DIY modification. Done properly it is safe and
+> fully reversible, but it is not endorsed by La Marzocco and you do it
+> entirely at your own risk.
+
+> **Note:** while this wiring is in place, the paddle works **only through
+> Apollo** — with the controller off, unplugged, or missing, flipping the
+> paddle does nothing. Because the tap is made with pluggable connectors,
+> undoing it is easy: open the top and temporarily reconnect the paddle's
+> original connectors to run the machine without Apollo.
 
 ## Parts
 
