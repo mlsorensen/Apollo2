@@ -96,6 +96,9 @@ void build_connection_panel(lv_obj_t* panel, const lv_font_t* font, int btn_h,
 
   *out_status = lv_label_create(panel);
   lv_label_set_text(*out_status, scan_hint);
+  // Full width so long status lines ("No machines found - ...") WRAP instead
+  // of overflowing the page as one clipped line.
+  lv_obj_set_width(*out_status, lv_pct(100));
   lv_obj_set_style_text_color(*out_status, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(*out_status, font, 0);
 
