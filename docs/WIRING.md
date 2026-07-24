@@ -84,8 +84,17 @@ bullet connectors at the machine end (two on the shared ground conductor):
 ## ESP32‑P4 boards (external opto module)
 
 On the P4‑WIFI6‑Touch‑LCD‑5 (and the 4.3), the paddle uses three native pins
-on the corner of the header — **GND, GPIO 52, GPIO 51** — which fit a 3‑pin
-screw terminal, plus the opto module for isolation:
+that sit **side by side** on the corner of the GPIO header — **GND, GPIO 52,
+GPIO 51**, in that order on the silkscreen — so a
+[2.54 mm 3‑pin screw‑terminal block](https://a.co/d/0eVdsD4h) clips straight
+onto them, no soldering:
+
+![The P4 header corner — GND, 52, 51 in a row](img/wiring/p4-header-pins.jpg)
+
+![Screw-terminal block on the pins, cable attached](img/wiring/p4-header-terminal.jpg)
+
+The cable can run out through a hole in the 3D‑printed backplate. From there,
+the opto module provides the isolation:
 
 ![Apollo P4 → opto module → Micra wiring](img/wiring/p4-opto-wiring.svg)
 

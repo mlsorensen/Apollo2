@@ -104,6 +104,16 @@ The S3 boards use the ESP32‑S3R8 (16 MB flash, 8 MB octal PSRAM). A supported
 Bluetooth scale (Bookoo Themis, or Acaia Umbra / Lunar / Pyxis / Prochef) is
 optional but unlocks the shot timer, flow graph, and brew‑by‑weight features.
 
+### Power, battery, and RTC
+
+The boards run from **USB‑C power** — that's the normal way to use them. An
+optional battery can be installed (the boards have a battery connector), but
+it only lasts a few hours, so treat it as a nice‑to‑have for moving the device
+around, not a way to run it. An optional **RTC coin cell** (boards with an
+RTC, e.g. the 4.3B/4.3C) keeps the clock through a power‑off — but it's only
+needed if you *don't* configure Wi‑Fi + NTP, which sets the time automatically
+on every boot.
+
 ### 3D‑printed stand and shells
 
 Ready‑to‑print 3MF files live in [`hardware/3d-prints/`](hardware/3d-prints/):
