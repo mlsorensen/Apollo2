@@ -179,7 +179,8 @@ machine is already warming up when you arrive.
   time the screen dims to 5 % (or switches off where the backlight can't dim);
   any touch restores it.
 - **Hour / Minute** — set the clock by hand. (With Wi‑Fi + NTP the clock sets
-  itself; boards with an RTC keep time through power‑off.)
+  itself on every boot; alternatively, boards with an RTC and an optional coin
+  cell installed keep time through a power‑off.)
 - **24‑hour** *(default on)* — clock format.
 - **Fahrenheit** *(default off)* — display unit for temperatures. Set‑points
   are still stored in Celsius.
