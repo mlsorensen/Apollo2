@@ -1796,8 +1796,8 @@ void App::update_settings_view() {
     // link had the radio; the scan preempts it now, but the answer can still
     // honestly be "nothing found").
     ui::set_text(settings_.status, settings_.scan_done
-                                       ? "No machines found - make sure it's powered "
-                                         "on nearby, then Scan again"
+                                       ? "No machines found - power it on nearby, "
+                                         "then Scan again"
                                        : "Tap Scan to find your machine");
   } else {
     ui::set_text(settings_.status, "Tap a machine to save it");

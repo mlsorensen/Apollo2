@@ -22,16 +22,17 @@ const Palette kPalettes[] = {
     //          name          bg        rail      card      text      muted     accent    scroll    ok        warn      alert
     // Mono: greyscale chrome; only the ok/warn/alert status roles keep muted
     // color (the dots/graph encode live machine state — grey would erase it).
-    {"Mono",      0x000000, 0x101010, 0x191919, 0xFFFFFF, 0x9A9A9A, 0xB9B9B9, 0x5E5E5E, 0x8FBF8F, 0xC9A94B, 0xC96A5C},
+    {"Mono",      0x000000, 0x161616, 0x212121, 0xFFFFFF, 0x9A9A9A, 0xB9B9B9, 0x5E5E5E, 0x8FBF8F, 0xC9A94B, 0xC96A5C},
     // High contrast: pure black, brighter secondary text, vivid saturated
-    // status colors, thumb bumped so it never vanishes.
-    {"Contrast",  0x000000, 0x000000, 0x141414, 0xFFFFFF, 0xD0D0D0, 0x00A2FF, 0x8A8A8A, 0x00E676, 0xFFD600, 0xFF3D2E},
+    // status colors, thumb bumped so it never vanishes. Terminal-green accent
+    // (the classic high-contrast look) so it doesn't read as another blue.
+    {"Contrast",  0x000000, 0x000000, 0x1E1E1E, 0xFFFFFF, 0xD0D0D0, 0x00C853, 0x8A8A8A, 0x00E676, 0xFFD600, 0xFF3D2E},
     // Rosso corsa accent on a dark warm-red body; giallo modena as warn.
-    {"Ferrari",   0x140607, 0x1E0A0C, 0x2A0E12, 0xFFF4EC, 0xBC8F86, 0xE8112D, 0x84443F, 0x63C74D, 0xFCD116, 0xFF7043},
+    {"Ferrari",   0x140607, 0x261013, 0x39151B, 0xFFF4EC, 0xBC8F86, 0xE8112D, 0x84443F, 0x63C74D, 0xFCD116, 0xFF7043},
     // Sunset: coral accent over warm plum-brown.
-    {"Sunset",    0x1A0F14, 0x241419, 0x301A20, 0xFFEDE3, 0xB58F92, 0xFF7043, 0x6E4A50, 0x66BB6A, 0xFFCA28, 0xEF5350},
+    {"Sunset",    0x1A0F14, 0x2A181E, 0x392129, 0xFFEDE3, 0xB58F92, 0xFF7043, 0x6E4A50, 0x66BB6A, 0xFFCA28, 0xEF5350},
     // Citrus: lime accent over deep olive (yellow-green, vs Forest's cool green).
-    {"Citrus",    0x111704, 0x18210A, 0x202B10, 0xF4F8E8, 0xA3B183, 0x8FB824, 0x53613B, 0x6FD08D, 0xE3B642, 0xE05D4A},
+    {"Citrus",    0x111704, 0x1E290D, 0x293714, 0xF4F8E8, 0xA3B183, 0x8FB824, 0x53613B, 0x6FD08D, 0xE3B642, 0xE05D4A},
 };
 constexpr int kCount = static_cast<int>(sizeof(kPalettes) / sizeof(kPalettes[0]));
 
