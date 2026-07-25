@@ -25,8 +25,8 @@ core::ShotRecord make_shot(uint32_t id, int64_t end_unix, float target_g,
   r.summary.final_g = final_g;
   r.summary.avg_gps =
       duration_ms > 0 ? final_g / (static_cast<float>(duration_ms) / 1000.0f) : 0.0f;
-  r.mode = mode;
-  r.wired = wired;
+  r.summary.mode = mode;
+  r.summary.wired = wired;
 
   const int n = std::min<int>(core::ShotRecord::kSampleCap,
                               static_cast<int>(duration_ms / 100));
@@ -122,25 +122,12 @@ bool FakeShotStore::read(uint32_t id, core::ShotRecord& out) const {
 }
 
 core::ShotStats FakeShotStore::stats(int64_t now_unix) const {
-  core::ShotStats st;
-  if (!available_) return st;
-  st.total = static_cast<int>(shots_.size());
-  float err_all = 0, err_30 = 0;
-  int n_all = 0, n_30 = 0;
-  for (const auto& s : shots_) {
-    if (s.summary.target_g <= 0.0f) continue;  // untargeted: no accuracy to score
-    const float e = std::fabs(s.summary.final_g - s.summary.target_g) /
-                    s.summary.target_g;
-    err_all += e;
-    ++n_all;
-    if (now_unix - s.summary.unix_time <= 30 * kDay) {
-      err_30 += e;
-      ++n_30;
-    }
-  }
-  if (n_all > 0) st.acc_lifetime_pct = 100.0f * (1.0f - err_all / n_all);
-  if (n_30 > 0) st.acc_30d_pct = 100.0f * (1.0f - err_30 / n_30);
-  return st;
+  if (!available_) return {};
+  std::vector<core::ShotSummary> sums;
+  sums.reserve(shots_.size());
+  for (const auto& s : shots_) sums.push_back(s.summary);
+  return core::compute_shot_stats(sums.data(), static_cast<int>(sums.size()),
+                                  now_unix);
 }
 
 }  // namespace host

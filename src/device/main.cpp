@@ -27,6 +27,7 @@
 #include "platform_esp32/paddle.h"
 #include "platform_esp32/provisioner.h"
 #include "platform_esp32/scale_link.h"
+#include "platform_esp32/shot_store.h"
 #include "platform_esp32/sound.h"
 #include "platform_esp32/scale_provisioner.h"
 #include "platform_esp32/token_setup.h"
@@ -58,9 +59,13 @@ platform::ScaleProvisioner g_scale_provisioner{g_scale, g_config};
 // Brew-by-weight: paddle relay + shot state machine over the paddle + scale
 // ports (core logic; polled from loop()).
 core::BrewController g_brew{platform::paddle(), g_scale};
-// Shot history: no storage backend wired yet — the History tab shows guidance.
-// The SD-backed platform::ShotStore replaces this on boards with a card slot.
+// Shot history: SD-backed on boards with a card slot; NullShotStore elsewhere
+// (the History tab shows guidance instead).
+#if defined(BOARD_HAS_SD_MMC)
+platform::ShotStore g_shots;
+#else
 core::NullShotStore g_shots;
+#endif
 ui::App g_app;
 
 constexpr uint32_t kUiRefreshMs = 500;
@@ -229,6 +234,9 @@ void setup() {
   // Build the UI bound to the machine + provisioner + battery + display.
   const ui::ScreenProfile screen{g_display.width(), g_display.height(),
                                  board::kUiScale};
+#if defined(BOARD_HAS_SD_MMC)
+  g_shots.begin();  // writer task; mounts lazily, so no card is fine
+#endif
   g_app.build(g_micra, g_provisioner, g_battery, g_display_settings, g_clock, g_history,
               g_scale, g_scale_provisioner, g_brew, g_network, platform::sound(), g_shots,
               screen);

@@ -56,6 +56,10 @@
 #define LV_USE_SYSMON 1
 #define LV_USE_PERF_MONITOR 1
 
+// Offscreen widget-tree rendering (lv_snapshot_take): the shot-history PNG
+// export draws the canonical 800x480 shot card into a memory buffer.
+#define LV_USE_SNAPSHOT 1
+
 // Fonts used by the UI. Enable more sizes here as the design grows.
 #define LV_FONT_MONTSERRAT_14 1
 #define LV_FONT_MONTSERRAT_16 1

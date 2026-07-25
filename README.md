@@ -30,6 +30,12 @@ to the machine instead of a phone app.
   (start/stop inferred from the weight stream alone — works on every board, no
   wiring), or **Manual**. Finished shots freeze into a review graph, and wired
   boards can **auto‑flush** the group after you lift the cup.
+- **Shot history on SD card** *(boards with a card slot; P4 boards first)* —
+  every finished shot is recorded to a FAT‑formatted microSD card: stats, the
+  full weight/flow series as CSV, and a rendered shot‑card PNG under
+  `/Apollo2/` — a take‑away database you can read on any computer. The Stats
+  tab's **History** section shows totals, lifetime/30‑day accuracy, and a
+  filterable shot list; tap a shot for its full‑screen card.
 - **Automatic time** — optionally join your home Wi‑Fi and the clock keeps itself
   correct over NTP, with a timezone picker that handles daylight saving. Time is
   saved to the on‑board RTC (where present) so it survives a power‑off.
@@ -206,7 +212,8 @@ locked out if your network changes.
   **Manual** — and becomes **Reset** while a finished shot is up for review.
 - **Settings** groups everything under Micra, Scale, and Device (brightness,
   clock, units, theme, Wi‑Fi).
-- **Stats** shows brew/boiler temperature history and device info.
+- **Stats** shows brew/boiler temperature history, the shot **History** log
+  (SD‑card boards), and device info.
 
 Every screen and setting is described in the **[user manual](MANUAL.md)**.
 
@@ -221,8 +228,8 @@ The code is layered so the same UI runs on a real board and on a laptop:
 ```
 include/core/        Pure interfaces (ports) + domain types. No LVGL, Arduino,
                      BLE, or SDL — just C++ and structs. e.g. IMachine, IScale,
-                     IClock, INetwork, IProvisioner, IBrewController, and the
-                     BLE central port (ble::ICentral).
+                     IClock, INetwork, IProvisioner, IBrewController, IShotStore
+                     (SD shot history), and the BLE central port (ble::ICentral).
 
 src/core/            Portable protocol logic: the La Marzocco Micra link and
                      the Bookoo scale driver, written only against ble::ICentral
