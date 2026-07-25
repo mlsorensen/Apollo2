@@ -235,7 +235,13 @@ machine is already warming up when you arrive.
   - **Reset stats**: tap any headline card. Non‑destructive — the three
     headline numbers restart from now (the Total card shows "Since ⟨date⟩")
     while every recorded shot stays on the card. Undo by deleting
-    `Apollo2/stats_since.txt` on a computer. Requires a FAT‑formatted SD card and a real
+    `Apollo2/stats_since.txt` on a computer.
+  - **Browse from your phone or computer**: with WiFi connected, open
+    `http://⟨device IP⟩/` (the IP is on **Stats → Info**). The device serves
+    its own web page — the same stats, month filters, and shot list, with a
+    live graph per shot and PNG/CSV downloads — styled to match whatever
+    theme the device is currently using. The same built‑in web server also
+    carries the setup pages during pairing/WiFi setup, so nothing conflicts. Requires a FAT‑formatted SD card and a real
   date/time (NTP, or Settings > Device); until both are present the tab shows
   what's needed. Records live on the card under `/Apollo2` — an index CSV, one
   samples CSV per shot, and a rendered PNG card — so the whole history can be

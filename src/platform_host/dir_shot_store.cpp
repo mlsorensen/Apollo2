@@ -130,6 +130,12 @@ core::ShotStats DirShotStore::stats(int64_t now_unix) const {
                                   now_unix, stats_since_);
 }
 
+bool DirShotStore::image_path(uint32_t id, char* out, size_t n) const {
+  std::snprintf(out, n, "%s/shots/%06u.png", dir_.c_str(), id);
+  std::error_code ec;
+  return fs::exists(out, ec);
+}
+
 core::StorageInfo DirShotStore::storage() const {
   std::error_code ec;
   const fs::space_info sp = fs::space(dir_, ec);

@@ -561,6 +561,14 @@ bool ShotStore::read(uint32_t id, core::ShotRecord& out) const {
   return true;
 }
 
+bool ShotStore::image_path(uint32_t id, char* out, size_t n) const {
+  if (!available_) return false;
+  std::snprintf(out, n, "%s/%s/shots/%06lu.png", kMount, core::kShotDirName,
+                static_cast<unsigned long>(id));
+  struct stat st;
+  return stat(out, &st) == 0;
+}
+
 core::ShotStats ShotStore::stats(int64_t now_unix) const {
   if (!available_) return {};
   xSemaphoreTake(mutex_, portMAX_DELAY);
