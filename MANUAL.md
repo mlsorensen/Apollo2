@@ -207,6 +207,9 @@ machine is already warming up when you arrive.
 
 - **Restart display** — soft reboot. Escape hatch for the rare RGB‑panel boot
   glitch where the image comes up shifted by a few pixels.
+- **Lock display for cleaning** — disables touch for 30 seconds so you can
+  wipe the screen. A full‑screen countdown shows the time remaining; the lock
+  ends on its own (touching the screen does nothing until then).
 
 ---
 

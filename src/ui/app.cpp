@@ -47,6 +47,14 @@ void on_restart_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->restart_device();
 }
 
+void on_clean_lock_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->start_clean_lock();
+}
+
+void on_clean_lock_timer(lv_timer_t* t) {
+  static_cast<ui::App*>(lv_timer_get_user_data(t))->clean_lock_tick();
+}
+
 void on_flow_unit_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->toggle_flow_units();
 }
@@ -479,6 +487,7 @@ namespace ui {
 
 App::~App() {
   if (screensaver_timer_ != nullptr) lv_timer_delete(screensaver_timer_);
+  if (clean_lock_timer_ != nullptr) lv_timer_delete(clean_lock_timer_);
   if (home_.shot_flash_timer != nullptr) lv_timer_delete(home_.shot_flash_timer);
   if (home_.stop_flash_timer != nullptr) lv_timer_delete(home_.stop_flash_timer);
   if (home_.flow_buf != nullptr) lv_free(home_.flow_buf);
@@ -691,6 +700,9 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                       LV_EVENT_VALUE_CHANGED, this);
   if (settings_.restart_btn != nullptr)
     lv_obj_add_event_cb(settings_.restart_btn, on_restart_clicked, LV_EVENT_CLICKED, this);
+  if (settings_.clean_lock_btn != nullptr)
+    lv_obj_add_event_cb(settings_.clean_lock_btn, on_clean_lock_clicked, LV_EVENT_CLICKED,
+                        this);
   if (settings_.auto_connect_switch != nullptr) {
     if (provisioner_ != nullptr && provisioner_->auto_connect())
       lv_obj_add_state(settings_.auto_connect_switch, LV_STATE_CHECKED);
@@ -1413,6 +1425,78 @@ void App::close_modal() {
   }
   if (tabview_ != nullptr) lv_obj_remove_flag(tabview_, LV_OBJ_FLAG_HIDDEN);  // reveal the UI
   wifi_setup_shown_ = false;
+}
+
+// Settings > "Lock display for cleaning": a full-screen opaque overlay on the
+// top layer swallows every touch for kCleanLockSecs so the glass can be wiped
+// without pressing buttons. Auto-dismisses; there is deliberately no way to
+// end it early by touch.
+void App::start_clean_lock() {
+  if (clean_lock_overlay_ != nullptr) return;  // already locked
+
+  lv_obj_t* bg = lv_obj_create(lv_layer_top());
+  lv_obj_remove_style_all(bg);
+  lv_obj_set_size(bg, lv_pct(100), lv_pct(100));
+  lv_obj_set_style_bg_color(bg, lv_color_hex(ui::theme::bg()), 0);
+  lv_obj_set_style_bg_opa(bg, LV_OPA_COVER, 0);
+  lv_obj_add_flag(bg, LV_OBJ_FLAG_CLICKABLE);  // eat touches (remove_style_all cleared it)
+  lv_obj_set_flex_flow(bg, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(bg, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_row(bg, ui::dp(8), 0);
+  clean_lock_overlay_ = bg;
+  // Nothing behind the opaque overlay is visible; don't render it (same
+  // reasoning as open_modal).
+  if (tabview_ != nullptr) lv_obj_add_flag(tabview_, LV_OBJ_FLAG_HIDDEN);
+
+  const bool compact = is_compact(screen_);
+  lv_obj_t* t = lv_label_create(bg);
+  lv_label_set_text(t, "Cleaning");
+  lv_obj_set_style_text_color(t, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(t, ui::font_dp(compact ? 20 : 24), 0);
+
+  clean_lock_count_ = lv_label_create(bg);
+  lv_obj_set_style_text_color(clean_lock_count_, lv_color_hex(ui::theme::accent()), 0);
+  lv_obj_set_style_text_font(clean_lock_count_, ui::font_dp(compact ? 40 : 48), 0);
+
+  lv_obj_t* hint = lv_label_create(bg);
+  lv_label_set_text(hint, "Touch disabled");
+  lv_obj_set_style_text_color(hint, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(hint, ui::font_dp(compact ? 14 : 16), 0);
+
+  clean_lock_t0_ = lv_tick_get();
+  clean_lock_shown_s_ = -1;
+  clean_lock_tick();  // paint "30" now, not a timer period later
+  clean_lock_timer_ = lv_timer_create(on_clean_lock_timer, 250, this);
+}
+
+void App::clean_lock_tick() {
+  if (clean_lock_overlay_ == nullptr) return;
+  const uint32_t elapsed_ms = lv_tick_elaps(clean_lock_t0_);
+  if (elapsed_ms >= static_cast<uint32_t>(kCleanLockSecs) * 1000u) {
+    end_clean_lock();
+    return;
+  }
+  const int remaining = kCleanLockSecs - static_cast<int>(elapsed_ms / 1000u);
+  if (remaining != clean_lock_shown_s_) {
+    clean_lock_shown_s_ = remaining;
+    lv_label_set_text_fmt(clean_lock_count_, "%d", remaining);
+  }
+}
+
+void App::end_clean_lock() {
+  if (clean_lock_timer_ != nullptr) {
+    lv_timer_delete(clean_lock_timer_);
+    clean_lock_timer_ = nullptr;
+  }
+  if (clean_lock_overlay_ != nullptr) {
+    lv_obj_delete(clean_lock_overlay_);
+    clean_lock_overlay_ = nullptr;
+    clean_lock_count_ = nullptr;
+  }
+  // Reveal the UI again — unless a modal is up (it hides/reveals on its own).
+  if (tabview_ != nullptr && modal_ == nullptr)
+    lv_obj_remove_flag(tabview_, LV_OBJ_FLAG_HIDDEN);
 }
 
 // Spinner shown while the pairing-mode token read runs (gives "it's working"

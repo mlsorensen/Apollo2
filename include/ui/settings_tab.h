@@ -83,6 +83,7 @@ struct SettingsWidgets {
   lv_obj_t* scope_graph_switch = nullptr;    // on = oscilloscope sweep, off = scroll
   lv_obj_t* perf_overlay_switch = nullptr;   // on = show LVGL FPS/CPU overlay
   lv_obj_t* restart_btn = nullptr;           // soft reboot (display-glitch escape hatch)
+  lv_obj_t* clean_lock_btn = nullptr;        // 30 s touch lockout for wiping the screen
   lv_obj_t* auto_connect_switch = nullptr;   // Micra: connect to saved machine at boot
   lv_obj_t* wired_paddle_switch = nullptr;   // Micra: paddle harness in use (off =
                                              // detector-driven "unwired" shots);
