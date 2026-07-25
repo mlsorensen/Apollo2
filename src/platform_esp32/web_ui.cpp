@@ -4,6 +4,7 @@
 #include <WiFi.h>
 
 #include <cstdio>
+#include <ctime>
 
 #include "core/shot_csv.h"
 #include "platform_esp32/webapp_dist.h"
@@ -14,6 +15,35 @@ namespace platform {
 namespace {
 
 const char* mode_name(core::ShotMode m) { return core::shot_mode_name(m); }
+
+// "shot-20260615-0455" — sortable, locale-free, matches when the shot ran.
+void shot_basename(const core::IShotStore& shots, uint32_t id, char* out,
+                   size_t n) {
+  int64_t unix_time = 0;
+  core::ShotSummary page[16];
+  for (int offset = 0;;) {
+    const int got = shots.list(page, 16, offset);
+    if (got == 0) break;
+    offset += got;
+    bool found = false;
+    for (int i = 0; i < got; ++i)
+      if (page[i].id == id) {
+        unix_time = page[i].unix_time;
+        found = true;
+        break;
+      }
+    if (found) break;
+  }
+  if (unix_time == 0) {
+    std::snprintf(out, n, "shot-%06lu", static_cast<unsigned long>(id));
+    return;
+  }
+  const time_t t = static_cast<time_t>(unix_time);
+  struct tm tm;
+  localtime_r(&t, &tm);
+  std::snprintf(out, n, "shot-%04d%02d%02d-%02d%02d", tm.tm_year + 1900,
+                tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min);
+}
 
 }  // namespace
 
@@ -138,9 +168,9 @@ void WebUi::handle_shot_csv() {
     server_.send(404, "text/plain", "no such shot");
     return;
   }
-  char disp[64];
-  std::snprintf(disp, sizeof(disp), "attachment; filename=shot-%06lu.csv",
-                static_cast<unsigned long>(id));
+  char base[40], disp[80];
+  shot_basename(*shots_, id, base, sizeof(base));
+  std::snprintf(disp, sizeof(disp), "attachment; filename=%s.csv", base);
   server_.sendHeader("Content-Disposition", disp);
   server_.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server_.send(200, "text/csv", "");
@@ -166,9 +196,9 @@ void WebUi::handle_shot_png() {
     server_.send(404, "text/plain", "no image for this shot");
     return;
   }
-  char disp[64];
-  std::snprintf(disp, sizeof(disp), "attachment; filename=shot-%06lu.png",
-                static_cast<unsigned long>(id));
+  char base[40], disp[80];
+  shot_basename(*shots_, id, base, sizeof(base));
+  std::snprintf(disp, sizeof(disp), "attachment; filename=%s.png", base);
   server_.sendHeader("Content-Disposition", disp);
   server_.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server_.send(200, "image/png", "");

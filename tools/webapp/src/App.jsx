@@ -32,6 +32,13 @@ function monthLabel(ym) {
   return `${MONTHS[(ym % 100) - 1]} ${Math.floor(ym / 100)}`;
 }
 
+function shotFileBase(s) {
+  const d = new Date(s.unix * 1000);
+  const p = (v) => String(v).padStart(2, '0');
+  return `shot-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-` +
+         `${p(d.getHours())}${p(d.getMinutes())}`;
+}
+
 function fmtBytes(b) {
   if (b >= 1e9) return (b / 1e9).toFixed(1) + ' GB';
   return Math.round(b / 1e6) + ' MB';
@@ -308,10 +315,12 @@ export default function App() {
               {samples == null && <Box sx={{ textAlign: 'center', py: 4 }}><CircularProgress size={28} /></Box>}
               {samples != null && <ShotChart samples={samples} target={open.target_g} theme={chart} />}
               <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
-                <Link href={`/api/shot.png?id=${open.id}`} download={`shot-${open.id}.png`}>
+                <Link href={`/api/shot.png?id=${open.id}`}
+                      download={`${shotFileBase(open)}.png`}>
                   Download card (PNG)
                 </Link>
-                <Link href={`/api/shot.csv?id=${open.id}`} download={`shot-${open.id}.csv`}>
+                <Link href={`/api/shot.csv?id=${open.id}`}
+                      download={`${shotFileBase(open)}.csv`}>
                   Download data (CSV)
                 </Link>
               </Stack>
