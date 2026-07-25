@@ -36,6 +36,14 @@ class ShotStore : public core::IShotStore {
   int list(core::ShotSummary* out, int max, int offset) const override;
   bool read(uint32_t id, core::ShotRecord& out) const override;
   core::ShotStats stats(int64_t now_unix) const override;
+  // Cached by the writer task (mount, idle probe, every save) — FATFS free
+  // -space queries aren't safe alongside a concurrent write, so the UI
+  // thread only ever reads this cache.
+  core::StorageInfo storage() const override;
+
+  // Below this free space, saves are dropped (a shot's files run ~200-400 KB
+  // and FS writes fail silently once space runs out).
+  static constexpr uint64_t kMinFreeBytes = 2ull * 1024 * 1024;
 
  private:
   struct SaveJob {
@@ -49,10 +57,12 @@ class ShotStore : public core::IShotStore {
   bool try_mount();           // mount + load index; true if usable
   void unmount();             // failure path: drop the card, retry later
   void write_job(SaveJob& job);
+  void refresh_storage();     // writer task only: requery + cache capacity
 
   volatile bool available_ = false;
   uint32_t next_id_ = 1;
   std::vector<core::ShotSummary> index_;  // newest first
+  core::StorageInfo storage_info_;        // cache; guarded by mutex_
   mutable SemaphoreHandle_t mutex_ = nullptr;
   QueueHandle_t queue_ = nullptr;
 };

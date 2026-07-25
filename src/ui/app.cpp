@@ -1818,6 +1818,36 @@ void App::update_history_view() {
     std::snprintf(b, sizeof(b), "-");
   lv_label_set_text(stats_.hist_stat_30, b);
 
+  // Capacity footer (updates every pass — the cache is cheap to read). FULL
+  // is loud: saves are being dropped and the user should know why.
+  if (stats_.history_sd_label != nullptr) {
+    const core::StorageInfo si = shots_->storage();
+    if (si.total_bytes == 0) {
+      lv_label_set_text(stats_.history_sd_label, "");
+    } else if (si.full) {
+      lv_label_set_text(stats_.history_sd_label,
+                        "SD card FULL - shots are not being saved");
+      lv_obj_set_style_text_color(stats_.history_sd_label,
+                                  lv_color_hex(ui::theme::alert()), 0);
+    } else {
+      char cap[64];
+      auto fmt_gb = [](uint64_t bytes, char* out, size_t n) {
+        if (bytes >= 1000000000ull)
+          std::snprintf(out, n, "%.1f GB", static_cast<double>(bytes) / 1e9);
+        else
+          std::snprintf(out, n, "%u MB",
+                        static_cast<unsigned>(bytes / 1000000ull));
+      };
+      char free_s[20], total_s[20];
+      fmt_gb(si.free_bytes, free_s, sizeof(free_s));
+      fmt_gb(si.total_bytes, total_s, sizeof(total_s));
+      std::snprintf(cap, sizeof(cap), "SD card: %s free of %s", free_s, total_s);
+      lv_label_set_text(stats_.history_sd_label, cap);
+      lv_obj_set_style_text_color(stats_.history_sd_label,
+                                  lv_color_hex(ui::theme::muted()), 0);
+    }
+  }
+
   // Rebuild the month filter + rows only when the data or filter changed —
   // this runs on the 2 Hz refresh while the tab is visible.
   if (shots_->count() == hist_built_count_ &&

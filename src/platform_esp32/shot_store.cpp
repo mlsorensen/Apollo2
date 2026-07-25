@@ -89,6 +89,7 @@ void ShotStore::run() {
         unmount();
       } else {
         d.close();
+        refresh_storage();
       }
     }
   }
@@ -139,6 +140,7 @@ bool ShotStore::try_mount() {
   next_id_ = max_id + 1;
   xSemaphoreGive(mutex_);
   available_ = true;
+  refresh_storage();
   Serial.printf("ShotStore: SD mounted, %d shots, next id %lu\n",
                 static_cast<int>(index_.size()),
                 static_cast<unsigned long>(next_id_));
@@ -147,12 +149,23 @@ bool ShotStore::try_mount() {
 
 void ShotStore::unmount() {
   available_ = false;
+  xSemaphoreTake(mutex_, portMAX_DELAY);
+  storage_info_ = {};
+  xSemaphoreGive(mutex_);
   SD_MMC.end();
   Serial.println("ShotStore: SD unavailable (removed?), will retry");
 }
 
 void ShotStore::write_job(SaveJob& job) {
   if (!available_) return;
+  // Card-full guard: FS writes fail SILENTLY when space runs out, which would
+  // leave truncated CSVs and half a PNG. Skip the save (history stays
+  // readable) rather than corrupt the tree; the UI shows FULL off the cache.
+  refresh_storage();
+  if (storage().full) {
+    Serial.println("ShotStore: SD card full, shot not saved");
+    return;
+  }
   core::ShotRecord& r = *job.rec;
 
   xSemaphoreTake(mutex_, portMAX_DELAY);
@@ -290,6 +303,22 @@ bool ShotStore::read(uint32_t id, core::ShotRecord& out) const {
   }
   f.close();
   return true;
+}
+
+void ShotStore::refresh_storage() {
+  const uint64_t total = SD_MMC.totalBytes();
+  const uint64_t used = SD_MMC.usedBytes();
+  const uint64_t free_b = total > used ? total - used : 0;
+  xSemaphoreTake(mutex_, portMAX_DELAY);
+  storage_info_ = {total, free_b, free_b < kMinFreeBytes};
+  xSemaphoreGive(mutex_);
+}
+
+core::StorageInfo ShotStore::storage() const {
+  xSemaphoreTake(mutex_, portMAX_DELAY);
+  const core::StorageInfo info = storage_info_;
+  xSemaphoreGive(mutex_);
+  return info;
 }
 
 core::ShotStats ShotStore::stats(int64_t now_unix) const {

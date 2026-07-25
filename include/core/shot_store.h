@@ -56,6 +56,14 @@ struct ShotStats {
   float acc_30d_pct = 0;       // last 30 days before `now_unix`
 };
 
+// Capacity readout for the History view. `full` means saves are being
+// DROPPED (free space under the store's reserve) — surface it loudly.
+struct StorageInfo {
+  uint64_t total_bytes = 0;  // 0 = unknown (no medium / not applicable)
+  uint64_t free_bytes = 0;
+  bool full = false;
+};
+
 // The one accuracy definition, shared by every store: 100% minus the mean
 // relative |final - target| error over targeted shots (target_g > 0).
 inline ShotStats compute_shot_stats(const ShotSummary* items, int n,
@@ -106,6 +114,11 @@ class IShotStore {
 
   // Headline metrics; `now_unix` anchors the 30-day window.
   virtual ShotStats stats(int64_t now_unix) const = 0;
+
+  // Capacity of the backing medium. Default: unknown (all zeros). Device
+  // implementations return a CACHED value — the UI thread must never touch
+  // the medium directly.
+  virtual StorageInfo storage() const { return {}; }
 };
 
 // For boards/builds without storage: never available, drops everything.

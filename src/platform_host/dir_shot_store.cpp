@@ -107,4 +107,11 @@ core::ShotStats DirShotStore::stats(int64_t now_unix) const {
                                   now_unix);
 }
 
+core::StorageInfo DirShotStore::storage() const {
+  std::error_code ec;
+  const fs::space_info sp = fs::space(dir_, ec);
+  if (ec) return {};
+  return {sp.capacity, sp.available, sp.available < 2ull * 1024 * 1024};
+}
+
 }  // namespace host
