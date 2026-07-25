@@ -641,44 +641,19 @@ bool Display::begin() {
   // panel that has its own GRAM and self-refreshes.
   // PSRAM on purpose on the S3 RGB boards — see the kBufferLines comment: the
   // internal variant starved WiFi of its init heap.
-#if defined(BOARD_DISPLAY_DSI)
-  // P4: the PSRAM bus is the bottleneck — the DPI scanout alone reads the
-  // framebuffer continuously (~100 MB/s on the 5") and the UI's render +
-  // rotate traffic competes with it. An INTERNAL (L2MEM) draw buffer takes
-  // LVGL's read-modify-write blending and the rotate's source reads off that
-  // bus entirely. Unlike the S3, the P4's radio lives on the remote C6
-  // (esp-hosted), so the S3's "internal buffer starves WiFi" ceiling doesn't
-  // apply — but still gate on generous headroom and fall back to PSRAM.
-  {
-    // Take whatever the internal heap can spare rather than demanding a fixed
-    // strip count: even a ~32-line internal buffer measured ~2.5x on render-
-    // bound full-screen work (settings scroll — see the kBufferLines history
-    // note), so a modest buffer is far better than none. Headroom must cover
-    // everything internal that inits after the display (NimBLE-hosted host,
-    // sound DMA, link-task stacks, the setup portal's WebServer) — the LVGL
-    // widget pool is PSRAM (lv_conf.h) and doesn't count.
-    constexpr size_t kHeadroom = 128 * 1024;
-    constexpr int kMinLines = 24;  // below this the per-flush overhead wins
-    const size_t line_bytes = static_cast<size_t>(w) * sizeof(lv_color_t);
-    const size_t free_internal = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
-    const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
-    size_t budget = free_internal > kHeadroom ? free_internal - kHeadroom : 0;
-    if (budget > largest) budget = largest;
-    int lines = static_cast<int>(budget / line_bytes);
-    if (lines > kBufferLines) lines = kBufferLines;
-    if (lines >= kMinLines) {
-      const size_t internal_bytes = line_bytes * static_cast<size_t>(lines);
-      g_draw_buf =
-          static_cast<lv_color_t*>(heap_caps_malloc(internal_bytes, MALLOC_CAP_INTERNAL));
-      if (g_draw_buf != nullptr) buf_bytes = internal_bytes;
-    }
-    Serial.printf("DSI: LVGL draw buffer %s (%d lines, %u bytes; internal free was %u)\n",
-                  g_draw_buf ? "INTERNAL" : "PSRAM (internal too tight)", lines,
-                  static_cast<unsigned>(g_draw_buf ? buf_bytes : 0),
-                  static_cast<unsigned>(free_internal));
-  }
-  if (g_draw_buf == nullptr)
-#endif
+  // P4/DSI: the draw buffer lives in PSRAM, ALWAYS. An earlier adaptive gate
+  // put it in internal L2MEM when ~128KB headroom remained — that premise
+  // ("the radio lives on the remote C6, so internal starvation can't hurt
+  // it") proved false on hardware: esp-hosted's SDIO link needs internal
+  // DMA RX buffers continuously, and with WiFi + NTP + the SD writer running,
+  // a 62KB internal draw buffer drove free internal to ~33KB — the DSI
+  // dirty-sync DMA lost its gdma link lists (ESP_ERR_NO_MEM fallback spam)
+  // and the radio died outright (assert sdio_rx_get_buffer, boot loop) on
+  // the 4.3. The 5" always landed on PSRAM (fragmented at init) at accepted
+  // performance; a fixed safe headroom is unknowable as features grow, so
+  // the internal path is gone. (The measured internal-buffer perf notes live
+  // in git history; if scroll perf ever needs it back, budget internal RAM
+  // globally first.)
   g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM));
   Serial.printf("RGB: LVGL draw buffer %s (%u bytes)\n",
                 g_draw_buf ? "ok" : "FAILED", static_cast<unsigned>(buf_bytes));

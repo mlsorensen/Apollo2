@@ -182,7 +182,9 @@ void ShotStore::begin() {
   mutex_ = xSemaphoreCreateMutex();
   queue_ = xQueueCreate(kQueueDepth, sizeof(SaveJob));
   // Low priority on the non-LVGL core: PNG encode is seconds of pure CPU.
-  xTaskCreatePinnedToCore(task_entry, "shot_store", 16384, this, 1, nullptr, 0);
+  // Stack is INTERNAL RAM (radio + DSI DMA compete for it): 12KB covers
+  // FATFS + stdio + the stb callback; stb's big buffers go to PSRAM.
+  xTaskCreatePinnedToCore(task_entry, "shot_store", 12288, this, 1, nullptr, 0);
 }
 
 void ShotStore::task_entry(void* self) { static_cast<ShotStore*>(self)->run(); }
