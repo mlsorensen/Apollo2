@@ -13,15 +13,20 @@
 #include "driver/sdmmc_host.h"
 #include "esp_heap_caps.h"
 #include "esp_vfs_fat.h"
+#if !defined(BOARD_SD_MMC_1BIT)
 #include "sd_pwr_ctrl_by_on_chip_ldo.h"
+#endif
 #include "sdmmc_cmd.h"
 
-// The card is mounted the way the Waveshare BSP does it — IDF's
-// esp_vfs_fat_sdmmc_mount on SDMMC SLOT 0 (the P4's IOMUX slot: the card is
-// hard-wired to GPIO39-44) with the slot's IO rail powered by on-chip LDO
-// channel 4. Arduino's SD_MMC library is NOT usable here: it hardcodes slot 1,
-// which this board's ESP32-C6 radio occupies (esp-hosted SDIO). File IO goes
-// through plain stdio against the VFS mountpoint.
+// The card is mounted the way the Waveshare BSPs do it, via IDF's
+// esp_vfs_fat_sdmmc_mount; file IO goes through plain stdio on the VFS
+// mountpoint. Two wirings share this file:
+//   - P4 boards: SDMMC SLOT 0, 4-bit (IOMUX — the card is hard-wired to
+//     GPIO39-44), the slot's IO rail powered by on-chip LDO channel 4.
+//     Arduino's SD_MMC library is NOT usable there: it hardcodes slot 1,
+//     which the ESP32-C6 radio occupies (esp-hosted SDIO).
+//   - S3 4.3C (BOARD_SD_MMC_1BIT): SLOT 1 via the GPIO matrix, 1-bit bus
+//     (vendor demo pins CLK 12 / CMD 11 / D0 13), no LDO involved.
 
 // stb PNG encoder for the on-SD shot cards. This is the DEVICE's only stb
 // implementation TU (the host's lives in png_display.cpp — one per binary).
@@ -41,6 +46,12 @@ namespace {
 constexpr const char* kMount = "/sdcard";
 constexpr uint32_t kRetryMs = 5000;  // mount retry cadence while unavailable
 constexpr int kQueueDepth = 2;
+
+#if defined(BOARD_SD_MMC_1BIT)
+constexpr int kSdSlot = SDMMC_HOST_SLOT_1;  // GPIO matrix: either slot works
+#else
+constexpr int kSdSlot = SDMMC_HOST_SLOT_0;  // the P4 card's IOMUX slot
+#endif
 
 char g_path[64];  // writer-task scratch (single-threaded there)
 
@@ -73,14 +84,42 @@ void png_write_cb(void* ctx, void* data, int size) {
   std::fwrite(data, 1, static_cast<size_t>(size), static_cast<FILE*>(ctx));
 }
 
-// The BSP's slot config: slot 0 is IOMUX, so no pins are specified.
-sdmmc_slot_config_t slot0_config() {
+// Per-board slot config. P4: slot 0 is IOMUX, so no pins are specified
+// (the BSP's config verbatim). 4.3C: pins routed through the GPIO matrix,
+// one data line.
+sdmmc_slot_config_t sd_slot_config() {
+#if defined(BOARD_SD_MMC_1BIT)
+  sdmmc_slot_config_t slot = SDMMC_SLOT_CONFIG_DEFAULT();
+  slot.clk = (gpio_num_t)board::kSdClk;
+  slot.cmd = (gpio_num_t)board::kSdCmd;
+  slot.d0 = (gpio_num_t)board::kSdD0;
+  slot.d1 = GPIO_NUM_NC;
+  slot.d2 = GPIO_NUM_NC;
+  slot.d3 = GPIO_NUM_NC;
+  slot.cd = SDMMC_SLOT_NO_CD;
+  slot.wp = SDMMC_SLOT_NO_WP;
+  slot.width = 1;
+  return slot;
+#else
   sdmmc_slot_config_t slot = {};
   slot.cd = SDMMC_SLOT_NO_CD;
   slot.wp = SDMMC_SLOT_NO_WP;
   slot.width = 4;
   slot.flags = 0;
   return slot;
+#endif
+}
+
+// Per-board host config: shared SDMMC peripheral settings for mount + probe.
+sdmmc_host_t sd_host_config() {
+  sdmmc_host_t host = SDMMC_HOST_DEFAULT();
+  host.slot = kSdSlot;
+#if defined(BOARD_SD_MMC_1BIT)
+  host.flags = SDMMC_HOST_FLAG_1BIT;  // default 20 MHz — matrix routing
+#else
+  host.max_freq_khz = SDMMC_FREQ_HIGHSPEED;
+#endif
+  return host;
 }
 
 // Identify a boot/volume sector's filesystem. Empty string = unrecognized.
@@ -92,19 +131,23 @@ const char* classify_fs_sector(const uint8_t* sec) {
   return "";
 }
 
-// Bring the SDMMC bus up ONCE and keep it up forever. The C6 radio shares
-// the SDMMC peripheral (esp-hosted SDIO): letting esp_vfs_fat_sdmmc_mount's
-// failure path deinit the host killed the radio mid-flight (sdio_rx assert,
-// boot loop) on any board without a card inserted. With the host + slot 0 +
-// LDO pre-initialized by us, the mount helper sees "already initialized" and
-// its cleanup leaves the shared host alone — a cardless retry loop touches
-// only slot 0.
+// Bring the SDMMC bus up ONCE and keep it up forever. On the P4 the C6
+// radio shares the SDMMC peripheral (esp-hosted SDIO): letting
+// esp_vfs_fat_sdmmc_mount's failure path deinit the host killed the radio
+// mid-flight (sdio_rx assert, boot loop) on any board without a card
+// inserted. With the host + slot + power pre-initialized by us, the mount
+// helper sees "already initialized" and its cleanup leaves the host alone —
+// a cardless retry loop touches only our slot. (The S3 4.3C has no sharing
+// concern; the same policy is simply harmless there.)
+#if !defined(BOARD_SD_MMC_1BIT)
 sd_pwr_ctrl_handle_t g_pwr = nullptr;  // persistent LDO handle (never freed)
+#endif
 
 bool ensure_bus() {
   static bool ready = false;
   static bool failed = false;
   if (ready || failed) return ready;
+#if !defined(BOARD_SD_MMC_1BIT)
   sd_pwr_ctrl_ldo_config_t ldo_config = {};
   ldo_config.ldo_chan_id = board::kSdLdoChannel;
   if (sd_pwr_ctrl_new_on_chip_ldo(&ldo_config, &g_pwr) != ESP_OK) {
@@ -112,6 +155,7 @@ bool ensure_bus() {
     failed = true;
     return false;
   }
+#endif
   const esp_err_t host_err = sdmmc_host_init();
   if (host_err != ESP_OK && host_err != ESP_ERR_INVALID_STATE) {
     Serial.printf("ShotStore: sdmmc host init failed (%s)\n",
@@ -119,8 +163,8 @@ bool ensure_bus() {
     failed = true;
     return false;
   }
-  const sdmmc_slot_config_t slot = slot0_config();
-  const esp_err_t slot_err = sdmmc_host_init_slot(SDMMC_HOST_SLOT_0, &slot);
+  const sdmmc_slot_config_t slot = sd_slot_config();
+  const esp_err_t slot_err = sdmmc_host_init_slot(kSdSlot, &slot);
   if (slot_err != ESP_OK && slot_err != ESP_ERR_INVALID_STATE) {
     Serial.printf("ShotStore: sdmmc slot init failed (%s)\n",
                   esp_err_to_name(slot_err));
@@ -141,9 +185,10 @@ core::MediumState probe_card_format(char* fs_type, size_t n) {
   sdmmc_card_t* card = nullptr;
   uint8_t* sec = nullptr;
   do {
-    sdmmc_host_t host = SDMMC_HOST_DEFAULT();
-    host.slot = SDMMC_HOST_SLOT_0;
+    sdmmc_host_t host = sd_host_config();
+#if !defined(BOARD_SD_MMC_1BIT)
     host.pwr_ctrl_handle = g_pwr;
+#endif
     card = static_cast<sdmmc_card_t*>(heap_caps_malloc(
         sizeof(sdmmc_card_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
     sec = static_cast<uint8_t*>(
@@ -224,16 +269,16 @@ bool ShotStore::try_mount() {
   static uint32_t attempts = 0;
   const bool log_this = (attempts++ % 12) == 0;
 
-  // BSP-style mount on the persistent bus: slot 0 (IOMUX — the card is
-  // hard-wired to it), IO rail from the persistent LDO-4 handle. The host is
-  // pre-initialized (ensure_bus), so the mount helper's failure cleanup will
-  // NOT deinit it — that used to take the C6 radio's shared SDMMC down.
+  // BSP-style mount on the persistent bus (see sd_host_config/sd_slot_config
+  // for the per-board wiring). The host is pre-initialized (ensure_bus), so
+  // the mount helper's failure cleanup will NOT deinit it — that used to
+  // take the P4's C6 radio down with it.
   if (!ensure_bus()) return false;
-  sdmmc_host_t host = SDMMC_HOST_DEFAULT();
-  host.slot = SDMMC_HOST_SLOT_0;
-  host.max_freq_khz = SDMMC_FREQ_HIGHSPEED;
+  sdmmc_host_t host = sd_host_config();
+#if !defined(BOARD_SD_MMC_1BIT)
   host.pwr_ctrl_handle = g_pwr;
-  const sdmmc_slot_config_t slot_config = slot0_config();
+#endif
+  const sdmmc_slot_config_t slot_config = sd_slot_config();
   esp_vfs_fat_sdmmc_mount_config_t mount_config = {};
   mount_config.format_if_mount_failed = false;
   mount_config.max_files = 4;
