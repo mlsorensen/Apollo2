@@ -8,6 +8,7 @@
 #include "core/machine.h"
 #include "core/network.h"
 #include "core/scale.h"
+#include "core/shot_store.h"
 #include "ui/screen.h"
 
 // Home tab: built once, then updated in place from new snapshots (no rebuild).
@@ -313,5 +314,11 @@ void cancel_stop_flash(HomeWidgets& w);
 // with a live timer / `off` with none are no-ops. When it stops, the next
 // update_home repaints the dot to the steady state color.
 void set_heating_pulse(HomeWidgets& w, bool on);
+
+// Copy the stored shot samples (raw, unsmoothed) oldest-first into `out`.
+// Call at the kReview freeze, AFTER finish_shot_plot/review_shot_plot: by then
+// both wired and unwired rings hold shot-relative timestamps and net grams.
+// Returns the number of samples written (<= max).
+int export_shot_series(const HomeWidgets& w, core::ShotSample* out, int max);
 
 }  // namespace ui

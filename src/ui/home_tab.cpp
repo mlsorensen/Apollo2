@@ -1847,6 +1847,17 @@ void review_shot_plot(HomeWidgets& w, uint32_t t_start, uint32_t t_end,
   shot_plot_redraw_full(w, UINT32_MAX);
 }
 
+int export_shot_series(const HomeWidgets& w, core::ShotSample* out, int max) {
+  int n = w.shot_n < max ? w.shot_n : max;
+  for (int i = 0; i < n; ++i) {
+    const int idx = shot_sample_idx(w, i);
+    out[i].t_ms = w.shot_ts[idx];
+    out[i].weight_g = w.shot_weights[idx];
+    out[i].flow_gps = w.shot_flows[idx];
+  }
+  return n;
+}
+
 void set_shot_smoothing(HomeWidgets& w, float k) {
   w.shot_smooth_k = k;
   // Repaint an on-screen shot plot in place (frozen review, or mid-shot — the

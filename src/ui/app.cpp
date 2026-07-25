@@ -1411,6 +1411,7 @@ void App::pump_scale_chart() {
           last_weight_g_ = -10000.0f;
         }
       }
+      capture_shot_record(bsnap, snap);  // after the freeze: rings are shot-relative
     }
     // The stop-early flash must not outlive the shot it belongs to: the user
     // already flipped the paddle (that's what ended it) — kill any remaining
@@ -1876,6 +1877,38 @@ void App::update_history_view() {
     lv_obj_set_style_text_font(more, ui::font_dp(is_compact(screen_) ? 12 : 14), 0);
     lv_obj_set_style_pad_ver(more, ui::dp(8), 0);
   }
+}
+
+void App::capture_shot_record(const core::BrewSnapshot& bsnap,
+                              const core::ScaleSnapshot& snap) {
+  if (shots_ == nullptr || !shots_->available()) return;
+  const int64_t now_unix = clock_ != nullptr ? clock_->now_unix() : 0;
+  if (now_unix == 0) return;  // no real date -> nothing sane to stamp
+
+  core::ShotRecord& r = shot_capture_;
+  r.n_samples = ui::export_shot_series(home_, r.samples,
+                                       core::ShotRecord::kSampleCap);
+  if (r.n_samples < 2) return;  // scale dark the whole shot -> nothing to keep
+
+  // Wired shots tare at start (weight_g is already net); unwired shots never
+  // tare, so subtract the detector's untared baseline — same convention as the
+  // frozen review readout above.
+  const float final_g =
+      snap.weight_g - (bsnap.paddle_wired ? 0.0f : bsnap.start_weight_g);
+  r.summary.id = 0;  // store-assigned
+  r.summary.unix_time = now_unix;
+  r.summary.duration_ms = bsnap.shot_ms;
+  // Manual-mode shots have no target to score against; store 0 = untargeted.
+  r.summary.target_g =
+      bsnap.mode == core::ShotMode::kManual ? 0.0f : bsnap.target_weight_g;
+  r.summary.final_g = final_g;
+  r.summary.avg_gps = bsnap.shot_ms > 0
+                          ? final_g / (static_cast<float>(bsnap.shot_ms) / 1000.0f)
+                          : 0.0f;
+  r.mode = bsnap.mode;
+  r.wired = bsnap.paddle_wired;
+  shots_->save(r);
+  // The History list notices count() changed on its next visible refresh.
 }
 
 void App::open_shot_card(uint32_t id) {
