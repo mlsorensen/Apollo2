@@ -344,6 +344,15 @@ void loop() {
   lv_timer_handler();        // LVGL render/input
   g_token_setup.handle();    // portal auto-close timeout (server pump is WebUi's)
   g_web_ui.poll();           // the shared HTTP server (setup + history app)
+
+  // Hourly last-known-time snapshot -> NVS, so the next boot without a
+  // surviving RTC starts approximately right instead of at 1970.
+  static uint32_t last_time_save_ms = 0;
+  if (millis() - last_time_save_ms >= 3600u * 1000u) {
+    last_time_save_ms = millis();
+    const std::time_t now_unix = g_clock.now_unix();
+    if (now_unix != 0) g_config.set_last_unix(now_unix);
+  }
   g_network.poll();          // drive the WiFi station state machine + NTP->RTC
 
   // Reflect the latest cached machine state in the UI (cheap; no BLE here).

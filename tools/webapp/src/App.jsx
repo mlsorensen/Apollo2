@@ -117,7 +117,10 @@ function StatCard({ value, caption }) {
                                  fontSize: 'clamp(1.15rem, 5.5vw, 2.125rem)' }}>
           {value}
         </Typography>
-        <Typography noWrap variant="body2" color="text.secondary">{caption}</Typography>
+        <Typography variant="body2" color="text.secondary"
+                    sx={{ lineHeight: 1.2, fontSize: { xs: '0.72rem', sm: '0.875rem' } }}>
+          {caption}
+        </Typography>
       </CardContent>
     </Card>
   );

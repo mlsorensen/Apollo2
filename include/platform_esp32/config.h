@@ -33,6 +33,12 @@ class Config {
   void set_shot_mode(int mode);        // 2=Detect); migrates the legacy bool key
   float overshoot_g() const;           // learned drip/lag compensation (default 2.0)
   void set_overshoot_g(float grams);
+
+  // Last known wall-clock time (unix, UTC), saved hourly while the clock is
+  // valid. Boot seeds the system clock from it when no real RTC survived —
+  // approximately right beats 1970 (NTP/RTC correct it when available).
+  int64_t last_unix() const;
+  void set_last_unix(int64_t t);
   int review_hold_s() const;           // shot-review linger before auto-reset (default 30)
   void set_review_hold_s(int seconds);
   bool auto_connect() const;           // connect to the saved Micra at boot (default true)
