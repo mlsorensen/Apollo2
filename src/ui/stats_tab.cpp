@@ -392,14 +392,28 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
     lv_obj_set_style_bg_opa(out.history_list, LV_OPA_COVER, LV_PART_SCROLLBAR);
     lv_obj_set_style_width(out.history_list, ui::dp(5), LV_PART_SCROLLBAR);
 
-    // Capacity footer: free/total, or an alert "FULL" when saves are dropped.
-    out.history_sd_label = lv_label_create(out.history_content);
+    // Footer row: browse URL centered, capacity right (alert "FULL" when
+    // saves are dropped). Plain container + aligned children — flex can't
+    // center one child independently of the other.
+    lv_obj_t* footer = lv_obj_create(out.history_content);
+    lv_obj_remove_style_all(footer);
+    lv_obj_remove_flag(footer, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_width(footer, lv_pct(100));
+    lv_obj_set_height(footer, ui::dp(compact ? 16 : 20));
+
+    out.history_url_label = lv_label_create(footer);
+    lv_label_set_text(out.history_url_label, "");
+    lv_obj_set_style_text_color(out.history_url_label,
+                                lv_color_hex(ui::theme::muted()), 0);
+    lv_obj_set_style_text_font(out.history_url_label, cap_font, 0);
+    lv_obj_align(out.history_url_label, LV_ALIGN_CENTER, 0, 0);
+
+    out.history_sd_label = lv_label_create(footer);
     lv_label_set_text(out.history_sd_label, "");
-    lv_obj_set_width(out.history_sd_label, lv_pct(100));
-    lv_obj_set_style_text_align(out.history_sd_label, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_set_style_text_color(out.history_sd_label,
                                 lv_color_hex(ui::theme::muted()), 0);
     lv_obj_set_style_text_font(out.history_sd_label, cap_font, 0);
+    lv_obj_align(out.history_sd_label, LV_ALIGN_RIGHT_MID, 0, 0);
 
     // Guidance card (no SD / no date): swapped in for the content wrapper.
     out.history_guidance = lv_obj_create(out.history_box);

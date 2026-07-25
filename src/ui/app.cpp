@@ -1865,6 +1865,21 @@ void App::update_history_view() {
     std::snprintf(b, sizeof(b), "-");
   lv_label_set_text(stats_.hist_stat_30, b);
 
+  // Footer URL: where to browse this history from a phone/computer. Shown
+  // only while the station is actually connected (the IP means nothing
+  // otherwise).
+  if (stats_.history_url_label != nullptr) {
+    if (network_ != nullptr && network_->status() == core::NetState::Connected &&
+        network_->ip()[0] != '\0') {
+      char url[48];
+      std::snprintf(url, sizeof(url), "View at http://%s", network_->ip());
+      lv_label_set_text(stats_.history_url_label, url);
+    } else {
+      lv_label_set_text(stats_.history_url_label, "");
+    }
+    lv_obj_align(stats_.history_url_label, LV_ALIGN_CENTER, 0, 0);  // re-center
+  }
+
   // Capacity footer (updates every pass — the cache is cheap to read). FULL
   // is loud: saves are being dropped and the user should know why.
   if (stats_.history_sd_label != nullptr) {
@@ -1893,6 +1908,7 @@ void App::update_history_view() {
       lv_obj_set_style_text_color(stats_.history_sd_label,
                                   lv_color_hex(ui::theme::muted()), 0);
     }
+    lv_obj_align(stats_.history_sd_label, LV_ALIGN_RIGHT_MID, 0, 0);
   }
 
   // Rebuild the month filter + rows only when the data or filter changed —
