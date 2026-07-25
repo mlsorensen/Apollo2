@@ -238,9 +238,10 @@ lv_obj_t* build_shot_card(lv_obj_t* parent, const core::ShotRecord& rec,
   lv_obj_set_style_text_color(when_lbl, lv_color_hex(theme::muted()), 0);
   lv_obj_set_style_text_font(when_lbl, small, 0);
 
-  const char* mode_txt = rec.wired                             ? "Auto shot"
-                         : rec.mode == core::ShotMode::kDetect ? "Detected"
-                                                               : "Manual";
+  const char* mode_txt = rec.summary.wired ? "Auto shot"
+                         : rec.summary.mode == core::ShotMode::kDetect
+                             ? "Detected"
+                             : "Manual";
   lv_obj_t* mode_lbl = lv_label_create(header);
   lv_label_set_text(mode_lbl, mode_txt);
   lv_obj_set_style_text_color(mode_lbl, lv_color_hex(theme::muted()), 0);
@@ -296,5 +297,26 @@ lv_obj_t* build_shot_card(lv_obj_t* parent, const core::ShotRecord& rec,
                       const_cast<core::ShotRecord*>(&rec));
   return card;
 }
+
+#if LV_USE_SNAPSHOT
+lv_draw_buf_t* render_shot_card(const core::ShotRecord& rec, int w, int h,
+                                bool use_24h) {
+  // Canonical card: build on a detached screen at scale 1.0 so the export is
+  // identical from every panel, restore the live scale after.
+  const float live_scale = ui::scale();
+  ui::set_scale(1.0f);
+  lv_obj_t* screen = lv_obj_create(nullptr);
+  lv_obj_set_size(screen, w, h);
+  lv_obj_set_style_bg_color(screen, lv_color_hex(theme::bg()), 0);
+  lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
+  lv_obj_set_style_pad_all(screen, ui::dp(8), 0);
+  build_shot_card(screen, rec, ScreenProfile{w, h, 1.0f}, use_24h);
+  lv_obj_update_layout(screen);
+  lv_draw_buf_t* buf = lv_snapshot_take(screen, LV_COLOR_FORMAT_RGB565);
+  lv_obj_delete(screen);
+  ui::set_scale(live_scale);
+  return buf;
+}
+#endif
 
 }  // namespace ui

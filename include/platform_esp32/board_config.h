@@ -426,6 +426,18 @@ constexpr bool kPaddleActiveHigh = true;
 //     gap either way. Do NOT define BOARD_HAS_PCF85063_RTC here: there is no
 //     such chip on the bus.
 
+// --- MicroSD: native 4-bit SDMMC (SDIO 3.0 slot). Pins from the board
+//     schematic (SD1: D0-D3 = GPIO39-42, CLK 43, CMD 44) and the Waveshare
+//     BSP's BSP_SD_* defines. Shot history lives here. NOT yet HW-tested on
+//     this board (the 5" sibling is the bring-up target). ---
+#define BOARD_HAS_SD_MMC
+constexpr int kSdClk = 43;
+constexpr int kSdCmd = 44;
+constexpr int kSdD0 = 39;
+constexpr int kSdD1 = 40;
+constexpr int kSdD2 = 41;
+constexpr int kSdD3 = 42;
+
 #elif defined(BOARD_WAVESHARE_P4_WIFI6_5)
 
 // Waveshare ESP32-P4-WIFI6-Touch-LCD-5 — electronically the 4.3's board (same
@@ -522,6 +534,16 @@ constexpr bool kPaddleActiveHigh = true;
 
 // --- RTC: same as the 4.3 — no discrete RTC chip; the RTC battery header
 //     backs the P4's VBAT pin / internal RTC (see the 4.3 block's note). ---
+
+// --- MicroSD: native 4-bit SDMMC (SDIO 3.0 slot). Pins identical to the 4.3
+//     (schematic SD1 + Waveshare BSP BSP_SD_*). Shot history lives here. ---
+#define BOARD_HAS_SD_MMC
+constexpr int kSdClk = 43;
+constexpr int kSdCmd = 44;
+constexpr int kSdD0 = 39;
+constexpr int kSdD1 = 40;
+constexpr int kSdD2 = 41;
+constexpr int kSdD3 = 42;
 
 #else
 #error "No board selected. Add -DBOARD_WAVESHARE_S3_LCD_2 (or _7B / _43B / _43C / P4_WIFI6_43 / P4_WIFI6_5) to build_flags in platformio.ini."

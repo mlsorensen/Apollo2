@@ -7,6 +7,9 @@
 #include <cstdio>
 #include <filesystem>
 
+#include "core/shot_csv.h"
+
+#include "platform_host/dir_shot_store.h"
 #include "platform_host/fake_battery.h"
 #include "platform_host/fake_brew_controller.h"
 #include "platform_host/fake_clock.h"
@@ -22,6 +25,7 @@
 #include "platform_host/png_display.h"
 #include "ui/app.h"
 #include "ui/screen.h"
+#include "ui/shot_card.h"
 #include "ui/theme.h"
 
 namespace {
@@ -185,5 +189,31 @@ int main() {
     ok &= r({320, 240}, path, 0, -1, false, i);
   }
   ok &= r({320, 240}, "renders/device_espresso_320x240.png", 1, ui::kSectionDevice, false, 2);
+
+  // Exercise the on-disk store format end-to-end: render the canonical card
+  // offscreen (the same path the device uses for its SD PNG) and push one
+  // canned record through DirShotStore -> sim_sd/Apollo2. The exact files the
+  // device writes, inspectable on the laptop.
+  {
+    host::PngDisplay display(800, 480);  // LVGL needs a display for snapshot
+    ui::theme::set_active(0);
+    core::ShotRecord rec;
+    if (shots.read(14, rec)) {
+      lv_draw_buf_t* card = ui::render_shot_card(rec, 800, 480, false);
+      if (card != nullptr) {
+        rec.card_rgb565 = reinterpret_cast<const uint16_t*>(card->data);
+        rec.card_w = static_cast<int>(card->header.w);
+        rec.card_h = static_cast<int>(card->header.h);
+        rec.card_stride_px = static_cast<int>(card->header.stride) / 2;
+      }
+      host::DirShotStore dir_store("sim_sd");
+      dir_store.save(rec);
+      if (card != nullptr) lv_draw_buf_destroy(card);
+      std::printf("wrote sim_sd/%s (index + samples + card png)\n",
+                  core::kShotDirName);
+    } else {
+      ok = false;
+    }
+  }
   return ok ? 0 : 1;
 }

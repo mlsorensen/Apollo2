@@ -26,17 +26,26 @@ struct ShotSummary {
   float target_g;      // 0 = no target (manual/stopwatch shot)
   float final_g;       // settled net weight
   float avg_gps;       // final_g / duration
+  ShotMode mode = ShotMode::kAuto;  // effective mode the shot ran under
+  bool wired = false;  // paddle harness vs weight-stream detection
 };
 
 // A full record: summary + the series. ~7 KB — pass by reference, never copy
 // onto the stack casually on-device.
 struct ShotRecord {
   static constexpr int kSampleCap = 600;  // mirrors the UI plot ring (60s @ 100ms)
-  ShotSummary summary;
-  ShotMode mode = ShotMode::kAuto;  // effective mode the shot ran under
-  bool wired = false;               // paddle harness vs weight-stream detection
+  ShotSummary summary;  // includes mode/wired — the index round-trips them
   int n_samples = 0;
   ShotSample samples[kSampleCap];
+
+  // Optional rendered shot-card image attached at save time (RGB565, row-major
+  // with `card_stride_px` pixels per row). Borrowed pointer: valid only during
+  // the save() call — implementations copy what they need before returning.
+  // Stores turn it into the on-disk PNG; read() never returns pixels.
+  const uint16_t* card_rgb565 = nullptr;
+  int card_w = 0;
+  int card_h = 0;
+  int card_stride_px = 0;
 };
 
 // Headline metrics for the History view. Accuracy = 100% minus the mean
@@ -46,6 +55,33 @@ struct ShotStats {
   float acc_lifetime_pct = 0;  // 0 when no targeted shots exist
   float acc_30d_pct = 0;       // last 30 days before `now_unix`
 };
+
+// The one accuracy definition, shared by every store: 100% minus the mean
+// relative |final - target| error over targeted shots (target_g > 0).
+inline ShotStats compute_shot_stats(const ShotSummary* items, int n,
+                                    int64_t now_unix) {
+  ShotStats st;
+  st.total = n;
+  float err_all = 0, err_30 = 0;
+  int n_all = 0, n_30 = 0;
+  constexpr int64_t k30d = 30ll * 86400;
+  for (int i = 0; i < n; ++i) {
+    const ShotSummary& s = items[i];
+    if (s.target_g <= 0.0f) continue;
+    const float e = (s.final_g > s.target_g ? s.final_g - s.target_g
+                                            : s.target_g - s.final_g) /
+                    s.target_g;
+    err_all += e;
+    ++n_all;
+    if (now_unix - s.unix_time <= k30d) {
+      err_30 += e;
+      ++n_30;
+    }
+  }
+  if (n_all > 0) st.acc_lifetime_pct = 100.0f * (1.0f - err_all / n_all);
+  if (n_30 > 0) st.acc_30d_pct = 100.0f * (1.0f - err_30 / n_30);
+  return st;
+}
 
 class IShotStore {
  public:
