@@ -63,8 +63,8 @@ class ShotStore : public core::IShotStore {
   void write_job(SaveJob& job);
   void refresh_storage();     // writer task only: requery + cache capacity
 
-  void* card_ = nullptr;  // sdmmc_card_t* while mounted (IDF types stay out
-  void* pwr_ = nullptr;   // of this header); sd_pwr_ctrl_handle_t
+  void* card_ = nullptr;  // sdmmc_card_t* while mounted (IDF type kept out
+                          // of this header)
 
   volatile bool available_ = false;
   uint32_t next_id_ = 1;

@@ -92,36 +92,58 @@ const char* classify_fs_sector(const uint8_t* sec) {
   return "";
 }
 
-// The FS wouldn't mount, but the card DID respond at the protocol level:
-// bring it up raw on slot 0 and read the boot sector (following one level of
-// MBR partition table) so the UI can name what's on it. The SDMMC host driver
-// may already be initialized (shared infrastructure) — tolerate that and
-// never deinit a host we didn't init.
-core::MediumState probe_card_format(char* fs_type, size_t n) {
-  fs_type[0] = '\0';
+// Bring the SDMMC bus up ONCE and keep it up forever. The C6 radio shares
+// the SDMMC peripheral (esp-hosted SDIO): letting esp_vfs_fat_sdmmc_mount's
+// failure path deinit the host killed the radio mid-flight (sdio_rx assert,
+// boot loop) on any board without a card inserted. With the host + slot 0 +
+// LDO pre-initialized by us, the mount helper sees "already initialized" and
+// its cleanup leaves the shared host alone — a cardless retry loop touches
+// only slot 0.
+sd_pwr_ctrl_handle_t g_pwr = nullptr;  // persistent LDO handle (never freed)
+
+bool ensure_bus() {
+  static bool ready = false;
+  static bool failed = false;
+  if (ready || failed) return ready;
   sd_pwr_ctrl_ldo_config_t ldo_config = {};
   ldo_config.ldo_chan_id = board::kSdLdoChannel;
-  sd_pwr_ctrl_handle_t pwr = nullptr;
-  if (sd_pwr_ctrl_new_on_chip_ldo(&ldo_config, &pwr) != ESP_OK)
-    return core::MediumState::kNone;
+  if (sd_pwr_ctrl_new_on_chip_ldo(&ldo_config, &g_pwr) != ESP_OK) {
+    Serial.println("ShotStore: SD LDO power init failed");
+    failed = true;
+    return false;
+  }
+  const esp_err_t host_err = sdmmc_host_init();
+  if (host_err != ESP_OK && host_err != ESP_ERR_INVALID_STATE) {
+    Serial.printf("ShotStore: sdmmc host init failed (%s)\n",
+                  esp_err_to_name(host_err));
+    failed = true;
+    return false;
+  }
+  const sdmmc_slot_config_t slot = slot0_config();
+  const esp_err_t slot_err = sdmmc_host_init_slot(SDMMC_HOST_SLOT_0, &slot);
+  if (slot_err != ESP_OK && slot_err != ESP_ERR_INVALID_STATE) {
+    Serial.printf("ShotStore: sdmmc slot init failed (%s)\n",
+                  esp_err_to_name(slot_err));
+    failed = true;
+    return false;
+  }
+  ready = true;
+  return true;
+}
 
+// The FS wouldn't mount, but the card DID respond at the protocol level:
+// bring it up raw on slot 0 and read the boot sector (following one level of
+// MBR partition table) so the UI can name what's on it. Uses the persistent
+// bus — inits/deinits nothing.
+core::MediumState probe_card_format(char* fs_type, size_t n) {
+  fs_type[0] = '\0';
   core::MediumState state = core::MediumState::kNone;
   sdmmc_card_t* card = nullptr;
   uint8_t* sec = nullptr;
-  bool host_inited_here = false;
   do {
-    const esp_err_t host_err = sdmmc_host_init();
-    if (host_err == ESP_OK) {
-      host_inited_here = true;
-    } else if (host_err != ESP_ERR_INVALID_STATE) {  // INVALID_STATE = already up
-      break;
-    }
-    const sdmmc_slot_config_t slot = slot0_config();
-    if (sdmmc_host_init_slot(SDMMC_HOST_SLOT_0, &slot) != ESP_OK) break;
-
     sdmmc_host_t host = SDMMC_HOST_DEFAULT();
     host.slot = SDMMC_HOST_SLOT_0;
-    host.pwr_ctrl_handle = pwr;
+    host.pwr_ctrl_handle = g_pwr;
     card = static_cast<sdmmc_card_t*>(heap_caps_malloc(
         sizeof(sdmmc_card_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
     sec = static_cast<uint8_t*>(
@@ -151,8 +173,6 @@ core::MediumState probe_card_format(char* fs_type, size_t n) {
 
   if (sec != nullptr) heap_caps_free(sec);
   if (card != nullptr) heap_caps_free(card);
-  if (host_inited_here) sdmmc_host_deinit();
-  sd_pwr_ctrl_del_on_chip_ldo(pwr);
   return state;
 }
 
@@ -202,19 +222,15 @@ bool ShotStore::try_mount() {
   static uint32_t attempts = 0;
   const bool log_this = (attempts++ % 12) == 0;
 
-  // BSP-verbatim mount: slot 0 (IOMUX — the card is hard-wired to it), IO
-  // rail from on-chip LDO 4, high-speed.
-  sd_pwr_ctrl_ldo_config_t ldo_config = {};
-  ldo_config.ldo_chan_id = board::kSdLdoChannel;
-  sd_pwr_ctrl_handle_t pwr = nullptr;
-  if (sd_pwr_ctrl_new_on_chip_ldo(&ldo_config, &pwr) != ESP_OK) {
-    if (log_this) Serial.println("ShotStore: SD LDO power init failed");
-    return false;
-  }
+  // BSP-style mount on the persistent bus: slot 0 (IOMUX — the card is
+  // hard-wired to it), IO rail from the persistent LDO-4 handle. The host is
+  // pre-initialized (ensure_bus), so the mount helper's failure cleanup will
+  // NOT deinit it — that used to take the C6 radio's shared SDMMC down.
+  if (!ensure_bus()) return false;
   sdmmc_host_t host = SDMMC_HOST_DEFAULT();
   host.slot = SDMMC_HOST_SLOT_0;
   host.max_freq_khz = SDMMC_FREQ_HIGHSPEED;
-  host.pwr_ctrl_handle = pwr;
+  host.pwr_ctrl_handle = g_pwr;
   const sdmmc_slot_config_t slot_config = slot0_config();
   esp_vfs_fat_sdmmc_mount_config_t mount_config = {};
   mount_config.format_if_mount_failed = false;
@@ -225,7 +241,6 @@ bool ShotStore::try_mount() {
   const esp_err_t err =
       esp_vfs_fat_sdmmc_mount(kMount, &host, &slot_config, &mount_config, &card);
   if (err != ESP_OK) {
-    sd_pwr_ctrl_del_on_chip_ldo(pwr);
     // ESP_FAIL = the card answered but the filesystem didn't mount — probe
     // what's actually on it so the UI can say "reformat as FAT32".
     core::StorageInfo info{};
@@ -253,8 +268,22 @@ bool ShotStore::try_mount() {
   uint32_t max_id = 0;
   FILE* f = std::fopen(index_path(), "r");
   if (f != nullptr) {
-    // Rows are ~60 bytes; hundreds of shots parse in a blink.
+    // The header line is the format version. On a mismatch (index written by
+    // NEWER firmware) leave the file strictly alone — appending v1 rows into
+    // a future format, or sscanf-guessing at reordered columns, would
+    // corrupt the user's database silently.
     char line[160];
+    if (std::fgets(line, sizeof(line), f) != nullptr &&
+        std::strcmp(line, core::kShotIndexHeader) != 0) {
+      std::fclose(f);
+      esp_vfs_fat_sdcard_unmount(kMount, card);
+      if (log_this)
+        Serial.println(
+            "ShotStore: shots.csv has an unknown format (newer firmware "
+            "wrote it?) — not touching it");
+      return false;
+    }
+    // Rows are ~60 bytes; hundreds of shots parse in a blink.
     while (std::fgets(line, sizeof(line), f) != nullptr) {
       core::ShotSummary s;
       if (core::parse_shot_index_row(line, s)) {
@@ -267,7 +296,6 @@ bool ShotStore::try_mount() {
     FILE* h = std::fopen(index_path(), "w");
     if (h == nullptr) {  // can't even create the index -> treat as unusable
       esp_vfs_fat_sdcard_unmount(kMount, card);
-      sd_pwr_ctrl_del_on_chip_ldo(pwr);
       if (log_this) Serial.println("ShotStore: SD mounted but not writable");
       return false;
     }
@@ -284,7 +312,6 @@ bool ShotStore::try_mount() {
   }
 
   card_ = card;
-  pwr_ = pwr;
   xSemaphoreTake(mutex_, portMAX_DELAY);
   index_ = std::move(loaded);
   next_id_ = max_id + 1;
@@ -307,10 +334,7 @@ void ShotStore::unmount() {
     esp_vfs_fat_sdcard_unmount(kMount, static_cast<sdmmc_card_t*>(card_));
     card_ = nullptr;
   }
-  if (pwr_ != nullptr) {
-    sd_pwr_ctrl_del_on_chip_ldo(static_cast<sd_pwr_ctrl_handle_t>(pwr_));
-    pwr_ = nullptr;
-  }
+  // The host, slot, and LDO stay up (shared with the radio; see ensure_bus).
   Serial.println("ShotStore: SD unavailable (removed?), will retry");
 }
 
