@@ -315,6 +315,17 @@ constexpr int kAudioDout = 15;    // ESP -> ES8311 SDIN (speaker)
 constexpr int kEs8311Addr = 0x18;
 constexpr int kIoExtPaEnable = 4;  // EXIO4 = PA_CTRL
 
+// --- MicroSD: native SDMMC in 1-BIT mode via the GPIO matrix (vendor demo
+//     user_sd.h: CLK 12, CMD 11, D0 13). Unlike the plain 4.3/4.3B — whose TF
+//     slot is SPI with CS on the CH422G — the 4.3C wires the card to real
+//     SDMMC-capable GPIOs, so the same IDF store as the P4 boards works, just
+//     one data line wide and with no LDO-powered IO rail. ---
+#define BOARD_HAS_SD_MMC
+#define BOARD_SD_MMC_1BIT
+constexpr int kSdClk = 12;
+constexpr int kSdCmd = 11;
+constexpr int kSdD0 = 13;
+
 #elif defined(BOARD_WAVESHARE_P4_WIFI6_43)
 
 // Waveshare ESP32-P4-WIFI6-Touch-LCD-4.3 — ESP32-P4NRW32 (32MB flash, 32MB
