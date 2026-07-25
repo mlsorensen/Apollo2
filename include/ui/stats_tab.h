@@ -59,6 +59,8 @@ struct StatsWidgets {
   lv_obj_t* hist_stat_total = nullptr;  // value labels inside the metric cards
   lv_obj_t* hist_stat_life = nullptr;
   lv_obj_t* hist_stat_30 = nullptr;
+  lv_obj_t* hist_stat_total_cap = nullptr;  // caption ("Total shots" / "Since ...")
+  lv_obj_t* hist_metric_cards[3] = {};      // clickable: tap -> reset-stats modal
   // Calendar filter (wide tiers; null on compact): a scrollable column of
   // month buttons — "All" plus every month that actually has shots — so old
   // months are one tap, not a long scroll. App fills it from the store.
@@ -77,10 +79,13 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
 void stats_select_section(StatsWidgets& w, int section);
 
 // History list helpers (App drives them from IShotStore data). A row shows
-// "when" (left) and a compact stats string (right) and is clickable; the
-// returned button carries no callback — App attaches one with the shot id.
-lv_obj_t* history_add_row(StatsWidgets& w, const char* when, const char* stats,
-                          const ScreenProfile& screen);
+// "when" (left) and, right-aligned: the result/target text, an optional
+// signed diff in `diff_color` (skipped when empty — untargeted shots), and
+// the duration. The returned row carries no callback — App attaches one with
+// the shot id.
+lv_obj_t* history_add_row(StatsWidgets& w, const char* when, const char* result,
+                          const char* diff, uint32_t diff_color,
+                          const char* duration, const ScreenProfile& screen);
 void history_clear_rows(StatsWidgets& w);
 
 // Month-filter buttons (no-ops when the filter list wasn't built — compact).

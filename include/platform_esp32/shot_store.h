@@ -40,6 +40,10 @@ class ShotStore : public core::IShotStore {
   // -space queries aren't safe alongside a concurrent write, so the UI
   // thread only ever reads this cache.
   core::StorageInfo storage() const override;
+  // Stats-reset marker: lives on the card (/Apollo2/stats_since.txt) so it
+  // travels with the data; cached here, written by the writer task.
+  int64_t stats_since() const override;
+  void set_stats_since(int64_t t) override;
 
   // Below this free space, saves are dropped (a shot's files run ~200-400 KB
   // and FS writes fail silently once space runs out).
@@ -59,8 +63,12 @@ class ShotStore : public core::IShotStore {
   void write_job(SaveJob& job);
   void refresh_storage();     // writer task only: requery + cache capacity
 
+  void* card_ = nullptr;  // sdmmc_card_t* while mounted (IDF types stay out
+  void* pwr_ = nullptr;   // of this header); sd_pwr_ctrl_handle_t
+
   volatile bool available_ = false;
   uint32_t next_id_ = 1;
+  int64_t stats_since_ = 0;               // cache; guarded by mutex_
   std::vector<core::ShotSummary> index_;  // newest first
   core::StorageInfo storage_info_;        // cache; guarded by mutex_
   mutable SemaphoreHandle_t mutex_ = nullptr;

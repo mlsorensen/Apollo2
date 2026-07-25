@@ -77,15 +77,19 @@ struct StorageInfo {
 
 // The one accuracy definition, shared by every store: 100% minus the mean
 // relative |final - target| error over targeted shots (target_g > 0).
+// `since` is the stats-reset marker (unix, 0 = never reset): shots before it
+// still exist in the list/history but don't count toward the headline stats.
 inline ShotStats compute_shot_stats(const ShotSummary* items, int n,
-                                    int64_t now_unix) {
+                                    int64_t now_unix, int64_t since = 0) {
   ShotStats st;
-  st.total = n;
+  st.total = 0;
   float err_all = 0, err_30 = 0;
   int n_all = 0, n_30 = 0;
   constexpr int64_t k30d = 30ll * 86400;
   for (int i = 0; i < n; ++i) {
     const ShotSummary& s = items[i];
+    if (s.unix_time < since) continue;
+    ++st.total;
     if (s.target_g <= 0.0f) continue;
     const float e = (s.final_g > s.target_g ? s.final_g - s.target_g
                                             : s.target_g - s.final_g) /
@@ -130,6 +134,13 @@ class IShotStore {
   // implementations return a CACHED value — the UI thread must never touch
   // the medium directly.
   virtual StorageInfo storage() const { return {}; }
+
+  // Stats-reset marker (unix; 0 = never reset). Non-destructive: headline
+  // stats count only shots at/after the marker, the recorded history is
+  // untouched. Stores persist it WITH the data (it describes the data), e.g.
+  // /Apollo2/stats_since.txt on SD — delete that file to undo a reset.
+  virtual int64_t stats_since() const { return 0; }
+  virtual void set_stats_since(int64_t) {}
 };
 
 // For boards/builds without storage: never available, drops everything.
