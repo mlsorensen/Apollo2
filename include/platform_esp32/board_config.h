@@ -437,6 +437,10 @@ constexpr int kSdD0 = 39;
 constexpr int kSdD1 = 40;
 constexpr int kSdD2 = 41;
 constexpr int kSdD3 = 42;
+// The SD pads' IO rail hangs off the P4's on-chip LDO channel 4 (BSP
+// ldo_chan_id = 4; schematic ESP_LDO_VO4) — without powering it, every
+// mount fails as if no card were present.
+constexpr int kSdLdoChannel = 4;
 
 #elif defined(BOARD_WAVESHARE_P4_WIFI6_5)
 
@@ -544,6 +548,10 @@ constexpr int kSdD0 = 39;
 constexpr int kSdD1 = 40;
 constexpr int kSdD2 = 41;
 constexpr int kSdD3 = 42;
+// The SD pads' IO rail hangs off the P4's on-chip LDO channel 4 (BSP
+// ldo_chan_id = 4; schematic ESP_LDO_VO4) — without powering it, every
+// mount fails as if no card were present.
+constexpr int kSdLdoChannel = 4;
 
 #else
 #error "No board selected. Add -DBOARD_WAVESHARE_S3_LCD_2 (or _7B / _43B / _43C / P4_WIFI6_43 / P4_WIFI6_5) to build_flags in platformio.ini."

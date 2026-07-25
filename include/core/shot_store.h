@@ -58,10 +58,21 @@ struct ShotStats {
 
 // Capacity readout for the History view. `full` means saves are being
 // DROPPED (free space under the store's reserve) — surface it loudly.
+// When a card is present but unusable, `state`/`fs_type` say WHY (a raw
+// boot-sector probe: "exFAT", "NTFS", ...) so the UI can tell the user to
+// reformat instead of implying no card is inserted.
+enum class MediumState : uint8_t {
+  kNone,       // nothing inserted (or the medium doesn't respond)
+  kOk,         // mounted and usable
+  kBadFormat,  // card responds, filesystem unsupported/corrupt — see fs_type
+};
+
 struct StorageInfo {
   uint64_t total_bytes = 0;  // 0 = unknown (no medium / not applicable)
   uint64_t free_bytes = 0;
   bool full = false;
+  MediumState state = MediumState::kNone;
+  char fs_type[8] = "";  // "exFAT" / "NTFS" / "FAT32" / "GPT" / "?" when kBadFormat
 };
 
 // The one accuracy definition, shared by every store: 100% minus the mean
