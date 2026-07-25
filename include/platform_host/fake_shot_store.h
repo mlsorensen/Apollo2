@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdio>
 #include <vector>
 
 #include "core/shot_store.h"
@@ -25,13 +26,21 @@ class FakeShotStore : public core::IShotStore {
 
   void set_available(bool on) { available_ = on; }
   void set_storage(uint64_t total, uint64_t free, bool full) {
-    storage_ = {total, free, full};
+    storage_.total_bytes = total;
+    storage_.free_bytes = free;
+    storage_.full = full;
+  }
+  // Pose an unusable card ("exFAT", "NTFS", ...) for the guidance render.
+  void set_medium(core::MediumState state, const char* fs) {
+    storage_.state = state;
+    std::snprintf(storage_.fs_type, sizeof(storage_.fs_type), "%s", fs);
   }
 
  private:
   bool available_ = true;
   // Plausible 32 GB card for renders; sim poses "full" via set_storage.
-  core::StorageInfo storage_ = {32000000000ull, 12400000000ull, false};
+  core::StorageInfo storage_ = {32000000000ull, 12400000000ull, false,
+                                core::MediumState::kOk, "FAT"};
   std::vector<core::ShotRecord> shots_;  // newest first
 };
 

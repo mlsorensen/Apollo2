@@ -1786,10 +1786,24 @@ void App::update_history_view() {
   // Prerequisites: storage and a real calendar date (records are stamped from
   // now_unix). Without either, the section is a how-to card instead of data.
   if (!shots_->available()) {
-    ui::history_show_guidance(
-        stats_,
-        "Insert a FAT-formatted SD card to record shot history.\n"
-        "Each finished shot is saved with its stats and graph.");
+    // Distinguish "empty slot" from "card we can't use" — the store probes
+    // an unmountable card's boot sector and names its filesystem.
+    const core::StorageInfo si = shots_->storage();
+    if (si.state == core::MediumState::kBadFormat) {
+      char msg[160];
+      std::snprintf(msg, sizeof(msg),
+                    "This SD card is %s-formatted, which isn't supported.\n"
+                    "Reformat it as FAT32 to record shot history.",
+                    si.fs_type[0] != '\0' && si.fs_type[0] != '?'
+                        ? si.fs_type
+                        : "not FAT32");
+      ui::history_show_guidance(stats_, msg);
+    } else {
+      ui::history_show_guidance(
+          stats_,
+          "Insert a FAT32-formatted SD card to record shot history.\n"
+          "Each finished shot is saved with its stats and graph.");
+    }
     return;
   }
   const core::WallTime now_wall = clock_ != nullptr ? clock_->now() : core::WallTime{};

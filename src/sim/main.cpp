@@ -174,8 +174,14 @@ int main() {
           ui::kStatsHistory);
   ok &= r(p5, "renders/stats_history_1280x720.png", 2, -1, false, 0, ui::kStatsHistory);
   shots.set_available(false);
+  shots.set_medium(core::MediumState::kNone, "");
   ok &= r({800, 480}, "renders/stats_history_nosd_800x480.png", 2, -1, false, 0,
           ui::kStatsHistory);
+  // Unsupported card (e.g. a 64GB+ card still on its factory exFAT).
+  shots.set_medium(core::MediumState::kBadFormat, "exFAT");
+  ok &= r({800, 480}, "renders/stats_history_exfat_800x480.png", 2, -1, false, 0,
+          ui::kStatsHistory);
+  shots.set_medium(core::MediumState::kOk, "FAT");
   shots.set_available(true);
   // Month filter engaged (May 2026 from the canned data).
   ok &= r({800, 480}, "renders/stats_history_may_800x480.png", 2, -1, false, 0,
