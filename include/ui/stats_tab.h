@@ -59,8 +59,11 @@ struct StatsWidgets {
   lv_obj_t* hist_stat_total = nullptr;  // value labels inside the metric cards
   lv_obj_t* hist_stat_life = nullptr;
   lv_obj_t* hist_stat_30 = nullptr;
-  lv_obj_t* hist_filter_btn[3] = {};    // All / 7 days / 30 days (null on compact)
-  int history_filter = 0;               // 0 = all, 1 = last 7d, 2 = last 30d
+  // Calendar filter (wide tiers; null on compact): a scrollable column of
+  // month buttons — "All" plus every month that actually has shots — so old
+  // months are one tap, not a long scroll. App fills it from the store.
+  lv_obj_t* history_filter_list = nullptr;
+  int history_filter_ym = 0;            // 0 = all, else year*100 + month (1-12)
   lv_obj_t* history_list = nullptr;     // scrollable rows (opaque bg — scroll cost)
   lv_obj_t* history_content = nullptr;  // metrics + filter + list wrapper
   lv_obj_t* history_guidance = nullptr; // "insert SD / set date" card
@@ -78,6 +81,11 @@ void stats_select_section(StatsWidgets& w, int section);
 lv_obj_t* history_add_row(StatsWidgets& w, const char* when, const char* stats,
                           const ScreenProfile& screen);
 void history_clear_rows(StatsWidgets& w);
+
+// Month-filter buttons (no-ops when the filter list wasn't built — compact).
+lv_obj_t* history_add_filter_button(StatsWidgets& w, const char* label,
+                                    bool active, const ScreenProfile& screen);
+void history_clear_filter_buttons(StatsWidgets& w);
 
 // Toggle between the real content and the guidance card (nullptr text keeps
 // the current guidance message).
