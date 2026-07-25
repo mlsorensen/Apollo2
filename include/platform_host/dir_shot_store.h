@@ -7,11 +7,11 @@
 
 namespace host {
 
-// Host implementation of the ON-DISK shot-store format (core/shot_csv.h),
-// rooted at a local directory instead of an SD card — `make sim` exercises it
-// so the exact files the device writes can be inspected on a laptop without
-// hardware. Synchronous (no writer task); not used for renders (FakeShotStore
-// is), just for format validation.
+// Host implementation of the ON-DISK shot-store format (core/shot_csv.h) —
+// CSVs only, like the device — rooted at a local directory instead of an SD
+// card; `make sim` exercises it so the exact files the device writes can be
+// inspected on a laptop without hardware. Synchronous (no writer task); not
+// used for renders (FakeShotStore is), just for format validation.
 class DirShotStore : public core::IShotStore {
  public:
   explicit DirShotStore(std::string root);  // e.g. "sim_sd" -> sim_sd/Apollo2
@@ -25,7 +25,6 @@ class DirShotStore : public core::IShotStore {
   core::StorageInfo storage() const override;  // real filesystem free space
   int64_t stats_since() const override { return stats_since_; }
   void set_stats_since(int64_t t) override;  // persists stats_since.txt
-  bool image_path(uint32_t id, char* out, size_t n) const override;
 
  private:
   std::string dir_;                       // <root>/Apollo2

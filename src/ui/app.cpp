@@ -2058,28 +2058,7 @@ void App::capture_shot_record(const core::BrewSnapshot& bsnap,
                           : 0.0f;
   r.summary.mode = bsnap.mode;
   r.summary.wired = bsnap.paddle_wired;
-#if LV_USE_SNAPSHOT
-  // Attach the canonical 800x480 card image; the store turns it into the
-  // on-SD PNG (borrowed pointer — save() copies, we destroy right after).
-  lv_draw_buf_t* card = ui::render_shot_card(r, 800, 480, clock_->use_24h());
-  if (card == nullptr) {
-    // Loud, because this failed SILENTLY once before: the snapshot buffer
-    // (~768 KB) comes out of LVGL's pool — if this prints, the pool is too
-    // small again (LV_MEM_SIZE) and shots get no PNG on the card.
-    LV_LOG_WARN("shot card snapshot failed - no PNG for this shot");
-  }
-  if (card != nullptr) {
-    r.card_rgb565 = reinterpret_cast<const uint16_t*>(card->data);
-    r.card_w = static_cast<int>(card->header.w);
-    r.card_h = static_cast<int>(card->header.h);
-    r.card_stride_px = static_cast<int>(card->header.stride) / 2;
-  }
   shots_->save(r);
-  if (card != nullptr) lv_draw_buf_destroy(card);
-  r.card_rgb565 = nullptr;
-#else
-  shots_->save(r);
-#endif
   // The History list notices count() changed on its next visible refresh.
 }
 

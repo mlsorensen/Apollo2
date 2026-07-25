@@ -14,16 +14,16 @@
 
 namespace platform {
 
-// SD-card shot history (4-bit SD_MMC). Layout under /Apollo2 (see
-// core/shot_csv.h): an index CSV parsed into RAM at mount, per-shot samples
-// CSVs, and a PNG card per shot — a take-away database readable anywhere.
+// SD-card shot history. Layout under /Apollo2 (see core/shot_csv.h): an
+// index CSV parsed into RAM at mount plus per-shot samples CSVs — a plain
+// take-away database readable anywhere (graphs are re-rendered from the data
+// by every viewer; nothing is pre-rendered).
 //
 // Threading: list/count/stats/read run on the LVGL thread against the RAM
 // index (mutex-guarded). save() deep-copies into PSRAM and enqueues; a
 // background writer task owns ALL SD I/O — mounting (lazy, retried), index
-// appends, samples, and the PNG encode (RGB565->RGB888 + stb, seconds of CPU
-// — never on the UI thread). Any I/O failure unmounts; the card can be
-// hot-inserted/removed and the store recovers on the next retry tick.
+// appends, samples. Any I/O failure unmounts; the card can be hot-inserted/
+// removed and the store recovers on the next retry tick.
 class ShotStore : public core::IShotStore {
  public:
   // Spawns the writer task. Call once after NVS/Serial are up; safe before
@@ -44,7 +44,6 @@ class ShotStore : public core::IShotStore {
   // travels with the data; cached here, written by the writer task.
   int64_t stats_since() const override;
   void set_stats_since(int64_t t) override;
-  bool image_path(uint32_t id, char* out, size_t n) const override;
 
   // Below this free space, saves are dropped (a shot's files run ~200-400 KB
   // and FS writes fail silently once space runs out).
@@ -52,9 +51,8 @@ class ShotStore : public core::IShotStore {
 
  private:
   struct SaveJob {
-    core::ShotRecord* rec;  // PSRAM copy, owned by the writer
-    uint16_t* px;           // packed RGB565 card, PSRAM, may be null
-    int w, h;
+    core::ShotRecord* rec;  // PSRAM copy, owned by the writer; null = the
+                            // stats-reset marker job (persist stats_since_)
   };
 
   static void task_entry(void* self);

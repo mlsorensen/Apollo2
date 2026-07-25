@@ -244,9 +244,10 @@ machine is already warming up when you arrive.
     carries the setup pages during pairing/WiFi setup, so nothing conflicts. Requires a FAT‑formatted SD card; recorded
   shots are viewable immediately. Recording NEW shots additionally needs a
   real date/time (NTP, or Settings → Device) — until the clock is set the
-  footer warns that shots aren't being saved. Records live on the card under `/Apollo2` — an index CSV, one
-  samples CSV per shot, and a rendered PNG card — so the whole history can be
-  read on any computer.
+  footer warns that shots aren't being saved. Records live on the card under `/Apollo2` — an index CSV plus one
+  samples CSV per shot — so the whole history can be read on any computer
+  (graphs are drawn from the data by the device and the web page; nothing is
+  pre-rendered).
 - **Info** — device details: our firmware version + git revision, uptime,
   battery/USB state with a runtime estimate, and the machine's Device
   Information (manufacturer, model, serial, firmware) read over Bluetooth.

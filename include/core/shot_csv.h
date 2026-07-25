@@ -11,7 +11,6 @@
 //
 //   /Apollo2/shots.csv          index, one row per shot (kShotIndexHeader)
 //   /Apollo2/shots/NNNNNN.csv   per-shot samples (kShotSamplesHeader)
-//   /Apollo2/shots/NNNNNN.png   rendered shot card
 //
 // Everything is plain CSV so the card can be pulled and analyzed on any
 // computer. The index's iso8601 column is LOCAL time (what the user saw);

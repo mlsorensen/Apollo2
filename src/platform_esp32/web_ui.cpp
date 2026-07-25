@@ -62,7 +62,6 @@ void WebUi::begin(TokenSetup& setup, core::IShotStore& shots, core::IClock& cloc
   server_.on("/api/summary", HTTP_GET, [this]() { handle_summary(); });
   server_.on("/api/shots", HTTP_GET, [this]() { handle_shots(); });
   server_.on("/api/shot.csv", HTTP_GET, [this]() { handle_shot_csv(); });
-  server_.on("/api/shot.png", HTTP_GET, [this]() { handle_shot_png(); });
   server_.onNotFound([this]() {
     // During a portal session, funnel everything to the setup page (phones
     // probe random URLs); otherwise a plain 404.
@@ -184,30 +183,5 @@ void WebUi::handle_shot_csv() {
   delete rec;
 }
 
-void WebUi::handle_shot_png() {
-  const uint32_t id = static_cast<uint32_t>(server_.arg("id").toInt());
-  char path[96];
-  if (!shots_->image_path(id, path, sizeof(path))) {
-    server_.send(404, "text/plain", "no image for this shot");
-    return;
-  }
-  FILE* f = std::fopen(path, "rb");
-  if (f == nullptr) {
-    server_.send(404, "text/plain", "no image for this shot");
-    return;
-  }
-  char base[40], disp[80];
-  shot_basename(*shots_, id, base, sizeof(base));
-  std::snprintf(disp, sizeof(disp), "attachment; filename=%s.png", base);
-  server_.sendHeader("Content-Disposition", disp);
-  server_.setContentLength(CONTENT_LENGTH_UNKNOWN);
-  server_.send(200, "image/png", "");
-  static char chunk[1024];
-  size_t n;
-  while ((n = std::fread(chunk, 1, sizeof(chunk), f)) > 0)
-    server_.sendContent(chunk, n);
-  std::fclose(f);
-  server_.sendContent("");
-}
 
 }  // namespace platform

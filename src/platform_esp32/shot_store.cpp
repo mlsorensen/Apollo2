@@ -28,17 +28,6 @@
 //   - S3 4.3C (BOARD_SD_MMC_1BIT): SLOT 1 via the GPIO matrix, 1-bit bus
 //     (vendor demo pins CLK 12 / CMD 11 / D0 13), no LDO involved.
 
-// stb PNG encoder for the on-SD shot cards. This is the DEVICE's only stb
-// implementation TU (the host's lives in png_display.cpp — one per binary).
-// All stb allocations go to PSRAM: the RGB888 frame + deflate buffers total
-// megabytes, which would exhaust internal RAM.
-#define STBIW_MALLOC(sz) heap_caps_malloc(sz, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)
-#define STBIW_REALLOC(p, newsz) \
-  heap_caps_realloc(p, newsz, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)
-#define STBIW_FREE(p) heap_caps_free(p)
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "vendor/stb_image_write.h"
-
 namespace platform {
 
 namespace {
@@ -78,10 +67,6 @@ const char* shot_file_path(uint32_t id, const char* ext) {
   std::snprintf(g_path, sizeof(g_path), "%s/%s/shots/%06lu.%s", kMount,
                 core::kShotDirName, static_cast<unsigned long>(id), ext);
   return g_path;
-}
-
-void png_write_cb(void* ctx, void* data, int size) {
-  std::fwrite(data, 1, static_cast<size_t>(size), static_cast<FILE*>(ctx));
 }
 
 // Per-board slot config. P4: slot 0 is IOMUX, so no pins are specified
@@ -246,7 +231,6 @@ void ShotStore::run() {
     if (xQueueReceive(queue_, &job, pdMS_TO_TICKS(kRetryMs)) == pdTRUE) {
       write_job(job);
       if (job.rec != nullptr) heap_caps_free(job.rec);
-      if (job.px != nullptr) heap_caps_free(job.px);
     } else {
       // Idle: liveness probe so a yanked card flips the UI to the guidance
       // card within a few seconds instead of on the next write. This must go
@@ -437,28 +421,6 @@ void ShotStore::write_job(SaveJob& job) {
   }
   std::fclose(sf);
 
-  // PNG card: RGB565 -> RGB888 in PSRAM, then stb encodes (seconds — that's
-  // why this whole path lives on the writer task).
-  if (job.px != nullptr) {
-    const size_t npix = static_cast<size_t>(job.w) * job.h;
-    uint8_t* rgb = static_cast<uint8_t*>(
-        heap_caps_malloc(npix * 3, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-    if (rgb != nullptr) {
-      for (size_t i = 0; i < npix; ++i) {
-        const uint16_t p = job.px[i];
-        rgb[i * 3 + 0] = static_cast<uint8_t>(((p >> 11) & 0x1F) * 255 / 31);
-        rgb[i * 3 + 1] = static_cast<uint8_t>(((p >> 5) & 0x3F) * 255 / 63);
-        rgb[i * 3 + 2] = static_cast<uint8_t>((p & 0x1F) * 255 / 31);
-      }
-      FILE* pf = std::fopen(shot_file_path(r.summary.id, "png"), "wb");
-      if (pf != nullptr) {
-        stbi_write_png_to_func(png_write_cb, pf, job.w, job.h, 3, rgb,
-                               job.w * 3);
-        std::fclose(pf);
-      }
-      heap_caps_free(rgb);
-    }
-  }
   Serial.printf("ShotStore: saved shot %lu (%.1fg, %lums)\n",
                 static_cast<unsigned long>(r.summary.id),
                 static_cast<double>(r.summary.final_g),
@@ -471,25 +433,11 @@ void ShotStore::save(const core::ShotRecord& record) {
       sizeof(core::ShotRecord), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
   if (rec == nullptr) return;
   std::memcpy(rec, &record, sizeof(core::ShotRecord));
-  rec->card_rgb565 = nullptr;  // pixels travel separately (packed copy below)
 
-  SaveJob job{rec, nullptr, record.card_w, record.card_h};
-  if (record.card_rgb565 != nullptr && record.card_w > 0 && record.card_h > 0) {
-    const size_t npix = static_cast<size_t>(record.card_w) * record.card_h;
-    job.px = static_cast<uint16_t*>(
-        heap_caps_malloc(npix * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-    if (job.px != nullptr) {
-      // Pack stride-padded rows tight.
-      for (int y = 0; y < record.card_h; ++y)
-        std::memcpy(job.px + static_cast<size_t>(y) * record.card_w,
-                    record.card_rgb565 + static_cast<size_t>(y) * record.card_stride_px,
-                    static_cast<size_t>(record.card_w) * 2);
-    }
-  }
+  SaveJob job{rec};
   if (xQueueSend(queue_, &job, 0) != pdTRUE) {
     // Queue full (two shots mid-write?) — drop rather than block the UI.
     heap_caps_free(rec);
-    if (job.px != nullptr) heap_caps_free(job.px);
     Serial.println("ShotStore: save queue full, shot dropped");
   }
 }
@@ -545,7 +493,6 @@ bool ShotStore::read(uint32_t id, core::ShotRecord& out) const {
   // Samples come off the card (~10-20 KB — fine on the LVGL thread at
   // modal-open); mode/wired ride in the summary, parsed from the index.
   out.n_samples = 0;
-  out.card_rgb565 = nullptr;
   char path[64];
   std::snprintf(path, sizeof(path), "%s/%s/shots/%06lu.csv", kMount,
                 core::kShotDirName, static_cast<unsigned long>(id));
@@ -561,13 +508,6 @@ bool ShotStore::read(uint32_t id, core::ShotRecord& out) const {
   return true;
 }
 
-bool ShotStore::image_path(uint32_t id, char* out, size_t n) const {
-  if (!available_) return false;
-  std::snprintf(out, n, "%s/%s/shots/%06lu.png", kMount, core::kShotDirName,
-                static_cast<unsigned long>(id));
-  struct stat st;
-  return stat(out, &st) == 0;
-}
 
 core::ShotStats ShotStore::stats(int64_t now_unix) const {
   if (!available_) return {};
@@ -590,7 +530,7 @@ void ShotStore::set_stats_since(int64_t t) {
   stats_since_ = t;
   xSemaphoreGive(mutex_);
   // Persist off-thread: a marker job is a SaveJob with no record attached.
-  SaveJob job{nullptr, nullptr, 0, 0};
+  SaveJob job{nullptr};
   xQueueSend(queue_, &job, 0);  // queue full -> marker lost until next reset; fine
 }
 
