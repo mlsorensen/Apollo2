@@ -31,7 +31,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             core::IScaleProvisioner& scale_provisioner, core::IBrewController& brew,
             core::INetwork& network, ui::ScreenProfile screen, const char* out_path,
             int tab = 0, int settings_section = -1, bool token_modal = false,
-            int theme = 0, int stats_section = -1) {
+            int theme = 0, int stats_section = -1, bool clean_lock = false) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
@@ -45,6 +45,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   if (settings_section >= 0) app.select_settings_section(settings_section);
   if (stats_section >= 0) app.select_stats_section(stats_section);
   if (token_modal) app.open_token_setup();
+  if (clean_lock) app.start_clean_lock();
   display.render_frame();
   if (!display.save_png(out_path)) {
     std::fprintf(stderr, "error: failed to write %s\n", out_path);
@@ -70,9 +71,10 @@ int main() {
 
   // One PNG per supported layout. Add a line here when a new form factor lands.
   auto r = [&](ui::ScreenProfile s, const char* path, int tab = 0, int sec = -1,
-               bool modal = false, int theme = 0, int stats = -1) {
+               bool modal = false, int theme = 0, int stats = -1, bool clean_lock = false) {
     return render(machine, provisioner, battery, disp, clock, history, scale,
-                  scale_provisioner, brew, network, s, path, tab, sec, modal, theme, stats);
+                  scale_provisioner, brew, network, s, path, tab, sec, modal, theme, stats,
+                  clean_lock);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
@@ -102,6 +104,10 @@ int main() {
   ok &= r({1024, 600}, "renders/home_noscale_1024x600.png");
   scale_provisioner.set_saved(true);
   ok &= r({800, 480}, "renders/settings_800x480.png", 1);
+  // Cleaning lock: full-screen touch-lockout countdown (over Home, like the
+  // token modal — the overlay hides the tabview either way).
+  ok &= r({800, 480}, "renders/clean_lock_800x480.png", 0, -1, false, 0, -1, true);
+  ok &= r({320, 240}, "renders/clean_lock_320x240.png", 0, -1, false, 0, -1, true);
   ok &= r({320, 240}, "renders/settings_320x240.png", 1);
   ok &= r({320, 240}, "renders/micra_320x240.png", 1, ui::kSectionMicra);  // chooser
   ok &= r({320, 240}, "renders/micra_bt_320x240.png", 1, ui::kSectionMicraBt);

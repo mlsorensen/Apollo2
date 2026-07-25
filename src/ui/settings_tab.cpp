@@ -549,10 +549,12 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   root_entry(menu, out.root_page, out.scale_page, "Scale", font, btn_h);
   root_entry(menu, out.root_page, out.device_page, "Device", font, btn_h);
 
-  // Root-level action row (not a drill-in): soft reboot — the escape hatch for
-  // the RGB panel's occasional shifted-raster boot glitch (ghost lines ~10-20px
-  // off). Same card styling as the entries, restart glyph instead of a chevron.
-  {
+  // Root-level action rows (not drill-ins). Same card styling as the entries,
+  // an action glyph instead of a chevron:
+  //  - Restart display: soft reboot — the escape hatch for the RGB panel's
+  //    occasional shifted-raster boot glitch (ghost lines ~10-20px off).
+  //  - Lock for cleaning: 30 s touch lockout so the glass can be wiped.
+  auto action_row = [&](const char* label, const char* symbol) {
     lv_obj_t* cont = lv_menu_cont_create(out.root_page);
     lv_obj_set_style_bg_color(cont, lv_color_hex(ui::theme::card()), 0);
     lv_obj_set_style_bg_opa(cont, LV_OPA_COVER, 0);
@@ -560,19 +562,21 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_set_style_pad_all(cont, ui::dp(10), 0);
     lv_obj_set_height(cont, btn_h);
     lv_obj_add_flag(cont, LV_OBJ_FLAG_CLICKABLE);
-    out.restart_btn = cont;
 
     lv_obj_t* lbl = lv_label_create(cont);
-    lv_label_set_text(lbl, "Restart display");
+    lv_label_set_text(lbl, label);
     lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text()), 0);
     lv_obj_set_style_text_font(lbl, font, 0);
     lv_obj_set_flex_grow(lbl, 1);
 
     lv_obj_t* glyph = lv_label_create(cont);
-    lv_label_set_text(glyph, LV_SYMBOL_REFRESH);
+    lv_label_set_text(glyph, symbol);
     lv_obj_set_style_text_color(glyph, lv_color_hex(ui::theme::muted()), 0);
     lv_obj_set_style_text_font(glyph, font, 0);
-  }
+    return cont;
+  };
+  out.restart_btn = action_row("Restart display", LV_SYMBOL_REFRESH);
+  out.clean_lock_btn = action_row("Lock display for cleaning", LV_SYMBOL_TINT);
 
   lv_menu_set_page(menu, out.root_page);
 }

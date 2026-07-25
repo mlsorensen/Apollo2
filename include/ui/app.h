@@ -104,6 +104,8 @@ class App {
   // esp_restart(); no-op in the sim.
   void set_restart_handler(std::function<void()> h) { restart_handler_ = std::move(h); }
   void restart_device() { if (restart_handler_) restart_handler_(); }
+  void start_clean_lock();  // Settings "Lock display for cleaning": 30 s touch lockout
+  void clean_lock_tick();   // countdown update (from an lv_timer, 4 Hz)
   void review_hold_adjust(int dir);  // Scale settings: review-hold stepper (5s steps)
   void cycle_flow_smooth();          // Scale settings: Off/Light/Medium/Strong
   void cycle_flush();                // Micra settings "Auto flush": Off / 3 s / 6 s
@@ -171,6 +173,15 @@ class App {
   // rebuilds — it belongs to the app, not the widget tree.
   lv_timer_t* screensaver_timer_ = nullptr;
   bool screensaver_on_ = false;
+  // Cleaning lock: a full-screen opaque overlay on the top layer swallows all
+  // touch input for kCleanLockSecs while a countdown shows time remaining.
+  void end_clean_lock();
+  static constexpr int kCleanLockSecs = 30;
+  lv_obj_t* clean_lock_overlay_ = nullptr;
+  lv_obj_t* clean_lock_count_ = nullptr;  // the big remaining-seconds label
+  lv_timer_t* clean_lock_timer_ = nullptr;
+  uint32_t clean_lock_t0_ = 0;   // lv_tick at lock start
+  int clean_lock_shown_s_ = -1;  // last rendered value (redraw on change only)
   bool theme_rebuild_pending_ = false;  // coalesce rapid theme cycling into one rebuild
   bool layout_rebuild_pending_ = false; // coalesce a scale pair/forget rebuild
   int rebuild_section_ = kSectionDevice;  // Settings section to return to after rebuild()
