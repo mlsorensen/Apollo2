@@ -7,6 +7,7 @@
 #include <ctime>
 
 #include "core/shot_csv.h"
+#include "platform_esp32/board_config.h"
 #include "platform_esp32/webapp_dist.h"
 #include "version.h"
 
@@ -72,30 +73,42 @@ void WebUi::begin(TokenSetup& setup, core::IShotStore& shots, core::IClock& cloc
       server_.send(404, "text/plain", "not found");
     }
   });
-  // All serving happens on a dedicated task so a slow client or a big
-  // response can't stall LVGL. Modest priority; internal-RAM stack (String,
-  // stdio, chunked send buffers — no deep call trees). 8 KB: the S3 boards
-  // run WiFi+BLE on-chip and internal RAM is their scarcest resource — this
-  // is the LAST task created at boot, and on the 4.3C a 12 KB stack lost
-  // that race SILENTLY once (server simply absent). Hence slim + CHECKED.
+#if defined(BOARD_DISPLAY_DSI)
+  // P4: a dedicated task so serving never stalls LVGL (see the header for
+  // why the S3 boards must NOT do this). Checked create — a silent failure
+  // here means "web interface simply absent" (seen once on the 4.3C).
   if (xTaskCreatePinnedToCore(task_entry, "web_ui", 8192, this, 2, nullptr,
                               0) != pdPASS) {
     Serial.println("WebUi: FAILED to create server task (internal RAM?) — "
                    "web interface unavailable");
   }
+#endif
+}
+
+bool WebUi::ensure_bound() {
+  // lwip's tcpip thread only exists once something has initialized WiFi;
+  // binding earlier asserts ("Invalid mbox").
+  if (bound_) return true;
+  if (WiFi.getMode() == WIFI_OFF) return false;
+  server_.begin();
+  bound_ = true;
+  Serial.println("WebUi: server up on :80");
+  return true;
+}
+
+void WebUi::poll() {
+#if !defined(BOARD_DISPLAY_DSI)
+  // S3: all serving happens here, on the main loop — LVGL pauses during a
+  // request, which keeps the RGB panel's PSRAM bandwidth intact (the panel
+  // visibly jitters if we serve concurrently; see the header).
+  if (ensure_bound()) server_.handleClient();
+#endif
 }
 
 void WebUi::task_entry(void* self) { static_cast<WebUi*>(self)->run(); }
 
 void WebUi::run() {
-  // Bind lazily: lwip's tcpip thread only exists once something has
-  // initialized WiFi, and binding earlier asserts ("Invalid mbox").
-  for (;;) {
-    if (WiFi.getMode() != WIFI_OFF) break;
-    vTaskDelay(pdMS_TO_TICKS(250));
-  }
-  server_.begin();
-  Serial.println("WebUi: server up on :80");
+  while (!ensure_bound()) vTaskDelay(pdMS_TO_TICKS(250));
   for (;;) {
     server_.handleClient();
     // handleClient returns immediately when idle; a short sleep keeps this
