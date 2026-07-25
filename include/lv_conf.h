@@ -24,10 +24,13 @@
 // internal SRAM. A big internal pool starved NimBLE — its mutex alloc failed and
 // it asserted in npl_freertos_mutex_pend on connect. PSRAM keeps internal RAM for
 // the BLE/WiFi stacks while giving the UI plenty of headroom.
-// 1 MB: the widget pool plus the flow-graph canvas buffer (a full-plot RGB565
-// bitmap, ~300-550 KB depending on screen). All PSRAM, so it doesn't touch the
-// internal RAM the BLE/WiFi stacks need.
-#define LV_MEM_SIZE (1024 * 1024)
+// 2.5 MB: the widget pool, the flow-graph canvas buffer (a full-plot RGB565
+// bitmap, ~300-550 KB depending on screen), AND the shot-card snapshot buffer
+// (lv_snapshot_take allocates ~768 KB contiguous from THIS pool for the
+// 800x480 PNG export — at 1 MB it could never fit next to the canvas, so
+// on-device shot PNGs silently never got written). All PSRAM, so it doesn't
+// touch the internal RAM the BLE/WiFi stacks need.
+#define LV_MEM_SIZE (2560 * 1024)
 #define LV_MEM_ADR 0
 #define LV_MEM_POOL_INCLUDE "esp_heap_caps.h"
 #define LV_MEM_POOL_ALLOC(size) heap_caps_malloc(size, MALLOC_CAP_SPIRAM)
