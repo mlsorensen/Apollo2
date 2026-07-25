@@ -104,7 +104,8 @@ class App {
   void apply_pending_theme();            // deferred rebuild (from lv_async_call)
   void apply_layout_rebuild();           // deferred rebuild after scale pair/forget
   void select_stats_section(int section); // Stats segmented selector
-  void set_history_filter(int filter);    // History: 0 all / 1 7d / 2 30d
+  void set_history_filter(int year_month); // History month filter: 0 = all,
+                                           // else year*100 + month (1-12)
   void open_shot_card(uint32_t id);       // History row tap -> full-screen card
   void shot_button();  // shot-mode toggle, or Reset while a shot is in review
   // Soft-reboot handler (Settings > Device "Restart"): wired by device main to

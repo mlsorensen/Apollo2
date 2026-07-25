@@ -146,10 +146,24 @@ void on_history_row(lv_event_t* e) {
 
 void on_history_filter(lv_event_t* e) {
   auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
-  auto* btn = static_cast<lv_obj_t*>(lv_event_get_target(e));
-  // Button order inside the filter card: [label, All, 7d, 30d] -> index-1.
-  app->set_history_filter(static_cast<int>(lv_obj_get_index(btn)) - 1);
+  auto* btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+  // Button user data = year*100 + month (0 = All).
+  app->set_history_filter(
+      static_cast<int>(reinterpret_cast<uintptr_t>(lv_obj_get_user_data(btn))));
 }
+
+// year*100 + month (1-12) of a shot's end time, in LOCAL time — the month
+// bucket the user saw the shot in.
+int shot_month_key(int64_t unix_time) {
+  const time_t t = static_cast<time_t>(unix_time);
+  struct tm tm;
+  localtime_r(&t, &tm);
+  return (tm.tm_year + 1900) * 100 + tm.tm_mon + 1;
+}
+
+constexpr const char* kMonthNames[12] = {"Jan", "Feb", "Mar", "Apr",
+                                         "May", "Jun", "Jul", "Aug",
+                                         "Sep", "Oct", "Nov", "Dec"};
 
 void on_shot_modal_close(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->dismiss_modal();
@@ -825,11 +839,8 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   }
   lv_obj_add_event_cb(stats_.zoom_in, on_zoom_in, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(stats_.zoom_out, on_zoom_out, LV_EVENT_CLICKED, this);
-  for (int i = 0; i < 3; ++i) {
-    if (stats_.hist_filter_btn[i] != nullptr)
-      lv_obj_add_event_cb(stats_.hist_filter_btn[i], on_history_filter,
-                          LV_EVENT_CLICKED, this);
-  }
+  // (History month-filter buttons are created dynamically in
+  // update_history_view and wired there.)
 
   if (brew_ != nullptr) {
     const core::BrewSnapshot b = brew_->snapshot();
@@ -1763,9 +1774,9 @@ void App::select_stats_section(int section) {
   update_stats_view();
 }
 
-void App::set_history_filter(int filter) {
-  if (filter < 0 || filter > 2 || filter == stats_.history_filter) return;
-  stats_.history_filter = filter;
+void App::set_history_filter(int year_month) {
+  if (year_month == stats_.history_filter_ym) return;
+  stats_.history_filter_ym = year_month;
   update_history_view();
 }
 
@@ -1807,43 +1818,47 @@ void App::update_history_view() {
     std::snprintf(b, sizeof(b), "-");
   lv_label_set_text(stats_.hist_stat_30, b);
 
-  // Filter buttons: accent the active one (buttons are null on compact).
-  for (int i = 0; i < 3; ++i) {
-    if (stats_.hist_filter_btn[i] == nullptr) continue;
-    lv_obj_set_style_bg_color(stats_.hist_filter_btn[i],
-                              lv_color_hex(i == stats_.history_filter
-                                               ? ui::theme::accent()
-                                               : ui::theme::rail()),
-                              0);
-  }
-
-  // Rebuild rows only when the data or filter changed — this runs on the 2 Hz
-  // refresh while the tab is visible.
+  // Rebuild the month filter + rows only when the data or filter changed —
+  // this runs on the 2 Hz refresh while the tab is visible.
   if (shots_->count() == hist_built_count_ &&
-      stats_.history_filter == hist_built_filter_)
+      stats_.history_filter_ym == hist_built_filter_)
     return;
   hist_built_count_ = shots_->count();
-  hist_built_filter_ = stats_.history_filter;
+  hist_built_filter_ = stats_.history_filter_ym;
 
-  ui::history_clear_rows(stats_);
-  // Page through summaries; stop when out of range or the row cap is hit (the
-  // cap keeps LVGL's widget count sane — filters narrow the rest).
+  // One pass over the summaries (paged, newest first): collect the distinct
+  // months that have shots (for the calendar filter) and the rows matching
+  // the active month. The row cap keeps LVGL's widget count sane; the month
+  // filter is how a long history stays navigable without deep scrolling.
   constexpr int kMaxRows = 60;
+  constexpr int kMaxMonths = 60;  // 5 years of distinct months — plenty
   constexpr int kPage = 16;
-  const int64_t cutoff =
-      stats_.history_filter == 1 ? now_unix - 7ll * 86400
-      : stats_.history_filter == 2 ? now_unix - 30ll * 86400
-                                   : 0;
+  const int filter_ym = stats_.history_filter_ym;
+  int months[kMaxMonths];
+  int n_months = 0;
+  bool filter_month_seen = filter_ym == 0;
   core::ShotSummary page[kPage];
   int offset = 0, rows = 0;
   bool truncated = false;
-  while (rows < kMaxRows) {
+
+  ui::history_clear_rows(stats_);
+  for (;;) {
     const int n = shots_->list(page, kPage, offset);
     if (n == 0) break;
     offset += n;
-    for (int i = 0; i < n && rows < kMaxRows; ++i) {
+    for (int i = 0; i < n; ++i) {
       const core::ShotSummary& s = page[i];
-      if (s.unix_time < cutoff) continue;  // newest-first: could break, but cheap
+      const int ym = shot_month_key(s.unix_time);
+      // Newest-first input keeps this ordered; dedupe against the last entry.
+      if (n_months < kMaxMonths && (n_months == 0 || months[n_months - 1] != ym))
+        months[n_months++] = ym;
+      if (ym == filter_ym) filter_month_seen = true;
+
+      if (filter_ym != 0 && ym != filter_ym) continue;
+      if (rows >= kMaxRows) {
+        truncated = true;
+        continue;  // keep scanning: the month list needs the full history
+      }
       char when[40];
       ui::format_shot_datetime(when, sizeof(when), s.unix_time,
                                clock_ != nullptr && clock_->use_24h(),
@@ -1863,11 +1878,40 @@ void App::update_history_view() {
       lv_obj_add_event_cb(row, on_history_row, LV_EVENT_CLICKED, this);
       ++rows;
     }
-    if (rows >= kMaxRows) truncated = true;
   }
+
+  // A filter pointing at a month that no longer exists falls back to All.
+  if (!filter_month_seen) {
+    stats_.history_filter_ym = 0;
+    hist_built_filter_ = -1;  // force a rebuild on the next pass
+  }
+
+  // Calendar filter: "All" + one button per month with shots, newest first.
+  ui::history_clear_filter_buttons(stats_);
+  if (stats_.history_filter_list != nullptr) {
+    lv_obj_t* all = ui::history_add_filter_button(
+        stats_, "All", stats_.history_filter_ym == 0, screen_);
+    if (all != nullptr) {
+      lv_obj_set_user_data(all, nullptr);  // ym 0
+      lv_obj_add_event_cb(all, on_history_filter, LV_EVENT_CLICKED, this);
+    }
+    for (int i = 0; i < n_months; ++i) {
+      char label[16];
+      std::snprintf(label, sizeof(label), "%s %d", kMonthNames[months[i] % 100 - 1],
+                    months[i] / 100);
+      lv_obj_t* btn = ui::history_add_filter_button(
+          stats_, label, stats_.history_filter_ym == months[i], screen_);
+      if (btn == nullptr) continue;
+      lv_obj_set_user_data(btn,
+                           reinterpret_cast<void*>(static_cast<uintptr_t>(months[i])));
+      lv_obj_add_event_cb(btn, on_history_filter, LV_EVENT_CLICKED, this);
+    }
+  }
+
   if (rows == 0) {
     lv_obj_t* none = lv_label_create(stats_.history_list);
-    lv_label_set_text(none, "No shots recorded yet");
+    lv_label_set_text(none, filter_ym == 0 ? "No shots recorded yet"
+                                           : "No shots in this month");
     lv_obj_set_style_text_color(none, lv_color_hex(ui::theme::muted()), 0);
     lv_obj_set_style_text_font(none, ui::font_dp(is_compact(screen_) ? 14 : 18), 0);
   } else if (truncated) {

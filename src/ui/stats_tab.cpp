@@ -304,9 +304,14 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
     lv_obj_set_height(metrics, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(metrics, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_column(metrics, ui::dp(8), 0);
-    out.hist_stat_total = make_metric_card(metrics, "Shots", big, cap_font);
-    out.hist_stat_life = make_metric_card(metrics, "Lifetime", big, cap_font);
-    out.hist_stat_30 = make_metric_card(metrics, "30 days", big, cap_font);
+    // Lifetime metrics — NOT affected by the month filter below; the captions
+    // say so explicitly.
+    out.hist_stat_total =
+        make_metric_card(metrics, compact ? "Shots" : "Total shots", big, cap_font);
+    out.hist_stat_life = make_metric_card(
+        metrics, compact ? "Lifetime acc" : "Lifetime accuracy", big, cap_font);
+    out.hist_stat_30 = make_metric_card(
+        metrics, compact ? "30-day acc" : "30-day accuracy", big, cap_font);
 
     // Bottom: filter card (wide/xl only) + the scrollable list.
     lv_obj_t* bottom = lv_obj_create(out.history_content);
@@ -335,16 +340,22 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
       lv_obj_set_style_text_color(fl, lv_color_hex(ui::theme::muted()), 0);
       lv_obj_set_style_text_font(fl, cap_font, 0);
 
-      static const char* kFilters[3] = {"All", "7 days", "30 days"};
-      for (int i = 0; i < 3; ++i) {
-        out.hist_filter_btn[i] = ui::make_button(filter);
-        lv_obj_set_width(out.hist_filter_btn[i], lv_pct(100));
-        lv_obj_set_style_radius(out.hist_filter_btn[i], ui::dp(8), 0);
-        lv_obj_t* l = lv_label_create(out.hist_filter_btn[i]);
-        lv_label_set_text(l, kFilters[i]);
-        lv_obj_set_style_text_font(l, font, 0);
-        lv_obj_center(l);
-      }
+      // The month buttons live in their own scrollable column (a long history
+      // has many months); App fills it — "All" + each month that has shots.
+      out.history_filter_list = lv_obj_create(filter);
+      lv_obj_remove_style_all(out.history_filter_list);
+      lv_obj_set_width(out.history_filter_list, lv_pct(100));
+      lv_obj_set_flex_grow(out.history_filter_list, 1);
+      lv_obj_set_flex_flow(out.history_filter_list, LV_FLEX_FLOW_COLUMN);
+      lv_obj_set_style_pad_row(out.history_filter_list, ui::dp(8), 0);
+      lv_obj_add_flag(out.history_filter_list, LV_OBJ_FLAG_SCROLLABLE);
+      lv_obj_set_scroll_dir(out.history_filter_list, LV_DIR_VER);
+      lv_obj_set_scrollbar_mode(out.history_filter_list, LV_SCROLLBAR_MODE_AUTO);
+      // Opaque bg (the parent card's color) — transparent scrollables force
+      // full-underlayer repaints per frame (the settings-page lesson).
+      lv_obj_set_style_bg_color(out.history_filter_list,
+                                lv_color_hex(ui::theme::card()), 0);
+      lv_obj_set_style_bg_opa(out.history_filter_list, LV_OPA_COVER, 0);
     }
 
     // The list scrolls; opaque bg — a transparent scrollable forces LVGL to
@@ -492,6 +503,26 @@ lv_obj_t* history_add_row(StatsWidgets& w, const char* when, const char* stats,
 
 void history_clear_rows(StatsWidgets& w) {
   if (w.history_list != nullptr) lv_obj_clean(w.history_list);
+}
+
+lv_obj_t* history_add_filter_button(StatsWidgets& w, const char* label,
+                                    bool active, const ScreenProfile& screen) {
+  if (w.history_filter_list == nullptr) return nullptr;
+  const bool xl = is_xl(screen);
+  lv_obj_t* btn = ui::make_button(w.history_filter_list);
+  lv_obj_set_width(btn, lv_pct(100));
+  lv_obj_set_style_radius(btn, ui::dp(8), 0);
+  lv_obj_set_style_bg_color(
+      btn, lv_color_hex(active ? ui::theme::accent() : ui::theme::rail()), 0);
+  lv_obj_t* l = lv_label_create(btn);
+  lv_label_set_text(l, label);
+  lv_obj_set_style_text_font(l, ui::font_dp(xl ? 24 : 17), 0);
+  lv_obj_center(l);
+  return btn;
+}
+
+void history_clear_filter_buttons(StatsWidgets& w) {
+  if (w.history_filter_list != nullptr) lv_obj_clean(w.history_filter_list);
 }
 
 void history_show_guidance(StatsWidgets& w, const char* text) {

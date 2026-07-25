@@ -37,7 +37,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             core::INetwork& network, core::IShotStore& shots, ui::ScreenProfile screen,
             const char* out_path, int tab = 0, int settings_section = -1,
             bool token_modal = false, int theme = 0, int stats_section = -1,
-            bool clean_lock = false, int shot_modal_id = -1) {
+            bool clean_lock = false, int shot_modal_id = -1, int history_ym = 0) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
@@ -50,6 +50,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   app.show_tab(tab);
   if (settings_section >= 0) app.select_settings_section(settings_section);
   if (stats_section >= 0) app.select_stats_section(stats_section);
+  if (history_ym != 0) app.set_history_filter(history_ym);
   if (token_modal) app.open_token_setup();
   if (clean_lock) app.start_clean_lock();
   if (shot_modal_id >= 0) app.open_shot_card(static_cast<uint32_t>(shot_modal_id));
@@ -80,10 +81,10 @@ int main() {
   // One PNG per supported layout. Add a line here when a new form factor lands.
   auto r = [&](ui::ScreenProfile s, const char* path, int tab = 0, int sec = -1,
                bool modal = false, int theme = 0, int stats = -1, bool clean_lock = false,
-               int shot_id = -1) {
+               int shot_id = -1, int history_ym = 0) {
     return render(machine, provisioner, battery, disp, clock, history, scale,
                   scale_provisioner, brew, network, shots, s, path, tab, sec, modal, theme,
-                  stats, clean_lock, shot_id);
+                  stats, clean_lock, shot_id, history_ym);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
@@ -176,6 +177,9 @@ int main() {
   ok &= r({800, 480}, "renders/stats_history_nosd_800x480.png", 2, -1, false, 0,
           ui::kStatsHistory);
   shots.set_available(true);
+  // Month filter engaged (May 2026 from the canned data).
+  ok &= r({800, 480}, "renders/stats_history_may_800x480.png", 2, -1, false, 0,
+          ui::kStatsHistory, false, -1, 202605);
   ok &= r({800, 480}, "renders/shot_card_800x480.png", 2, -1, false, 0,
           ui::kStatsHistory, false, 14);
   ok &= r({320, 240}, "renders/shot_card_320x240.png", 2, -1, false, 0,
