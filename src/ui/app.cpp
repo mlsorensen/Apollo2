@@ -1822,14 +1822,10 @@ void App::update_history_view() {
     }
     return;
   }
+  // An unset clock does NOT block viewing — stored shots carry their own
+  // timestamps (NTP can take minutes after a cold boot). It only blocks
+  // CAPTURE (which gates on now_unix itself); the footer says so below.
   const core::WallTime now_wall = clock_ != nullptr ? clock_->now() : core::WallTime{};
-  if (!now_wall.date_valid) {
-    ui::history_show_guidance(
-        stats_,
-        "Set the date and time to record shot history:\n"
-        "Settings > Device, or enable WiFi + NTP.");
-    return;
-  }
   ui::history_show_content(stats_);
 
   const int64_t now_unix = clock_ != nullptr ? clock_->now_unix() : 0;
@@ -1865,15 +1861,23 @@ void App::update_history_view() {
     std::snprintf(b, sizeof(b), "-");
   lv_label_set_text(stats_.hist_stat_30, b);
 
-  // Footer URL: where to browse this history from a phone/computer. Shown
-  // only while the station is actually connected (the IP means nothing
-  // otherwise).
+  // Footer center: normally the browse URL (only while the station is
+  // connected — the IP means nothing otherwise). An unset clock takes the
+  // slot over as a warning: new shots are NOT being recorded until it's set.
   if (stats_.history_url_label != nullptr) {
-    if (network_ != nullptr && network_->status() == core::NetState::Connected &&
-        network_->ip()[0] != '\0') {
+    if (!now_wall.date_valid) {
+      lv_label_set_text(stats_.history_url_label,
+                        "Clock not set - new shots won't be saved");
+      lv_obj_set_style_text_color(stats_.history_url_label,
+                                  lv_color_hex(ui::theme::alert()), 0);
+    } else if (network_ != nullptr &&
+               network_->status() == core::NetState::Connected &&
+               network_->ip()[0] != '\0') {
       char url[48];
       std::snprintf(url, sizeof(url), "View at http://%s", network_->ip());
       lv_label_set_text(stats_.history_url_label, url);
+      lv_obj_set_style_text_color(stats_.history_url_label,
+                                  lv_color_hex(ui::theme::muted()), 0);
     } else {
       lv_label_set_text(stats_.history_url_label, "");
     }

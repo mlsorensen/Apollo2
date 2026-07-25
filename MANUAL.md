@@ -241,9 +241,10 @@ machine is already warming up when you arrive.
     its own web page — the same stats, month filters, and shot list, with a
     live graph per shot and PNG/CSV downloads — styled to match whatever
     theme the device is currently using. The same built‑in web server also
-    carries the setup pages during pairing/WiFi setup, so nothing conflicts. Requires a FAT‑formatted SD card and a real
-  date/time (NTP, or Settings > Device); until both are present the tab shows
-  what's needed. Records live on the card under `/Apollo2` — an index CSV, one
+    carries the setup pages during pairing/WiFi setup, so nothing conflicts. Requires a FAT‑formatted SD card; recorded
+  shots are viewable immediately. Recording NEW shots additionally needs a
+  real date/time (NTP, or Settings → Device) — until the clock is set the
+  footer warns that shots aren't being saved. Records live on the card under `/Apollo2` — an index CSV, one
   samples CSV per shot, and a rendered PNG card — so the whole history can be
   read on any computer.
 - **Info** — device details: our firmware version + git revision, uptime,

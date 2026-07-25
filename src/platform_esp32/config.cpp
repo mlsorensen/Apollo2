@@ -24,6 +24,7 @@ constexpr char kTargetKey[] = "tgtg";
 constexpr char kShotModeKey[] = "shotmode";  // LEGACY bool (armed) — migration only
 constexpr char kShotMode3Key[] = "shotmd";   // tri-state core::ShotMode as int
 constexpr char kOvershootKey[] = "ovshoot";
+constexpr char kLastUnixKey[] = "lastunix";
 constexpr char kReviewHoldKey[] = "revhold";
 constexpr char kAutoConnectKey[] = "autoconn";
 constexpr char kWiredPaddleKey[] = "wiredpad";
@@ -120,6 +121,21 @@ float Config::target_weight_g() const {
   const float v = p.isKey(kTargetKey) ? p.getFloat(kTargetKey, 36.0f) : 36.0f;
   p.end();
   return v;
+}
+
+int64_t Config::last_unix() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 0;
+  const int64_t v = p.isKey(kLastUnixKey) ? p.getLong64(kLastUnixKey, 0) : 0;
+  p.end();
+  return v;
+}
+
+void Config::set_last_unix(int64_t t) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putLong64(kLastUnixKey, t);
+  p.end();
 }
 
 float Config::overshoot_g() const {

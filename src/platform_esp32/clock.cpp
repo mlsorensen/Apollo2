@@ -5,8 +5,8 @@
 #include <time.h>
 
 #include "platform_esp32/board_config.h"
-#if defined(BOARD_HAS_PCF85063_RTC)
 #include <Arduino.h>
+#if defined(BOARD_HAS_PCF85063_RTC)
 #include <Wire.h>
 #endif
 
@@ -109,6 +109,18 @@ void Clock::begin() {
     seed_system_time(tm);  // restore across power cycles
   }
 #endif
+  // No RTC survived (no coin cell / P4 flash reset dropped the RTC domain):
+  // seed from the hourly NVS snapshot. Stale by however long the power was
+  // off, but "approximately right" beats 1970 — the History view and clock
+  // work immediately, and NTP or a manual set corrects it later.
+  if (time(nullptr) < 1000000000) {  // clock unset (way before kBaseYear)
+    const int64_t saved = config_.last_unix();
+    if (saved > 0) {
+      const struct timeval tv = {static_cast<time_t>(saved), 0};
+      settimeofday(&tv, nullptr);
+      Serial.println("clock: seeded from last saved time (stale until NTP/manual set)");
+    }
+  }
 }
 
 core::WallTime Clock::now() const {
