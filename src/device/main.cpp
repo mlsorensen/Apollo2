@@ -344,8 +344,8 @@ void loop() {
   g_brew.poll(millis());     // paddle relay + shot state machine (edge-critical)
   g_app.pump_scale_chart();  // drain the scale's flow stream into the graph (fast)
   lv_timer_handler();        // LVGL render/input
-  g_token_setup.handle();    // portal auto-close timeout (the server itself
-                             // runs on WebUi's own task)
+  g_token_setup.handle();    // portal auto-close timeout
+  g_web_ui.poll();           // S3 boards serve here; no-op on the P4s (task)
 
   // Internal-heap telltale, once a minute: the S3 boards live close to the
   // internal-RAM ceiling (on-chip WiFi+BLE + task stacks + DMA buffers), and
