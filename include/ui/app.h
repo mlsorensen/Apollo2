@@ -125,6 +125,10 @@ class App {
   void sync_home_setpoints(bool connected);  // mirror set-points to the Home steppers
   void update_battery_runtime(const core::BatteryState& b);  // track drain for the estimate
   void seed_time_steppers();  // load the clock into the Hour/Minute steppers
+  // Re-derive the inferred Heating state (hysteresis bit = heating_) and
+  // start/stop the status-dot pulse. Call once per machine-snapshot pass,
+  // before update_home.
+  void update_heating(const core::MachineSnapshot& state);
   void rebuild();             // tear down + rebuild the UI (e.g. after a theme change)
   void request_layout_rebuild(int section);  // defer a rebuild, returning to `section`
   void handle_pairing(core::Link link);
@@ -210,6 +214,10 @@ class App {
   std::function<void()> restart_handler_;  // Settings > Device "Restart" (device only)
   float batt_cutoff_volts_ = 0.0f;
   int batt_low_count_ = 0;  // consecutive sub-cutoff reads (debounce)
+
+  // Inferred Heating state (see core::derive_heating); doubles as the
+  // hysteresis "previous result" bit.
+  bool heating_ = false;
 };
 
 }  // namespace ui

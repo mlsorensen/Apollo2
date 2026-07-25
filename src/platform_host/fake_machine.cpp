@@ -12,9 +12,9 @@ core::MachineSnapshot FakeMachine::snapshot() const {
       .software = "v5.0.9",
       .link = core::Link::Connected,  // the fake is always "connected"
       .power = power_,
-      .brew_temp_c = 93.0f,
+      .brew_temp_c = brew_temp_,
       .brew_target_c = brew_target_,
-      .boiler_temp_c = 123.0f,
+      .boiler_temp_c = boiler_temp_,
       .boiler_target_c = steam_target_,
       .steam_enabled = steam_enabled_,
       .brewing = false,

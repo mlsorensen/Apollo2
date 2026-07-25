@@ -92,6 +92,12 @@ int main() {
   scale_provisioner.set_connect_enabled(true);
   scale.set_connected(true);
   scale.set_umbra(false);
+  // Heating: machine on but boilers still below target — the inferred state
+  // shows an amber (pulsing on-device) dot + "Heating" instead of "Ready".
+  machine.set_temps(78.0f, 96.0f);
+  ok &= r({800, 480}, "renders/home_heating_800x480.png");
+  ok &= r({320, 240}, "renders/home_heating_320x240.png");
+  machine.set_temps(93.0f, 123.0f);
   // Unwired mode (paddle harness not in use): the shot button arms the weight-
   // stream detector ("Detect") instead of the auto-stop, pill shows Ready.
   brew.set_wired_paddle(false);

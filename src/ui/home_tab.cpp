@@ -983,7 +983,7 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
                  const core::BatteryState& battery, const core::WallTime& clock,
                  bool clock_24h, bool fahrenheit, const core::ScaleSnapshot& scale,
                  const core::ScaleFeatures& scale_features, bool scale_connect_enabled,
-                 const core::BrewSnapshot& brew, core::NetState net) {
+                 const core::BrewSnapshot& brew, core::NetState net, bool heating) {
   const bool connected = state.link == core::Link::Connected;
   const bool on = state.power == core::Power::On;
 
@@ -1106,17 +1106,20 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     case core::Link::Disconnected: status = "Disconnected"; dot = ui::theme::alert(); break;
     case core::Link::Connecting:   status = "Connecting..."; dot = ui::theme::warn(); break;
     case core::Link::Connected:
-      status = on ? "Ready" : "Standby";
-      dot = on ? ui::theme::ok() : ui::theme::warn();
+      status = heating ? "Heating" : on ? "Ready" : "Standby";
+      dot = on ? (heating ? ui::theme::warn() : ui::theme::ok()) : ui::theme::warn();
       break;
   }
+  // While the heating pulse runs, its timer owns the dot colors — writing the
+  // steady color here would stomp the "off" half of every blink.
+  const bool pulse = w.heat_pulse_timer != nullptr;
   if (w.status_label != nullptr) {
     ui::set_text(w.status_label, status);
-    ui::set_bg_color(w.status_dot, dot);
+    if (!pulse) ui::set_bg_color(w.status_dot, dot);
   }
   // Panel/card dots + optional status text. Compact card headers are dot-only
   // (label null), so the dot is set independently of the label.
-  if (w.micra_status_dot != nullptr)
+  if (w.micra_status_dot != nullptr && !pulse)
     ui::set_bg_color(w.micra_status_dot, dot);
   if (w.micra_status_label != nullptr) {
     // Header caption is already "MICRA", so drop the wordy Unconfigured hint.
@@ -1315,7 +1318,34 @@ void stop_flash_cb(lv_timer_t* t) {
   }
 }
 
+// One step of the heating pulse: the Micra status dot(s) breathe between the
+// warn color and muted until set_heating_pulse(false) deletes the timer. Runs
+// forever (heating lasts minutes); update_home skips dot styling while the
+// timer exists so the 2 Hz refresh can't stomp the dark half of the blink.
+void heat_pulse_cb(lv_timer_t* t) {
+  auto* w = static_cast<ui::HomeWidgets*>(lv_timer_get_user_data(t));
+  w->heat_pulse_lit = !w->heat_pulse_lit;
+  const uint32_t c = w->heat_pulse_lit ? ui::theme::warn() : ui::theme::muted();
+  if (w->status_dot != nullptr) ui::set_bg_color(w->status_dot, c);
+  if (w->micra_status_dot != nullptr) ui::set_bg_color(w->micra_status_dot, c);
+}
+
 }  // namespace
+
+void set_heating_pulse(HomeWidgets& w, bool on) {
+  if (on == (w.heat_pulse_timer != nullptr)) return;
+  if (on) {
+    w.heat_pulse_timer = lv_timer_create(heat_pulse_cb, 500, &w);
+    // Paint the lit state now, not half a second from now — the status text
+    // already flipped to "Heating" this frame (and sim renders capture it).
+    w.heat_pulse_lit = false;
+    heat_pulse_cb(w.heat_pulse_timer);
+  } else {
+    lv_timer_delete(w.heat_pulse_timer);
+    w.heat_pulse_timer = nullptr;
+    // update_home's next pass repaints the steady-state dot color.
+  }
+}
 
 void flash_shot_button(HomeWidgets& w) {
   if (w.shot_btn == nullptr) return;

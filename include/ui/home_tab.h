@@ -76,6 +76,12 @@ struct HomeWidgets {
   // update_home leaves the button alone while stop_flash_count > 0.
   lv_timer_t* stop_flash_timer = nullptr;
   int stop_flash_count = 0;
+  // Heating pulse on the Micra status dot(s): a repeating timer alternates the
+  // dot between the warn color and muted while core::derive_heating holds.
+  // update_home leaves the dot's color alone while the timer exists (the label
+  // text/color it still owns). Same ownership rules as shot_flash_timer.
+  lv_timer_t* heat_pulse_timer = nullptr;
+  bool heat_pulse_lit = false;
   // Scale battery icon in the SCALE header, right of the status text (icon-only
   // level estimate; hidden unless the connected scale reports a level).
   lv_obj_t* scale_batt_label = nullptr;
@@ -210,11 +216,13 @@ void build_bottom_tray(lv_obj_t* bar, const lv_font_t* font, HomeWidgets& out);
 // Apply machine + battery + scale state to the built widgets (live, no rebuild).
 // scale_features/scale_connect_enabled drive the sleep-aware scale status: a
 // disconnected sleep-capable scale shows as "Sleeping", not gone.
+// `heating` is the caller's core::derive_heating result (App carries the
+// hysteresis bit and drives set_heating_pulse alongside).
 void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
                  const core::BatteryState& battery, const core::WallTime& clock,
                  bool clock_24h, bool fahrenheit, const core::ScaleSnapshot& scale,
                  const core::ScaleFeatures& scale_features, bool scale_connect_enabled,
-                 const core::BrewSnapshot& brew, core::NetState net);
+                 const core::BrewSnapshot& brew, core::NetState net, bool heating);
 
 // Scroll the flow strip chart left by however many pixels elapsed wall-clock time
 // calls for, painting the new right-edge column(s) with the scale's current flow.
@@ -300,5 +308,10 @@ void flash_stop_hint(HomeWidgets& w);
 // Kill a stop-early flash mid-countdown (the shot ended — the signal must not
 // keep telling the user to stop it). The next update_home repaints the pill.
 void cancel_stop_flash(HomeWidgets& w);
+
+// Start/stop the heating pulse on the Micra status dot(s). Idempotent: `on`
+// with a live timer / `off` with none are no-ops. When it stops, the next
+// update_home repaints the dot to the steady state color.
+void set_heating_pulse(HomeWidgets& w, bool on);
 
 }  // namespace ui

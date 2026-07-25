@@ -17,7 +17,10 @@ The Home screen adapts to the screen size and to whether a scale is paired.
 ### MICRA card
 
 - **Status** — `Set up in Settings` (nothing paired yet), `Token needed`,
-  `Disconnected`, `Connecting...`, `Ready` (powered on), or `Standby`.
+  `Disconnected`, `Connecting...`, `Heating` (powered on, boilers still coming
+  up to temperature — the dot pulses amber), `Ready` (at temperature), or
+  `Standby`. The Micra itself doesn't report a warm‑up state; `Heating` is
+  inferred from the live boiler temperatures vs their set‑points.
 - **BREW / STEAM** — live boiler temperatures. On larger screens each has a
   **−/+** stepper that edits the set‑point directly; the small grey number is
   the current target. Edits are written to the machine as you tap.
