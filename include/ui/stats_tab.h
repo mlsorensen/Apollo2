@@ -65,6 +65,7 @@ struct StatsWidgets {
   lv_obj_t* history_filter_list = nullptr;
   int history_filter_ym = 0;            // 0 = all, else year*100 + month (1-12)
   lv_obj_t* history_list = nullptr;     // scrollable rows (opaque bg — scroll cost)
+  lv_obj_t* history_sd_label = nullptr; // capacity footer: "SD: x free of y" / FULL
   lv_obj_t* history_content = nullptr;  // metrics + filter + list wrapper
   lv_obj_t* history_guidance = nullptr; // "insert SD / set date" card
   lv_obj_t* history_guidance_label = nullptr;

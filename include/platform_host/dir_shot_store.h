@@ -22,6 +22,7 @@ class DirShotStore : public core::IShotStore {
   int list(core::ShotSummary* out, int max, int offset) const override;
   bool read(uint32_t id, core::ShotRecord& out) const override;
   core::ShotStats stats(int64_t now_unix) const override;
+  core::StorageInfo storage() const override;  // real filesystem free space
 
  private:
   std::string dir_;                       // <root>/Apollo2

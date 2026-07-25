@@ -377,6 +377,15 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
     lv_obj_set_style_bg_opa(out.history_list, LV_OPA_COVER, LV_PART_SCROLLBAR);
     lv_obj_set_style_width(out.history_list, ui::dp(5), LV_PART_SCROLLBAR);
 
+    // Capacity footer: free/total, or an alert "FULL" when saves are dropped.
+    out.history_sd_label = lv_label_create(out.history_content);
+    lv_label_set_text(out.history_sd_label, "");
+    lv_obj_set_width(out.history_sd_label, lv_pct(100));
+    lv_obj_set_style_text_align(out.history_sd_label, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_style_text_color(out.history_sd_label,
+                                lv_color_hex(ui::theme::muted()), 0);
+    lv_obj_set_style_text_font(out.history_sd_label, cap_font, 0);
+
     // Guidance card (no SD / no date): swapped in for the content wrapper.
     out.history_guidance = lv_obj_create(out.history_box);
     lv_obj_remove_style_all(out.history_guidance);

@@ -180,6 +180,11 @@ int main() {
   // Month filter engaged (May 2026 from the canned data).
   ok &= r({800, 480}, "renders/stats_history_may_800x480.png", 2, -1, false, 0,
           ui::kStatsHistory, false, -1, 202605);
+  // Card full: the capacity footer goes loud (saves are being dropped).
+  shots.set_storage(32000000000ull, 1000000ull, true);
+  ok &= r({800, 480}, "renders/stats_history_full_800x480.png", 2, -1, false, 0,
+          ui::kStatsHistory);
+  shots.set_storage(32000000000ull, 12400000000ull, false);
   ok &= r({800, 480}, "renders/shot_card_800x480.png", 2, -1, false, 0,
           ui::kStatsHistory, false, 14);
   ok &= r({320, 240}, "renders/shot_card_320x240.png", 2, -1, false, 0,
