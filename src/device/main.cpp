@@ -58,6 +58,9 @@ platform::ScaleProvisioner g_scale_provisioner{g_scale, g_config};
 // Brew-by-weight: paddle relay + shot state machine over the paddle + scale
 // ports (core logic; polled from loop()).
 core::BrewController g_brew{platform::paddle(), g_scale};
+// Shot history: no storage backend wired yet — the History tab shows guidance.
+// The SD-backed platform::ShotStore replaces this on boards with a card slot.
+core::NullShotStore g_shots;
 ui::App g_app;
 
 constexpr uint32_t kUiRefreshMs = 500;
@@ -227,7 +230,8 @@ void setup() {
   const ui::ScreenProfile screen{g_display.width(), g_display.height(),
                                  board::kUiScale};
   g_app.build(g_micra, g_provisioner, g_battery, g_display_settings, g_clock, g_history,
-              g_scale, g_scale_provisioner, g_brew, g_network, platform::sound(), screen);
+              g_scale, g_scale_provisioner, g_brew, g_network, platform::sound(), g_shots,
+              screen);
 
   // Settings > Device "Restart": soft reboot — re-runs the whole panel init,
   // the escape hatch for the RGB panel's occasional shifted-raster boot glitch.

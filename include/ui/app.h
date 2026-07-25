@@ -13,6 +13,7 @@
 #include "core/provisioner.h"
 #include "core/scale.h"
 #include "core/scale_provisioner.h"
+#include "core/shot_store.h"
 #include "core/sound.h"
 #include "ui/home_tab.h"
 #include "ui/screen.h"
@@ -36,7 +37,8 @@ class App {
              core::IBattery& battery, core::IDisplaySettings& display,
              core::IClock& clock, core::IHistory& history, core::IScale& scale,
              core::IScaleProvisioner& scale_provisioner, core::IBrewController& brew,
-             core::INetwork& network, core::ISound& sound, const ScreenProfile& screen);
+             core::INetwork& network, core::ISound& sound, core::IShotStore& shots,
+             const ScreenProfile& screen);
 
   // Reflect the latest machine state and scan results in the UI (no I/O).
   void refresh();
@@ -102,6 +104,8 @@ class App {
   void apply_pending_theme();            // deferred rebuild (from lv_async_call)
   void apply_layout_rebuild();           // deferred rebuild after scale pair/forget
   void select_stats_section(int section); // Stats segmented selector
+  void set_history_filter(int filter);    // History: 0 all / 1 7d / 2 30d
+  void open_shot_card(uint32_t id);       // History row tap -> full-screen card
   void shot_button();  // shot-mode toggle, or Reset while a shot is in review
   // Soft-reboot handler (Settings > Device "Restart"): wired by device main to
   // esp_restart(); no-op in the sim.
@@ -124,6 +128,7 @@ class App {
   void update_settings_view();
   void update_scale_view();   // refresh the Scale page (connection + target)
   void update_stats_view();   // refill the chart / info from history
+  void update_history_view(); // History section: guidance / metrics / list
   void update_temp_panels(const core::MachineSnapshot& state);
   void sync_home_setpoints(bool connected);  // mirror set-points to the Home steppers
   void update_battery_runtime(const core::BatteryState& b);  // track drain for the estimate
@@ -160,6 +165,7 @@ class App {
   core::IBrewController* brew_ = nullptr;
   core::INetwork* network_ = nullptr;
   core::ISound* sound_ = nullptr;
+  core::IShotStore* shots_ = nullptr;
   bool click_sound_on_ = true;  // cached from IDisplaySettings (checked per press)
   lv_obj_t* tabview_ = nullptr;
   ScreenProfile screen_{};          // stored so we can rebuild on a theme change
@@ -222,6 +228,14 @@ class App {
   // Inferred Heating state (see core::derive_heating); doubles as the
   // hysteresis "previous result" bit.
   bool heating_ = false;
+
+  // Shot-history view state. shot_view_ backs the open shot-card modal (the
+  // card's graph paints from it on every redraw, so it must outlive the
+  // modal). The built-rows fingerprint avoids rebuilding the list every
+  // refresh tick.
+  core::ShotRecord shot_view_;
+  int hist_built_count_ = -1;   // count() the rows were last built from
+  int hist_built_filter_ = -1;  // filter the rows were last built from
 };
 
 }  // namespace ui
