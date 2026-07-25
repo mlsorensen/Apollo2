@@ -490,6 +490,7 @@ App::~App() {
   if (clean_lock_timer_ != nullptr) lv_timer_delete(clean_lock_timer_);
   if (home_.shot_flash_timer != nullptr) lv_timer_delete(home_.shot_flash_timer);
   if (home_.stop_flash_timer != nullptr) lv_timer_delete(home_.stop_flash_timer);
+  if (home_.heat_pulse_timer != nullptr) lv_timer_delete(home_.heat_pulse_timer);
   if (home_.flow_buf != nullptr) lv_free(home_.flow_buf);
   if (home_.flow_weights != nullptr) lv_free(home_.flow_weights);
   if (home_.flow_flows != nullptr) lv_free(home_.flow_flows);
@@ -541,6 +542,12 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     lv_timer_delete(home_.stop_flash_timer);
     home_.stop_flash_timer = nullptr;
     home_.stop_flash_count = 0;
+  }
+  if (home_.heat_pulse_timer != nullptr) {
+    lv_timer_delete(home_.heat_pulse_timer);
+    home_.heat_pulse_timer = nullptr;
+    // heating_ keeps its value: update_heating re-arms the pulse on the first
+    // refresh after the rebuild.
   }
   if (home_.flow_buf != nullptr) {
     lv_free(home_.flow_buf);
@@ -645,10 +652,14 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     lv_obj_add_event_cb(home_.target_plus, on_target_plus, LV_EVENT_CLICKED, this);
   }
   battery_state_ = battery_->battery();
-  update_home(home_, machine_->snapshot(), battery_state_, clock_->now(),
-              clock_->use_24h(), display_->use_fahrenheit(), scale_->snapshot(),
-              scale_->features(), scale_connect_enabled(), brew_->snapshot(),
-              net_status());
+  {
+    const core::MachineSnapshot msnap = machine_->snapshot();
+    update_heating(msnap);
+    update_home(home_, msnap, battery_state_, clock_->now(),
+                clock_->use_24h(), display_->use_fahrenheit(), scale_->snapshot(),
+                scale_->features(), scale_connect_enabled(), brew_->snapshot(),
+                net_status(), heating_);
+  }
   update_battery_runtime(battery_state_);
 
   build_settings_tab(settings, screen, display_->supports_brightness(),
@@ -795,14 +806,20 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   set_theme_label(settings_);
 }
 
+void App::update_heating(const core::MachineSnapshot& state) {
+  heating_ = core::derive_heating(state, heating_);
+  ui::set_heating_pulse(home_, heating_);  // idempotent; re-arms after rebuild
+}
+
 void App::refresh() {
   if (machine_ != nullptr) {
     const core::MachineSnapshot snap = machine_->snapshot();
     if (battery_ != nullptr) {
       battery_state_ = battery_->battery();
+      update_heating(snap);
       update_home(home_, snap, battery_state_, clock_->now(), clock_->use_24h(),
                   display_->use_fahrenheit(), scale_->snapshot(), scale_->features(),
-                  scale_connect_enabled(), brew_->snapshot(), net_status());
+                  scale_connect_enabled(), brew_->snapshot(), net_status(), heating_);
       update_battery_runtime(battery_state_);
 
       // Critically-low pack (on battery, sustained) -> hand off to deep sleep.
@@ -981,7 +998,7 @@ void App::set_use_fahrenheit(bool on) {
     update_temp_panels(snap);
     update_home(home_, snap, battery_state_, clock_->now(), clock_->use_24h(), on,
                 scale_->snapshot(), scale_->features(), scale_connect_enabled(),
-                brew_->snapshot(), net_status());
+                brew_->snapshot(), net_status(), heating_);
     update_stats_view();
   }
 }

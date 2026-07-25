@@ -55,6 +55,27 @@ struct MachineSnapshot {
   bool        brewing;         // a shot is currently being pulled
 };
 
+// Heating inference. The Micra reports only BrewingMode/StandBy — there is no
+// "warming up" mode on the wire — but every snapshot carries current + target
+// temps, so "heating" is derived: on, connected, and a relevant boiler still
+// short of its set point. Asymmetric deadbands give hysteresis so the state
+// can't flicker at the boundary; the caller keeps the previous result and
+// passes it back in.
+constexpr float kHeatingOnDeltaC = 2.0f;    // below target by this => heating
+constexpr float kHeatingOffDeltaC = 0.75f;  // within this of target => ready
+
+inline bool boiler_heating(float temp_c, float target_c, bool prev) {
+  const float delta = prev ? kHeatingOffDeltaC : kHeatingOnDeltaC;
+  return target_c > 0.0f && temp_c < target_c - delta;
+}
+
+inline bool derive_heating(const MachineSnapshot& s, bool prev) {
+  if (s.link != Link::Connected || s.power != Power::On) return false;
+  return boiler_heating(s.brew_temp_c, s.brew_target_c, prev) ||
+         (s.steam_enabled &&
+          boiler_heating(s.boiler_temp_c, s.boiler_target_c, prev));
+}
+
 // The port the UI depends on. Anything that can describe and control a machine
 // implements this — the BLE link, the host fake, future devices. The UI holds
 // only a reference to this interface, never a concrete transport.
