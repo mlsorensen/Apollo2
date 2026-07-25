@@ -184,6 +184,9 @@ machine is already warming up when you arrive.
 - **Hour / Minute** — set the clock by hand. (With Wi‑Fi + NTP the clock sets
   itself on every boot; alternatively, boards with an RTC and an optional coin
   cell installed keep time through a power‑off.)
+- **Year / Month / Day** — set the calendar date by hand. NTP fills it in
+  automatically; without NTP a real date is needed for features that stamp
+  records (shot history). Setting only the time leaves the date unset.
 - **24‑hour** *(default on)* — clock format.
 - **Fahrenheit** *(default off)* — display unit for temperatures. Set‑points
   are still stored in Celsius.

@@ -129,10 +129,24 @@ struct SettingsWidgets {
   lv_obj_t* minute_minus = nullptr;
   lv_obj_t* minute_plus = nullptr;
   lv_obj_t* minute_value = nullptr;
+  // Calendar date steppers (shot history needs a real date; NTP sets it
+  // automatically when WiFi is on — these are for the offline path).
+  lv_obj_t* year_minus = nullptr;
+  lv_obj_t* year_plus = nullptr;
+  lv_obj_t* year_value = nullptr;
+  lv_obj_t* month_minus = nullptr;
+  lv_obj_t* month_plus = nullptr;
+  lv_obj_t* month_value = nullptr;
+  lv_obj_t* day_minus = nullptr;
+  lv_obj_t* day_plus = nullptr;
+  lv_obj_t* day_value = nullptr;
   lv_obj_t* clock_mode_switch = nullptr;  // on = 24-hour, off = 12-hour
   lv_obj_t* units_switch = nullptr;       // on = Fahrenheit, off = Celsius
   int set_hour = 12;
   int set_minute = 0;
+  int set_year = 2026;  // seed when the clock has no real date yet
+  int set_month = 1;
+  int set_day = 1;
   bool clock_24h = true;
 
   lv_obj_t* theme_btn = nullptr;

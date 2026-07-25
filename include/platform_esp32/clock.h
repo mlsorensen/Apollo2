@@ -21,7 +21,9 @@ class Clock : public core::IClock {
 
   core::WallTime now() const override;
   void set(int hour, int minute) override;
+  void set_date(int year, int month, int day) override;
   void set_unix(std::time_t utc) override;
+  std::time_t now_unix() const override;
   bool use_24h() const override { return config_.clock_24h(); }
   void set_24h(bool on) override { config_.set_clock_24h(on); }
 

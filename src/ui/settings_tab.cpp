@@ -203,6 +203,20 @@ void build_device_rows(lv_obj_t* page, const lv_font_t* text_font,
   make_inline_stepper(rm, text_font, symbol_font, btn_size, &out.minute_minus,
                       &out.minute_value, &out.minute_plus, nullptr);
 
+  // Calendar date. NTP fills it in automatically when WiFi is on; these rows
+  // are the offline path (shot history needs a real date to record).
+  lv_obj_t* ry = make_setting_row(page, "Year", text_font);
+  make_inline_stepper(ry, text_font, symbol_font, btn_size, &out.year_minus,
+                      &out.year_value, &out.year_plus, nullptr);
+
+  lv_obj_t* rmo = make_setting_row(page, "Month", text_font);
+  make_inline_stepper(rmo, text_font, symbol_font, btn_size, &out.month_minus,
+                      &out.month_value, &out.month_plus, nullptr);
+
+  lv_obj_t* rday = make_setting_row(page, "Day", text_font);
+  make_inline_stepper(rday, text_font, symbol_font, btn_size, &out.day_minus,
+                      &out.day_value, &out.day_plus, nullptr);
+
   lv_obj_t* rc = make_setting_row(page, "24-hour", text_font);
   out.clock_mode_switch = lv_switch_create(rc);
   lv_obj_set_size(out.clock_mode_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
