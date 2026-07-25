@@ -18,12 +18,10 @@ namespace platform {
 //   /api/summary device name/version, ACTIVE THEME palette, storage, stats
 //   /api/shots   the shot index as JSON (chunked; newest first)
 //   /api/shot.csv?id=N   one shot's sample series (download)
-//   /api/shot.png?id=N   one shot's rendered card (download, streamed off SD)
 //
 // The server runs from boot and is pumped from the main loop; with no network
 // up, handleClient is a cheap no-op. Handlers therefore run on the LVGL
-// thread — fine for the small JSON endpoints, a brief pause for the bundle
-// and PNG streams.
+// thread — fine for the small JSON endpoints, a brief pause for the bundle.
 struct WebTheme {
   uint32_t bg, rail, card, text, muted, accent, ok, warn, alert;
 };
@@ -46,7 +44,6 @@ class WebUi {
   void handle_summary();
   void handle_shots();
   void handle_shot_csv();
-  void handle_shot_png();
 
   WebServer server_{80};
   TokenSetup* setup_ = nullptr;

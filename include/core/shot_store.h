@@ -8,8 +8,9 @@
 // Shot-history port. When a shot finishes (reaches review), the UI assembles a
 // ShotRecord — headline stats plus the sampled weight/flow series — and hands
 // it to this port. The device implementation persists to an SD card under
-// /Apollo2 (records + a rendered PNG per shot: a take-away "database" readable
-// on any computer); the host fake serves canned records to the sim. Boards
+// /Apollo2 as plain CSVs: a take-away database readable anywhere (the web
+// app and the on-device viewer both re-render graphs from the data — nothing
+// is pre-rendered). The host fake serves canned records to the sim. Boards
 // without storage use NullShotStore and the History UI shows guidance instead.
 
 namespace core {
@@ -38,15 +39,6 @@ struct ShotRecord {
   ShotSummary summary;  // includes mode/wired — the index round-trips them
   int n_samples = 0;
   ShotSample samples[kSampleCap];
-
-  // Optional rendered shot-card image attached at save time (RGB565, row-major
-  // with `card_stride_px` pixels per row). Borrowed pointer: valid only during
-  // the save() call — implementations copy what they need before returning.
-  // Stores turn it into the on-disk PNG; read() never returns pixels.
-  const uint16_t* card_rgb565 = nullptr;
-  int card_w = 0;
-  int card_h = 0;
-  int card_stride_px = 0;
 };
 
 // Headline metrics for the History view. Accuracy = 100% minus the mean
@@ -143,10 +135,6 @@ class IShotStore {
   virtual int64_t stats_since() const { return 0; }
   virtual void set_stats_since(int64_t) {}
 
-  // Filesystem path (openable with stdio) of a shot's rendered PNG card, or
-  // false when the store has no image for it. Lets transports (the web
-  // server) stream the file without knowing the store's directory layout.
-  virtual bool image_path(uint32_t, char*, size_t) const { return false; }
 };
 
 // For boards/builds without storage: never available, drops everything.

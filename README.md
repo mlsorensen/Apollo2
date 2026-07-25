@@ -31,9 +31,9 @@ to the machine instead of a phone app.
   wiring), or **Manual**. Finished shots freeze into a review graph, and wired
   boards can **auto‑flush** the group after you lift the cup.
 - **Shot history on SD card** *(P4 boards and the S3 4.3C)* —
-  every finished shot is recorded to a FAT‑formatted microSD card: stats, the
-  full weight/flow series as CSV, and a rendered shot‑card PNG under
-  `/Apollo2/` — a take‑away database you can read on any computer. The Stats
+  every finished shot is recorded to a FAT‑formatted microSD card: stats and
+  the full weight/flow series as CSV under `/Apollo2/` — a take‑away database
+  you can read on any computer. The Stats
   tab's **History** section shows totals, lifetime/30‑day accuracy, and a
   filterable shot list; tap a shot for its full‑screen card. With WiFi on,
   the device also serves a **web page** at its local IP — browse and download
