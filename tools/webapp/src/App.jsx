@@ -39,6 +39,69 @@ function shotFileBase(s) {
          `${p(d.getHours())}${p(d.getMinutes())}`;
 }
 
+// "Download card": compose the SAME card the dialog shows — header, hero
+// stats, and the live SVG graph — onto a canvas and save it as a PNG. Fully
+// client-side (the server's stored PNGs are never touched) and always in the
+// device's current theme.
+function downloadCard(shot, svgEl, theme, textColor) {
+  const W = 1600, H = 960, M = 48;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = theme.bg;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.fillStyle = theme.muted;
+  ctx.font = '28px system-ui, sans-serif';
+  ctx.textBaseline = 'top';
+  ctx.fillText(fmtWhen(shot.unix), M, M);
+  ctx.textAlign = 'right';
+  ctx.fillText(shot.wired ? 'Auto shot' : shot.mode === 'detect' ? 'Detected' : 'Manual',
+               W - M, M);
+  ctx.textAlign = 'left';
+
+  const diff = shot.target_g > 0 ? shot.final_g - shot.target_g : null;
+  const stats = [
+    [shot.final_g.toFixed(1) + ' g', 'Result', textColor],
+    [shot.target_g > 0 ? shot.target_g.toFixed(0) + ' g' : '-', 'Target', textColor],
+    [diff != null ? (diff >= 0 ? '+' : '') + diff.toFixed(1) + ' g' : '-', 'Diff',
+     diff == null ? textColor : Math.abs(diff) <= 2 ? theme.ok : theme.warn],
+    [(shot.duration_ms / 1000).toFixed(1) + ' s', 'Time', textColor],
+    [shot.avg_gps.toFixed(2) + ' g/s', 'Avg flow', textColor],
+  ];
+  const colW = (W - 2 * M) / stats.length;
+  stats.forEach(([value, caption, color], i) => {
+    const cx = M + colW * i + colW / 2;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = color;
+    ctx.font = '600 52px system-ui, sans-serif';
+    ctx.fillText(value, cx, 120);
+    ctx.fillStyle = theme.muted;
+    ctx.font = '26px system-ui, sans-serif';
+    ctx.fillText(caption, cx, 190);
+  });
+  ctx.textAlign = 'left';
+
+  // Rasterize the on-screen SVG at 2x for a crisp export.
+  const clone = svgEl.cloneNode(true);
+  clone.setAttribute('width', W - 2 * M);
+  clone.setAttribute('height', H - 300);
+  const xml = new XMLSerializer().serializeToString(clone);
+  const img = new Image();
+  img.onload = () => {
+    ctx.drawImage(img, M, 250, W - 2 * M, H - 300);
+    canvas.toBlob((blob) => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${shotFileBase(shot)}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    }, 'image/png');
+  };
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
+}
+
 function fmtBytes(b) {
   if (b >= 1e9) return (b / 1e9).toFixed(1) + ' GB';
   return Math.round(b / 1e6) + ' MB';
@@ -68,7 +131,7 @@ function ShotChart({ samples, target, theme }) {
   const tick = (v) => (Number.isInteger(v) ? v : +v.toFixed(2));
   const grid = [0, 1, 2, 3, 4];
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto' }}>
+    <svg id="shot-chart" viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto' }}>
       {grid.map((i) => (
         <line key={i} x1={L} x2={W - R} y1={T + (ph * i) / 4} y2={T + (ph * i) / 4}
               stroke={theme.rail} strokeWidth="1" />
@@ -318,8 +381,13 @@ export default function App() {
               {samples == null && <Box sx={{ textAlign: 'center', py: 4 }}><CircularProgress size={28} /></Box>}
               {samples != null && <ShotChart samples={samples} target={open.target_g} theme={chart} />}
               <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
-                <Link href={`/api/shot.png?id=${open.id}`}
-                      download={`${shotFileBase(open)}.png`}>
+                <Link component="button" underline="hover"
+                      disabled={samples == null || samples.length < 2}
+                      onClick={() => {
+                        const el = document.getElementById('shot-chart');
+                        if (el) downloadCard(open, el, chart,
+                                             muiTheme.palette.text.primary);
+                      }}>
                   Download card (PNG)
                 </Link>
                 <Link href={`/api/shot.csv?id=${open.id}`}
