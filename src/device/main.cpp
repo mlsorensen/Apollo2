@@ -342,8 +342,8 @@ void loop() {
   g_brew.poll(millis());     // paddle relay + shot state machine (edge-critical)
   g_app.pump_scale_chart();  // drain the scale's flow stream into the graph (fast)
   lv_timer_handler();        // LVGL render/input
-  g_token_setup.handle();    // portal auto-close timeout (server pump is WebUi's)
-  g_web_ui.poll();           // the shared HTTP server (setup + history app)
+  g_token_setup.handle();    // portal auto-close timeout (the server itself
+                             // runs on WebUi's own task)
 
   // Hourly last-known-time snapshot -> NVS, so the next boot without a
   // surviving RTC starts approximately right instead of at 1970.

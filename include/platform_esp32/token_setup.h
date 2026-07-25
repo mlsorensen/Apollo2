@@ -2,6 +2,8 @@
 
 #include <WebServer.h>
 
+#include <atomic>
+
 namespace platform {
 
 class Config;
@@ -43,12 +45,9 @@ class TokenSetup {
   void handle_wifi();
 
   // True once (consumed) after the user submits WiFi credentials via the portal,
-  // so Network can tear the AP down and reconnect the station from loop() context.
-  bool take_wifi_saved() {
-    const bool v = wifi_saved_;
-    wifi_saved_ = false;
-    return v;
-  }
+  // so Network can tear the AP down and reconnect the station from loop()
+  // context. Atomic: the write happens on the web-server task.
+  bool take_wifi_saved() { return wifi_saved_.exchange(false); }
 
   const char* ssid() const { return "Micra-Setup"; }
   const char* url() const { return "http://192.168.4.1"; }
@@ -58,9 +57,11 @@ class TokenSetup {
   MicraLink& link_;
   WebServer* server_ = nullptr;  // the shared server (owned by WebUi)
   Mode mode_ = Mode::Token;
-  bool active_ = false;
+  // active_ is read by the web-server task (route dispatch) and written on
+  // the main thread (portal lifecycle); wifi_saved_ the reverse. Atomics.
+  std::atomic<bool> active_{false};
   bool stop_pending_ = false;
-  bool wifi_saved_ = false;
+  std::atomic<bool> wifi_saved_{false};
   uint32_t stop_at_ms_ = 0;
 };
 
