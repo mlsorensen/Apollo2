@@ -74,8 +74,15 @@ void WebUi::begin(TokenSetup& setup, core::IShotStore& shots, core::IClock& cloc
   });
   // All serving happens on a dedicated task so a slow client or a big
   // response can't stall LVGL. Modest priority; internal-RAM stack (String,
-  // stdio, chunked send buffers — no big allocations).
-  xTaskCreatePinnedToCore(task_entry, "web_ui", 12288, this, 2, nullptr, 0);
+  // stdio, chunked send buffers — no deep call trees). 8 KB: the S3 boards
+  // run WiFi+BLE on-chip and internal RAM is their scarcest resource — this
+  // is the LAST task created at boot, and on the 4.3C a 12 KB stack lost
+  // that race SILENTLY once (server simply absent). Hence slim + CHECKED.
+  if (xTaskCreatePinnedToCore(task_entry, "web_ui", 8192, this, 2, nullptr,
+                              0) != pdPASS) {
+    Serial.println("WebUi: FAILED to create server task (internal RAM?) — "
+                   "web interface unavailable");
+  }
 }
 
 void WebUi::task_entry(void* self) { static_cast<WebUi*>(self)->run(); }

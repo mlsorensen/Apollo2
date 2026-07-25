@@ -589,6 +589,12 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   machine_ = &machine;
   shots_ = &shots;
   hist_built_count_ = -1;  // a rebuild recreates the list; force a row refill
+  // Shot-record staging lives in the LVGL pool (PSRAM on device) — see the
+  // member comment. Allocated once; survives rebuilds.
+  if (shot_view_ == nullptr)
+    shot_view_ = static_cast<core::ShotRecord*>(lv_malloc(sizeof(core::ShotRecord)));
+  if (shot_capture_ == nullptr)
+    shot_capture_ = static_cast<core::ShotRecord*>(lv_malloc(sizeof(core::ShotRecord)));
   provisioner_ = &provisioner;
   battery_ = &battery;
   display_ = &display;
@@ -2036,7 +2042,8 @@ void App::capture_shot_record(const core::BrewSnapshot& bsnap,
   const int64_t now_unix = clock_ != nullptr ? clock_->now_unix() : 0;
   if (now_unix == 0) return;  // no real date -> nothing sane to stamp
 
-  core::ShotRecord& r = shot_capture_;
+  if (shot_capture_ == nullptr) return;
+  core::ShotRecord& r = *shot_capture_;
   r.n_samples = ui::export_shot_series(home_, r.samples,
                                        core::ShotRecord::kSampleCap);
   if (r.n_samples < 2) return;  // scale dark the whole shot -> nothing to keep
@@ -2088,7 +2095,8 @@ void App::confirm_reset_stats() {
 }
 
 void App::open_shot_card(uint32_t id) {
-  if (shots_ == nullptr || !shots_->read(id, shot_view_)) return;
+  if (shots_ == nullptr || shot_view_ == nullptr ||
+      !shots_->read(id, *shot_view_)) return;
   close_modal();
   // Near-full-screen overlay; tap anywhere outside (or on the header) closes.
   lv_obj_t* bg = lv_obj_create(lv_layer_top());
@@ -2106,7 +2114,7 @@ void App::open_shot_card(uint32_t id) {
   lv_obj_add_flag(holder, LV_OBJ_FLAG_EVENT_BUBBLE);  // card taps bubble to bg
   lv_obj_set_size(holder, lv_pct(96), lv_pct(94));
   lv_obj_center(holder);
-  ui::build_shot_card(holder, shot_view_, screen_,
+  ui::build_shot_card(holder, *shot_view_, screen_,
                       clock_ != nullptr && clock_->use_24h());
 }
 

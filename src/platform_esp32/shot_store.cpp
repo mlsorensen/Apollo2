@@ -211,10 +211,15 @@ core::MediumState probe_card_format(char* fs_type, size_t n) {
 void ShotStore::begin() {
   mutex_ = xSemaphoreCreateMutex();
   queue_ = xQueueCreate(kQueueDepth, sizeof(SaveJob));
-  // Low priority on the non-LVGL core: PNG encode is seconds of pure CPU.
-  // Stack is INTERNAL RAM (radio + DSI DMA compete for it): 12KB covers
-  // FATFS + stdio + the stb callback; stb's big buffers go to PSRAM.
-  xTaskCreatePinnedToCore(task_entry, "shot_store", 12288, this, 1, nullptr, 0);
+  // Low priority on the non-LVGL core. Stack is INTERNAL RAM (the radios
+  // and DMA compete for it — scarcest on the S3 boards): 8 KB covers FATFS +
+  // stdio, and the create is CHECKED because a silent failure here means
+  // shots quietly never save.
+  if (xTaskCreatePinnedToCore(task_entry, "shot_store", 8192, this, 1, nullptr,
+                              0) != pdPASS) {
+    Serial.println("ShotStore: FAILED to create writer task (internal RAM?) — "
+                   "shots will not be saved");
+  }
 }
 
 void ShotStore::task_entry(void* self) { static_cast<ShotStore*>(self)->run(); }
