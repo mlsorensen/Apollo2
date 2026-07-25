@@ -1,6 +1,7 @@
 #include "platform_host/dir_shot_store.h"
 
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 
 #include "core/shot_csv.h"
@@ -16,6 +17,15 @@ DirShotStore::DirShotStore(std::string root) {
   const std::string index = dir_ + "/shots.csv";
   if (FILE* f = std::fopen(index.c_str(), "r")) {
     char line[160];
+    // Header line = format version; a mismatch means "don't touch" (see the
+    // evolution contract in shot_csv.h).
+    if (std::fgets(line, sizeof(line), f) != nullptr &&
+        std::strcmp(line, core::kShotIndexHeader) != 0) {
+      std::fclose(f);
+      std::fprintf(stderr, "DirShotStore: unknown index format, not touching\n");
+      index_.clear();
+      return;
+    }
     while (std::fgets(line, sizeof(line), f) != nullptr) {
       core::ShotSummary s;
       if (core::parse_shot_index_row(line, s)) {

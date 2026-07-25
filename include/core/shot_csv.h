@@ -16,6 +16,18 @@
 // Everything is plain CSV so the card can be pulled and analyzed on any
 // computer. The index's iso8601 column is LOCAL time (what the user saw);
 // unix is UTC for arithmetic.
+//
+// FORMAT EVOLUTION CONTRACT (the header line IS the version):
+//   - The first line of each file is its header constant below. Firmware
+//     parses a file ONLY when the header matches exactly; on a mismatch it
+//     must leave the file untouched and surface the situation (a newer
+//     format misread by sscanf would corrupt silently — never guess).
+//   - Compatible changes APPEND columns, keep the same header prefix
+//     semantics, and parsers default missing trailing columns (see
+//     parse_shot_index_row: mode/wired are optional) and ignore extras.
+//   - A breaking change (reorder/remove/retype) gets a NEW header string and
+//     a migrating loader that reads the old header and rewrites the index
+//     (keep the original as shots.csv.bak).
 
 namespace core {
 

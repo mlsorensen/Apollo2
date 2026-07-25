@@ -24,7 +24,7 @@ enum StatsSection {
 };
 
 constexpr int kStatsPoints = 96;   // chart resolution (buckets across the window)
-constexpr int kStatsInfoRows = 8;  // device-info table rows (see kInfoKeys)
+constexpr int kStatsInfoRows = 9;  // device-info table rows (see kInfoKeys)
 
 struct StatsWidgets {
   lv_obj_t* seg[kStatsCount] = {};
