@@ -72,18 +72,29 @@ void WebUi::begin(TokenSetup& setup, core::IShotStore& shots, core::IClock& cloc
       server_.send(404, "text/plain", "not found");
     }
   });
-  // Socket binding is deferred to poll(): lwip's tcpip thread only exists
-  // once something has initialized WiFi, and binding earlier asserts.
+  // All serving happens on a dedicated task so a slow client or a big
+  // response can't stall LVGL. Modest priority; internal-RAM stack (String,
+  // stdio, chunked send buffers — no big allocations).
+  xTaskCreatePinnedToCore(task_entry, "web_ui", 12288, this, 2, nullptr, 0);
 }
 
-void WebUi::poll() {
-  if (!started_) {
-    if (WiFi.getMode() == WIFI_OFF) return;  // no network stack yet
-    server_.begin();
-    started_ = true;
-    Serial.println("WebUi: server up on :80");
+void WebUi::task_entry(void* self) { static_cast<WebUi*>(self)->run(); }
+
+void WebUi::run() {
+  // Bind lazily: lwip's tcpip thread only exists once something has
+  // initialized WiFi, and binding earlier asserts ("Invalid mbox").
+  for (;;) {
+    if (WiFi.getMode() != WIFI_OFF) break;
+    vTaskDelay(pdMS_TO_TICKS(250));
   }
-  server_.handleClient();
+  server_.begin();
+  Serial.println("WebUi: server up on :80");
+  for (;;) {
+    server_.handleClient();
+    // handleClient returns immediately when idle; a short sleep keeps this
+    // task near-zero-cost between requests.
+    vTaskDelay(pdMS_TO_TICKS(2));
+  }
 }
 
 void WebUi::handle_root() {
