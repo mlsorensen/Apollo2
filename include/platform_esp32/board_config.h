@@ -418,10 +418,13 @@ constexpr int  kPaddleDrivePin = 52;
 constexpr int  kPaddleSensePin = 51;
 constexpr bool kPaddleActiveHigh = true;
 
-// --- RTC: on-board PCF85063 on the shared I2C bus (RTC battery header on the
-//     board edge). Same driver as the 4.3B/4.3C. Address assumed 0x51 like the
-//     S3 boards — confirm against the Waveshare BSP / an I2C scan on first use.
-#define BOARD_HAS_PCF85063_RTC
+// --- RTC: NO discrete RTC chip (schematic-verified). The "RTC BAT" header
+//     feeds the ESP32-P4's own VBAT pin (102) through a B5819WS diode, backing
+//     the P4's internal RTC/LP domain (32.768k crystal on the LP XTAL pins).
+//     Whether system time actually survives a full power-off depends on the
+//     IDF build's VBAT support — verify on hardware; NTP/manual set cover the
+//     gap either way. Do NOT define BOARD_HAS_PCF85063_RTC here: there is no
+//     such chip on the bus.
 
 #elif defined(BOARD_WAVESHARE_P4_WIFI6_5)
 
@@ -517,9 +520,8 @@ constexpr int  kPaddleDrivePin = 52;
 constexpr int  kPaddleSensePin = 51;
 constexpr bool kPaddleActiveHigh = true;
 
-// --- RTC: on-board PCF85063 on the shared I2C bus, same as the 4.3 (see that
-//     block's note; address assumed 0x51 — confirm on first use). ---
-#define BOARD_HAS_PCF85063_RTC
+// --- RTC: same as the 4.3 — no discrete RTC chip; the RTC battery header
+//     backs the P4's VBAT pin / internal RTC (see the 4.3 block's note). ---
 
 #else
 #error "No board selected. Add -DBOARD_WAVESHARE_S3_LCD_2 (or _7B / _43B / _43C / P4_WIFI6_43 / P4_WIFI6_5) to build_flags in platformio.ini."

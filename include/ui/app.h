@@ -129,6 +129,10 @@ class App {
   void update_scale_view();   // refresh the Scale page (connection + target)
   void update_stats_view();   // refill the chart / info from history
   void update_history_view(); // History section: guidance / metrics / list
+  // Assemble + save a ShotRecord at the kReview freeze (no-op without storage
+  // or a real date). Call AFTER finish/review_shot_plot rebased the ring.
+  void capture_shot_record(const core::BrewSnapshot& bsnap,
+                           const core::ScaleSnapshot& snap);
   void update_temp_panels(const core::MachineSnapshot& state);
   void sync_home_setpoints(bool connected);  // mirror set-points to the Home steppers
   void update_battery_runtime(const core::BatteryState& b);  // track drain for the estimate
@@ -234,6 +238,7 @@ class App {
   // modal). The built-rows fingerprint avoids rebuilding the list every
   // refresh tick.
   core::ShotRecord shot_view_;
+  core::ShotRecord shot_capture_;  // staging for save() (too big for the stack)
   int hist_built_count_ = -1;   // count() the rows were last built from
   int hist_built_filter_ = -1;  // filter the rows were last built from
 };
