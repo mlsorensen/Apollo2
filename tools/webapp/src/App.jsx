@@ -104,10 +104,13 @@ function ShotChart({ samples, target, theme }) {
 
 function StatCard({ value, caption }) {
   return (
-    <Card sx={{ flex: 1, textAlign: 'center' }}>
-      <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-        <Typography variant="h4">{value}</Typography>
-        <Typography variant="body2" color="text.secondary">{caption}</Typography>
+    <Card sx={{ flex: 1, textAlign: 'center', minWidth: 0 }}>
+      <CardContent sx={{ py: 1.5, px: 0.5, '&:last-child': { pb: 1.5 } }}>
+        <Typography noWrap sx={{ fontWeight: 500,
+                                 fontSize: 'clamp(1.15rem, 5.5vw, 2.125rem)' }}>
+          {value}
+        </Typography>
+        <Typography noWrap variant="body2" color="text.secondary">{caption}</Typography>
       </CardContent>
     </Card>
   );
@@ -193,15 +196,19 @@ export default function App() {
       <CssBaseline />
       <AppBar position="static" color="transparent" elevation={0}
               sx={{ borderBottom: 1, borderColor: 'divider' }}>
-        <Toolbar>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>
-            {summary?.name || 'Apollo 2'} — Shot History
+        <Toolbar sx={{ gap: 1 }}>
+          <Typography noWrap variant="h6" sx={{ flexGrow: 1, minWidth: 0 }}>
+            {summary?.name || 'Apollo 2'}
+            <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+              {' — Shot History'}
+            </Box>
           </Typography>
           {summary?.storage?.total > 0 && (
-            <Typography variant="body2"
+            <Typography noWrap variant="body2" sx={{ flexShrink: 0,
+                          fontSize: { xs: '0.72rem', sm: '0.875rem' } }}
                         color={summary.storage.full ? 'error' : 'text.secondary'}>
               {summary.storage.full
-                ? 'SD card FULL — shots are not being saved'
+                ? 'SD FULL — not saving'
                 : `SD: ${fmtBytes(summary.storage.free)} free of ${fmtBytes(summary.storage.total)}`}
             </Typography>
           )}
