@@ -13,6 +13,8 @@
 #endif
 #include <lvgl.h>
 
+#include <esp_heap_caps.h>
+
 #include "core/brew_controller.h"
 #include "platform_esp32/battery.h"
 #include "platform_esp32/board_config.h"
@@ -344,6 +346,20 @@ void loop() {
   lv_timer_handler();        // LVGL render/input
   g_token_setup.handle();    // portal auto-close timeout (the server itself
                              // runs on WebUi's own task)
+
+  // Internal-heap telltale, once a minute: the S3 boards live close to the
+  // internal-RAM ceiling (on-chip WiFi+BLE + task stacks + DMA buffers), and
+  // every starvation bug so far surfaced as some SILENT downstream failure.
+  // With this line in the log, the next one arrives with numbers attached.
+  static uint32_t last_heap_log_ms = 0;
+  if (millis() - last_heap_log_ms >= 60u * 1000u) {
+    last_heap_log_ms = millis();
+    Serial.printf("heap: internal free=%u largest=%u\n",
+                  static_cast<unsigned>(heap_caps_get_free_size(
+                      MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+                  static_cast<unsigned>(heap_caps_get_largest_free_block(
+                      MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)));
+  }
 
   // Hourly last-known-time snapshot -> NVS, so the next boot without a
   // surviving RTC starts approximately right instead of at 1970.

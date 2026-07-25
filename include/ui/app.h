@@ -238,10 +238,13 @@ class App {
 
   // Shot-history view state. shot_view_ backs the open shot-card modal (the
   // card's graph paints from it on every redraw, so it must outlive the
-  // modal). The built-rows fingerprint avoids rebuilding the list every
-  // refresh tick.
-  core::ShotRecord shot_view_;
-  core::ShotRecord shot_capture_;  // staging for save() (too big for the stack)
+  // modal); shot_capture_ stages save(). ~7 KB each — allocated from the
+  // LVGL pool (PSRAM on device) in build(), NOT members: as members of a
+  // global App they'd sit in internal .bss, and internal RAM is the S3
+  // boards' scarcest resource. The built-rows fingerprint avoids rebuilding
+  // the list every refresh tick.
+  core::ShotRecord* shot_view_ = nullptr;
+  core::ShotRecord* shot_capture_ = nullptr;
   int hist_built_count_ = -1;   // count() the rows were last built from
   int hist_built_filter_ = -1;  // filter the rows were last built from
 };
