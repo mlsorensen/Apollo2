@@ -89,6 +89,9 @@ class App {
   void screensaver_tick();               // idle-dim poll (from an lv_timer, ~4 Hz)
   void hour_adjust(int dir);             // Device clock hour +/- (wraps)
   void minute_adjust(int dir);           // Device clock minute +/- (wraps)
+  void year_adjust(int dir);             // Device calendar date +/- (day clamps
+  void month_adjust(int dir);            // to the month's length; month wraps)
+  void day_adjust(int dir);
   void set_clock_24h(bool on);           // Device "24-hour" switch
   void set_use_fahrenheit(bool on);      // Device "Fahrenheit" switch
   void set_drop_negative_flow(bool on);  // Scale "Drop negative g/s" switch
@@ -124,7 +127,8 @@ class App {
   void update_temp_panels(const core::MachineSnapshot& state);
   void sync_home_setpoints(bool connected);  // mirror set-points to the Home steppers
   void update_battery_runtime(const core::BatteryState& b);  // track drain for the estimate
-  void seed_time_steppers();  // load the clock into the Hour/Minute steppers
+  void seed_time_steppers();  // load the clock into the Hour/Minute/date steppers
+  void apply_date_steppers(); // clamp day, repaint labels, write clock_->set_date
   // Re-derive the inferred Heating state (hysteresis bit = heating_) and
   // start/stop the status-dot pulse. Call once per machine-snapshot pass,
   // before update_home.

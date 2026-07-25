@@ -222,6 +222,26 @@ void set_time_labels(ui::SettingsWidgets& s) {
   lv_label_set_text(s.minute_value, b);
 }
 
+void set_date_labels(ui::SettingsWidgets& s) {
+  if (s.year_value == nullptr) return;
+  char b[8];
+  std::snprintf(b, sizeof(b), "%04d", s.set_year);
+  lv_label_set_text(s.year_value, b);
+  std::snprintf(b, sizeof(b), "%02d", s.set_month);
+  lv_label_set_text(s.month_value, b);
+  std::snprintf(b, sizeof(b), "%02d", s.set_day);
+  lv_label_set_text(s.day_value, b);
+}
+
+int days_in_month(int year, int month) {
+  static const int kDays[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  if (month == 2) {
+    const bool leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+    return leap ? 29 : 28;
+  }
+  return kDays[month - 1];
+}
+
 // Hour/Minute steppers: tap = +/-1, hold = repeat (spin through values).
 bool is_step_event(lv_event_t* e) {
   const lv_event_code_t c = lv_event_get_code(e);
@@ -238,6 +258,24 @@ void on_minute_minus(lv_event_t* e) {
 }
 void on_minute_plus(lv_event_t* e) {
   if (is_step_event(e)) static_cast<ui::App*>(lv_event_get_user_data(e))->minute_adjust(+1);
+}
+void on_year_minus(lv_event_t* e) {
+  if (is_step_event(e)) static_cast<ui::App*>(lv_event_get_user_data(e))->year_adjust(-1);
+}
+void on_year_plus(lv_event_t* e) {
+  if (is_step_event(e)) static_cast<ui::App*>(lv_event_get_user_data(e))->year_adjust(+1);
+}
+void on_month_minus(lv_event_t* e) {
+  if (is_step_event(e)) static_cast<ui::App*>(lv_event_get_user_data(e))->month_adjust(-1);
+}
+void on_month_plus(lv_event_t* e) {
+  if (is_step_event(e)) static_cast<ui::App*>(lv_event_get_user_data(e))->month_adjust(+1);
+}
+void on_day_minus(lv_event_t* e) {
+  if (is_step_event(e)) static_cast<ui::App*>(lv_event_get_user_data(e))->day_adjust(-1);
+}
+void on_day_plus(lv_event_t* e) {
+  if (is_step_event(e)) static_cast<ui::App*>(lv_event_get_user_data(e))->day_adjust(+1);
 }
 void on_clock_mode_switch(lv_event_t* e) {
   auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
@@ -702,6 +740,12 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(settings_.hour_plus, on_hour_plus, LV_EVENT_ALL, this);
   lv_obj_add_event_cb(settings_.minute_minus, on_minute_minus, LV_EVENT_ALL, this);
   lv_obj_add_event_cb(settings_.minute_plus, on_minute_plus, LV_EVENT_ALL, this);
+  lv_obj_add_event_cb(settings_.year_minus, on_year_minus, LV_EVENT_ALL, this);
+  lv_obj_add_event_cb(settings_.year_plus, on_year_plus, LV_EVENT_ALL, this);
+  lv_obj_add_event_cb(settings_.month_minus, on_month_minus, LV_EVENT_ALL, this);
+  lv_obj_add_event_cb(settings_.month_plus, on_month_plus, LV_EVENT_ALL, this);
+  lv_obj_add_event_cb(settings_.day_minus, on_day_minus, LV_EVENT_ALL, this);
+  lv_obj_add_event_cb(settings_.day_plus, on_day_plus, LV_EVENT_ALL, this);
   lv_obj_add_event_cb(settings_.clock_mode_switch, on_clock_mode_switch,
                       LV_EVENT_VALUE_CHANGED, this);
   lv_obj_add_event_cb(settings_.units_switch, on_units_switch, LV_EVENT_VALUE_CHANGED, this);
@@ -960,7 +1004,13 @@ void App::seed_time_steppers() {
   const core::WallTime t = clock_->now();
   settings_.set_hour = t.valid ? t.hour : 12;
   settings_.set_minute = t.valid ? t.minute : 0;
+  if (t.date_valid) {
+    settings_.set_year = t.year;
+    settings_.set_month = t.month;
+    settings_.set_day = t.day;
+  }  // else keep the SettingsWidgets seed defaults — a plausible starting point
   set_time_labels(settings_);
+  set_date_labels(settings_);
 }
 
 void App::on_settings_page_shown() {
@@ -982,6 +1032,35 @@ void App::minute_adjust(int dir) {
   settings_.set_minute = (settings_.set_minute + dir + 60) % 60;
   set_time_labels(settings_);
   if (clock_ != nullptr) clock_->set(settings_.set_hour, settings_.set_minute);
+}
+
+// Date steppers write the full date on every step (like the time steppers).
+// The RTC stores 2000-2099, so the year clamps there; day re-clamps whenever
+// the month/year changes shorten the month.
+void App::apply_date_steppers() {
+  const int dim = days_in_month(settings_.set_year, settings_.set_month);
+  if (settings_.set_day > dim) settings_.set_day = dim;
+  set_date_labels(settings_);
+  if (clock_ != nullptr)
+    clock_->set_date(settings_.set_year, settings_.set_month, settings_.set_day);
+}
+
+void App::year_adjust(int dir) {
+  settings_.set_year = settings_.set_year + dir;
+  if (settings_.set_year < core::kClockBaseYear) settings_.set_year = core::kClockBaseYear;
+  if (settings_.set_year > 2099) settings_.set_year = 2099;
+  apply_date_steppers();
+}
+
+void App::month_adjust(int dir) {
+  settings_.set_month = ((settings_.set_month - 1 + dir + 12) % 12) + 1;
+  apply_date_steppers();
+}
+
+void App::day_adjust(int dir) {
+  const int dim = days_in_month(settings_.set_year, settings_.set_month);
+  settings_.set_day = ((settings_.set_day - 1 + dir + dim) % dim) + 1;
+  apply_date_steppers();
 }
 
 void App::set_clock_24h(bool on) {

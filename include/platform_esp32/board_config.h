@@ -418,6 +418,11 @@ constexpr int  kPaddleDrivePin = 52;
 constexpr int  kPaddleSensePin = 51;
 constexpr bool kPaddleActiveHigh = true;
 
+// --- RTC: on-board PCF85063 on the shared I2C bus (RTC battery header on the
+//     board edge). Same driver as the 4.3B/4.3C. Address assumed 0x51 like the
+//     S3 boards — confirm against the Waveshare BSP / an I2C scan on first use.
+#define BOARD_HAS_PCF85063_RTC
+
 #elif defined(BOARD_WAVESHARE_P4_WIFI6_5)
 
 // Waveshare ESP32-P4-WIFI6-Touch-LCD-5 — electronically the 4.3's board (same
@@ -511,6 +516,10 @@ constexpr int kAudioPaPin = 53;   // speaker power-amp enable, active-high
 constexpr int  kPaddleDrivePin = 52;
 constexpr int  kPaddleSensePin = 51;
 constexpr bool kPaddleActiveHigh = true;
+
+// --- RTC: on-board PCF85063 on the shared I2C bus, same as the 4.3 (see that
+//     block's note; address assumed 0x51 — confirm on first use). ---
+#define BOARD_HAS_PCF85063_RTC
 
 #else
 #error "No board selected. Add -DBOARD_WAVESHARE_S3_LCD_2 (or _7B / _43B / _43C / P4_WIFI6_43 / P4_WIFI6_5) to build_flags in platformio.ini."

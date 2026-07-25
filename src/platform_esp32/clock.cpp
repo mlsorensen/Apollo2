@@ -13,7 +13,14 @@
 namespace platform {
 
 namespace {
-constexpr int kBaseYear = 2024;  // time is set against this date; year proves "set"
+// Time is set against core::kClockBaseYear's Jan 1 when no real date is known;
+// the year proves "set" and the exact placeholder date marks "date unknown".
+constexpr int kBaseYear = core::kClockBaseYear;
+
+// The placeholder (manual hh:mm set, no date known) vs a real calendar date.
+bool is_placeholder_date(const struct tm& tm) {
+  return (tm.tm_year + 1900) == kBaseYear && tm.tm_mon == 0 && tm.tm_mday == 1;
+}
 
 #if defined(BOARD_HAS_PCF85063_RTC)
 // PCF85063A: I2C 0x51, BCD time in registers 0x04..0x0A (sec,min,hour,day,wday,
@@ -109,15 +116,61 @@ core::WallTime Clock::now() const {
   struct tm tm;
   localtime_r(&t, &tm);
   const bool valid = (tm.tm_year + 1900) >= kBaseYear;
-  return core::WallTime{valid, tm.tm_hour, tm.tm_min};
+  const bool dated = valid && !is_placeholder_date(tm);
+  return core::WallTime{valid,          tm.tm_hour,           tm.tm_min,
+                        dated,          dated ? tm.tm_year + 1900 : 0,
+                        dated ? tm.tm_mon + 1 : 0,
+                        dated ? tm.tm_mday : 0};
 }
 
 void Clock::set(int hour, int minute) {
-  struct tm tm = base_date_time(hour, minute);
+  // Keep a real date if one is known (NTP or a manual set_date) — an hh:mm
+  // tweak must not knock the calendar back to the placeholder.
+  const time_t t = time(nullptr);
+  struct tm cur;
+  localtime_r(&t, &cur);
+  struct tm tm;
+  if ((cur.tm_year + 1900) >= kBaseYear && !is_placeholder_date(cur)) {
+    tm = cur;
+    tm.tm_hour = hour;
+    tm.tm_min = minute;
+    tm.tm_sec = 0;
+    tm.tm_isdst = -1;
+  } else {
+    tm = base_date_time(hour, minute);
+  }
   seed_system_time(tm);  // mktime fills tm_wday for the RTC write below
 #if defined(BOARD_HAS_PCF85063_RTC)
   rtc_write(tm);  // also persist to the coin-cell-backed RTC
 #endif
+}
+
+void Clock::set_date(int year, int month, int day) {
+  // Compose the new calendar date with the current hh:mm (00:00 if unset).
+  const time_t t = time(nullptr);
+  struct tm cur;
+  localtime_r(&t, &cur);
+  const bool time_known = (cur.tm_year + 1900) >= kBaseYear;
+  struct tm tm = {};
+  tm.tm_year = year - 1900;
+  tm.tm_mon = month - 1;
+  tm.tm_mday = day;
+  tm.tm_hour = time_known ? cur.tm_hour : 0;
+  tm.tm_min = time_known ? cur.tm_min : 0;
+  tm.tm_sec = time_known ? cur.tm_sec : 0;
+  tm.tm_isdst = -1;
+  seed_system_time(tm);
+#if defined(BOARD_HAS_PCF85063_RTC)
+  rtc_write(tm);
+#endif
+}
+
+std::time_t Clock::now_unix() const {
+  const time_t t = time(nullptr);
+  struct tm tm;
+  localtime_r(&t, &tm);
+  if ((tm.tm_year + 1900) < kBaseYear || is_placeholder_date(tm)) return 0;
+  return t;
 }
 
 void Clock::set_unix(std::time_t utc) {
