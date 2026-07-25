@@ -228,8 +228,14 @@ machine is already warming up when you arrive.
   lifetime totals: shots recorded, lifetime accuracy and 30‑day accuracy
   (actual vs target weight). Below, the shot list with a calendar filter —
   **All** plus a button for each month that has shots, so an old month is one
-  tap away instead of a long scroll. Tap a shot for a full‑screen card with
-  its result/target/diff, time, average flow, and the weight + flow graph. Requires a FAT‑formatted SD card and a real
+  tap away instead of a long scroll. Each row shows the signed miss against
+  target — `36.2/36g (+0.2)` — green within 2 g, amber beyond. Tap a shot for
+  a full‑screen card with its result/target/diff, time, average flow, and the
+  weight + flow graph.
+  - **Reset stats**: tap any headline card. Non‑destructive — the three
+    headline numbers restart from now (the Total card shows "Since ⟨date⟩")
+    while every recorded shot stays on the card. Undo by deleting
+    `Apollo2/stats_since.txt` on a computer. Requires a FAT‑formatted SD card and a real
   date/time (NTP, or Settings > Device); until both are present the tab shows
   what's needed. Records live on the card under `/Apollo2` — an index CSV, one
   samples CSV per shot, and a rendered PNG card — so the whole history can be

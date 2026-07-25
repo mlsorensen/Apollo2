@@ -23,6 +23,8 @@ class FakeShotStore : public core::IShotStore {
   core::ShotStats stats(int64_t now_unix) const override;
 
   core::StorageInfo storage() const override { return storage_; }
+  int64_t stats_since() const override { return stats_since_; }
+  void set_stats_since(int64_t t) override { stats_since_ = t; }
 
   void set_available(bool on) { available_ = on; }
   void set_storage(uint64_t total, uint64_t free, bool full) {
@@ -38,6 +40,7 @@ class FakeShotStore : public core::IShotStore {
 
  private:
   bool available_ = true;
+  int64_t stats_since_ = 0;
   // Plausible 32 GB card for renders; sim poses "full" via set_storage.
   core::StorageInfo storage_ = {32000000000ull, 12400000000ull, false,
                                 core::MediumState::kOk, "FAT"};

@@ -127,7 +127,7 @@ core::ShotStats FakeShotStore::stats(int64_t now_unix) const {
   sums.reserve(shots_.size());
   for (const auto& s : shots_) sums.push_back(s.summary);
   return core::compute_shot_stats(sums.data(), static_cast<int>(sums.size()),
-                                  now_unix);
+                                  now_unix, stats_since_);
 }
 
 }  // namespace host

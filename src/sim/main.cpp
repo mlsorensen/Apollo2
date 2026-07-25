@@ -186,6 +186,11 @@ int main() {
   // Month filter engaged (May 2026 from the canned data).
   ok &= r({800, 480}, "renders/stats_history_may_800x480.png", 2, -1, false, 0,
           ui::kStatsHistory, false, -1, 202605);
+  // Stats reset 3 days ago: Total card caption flips to "Since ...".
+  shots.set_stats_since(1781528100ll - 3 * 86400);
+  ok &= r({800, 480}, "renders/stats_history_reset_800x480.png", 2, -1, false, 0,
+          ui::kStatsHistory);
+  shots.set_stats_since(0);
   // Card full: the capacity footer goes loud (saves are being dropped).
   shots.set_storage(32000000000ull, 1000000ull, true);
   ok &= r({800, 480}, "renders/stats_history_full_800x480.png", 2, -1, false, 0,

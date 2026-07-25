@@ -28,6 +28,19 @@ DirShotStore::DirShotStore(std::string root) {
     std::fputs(core::kShotIndexHeader, h);
     std::fclose(h);
   }
+  if (FILE* m = std::fopen((dir_ + "/stats_since.txt").c_str(), "r")) {
+    long long v = 0;
+    if (std::fscanf(m, "%lld", &v) == 1) stats_since_ = v;
+    std::fclose(m);
+  }
+}
+
+void DirShotStore::set_stats_since(int64_t t) {
+  stats_since_ = t;
+  if (FILE* m = std::fopen((dir_ + "/stats_since.txt").c_str(), "w")) {
+    std::fprintf(m, "%lld\n", static_cast<long long>(t));
+    std::fclose(m);
+  }
 }
 
 void DirShotStore::save(const core::ShotRecord& record) {
@@ -104,7 +117,7 @@ bool DirShotStore::read(uint32_t id, core::ShotRecord& out) const {
 
 core::ShotStats DirShotStore::stats(int64_t now_unix) const {
   return core::compute_shot_stats(index_.data(), static_cast<int>(index_.size()),
-                                  now_unix);
+                                  now_unix, stats_since_);
 }
 
 core::StorageInfo DirShotStore::storage() const {

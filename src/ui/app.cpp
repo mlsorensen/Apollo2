@@ -169,6 +169,18 @@ void on_shot_modal_close(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->dismiss_modal();
 }
 
+void on_hist_metric_card(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->open_reset_stats_modal();
+}
+
+void on_reset_stats_confirm(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->confirm_reset_stats();
+}
+
+void on_reset_stats_cancel(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->dismiss_modal();
+}
+
 void on_stats_segment(lv_event_t* e) {
   auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
   auto* btn = static_cast<lv_obj_t*>(lv_event_get_target(e));
@@ -841,6 +853,10 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(stats_.zoom_out, on_zoom_out, LV_EVENT_CLICKED, this);
   // (History month-filter buttons are created dynamically in
   // update_history_view and wired there.)
+  for (lv_obj_t* c : stats_.hist_metric_cards) {
+    if (c != nullptr)
+      lv_obj_add_event_cb(c, on_hist_metric_card, LV_EVENT_CLICKED, this);
+  }
 
   if (brew_ != nullptr) {
     const core::BrewSnapshot b = brew_->snapshot();
@@ -1821,6 +1837,23 @@ void App::update_history_view() {
   char b[24];
   std::snprintf(b, sizeof(b), "%d", st.total);
   lv_label_set_text(stats_.hist_stat_total, b);
+  // After a stats reset the Total card says so ("Since 6/15/26") — the list
+  // below still shows everything, only the headline numbers restarted.
+  if (stats_.hist_stat_total_cap != nullptr) {
+    const int64_t since = shots_->stats_since();
+    if (since > 0) {
+      const time_t t = static_cast<time_t>(since);
+      struct tm tm;
+      localtime_r(&t, &tm);
+      char cap[20];
+      std::snprintf(cap, sizeof(cap), "Since %d/%d/%02d", tm.tm_mon + 1,
+                    tm.tm_mday, (tm.tm_year + 1900) % 100);
+      lv_label_set_text(stats_.hist_stat_total_cap, cap);
+    } else {
+      lv_label_set_text(stats_.hist_stat_total_cap,
+                        is_compact(screen_) ? "Shots" : "Total shots");
+    }
+  }
   if (st.acc_lifetime_pct > 0.0f)
     std::snprintf(b, sizeof(b), "%.1f%%", static_cast<double>(st.acc_lifetime_pct));
   else
@@ -1907,17 +1940,27 @@ void App::update_history_view() {
       ui::format_shot_datetime(when, sizeof(when), s.unix_time,
                                clock_ != nullptr && clock_->use_24h(),
                                !is_compact(screen_));
-      char stats_txt[48];
-      if (s.target_g > 0.0f)
-        std::snprintf(stats_txt, sizeof(stats_txt), "%.1f / %.0f g  %us",
+      char result_txt[24], diff_txt[16], dur_txt[12];
+      std::snprintf(dur_txt, sizeof(dur_txt), "%us",
+                    static_cast<unsigned>((s.duration_ms + 500) / 1000));
+      uint32_t diff_color = ui::theme::muted();
+      if (s.target_g > 0.0f) {
+        std::snprintf(result_txt, sizeof(result_txt), "%.1f/%.0fg",
                       static_cast<double>(s.final_g),
-                      static_cast<double>(s.target_g),
-                      static_cast<unsigned>((s.duration_ms + 500) / 1000));
-      else
-        std::snprintf(stats_txt, sizeof(stats_txt), "%.1f g  %us",
-                      static_cast<double>(s.final_g),
-                      static_cast<unsigned>((s.duration_ms + 500) / 1000));
-      lv_obj_t* row = ui::history_add_row(stats_, when, stats_txt, screen_);
+                      static_cast<double>(s.target_g));
+        const float diff = s.final_g - s.target_g;
+        std::snprintf(diff_txt, sizeof(diff_txt), "(%+.1f)",
+                      static_cast<double>(diff));
+        // At-a-glance verdict: within 2 g of target reads good, beyond warns.
+        diff_color = (diff < 0 ? -diff : diff) <= 2.0f ? ui::theme::ok()
+                                                       : ui::theme::warn();
+      } else {
+        std::snprintf(result_txt, sizeof(result_txt), "%.1fg",
+                      static_cast<double>(s.final_g));
+        diff_txt[0] = '\0';
+      }
+      lv_obj_t* row = ui::history_add_row(stats_, when, result_txt, diff_txt,
+                                          diff_color, dur_txt, screen_);
       lv_obj_set_user_data(row, reinterpret_cast<void*>(static_cast<uintptr_t>(s.id)));
       lv_obj_add_event_cb(row, on_history_row, LV_EVENT_CLICKED, this);
       ++rows;
@@ -2012,6 +2055,31 @@ void App::capture_shot_record(const core::BrewSnapshot& bsnap,
   shots_->save(r);
 #endif
   // The History list notices count() changed on its next visible refresh.
+}
+
+void App::open_reset_stats_modal() {
+  if (shots_ == nullptr || !shots_->available()) return;
+  lv_obj_t* card = open_modal(
+      "Reset stats?",
+      "The headline stats restart from now. Recorded shots stay on the SD "
+      "card untouched.\n(Undo: delete Apollo2/stats_since.txt on a computer.)");
+  lv_obj_t* row = lv_obj_create(card);
+  lv_obj_remove_style_all(row);
+  lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_style_pad_column(row, ui::dp(10), 0);
+  modal_button(row, "Reset", ui::theme::warn(), on_reset_stats_confirm, this);
+  modal_button(row, "Cancel", ui::theme::rail(), on_reset_stats_cancel, this);
+}
+
+void App::confirm_reset_stats() {
+  if (shots_ != nullptr && clock_ != nullptr) {
+    const int64_t now = clock_->now_unix();
+    if (now != 0) shots_->set_stats_since(now);
+  }
+  close_modal();
+  hist_built_count_ = -1;  // repaint metrics + caption on the next pass
+  update_history_view();
 }
 
 void App::open_shot_card(uint32_t id) {

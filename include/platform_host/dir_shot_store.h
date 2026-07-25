@@ -23,9 +23,12 @@ class DirShotStore : public core::IShotStore {
   bool read(uint32_t id, core::ShotRecord& out) const override;
   core::ShotStats stats(int64_t now_unix) const override;
   core::StorageInfo storage() const override;  // real filesystem free space
+  int64_t stats_since() const override { return stats_since_; }
+  void set_stats_since(int64_t t) override;  // persists stats_since.txt
 
  private:
   std::string dir_;                       // <root>/Apollo2
+  int64_t stats_since_ = 0;
   std::vector<core::ShotSummary> index_;  // newest first
   uint32_t next_id_ = 1;
 };

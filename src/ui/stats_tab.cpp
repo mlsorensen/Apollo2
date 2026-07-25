@@ -170,9 +170,13 @@ void make_info_header(lv_obj_t* parent, const char* text, const lv_font_t* font)
 }
 
 // One headline metric card for the History view: big value over a small
-// caption. Returns the value label.
+// caption. Returns the value label; optionally exposes the card (for tap
+// handlers) and the caption label (the Total card's caption changes after a
+// stats reset).
 lv_obj_t* make_metric_card(lv_obj_t* parent, const char* caption,
-                           const lv_font_t* value_font, const lv_font_t* cap_font) {
+                           const lv_font_t* value_font, const lv_font_t* cap_font,
+                           lv_obj_t** out_card = nullptr,
+                           lv_obj_t** out_cap = nullptr) {
   lv_obj_t* card = lv_obj_create(parent);
   lv_obj_remove_style_all(card);
   lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
@@ -195,6 +199,8 @@ lv_obj_t* make_metric_card(lv_obj_t* parent, const char* caption,
   lv_label_set_text(cap, caption);
   lv_obj_set_style_text_color(cap, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(cap, cap_font, 0);
+  if (out_card != nullptr) *out_card = card;
+  if (out_cap != nullptr) *out_cap = cap;
   return val;
 }
 
@@ -307,11 +313,18 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
     // Lifetime metrics — NOT affected by the month filter below; the captions
     // say so explicitly.
     out.hist_stat_total =
-        make_metric_card(metrics, compact ? "Shots" : "Total shots", big, cap_font);
+        make_metric_card(metrics, compact ? "Shots" : "Total shots", big, cap_font,
+                         &out.hist_metric_cards[0], &out.hist_stat_total_cap);
     out.hist_stat_life = make_metric_card(
-        metrics, compact ? "Lifetime acc" : "Lifetime accuracy", big, cap_font);
+        metrics, compact ? "Lifetime acc" : "Lifetime accuracy", big, cap_font,
+        &out.hist_metric_cards[1]);
     out.hist_stat_30 = make_metric_card(
-        metrics, compact ? "30-day acc" : "30-day accuracy", big, cap_font);
+        metrics, compact ? "30-day acc" : "30-day accuracy", big, cap_font,
+        &out.hist_metric_cards[2]);
+    // Tapping a metric card offers a (non-destructive) stats reset — App
+    // wires the callback + confirm modal.
+    for (lv_obj_t* c : out.hist_metric_cards)
+      lv_obj_add_flag(c, LV_OBJ_FLAG_CLICKABLE);
 
     // Bottom: filter card (wide/xl only) + the scrollable list.
     lv_obj_t* bottom = lv_obj_create(out.history_content);
@@ -326,7 +339,9 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
       lv_obj_t* filter = lv_obj_create(bottom);
       lv_obj_remove_style_all(filter);
       lv_obj_remove_flag(filter, LV_OBJ_FLAG_SCROLLABLE);
-      lv_obj_set_width(filter, lv_pct(30));
+      // 1:2 with the list so the filter's edge lines up with the first
+      // hero card's edge above it.
+      lv_obj_set_flex_grow(filter, 1);
       lv_obj_set_height(filter, lv_pct(100));
       lv_obj_set_style_bg_color(filter, lv_color_hex(ui::theme::card()), 0);
       lv_obj_set_style_bg_opa(filter, LV_OPA_COVER, 0);
@@ -362,7 +377,7 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
     // re-render every layer beneath it each frame (the settings-page lesson).
     out.history_list = lv_obj_create(bottom);
     lv_obj_remove_style_all(out.history_list);
-    lv_obj_set_flex_grow(out.history_list, 1);
+    lv_obj_set_flex_grow(out.history_list, compact ? 1 : 2);
     lv_obj_set_height(out.history_list, lv_pct(100));
     lv_obj_set_style_bg_color(out.history_list, lv_color_hex(ui::theme::card()), 0);
     lv_obj_set_style_bg_opa(out.history_list, LV_OPA_COVER, 0);
@@ -473,8 +488,9 @@ void stats_select_section(StatsWidgets& w, int section) {
   }
 }
 
-lv_obj_t* history_add_row(StatsWidgets& w, const char* when, const char* stats,
-                          const ScreenProfile& screen) {
+lv_obj_t* history_add_row(StatsWidgets& w, const char* when, const char* result,
+                          const char* diff, uint32_t diff_color,
+                          const char* duration, const ScreenProfile& screen) {
   const bool compact = is_compact(screen);
   const bool xl = is_xl(screen);
   const lv_font_t* font = ui::font_dp(compact ? 13 : xl ? 24 : 17);
@@ -503,10 +519,30 @@ lv_obj_t* history_add_row(StatsWidgets& w, const char* when, const char* stats,
   lv_obj_set_style_text_color(when_lbl, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(when_lbl, font, 0);
 
-  lv_obj_t* stats_lbl = lv_label_create(row);
-  lv_label_set_text(stats_lbl, stats);
-  lv_obj_set_style_text_color(stats_lbl, lv_color_hex(ui::theme::muted()), 0);
-  lv_obj_set_style_text_font(stats_lbl, font, 0);
+  lv_obj_t* right = lv_obj_create(row);
+  lv_obj_remove_style_all(right);
+  lv_obj_remove_flag(right, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(right, LV_OBJ_FLAG_EVENT_BUBBLE);  // row tap works everywhere
+  lv_obj_set_size(right, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(right, LV_FLEX_FLOW_ROW);
+  lv_obj_set_style_pad_column(right, ui::dp(6), 0);
+
+  lv_obj_t* result_lbl = lv_label_create(right);
+  lv_label_set_text(result_lbl, result);
+  lv_obj_set_style_text_color(result_lbl, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(result_lbl, font, 0);
+
+  if (diff != nullptr && diff[0] != '\0') {
+    lv_obj_t* diff_lbl = lv_label_create(right);
+    lv_label_set_text(diff_lbl, diff);
+    lv_obj_set_style_text_color(diff_lbl, lv_color_hex(diff_color), 0);
+    lv_obj_set_style_text_font(diff_lbl, font, 0);
+  }
+
+  lv_obj_t* dur_lbl = lv_label_create(right);
+  lv_label_set_text(dur_lbl, duration);
+  lv_obj_set_style_text_color(dur_lbl, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(dur_lbl, font, 0);
   return row;
 }
 

@@ -107,6 +107,8 @@ class App {
   void set_history_filter(int year_month); // History month filter: 0 = all,
                                            // else year*100 + month (1-12)
   void open_shot_card(uint32_t id);       // History row tap -> full-screen card
+  void open_reset_stats_modal();          // metric-card tap -> confirm dialog
+  void confirm_reset_stats();             // modal "Reset": set the marker
   void shot_button();  // shot-mode toggle, or Reset while a shot is in review
   // Soft-reboot handler (Settings > Device "Restart"): wired by device main to
   // esp_restart(); no-op in the sim.
