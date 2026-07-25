@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include "core/brew.h"
@@ -141,6 +142,11 @@ class IShotStore {
   // /Apollo2/stats_since.txt on SD — delete that file to undo a reset.
   virtual int64_t stats_since() const { return 0; }
   virtual void set_stats_since(int64_t) {}
+
+  // Filesystem path (openable with stdio) of a shot's rendered PNG card, or
+  // false when the store has no image for it. Lets transports (the web
+  // server) stream the file without knowing the store's directory layout.
+  virtual bool image_path(uint32_t, char*, size_t) const { return false; }
 };
 
 // For boards/builds without storage: never available, drops everything.

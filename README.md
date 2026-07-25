@@ -35,7 +35,9 @@ to the machine instead of a phone app.
   full weight/flow series as CSV, and a rendered shot‑card PNG under
   `/Apollo2/` — a take‑away database you can read on any computer. The Stats
   tab's **History** section shows totals, lifetime/30‑day accuracy, and a
-  filterable shot list; tap a shot for its full‑screen card.
+  filterable shot list; tap a shot for its full‑screen card. With WiFi on,
+  the device also serves a **web page** at its local IP — browse and download
+  your shots from a phone or computer, themed to match the device.
 - **Automatic time** — optionally join your home Wi‑Fi and the clock keeps itself
   correct over NTP, with a timezone picker that handles daylight saving. Time is
   saved to the on‑board RTC (where present) so it survives a power‑off.

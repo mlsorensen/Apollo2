@@ -32,7 +32,9 @@
 #include "platform_esp32/scale_provisioner.h"
 #include "platform_esp32/token_setup.h"
 #include "platform_esp32/touch.h"
+#include "platform_esp32/web_ui.h"
 #include "ui/app.h"
+#include "ui/theme.h"
 #include "version.h"
 
 // Device entry. Brings up the panel + touch, builds the UI bound to the BLE
@@ -66,6 +68,7 @@ platform::ShotStore g_shots;
 #else
 core::NullShotStore g_shots;
 #endif
+platform::WebUi g_web_ui;  // the ONE HTTP server (setup portal + history app)
 ui::App g_app;
 
 constexpr uint32_t kUiRefreshMs = 500;
@@ -237,6 +240,16 @@ void setup() {
 #if defined(BOARD_HAS_SD_MMC)
   g_shots.begin();  // writer task; mounts lazily, so no card is fine
 #endif
+  // One web server for everything: the setup portal's pages ride it during
+  // AP sessions; on the home network it serves the shot-history app + API.
+  // The theme callback reads the ACTIVE palette per request, so the web page
+  // always matches whatever the screen is showing.
+  g_web_ui.begin(g_token_setup, g_shots, g_clock, "Apollo 2", [] {
+    return platform::WebTheme{
+        ui::theme::bg(),   ui::theme::rail(),  ui::theme::card(),
+        ui::theme::text(), ui::theme::muted(), ui::theme::accent(),
+        ui::theme::ok(),   ui::theme::warn(),  ui::theme::alert()};
+  });
   g_app.build(g_micra, g_provisioner, g_battery, g_display_settings, g_clock, g_history,
               g_scale, g_scale_provisioner, g_brew, g_network, platform::sound(), g_shots,
               screen);
@@ -329,7 +342,8 @@ void loop() {
   g_brew.poll(millis());     // paddle relay + shot state machine (edge-critical)
   g_app.pump_scale_chart();  // drain the scale's flow stream into the graph (fast)
   lv_timer_handler();        // LVGL render/input
-  g_token_setup.handle();    // pump the WiFi setup web server when active
+  g_token_setup.handle();    // portal auto-close timeout (server pump is WebUi's)
+  g_web_ui.poll();           // the shared HTTP server (setup + history app)
   g_network.poll();          // drive the WiFi station state machine + NTP->RTC
 
   // Reflect the latest cached machine state in the UI (cheap; no BLE here).

@@ -25,6 +25,7 @@ class DirShotStore : public core::IShotStore {
   core::StorageInfo storage() const override;  // real filesystem free space
   int64_t stats_since() const override { return stats_since_; }
   void set_stats_since(int64_t t) override;  // persists stats_since.txt
+  bool image_path(uint32_t id, char* out, size_t n) const override;
 
  private:
   std::string dir_;                       // <root>/Apollo2

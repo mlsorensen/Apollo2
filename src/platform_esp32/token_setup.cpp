@@ -117,10 +117,7 @@ void TokenSetup::start(Mode mode) {
   // The phone is inches away, so run low TX power — smaller current spikes, which
   // matters on a USB-powered 7" board where a WiFi burst can brown out the rail.
   WiFi.setTxPower(WIFI_POWER_8_5dBm);
-  server_.on("/", [this]() { handle_root(); });
-  server_.on("/save", HTTP_POST, [this]() { handle_save(); });
-  server_.on("/wifi", HTTP_POST, [this]() { handle_wifi(); });
-  server_.begin();
+  // Routes live on the shared server (WebUi) — nothing to register here.
   active_ = true;
   stop_pending_ = true;                     // safety net: auto-close if unused, so the
   stop_at_ms_ = millis() + 5 * 60 * 1000;   // AP can't linger (the device closes it on connect)
@@ -131,7 +128,6 @@ void TokenSetup::start(Mode mode) {
 
 void TokenSetup::stop() {
   if (!active_) return;
-  server_.stop();
   WiFi.softAPdisconnect(true);
   WiFi.mode(WIFI_OFF);
   active_ = false;
@@ -140,8 +136,7 @@ void TokenSetup::stop() {
 }
 
 void TokenSetup::handle() {
-  if (!active_) return;
-  server_.handleClient();
+  if (!active_) return;  // client pumping lives in WebUi::poll()
   if (stop_pending_ && millis() > stop_at_ms_) stop();
 }
 
@@ -149,15 +144,15 @@ void TokenSetup::handle_root() {
   String page(kPageHead);
   page += (mode_ == Mode::Token) ? kTokenPage : kWifiPage;
   page += kPageTail;
-  server_.send(200, "text/html", page);
+  server_->send(200, "text/html", page);
 }
 
 void TokenSetup::handle_save() {
-  String token = server_.arg("token");
+  String token = server_->arg("token");
   token.trim();
   if (!looks_like_token(token)) {
-    server_.send(200, "text/plain",
-                 "That token is not valid (it should be 64 hex characters).");
+    server_->send(200, "text/plain",
+                  "That token is not valid (it should be 64 hex characters).");
     return;
   }
   const std::string t(token.c_str());
@@ -167,18 +162,18 @@ void TokenSetup::handle_save() {
   // Plain-text result for the async form; the AP stays up so a rejected token
   // can be corrected and resubmitted. The device closes it once the link
   // connects (or the safety timeout fires).
-  server_.send(200, "text/plain",
-               "Saved. The device is connecting -- this page stays open in case "
+  server_->send(200, "text/plain",
+                "Saved. The device is connecting -- this page stays open in case "
                "the token is wrong; you can paste a new one and Save again. Once "
                "connected, the device closes this setup network.");
 }
 
 void TokenSetup::handle_wifi() {
-  String ssid = server_.arg("ssid");
-  String pass = server_.arg("pass");
+  String ssid = server_->arg("ssid");
+  String pass = server_->arg("pass");
   ssid.trim();
   if (ssid.length() == 0) {
-    server_.send(200, "text/plain", "Enter a network name.");
+    server_->send(200, "text/plain", "Enter a network name.");
     return;
   }
   config_.save_wifi(std::string(ssid.c_str()), std::string(pass.c_str()));
@@ -186,8 +181,8 @@ void TokenSetup::handle_wifi() {
   wifi_saved_ = true;  // Network tears down the AP + connects from loop() context
   Serial.printf("TokenSetup: WiFi credentials saved for '%s'\n", ssid.c_str());
   // Reply before the AP is torn down (next loop) so the phone gets this message.
-  server_.send(200, "text/plain",
-               "Saved. The device is leaving this setup network to connect to your "
+  server_->send(200, "text/plain",
+                "Saved. The device is leaving this setup network to connect to your "
                "WiFi -- watch the device screen for the status and its local IP.");
 }
 

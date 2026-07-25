@@ -15,9 +15,14 @@ class MicraLink;
 // when the credentials are saved), and a combined page left the other half
 // dead on the phone after the AP closed under it.
 //
-// When active, handle() must be pumped from the main loop. BLE is idle while
-// this runs (the link sits in NeedsToken until a token arrives), so WiFi/BLE
-// don't contend.
+// The HTTP server itself is SHARED: platform::WebUi owns the one WebServer
+// on :80 (setup pages + the shot-history app as different routes) and pumps
+// it. This class owns only the AP lifecycle + the setup page content;
+// attach() wires it to the shared server, and WebUi routes '/', '/save' and
+// '/wifi' here while a portal is active. handle() (pumped from loop) now
+// carries just the auto-close timeout. BLE is idle while a token portal runs
+// (the link sits in NeedsToken until a token arrives), so WiFi/BLE don't
+// contend.
 
 class TokenSetup {
  public:
@@ -25,10 +30,17 @@ class TokenSetup {
 
   TokenSetup(Config& config, MicraLink& link);
 
+  void attach(WebServer& server) { server_ = &server; }
+
   void start(Mode mode);
   void stop();
   void handle();  // pump from loop(); no-op when inactive
   bool active() const { return active_; }
+
+  // Route handlers, invoked by WebUi on the shared server.
+  void handle_root();
+  void handle_save();
+  void handle_wifi();
 
   // True once (consumed) after the user submits WiFi credentials via the portal,
   // so Network can tear the AP down and reconnect the station from loop() context.
@@ -42,13 +54,9 @@ class TokenSetup {
   const char* url() const { return "http://192.168.4.1"; }
 
  private:
-  void handle_root();
-  void handle_save();
-  void handle_wifi();
-
   Config& config_;
   MicraLink& link_;
-  WebServer server_{80};
+  WebServer* server_ = nullptr;  // the shared server (owned by WebUi)
   Mode mode_ = Mode::Token;
   bool active_ = false;
   bool stop_pending_ = false;

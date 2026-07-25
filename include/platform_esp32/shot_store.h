@@ -44,6 +44,7 @@ class ShotStore : public core::IShotStore {
   // travels with the data; cached here, written by the writer task.
   int64_t stats_since() const override;
   void set_stats_since(int64_t t) override;
+  bool image_path(uint32_t id, char* out, size_t n) const override;
 
   // Below this free space, saves are dropped (a shot's files run ~200-400 KB
   // and FS writes fail silently once space runs out).

@@ -16,3 +16,5 @@ sdkconfig.esp32-p4-micra-43
 sdkconfig.defaults
 .DS_Store
 sim_sd/
+tools/webapp/node_modules/
+tools/webapp/dist/
