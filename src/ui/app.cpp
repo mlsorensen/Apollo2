@@ -7,6 +7,7 @@
 
 #include <lvgl.h>
 
+#include "ui/shot_card.h"
 #include "ui/stats_tab.h"
 #include "ui/theme.h"
 #include "ui/timezones.h"
@@ -133,6 +134,25 @@ void on_review_plus(lv_event_t* e) {
 }
 void on_target_plus(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->target_adjust(+1);
+}
+
+void on_history_row(lv_event_t* e) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  auto* row = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+  const uint32_t id =
+      static_cast<uint32_t>(reinterpret_cast<uintptr_t>(lv_obj_get_user_data(row)));
+  app->open_shot_card(id);
+}
+
+void on_history_filter(lv_event_t* e) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  auto* btn = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  // Button order inside the filter card: [label, All, 7d, 30d] -> index-1.
+  app->set_history_filter(static_cast<int>(lv_obj_get_index(btn)) - 1);
+}
+
+void on_shot_modal_close(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->dismiss_modal();
 }
 
 void on_stats_segment(lv_event_t* e) {
@@ -538,8 +558,11 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                 core::IBattery& battery, core::IDisplaySettings& display,
                 core::IClock& clock, core::IHistory& history, core::IScale& scale,
                 core::IScaleProvisioner& scale_provisioner, core::IBrewController& brew,
-                core::INetwork& network, core::ISound& sound, const ScreenProfile& screen) {
+                core::INetwork& network, core::ISound& sound, core::IShotStore& shots,
+                const ScreenProfile& screen) {
   machine_ = &machine;
+  shots_ = &shots;
+  hist_built_count_ = -1;  // a rebuild recreates the list; force a row refill
   provisioner_ = &provisioner;
   battery_ = &battery;
   display_ = &display;
@@ -802,6 +825,11 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   }
   lv_obj_add_event_cb(stats_.zoom_in, on_zoom_in, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(stats_.zoom_out, on_zoom_out, LV_EVENT_CLICKED, this);
+  for (int i = 0; i < 3; ++i) {
+    if (stats_.hist_filter_btn[i] != nullptr)
+      lv_obj_add_event_cb(stats_.hist_filter_btn[i], on_history_filter,
+                          LV_EVENT_CLICKED, this);
+  }
 
   if (brew_ != nullptr) {
     const core::BrewSnapshot b = brew_->snapshot();
@@ -1145,7 +1173,7 @@ void App::rebuild() {
     scroll_y = lv_obj_get_scroll_y(settings_.device_page);
 
   build(*machine_, *provisioner_, *battery_, *display_, *clock_, *history_, *scale_,
-        *scale_provisioner_, *brew_, *network_, *sound_, screen_);
+        *scale_provisioner_, *brew_, *network_, *sound_, *shots_, screen_);
   show_tab(1);                       // back to Settings...
   select_settings_section(section);  // ...on the section that triggered the rebuild
 
@@ -1734,6 +1762,145 @@ void App::select_stats_section(int section) {
   update_stats_view();
 }
 
+void App::set_history_filter(int filter) {
+  if (filter < 0 || filter > 2 || filter == stats_.history_filter) return;
+  stats_.history_filter = filter;
+  update_history_view();
+}
+
+void App::update_history_view() {
+  if (shots_ == nullptr || stats_.history_box == nullptr) return;
+
+  // Prerequisites: storage and a real calendar date (records are stamped from
+  // now_unix). Without either, the section is a how-to card instead of data.
+  if (!shots_->available()) {
+    ui::history_show_guidance(
+        stats_,
+        "Insert a FAT-formatted SD card to record shot history.\n"
+        "Each finished shot is saved with its stats and graph.");
+    return;
+  }
+  const core::WallTime now_wall = clock_ != nullptr ? clock_->now() : core::WallTime{};
+  if (!now_wall.date_valid) {
+    ui::history_show_guidance(
+        stats_,
+        "Set the date and time to record shot history:\n"
+        "Settings > Device, or enable WiFi + NTP.");
+    return;
+  }
+  ui::history_show_content(stats_);
+
+  const int64_t now_unix = clock_ != nullptr ? clock_->now_unix() : 0;
+  const core::ShotStats st = shots_->stats(now_unix);
+  char b[24];
+  std::snprintf(b, sizeof(b), "%d", st.total);
+  lv_label_set_text(stats_.hist_stat_total, b);
+  if (st.acc_lifetime_pct > 0.0f)
+    std::snprintf(b, sizeof(b), "%.1f%%", static_cast<double>(st.acc_lifetime_pct));
+  else
+    std::snprintf(b, sizeof(b), "-");
+  lv_label_set_text(stats_.hist_stat_life, b);
+  if (st.acc_30d_pct > 0.0f)
+    std::snprintf(b, sizeof(b), "%.1f%%", static_cast<double>(st.acc_30d_pct));
+  else
+    std::snprintf(b, sizeof(b), "-");
+  lv_label_set_text(stats_.hist_stat_30, b);
+
+  // Filter buttons: accent the active one (buttons are null on compact).
+  for (int i = 0; i < 3; ++i) {
+    if (stats_.hist_filter_btn[i] == nullptr) continue;
+    lv_obj_set_style_bg_color(stats_.hist_filter_btn[i],
+                              lv_color_hex(i == stats_.history_filter
+                                               ? ui::theme::accent()
+                                               : ui::theme::rail()),
+                              0);
+  }
+
+  // Rebuild rows only when the data or filter changed — this runs on the 2 Hz
+  // refresh while the tab is visible.
+  if (shots_->count() == hist_built_count_ &&
+      stats_.history_filter == hist_built_filter_)
+    return;
+  hist_built_count_ = shots_->count();
+  hist_built_filter_ = stats_.history_filter;
+
+  ui::history_clear_rows(stats_);
+  // Page through summaries; stop when out of range or the row cap is hit (the
+  // cap keeps LVGL's widget count sane — filters narrow the rest).
+  constexpr int kMaxRows = 60;
+  constexpr int kPage = 16;
+  const int64_t cutoff =
+      stats_.history_filter == 1 ? now_unix - 7ll * 86400
+      : stats_.history_filter == 2 ? now_unix - 30ll * 86400
+                                   : 0;
+  core::ShotSummary page[kPage];
+  int offset = 0, rows = 0;
+  bool truncated = false;
+  while (rows < kMaxRows) {
+    const int n = shots_->list(page, kPage, offset);
+    if (n == 0) break;
+    offset += n;
+    for (int i = 0; i < n && rows < kMaxRows; ++i) {
+      const core::ShotSummary& s = page[i];
+      if (s.unix_time < cutoff) continue;  // newest-first: could break, but cheap
+      char when[40];
+      ui::format_shot_datetime(when, sizeof(when), s.unix_time,
+                               clock_ != nullptr && clock_->use_24h(),
+                               !is_compact(screen_));
+      char stats_txt[48];
+      if (s.target_g > 0.0f)
+        std::snprintf(stats_txt, sizeof(stats_txt), "%.1f / %.0f g  %us",
+                      static_cast<double>(s.final_g),
+                      static_cast<double>(s.target_g),
+                      static_cast<unsigned>((s.duration_ms + 500) / 1000));
+      else
+        std::snprintf(stats_txt, sizeof(stats_txt), "%.1f g  %us",
+                      static_cast<double>(s.final_g),
+                      static_cast<unsigned>((s.duration_ms + 500) / 1000));
+      lv_obj_t* row = ui::history_add_row(stats_, when, stats_txt, screen_);
+      lv_obj_set_user_data(row, reinterpret_cast<void*>(static_cast<uintptr_t>(s.id)));
+      lv_obj_add_event_cb(row, on_history_row, LV_EVENT_CLICKED, this);
+      ++rows;
+    }
+    if (rows >= kMaxRows) truncated = true;
+  }
+  if (rows == 0) {
+    lv_obj_t* none = lv_label_create(stats_.history_list);
+    lv_label_set_text(none, "No shots recorded yet");
+    lv_obj_set_style_text_color(none, lv_color_hex(ui::theme::muted()), 0);
+    lv_obj_set_style_text_font(none, ui::font_dp(is_compact(screen_) ? 14 : 18), 0);
+  } else if (truncated) {
+    lv_obj_t* more = lv_label_create(stats_.history_list);
+    lv_label_set_text(more, "Showing the latest 60");
+    lv_obj_set_style_text_color(more, lv_color_hex(ui::theme::muted()), 0);
+    lv_obj_set_style_text_font(more, ui::font_dp(is_compact(screen_) ? 12 : 14), 0);
+    lv_obj_set_style_pad_ver(more, ui::dp(8), 0);
+  }
+}
+
+void App::open_shot_card(uint32_t id) {
+  if (shots_ == nullptr || !shots_->read(id, shot_view_)) return;
+  close_modal();
+  // Near-full-screen overlay; tap anywhere outside (or on the header) closes.
+  lv_obj_t* bg = lv_obj_create(lv_layer_top());
+  lv_obj_remove_style_all(bg);
+  lv_obj_set_size(bg, lv_pct(100), lv_pct(100));
+  lv_obj_set_style_bg_color(bg, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_opa(bg, LV_OPA_70, 0);
+  lv_obj_add_flag(bg, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_event_cb(bg, on_shot_modal_close, LV_EVENT_CLICKED, this);
+  modal_ = bg;
+  if (tabview_ != nullptr) lv_obj_add_flag(tabview_, LV_OBJ_FLAG_HIDDEN);
+
+  lv_obj_t* holder = lv_obj_create(bg);
+  lv_obj_remove_style_all(holder);
+  lv_obj_add_flag(holder, LV_OBJ_FLAG_EVENT_BUBBLE);  // card taps bubble to bg
+  lv_obj_set_size(holder, lv_pct(96), lv_pct(94));
+  lv_obj_center(holder);
+  ui::build_shot_card(holder, shot_view_, screen_,
+                      clock_ != nullptr && clock_->use_24h());
+}
+
 void App::zoom_step(int dir) {
   int i = stats_.zoom_idx + dir;
   if (i < 0) i = 0;
@@ -1844,6 +2011,11 @@ void App::update_stats_view() {
       const bool have = vals[i] != nullptr && vals[i][0] != '\0';
       lv_label_set_text(stats_.info_val[i], have ? vals[i] : "-");
     }
+    return;
+  }
+
+  if (stats_.active == kStatsHistory) {
+    update_history_view();
     return;
   }
 

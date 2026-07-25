@@ -224,6 +224,15 @@ machine is already warming up when you arrive.
 - **Brew / Boiler** — temperature history graphs. Tap **+/−** to zoom the time
   window; the set‑point is drawn as a reference line; gaps mean the machine was
   disconnected.
+- **History** — the shot log (boards with an SD‑card slot). Headline cards show
+  total recorded shots and accuracy (actual vs target weight) lifetime and over
+  the last 30 days; below, a filterable list of shots — tap one for a
+  full‑screen card with the shot's result/target/diff, time, average flow, and
+  the weight + flow graph. Requires a FAT‑formatted SD card and a real
+  date/time (NTP, or Settings > Device); until both are present the tab shows
+  what's needed. Records live on the card under `/Apollo2` — an index CSV, one
+  samples CSV per shot, and a rendered PNG card — so the whole history can be
+  read on any computer.
 - **Info** — device details: our firmware version + git revision, uptime,
   battery/USB state with a runtime estimate, and the machine's Device
   Information (manufacturer, model, serial, firmware) read over Bluetooth.

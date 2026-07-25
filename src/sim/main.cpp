@@ -17,6 +17,7 @@
 #include "platform_host/fake_provisioner.h"
 #include "platform_host/fake_scale.h"
 #include "platform_host/fake_scale_provisioner.h"
+#include "platform_host/fake_shot_store.h"
 #include "platform_host/fake_sound.h"
 #include "platform_host/png_display.h"
 #include "ui/app.h"
@@ -29,9 +30,10 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             core::IBattery& battery, core::IDisplaySettings& disp_settings,
             core::IClock& clock, core::IHistory& history, core::IScale& scale,
             core::IScaleProvisioner& scale_provisioner, core::IBrewController& brew,
-            core::INetwork& network, ui::ScreenProfile screen, const char* out_path,
-            int tab = 0, int settings_section = -1, bool token_modal = false,
-            int theme = 0, int stats_section = -1, bool clean_lock = false) {
+            core::INetwork& network, core::IShotStore& shots, ui::ScreenProfile screen,
+            const char* out_path, int tab = 0, int settings_section = -1,
+            bool token_modal = false, int theme = 0, int stats_section = -1,
+            bool clean_lock = false, int shot_modal_id = -1) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
@@ -40,12 +42,13 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   static host::FakeSound fake_sound;  // stateless; shared across renders
   ui::App app;
   app.build(machine, provisioner, battery, disp_settings, clock, history, scale,
-            scale_provisioner, brew, network, fake_sound, screen);
+            scale_provisioner, brew, network, fake_sound, shots, screen);
   app.show_tab(tab);
   if (settings_section >= 0) app.select_settings_section(settings_section);
   if (stats_section >= 0) app.select_stats_section(stats_section);
   if (token_modal) app.open_token_setup();
   if (clean_lock) app.start_clean_lock();
+  if (shot_modal_id >= 0) app.open_shot_card(static_cast<uint32_t>(shot_modal_id));
   display.render_frame();
   if (!display.save_png(out_path)) {
     std::fprintf(stderr, "error: failed to write %s\n", out_path);
@@ -68,13 +71,15 @@ int main() {
   host::FakeScaleProvisioner scale_provisioner;
   host::FakeBrewController brew;
   host::FakeNetwork network;
+  host::FakeShotStore shots;
 
   // One PNG per supported layout. Add a line here when a new form factor lands.
   auto r = [&](ui::ScreenProfile s, const char* path, int tab = 0, int sec = -1,
-               bool modal = false, int theme = 0, int stats = -1, bool clean_lock = false) {
+               bool modal = false, int theme = 0, int stats = -1, bool clean_lock = false,
+               int shot_id = -1) {
     return render(machine, provisioner, battery, disp, clock, history, scale,
-                  scale_provisioner, brew, network, s, path, tab, sec, modal, theme, stats,
-                  clean_lock);
+                  scale_provisioner, brew, network, shots, s, path, tab, sec, modal, theme,
+                  stats, clean_lock, shot_id);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
@@ -153,6 +158,24 @@ int main() {
   ok &= r({1024, 600}, "renders/stats_brew_1024x600.png", 2, -1, false, 0, ui::kStatsBrew);
   ok &= r({1024, 600}, "renders/stats_boiler_1024x600.png", 2, -1, false, 0, ui::kStatsBoiler);
   ok &= r({1024, 600}, "renders/stats_info_1024x600.png", 2, -1, false, 0, ui::kStatsInfo);
+
+  // Shot history (Stats > History): metrics + filters + list, the guidance
+  // card (no SD), and the full-screen shot-card modal.
+  ok &= r({800, 480}, "renders/stats_history_800x480.png", 2, -1, false, 0,
+          ui::kStatsHistory);
+  ok &= r({320, 240}, "renders/stats_history_320x240.png", 2, -1, false, 0,
+          ui::kStatsHistory);
+  ok &= r({1024, 600}, "renders/stats_history_1024x600.png", 2, -1, false, 0,
+          ui::kStatsHistory);
+  ok &= r(p5, "renders/stats_history_1280x720.png", 2, -1, false, 0, ui::kStatsHistory);
+  shots.set_available(false);
+  ok &= r({800, 480}, "renders/stats_history_nosd_800x480.png", 2, -1, false, 0,
+          ui::kStatsHistory);
+  shots.set_available(true);
+  ok &= r({800, 480}, "renders/shot_card_800x480.png", 2, -1, false, 0,
+          ui::kStatsHistory, false, 14);
+  ok &= r({320, 240}, "renders/shot_card_320x240.png", 2, -1, false, 0,
+          ui::kStatsHistory, false, 14);
 
   // Theme previews: Home in every color scheme, plus a Device panel in one alt
   // scheme to show themed controls + scrollbar.

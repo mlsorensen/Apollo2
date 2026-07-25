@@ -169,6 +169,35 @@ void make_info_header(lv_obj_t* parent, const char* text, const lv_font_t* font)
   lv_obj_set_style_pad_bottom(h, ui::dp(2), 0);
 }
 
+// One headline metric card for the History view: big value over a small
+// caption. Returns the value label.
+lv_obj_t* make_metric_card(lv_obj_t* parent, const char* caption,
+                           const lv_font_t* value_font, const lv_font_t* cap_font) {
+  lv_obj_t* card = lv_obj_create(parent);
+  lv_obj_remove_style_all(card);
+  lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_flex_grow(card, 1);
+  lv_obj_set_height(card, LV_SIZE_CONTENT);
+  lv_obj_set_style_bg_color(card, lv_color_hex(ui::theme::card()), 0);
+  lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(card, ui::dp(12), 0);
+  lv_obj_set_style_pad_all(card, ui::dp(10), 0);
+  lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(card, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+
+  lv_obj_t* val = lv_label_create(card);
+  lv_label_set_text(val, "-");
+  lv_obj_set_style_text_color(val, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(val, value_font, 0);
+
+  lv_obj_t* cap = lv_label_create(card);
+  lv_label_set_text(cap, caption);
+  lv_obj_set_style_text_color(cap, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(cap, cap_font, 0);
+  return val;
+}
+
 }  // namespace
 
 void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets& out) {
@@ -189,7 +218,7 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
   lv_obj_set_flex_flow(seg_row, LV_FLEX_FLOW_ROW);
   lv_obj_set_style_pad_column(seg_row, ui::dp(6), 0);
 
-  const char* labels[kStatsCount] = {"Brew", "Boiler", "Info"};
+  const char* labels[kStatsCount] = {"Brew", "Boiler", "History", "Info"};
   for (int i = 0; i < kStatsCount; ++i) {
     out.seg[i] = ui::make_button(seg_row);
     lv_obj_set_flex_grow(out.seg[i], 1);
@@ -252,6 +281,122 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
   lv_obj_center(out.empty_label);
   lv_obj_add_flag(out.empty_label, LV_OBJ_FLAG_HIDDEN);
 
+  // --- History view: metric cards + (filters +) shot list --------------------
+  out.history_box = make_box(parent);
+  {
+    const lv_font_t* big = ui::font_dp(compact ? 20 : xl ? 40 : 30);
+    const lv_font_t* cap_font = ui::font_dp(compact ? 12 : xl ? 18 : 14);
+
+    // Real content wrapper (hidden when guidance shows).
+    out.history_content = lv_obj_create(out.history_box);
+    lv_obj_remove_style_all(out.history_content);
+    lv_obj_remove_flag(out.history_content, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_width(out.history_content, lv_pct(100));
+    lv_obj_set_flex_grow(out.history_content, 1);
+    lv_obj_set_flex_flow(out.history_content, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(out.history_content, ui::dp(8), 0);
+
+    // Headline metric cards: total shots, lifetime accuracy, 30-day accuracy.
+    lv_obj_t* metrics = lv_obj_create(out.history_content);
+    lv_obj_remove_style_all(metrics);
+    lv_obj_remove_flag(metrics, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_width(metrics, lv_pct(100));
+    lv_obj_set_height(metrics, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(metrics, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(metrics, ui::dp(8), 0);
+    out.hist_stat_total = make_metric_card(metrics, "Shots", big, cap_font);
+    out.hist_stat_life = make_metric_card(metrics, "Lifetime", big, cap_font);
+    out.hist_stat_30 = make_metric_card(metrics, "30 days", big, cap_font);
+
+    // Bottom: filter card (wide/xl only) + the scrollable list.
+    lv_obj_t* bottom = lv_obj_create(out.history_content);
+    lv_obj_remove_style_all(bottom);
+    lv_obj_remove_flag(bottom, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_width(bottom, lv_pct(100));
+    lv_obj_set_flex_grow(bottom, 1);
+    lv_obj_set_flex_flow(bottom, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(bottom, ui::dp(8), 0);
+
+    if (!compact) {
+      lv_obj_t* filter = lv_obj_create(bottom);
+      lv_obj_remove_style_all(filter);
+      lv_obj_remove_flag(filter, LV_OBJ_FLAG_SCROLLABLE);
+      lv_obj_set_width(filter, lv_pct(30));
+      lv_obj_set_height(filter, lv_pct(100));
+      lv_obj_set_style_bg_color(filter, lv_color_hex(ui::theme::card()), 0);
+      lv_obj_set_style_bg_opa(filter, LV_OPA_COVER, 0);
+      lv_obj_set_style_radius(filter, ui::dp(12), 0);
+      lv_obj_set_style_pad_all(filter, ui::dp(10), 0);
+      lv_obj_set_style_pad_row(filter, ui::dp(8), 0);
+      lv_obj_set_flex_flow(filter, LV_FLEX_FLOW_COLUMN);
+
+      lv_obj_t* fl = lv_label_create(filter);
+      lv_label_set_text(fl, "Show");
+      lv_obj_set_style_text_color(fl, lv_color_hex(ui::theme::muted()), 0);
+      lv_obj_set_style_text_font(fl, cap_font, 0);
+
+      static const char* kFilters[3] = {"All", "7 days", "30 days"};
+      for (int i = 0; i < 3; ++i) {
+        out.hist_filter_btn[i] = ui::make_button(filter);
+        lv_obj_set_width(out.hist_filter_btn[i], lv_pct(100));
+        lv_obj_set_style_radius(out.hist_filter_btn[i], ui::dp(8), 0);
+        lv_obj_t* l = lv_label_create(out.hist_filter_btn[i]);
+        lv_label_set_text(l, kFilters[i]);
+        lv_obj_set_style_text_font(l, font, 0);
+        lv_obj_center(l);
+      }
+    }
+
+    // The list scrolls; opaque bg — a transparent scrollable forces LVGL to
+    // re-render every layer beneath it each frame (the settings-page lesson).
+    out.history_list = lv_obj_create(bottom);
+    lv_obj_remove_style_all(out.history_list);
+    lv_obj_set_flex_grow(out.history_list, 1);
+    lv_obj_set_height(out.history_list, lv_pct(100));
+    lv_obj_set_style_bg_color(out.history_list, lv_color_hex(ui::theme::card()), 0);
+    lv_obj_set_style_bg_opa(out.history_list, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(out.history_list, ui::dp(12), 0);
+    lv_obj_set_style_pad_all(out.history_list, ui::dp(compact ? 6 : 10), 0);
+    lv_obj_set_flex_flow(out.history_list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_add_flag(out.history_list, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(out.history_list, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(out.history_list, LV_SCROLLBAR_MODE_AUTO);
+    lv_obj_set_style_bg_color(out.history_list, lv_color_hex(ui::theme::scrollbar()),
+                              LV_PART_SCROLLBAR);
+    lv_obj_set_style_bg_opa(out.history_list, LV_OPA_COVER, LV_PART_SCROLLBAR);
+    lv_obj_set_style_width(out.history_list, ui::dp(5), LV_PART_SCROLLBAR);
+
+    // Guidance card (no SD / no date): swapped in for the content wrapper.
+    out.history_guidance = lv_obj_create(out.history_box);
+    lv_obj_remove_style_all(out.history_guidance);
+    lv_obj_remove_flag(out.history_guidance, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_width(out.history_guidance, lv_pct(100));
+    lv_obj_set_flex_grow(out.history_guidance, 1);
+    lv_obj_set_style_bg_color(out.history_guidance, lv_color_hex(ui::theme::card()), 0);
+    lv_obj_set_style_bg_opa(out.history_guidance, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(out.history_guidance, ui::dp(12), 0);
+    lv_obj_set_style_pad_all(out.history_guidance, ui::dp(16), 0);
+    lv_obj_set_flex_flow(out.history_guidance, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(out.history_guidance, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(out.history_guidance, ui::dp(10), 0);
+
+    lv_obj_t* icon = lv_label_create(out.history_guidance);
+    lv_label_set_text(icon, LV_SYMBOL_SD_CARD);
+    lv_obj_set_style_text_color(icon, lv_color_hex(ui::theme::muted()), 0);
+    lv_obj_set_style_text_font(icon, ui::font_dp(compact ? 24 : 36), 0);
+
+    out.history_guidance_label = lv_label_create(out.history_guidance);
+    lv_label_set_text(out.history_guidance_label, "");
+    lv_obj_set_width(out.history_guidance_label, lv_pct(90));
+    lv_label_set_long_mode(out.history_guidance_label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_align(out.history_guidance_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(out.history_guidance_label,
+                                lv_color_hex(ui::theme::muted()), 0);
+    lv_obj_set_style_text_font(out.history_guidance_label, font, 0);
+    lv_obj_add_flag(out.history_guidance, LV_OBJ_FLAG_HIDDEN);
+  }
+
   // --- Info view: a key/value table ------------------------------------------
   out.info_box = make_box(parent);
   lv_obj_set_style_pad_row(out.info_box, 0, 0);
@@ -287,13 +432,17 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
 
 void stats_select_section(StatsWidgets& w, int section) {
   w.active = section;
-  const bool info = (section == kStatsInfo);
-  if (info) {
-    lv_obj_add_flag(w.graph_box, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_remove_flag(w.info_box, LV_OBJ_FLAG_HIDDEN);
-  } else {
-    lv_obj_remove_flag(w.graph_box, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(w.info_box, LV_OBJ_FLAG_HIDDEN);
+  // One content box per kind of section; show exactly the active one.
+  lv_obj_t* boxes[3] = {w.graph_box, w.history_box, w.info_box};
+  lv_obj_t* show = (section == kStatsInfo)      ? w.info_box
+                   : (section == kStatsHistory) ? w.history_box
+                                                : w.graph_box;
+  for (lv_obj_t* box : boxes) {
+    if (box == show) {
+      lv_obj_remove_flag(box, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_add_flag(box, LV_OBJ_FLAG_HIDDEN);
+    }
   }
   for (int i = 0; i < kStatsCount; ++i) {
     if (i == section) {
@@ -302,6 +451,60 @@ void stats_select_section(StatsWidgets& w, int section) {
       lv_obj_set_style_bg_color(w.seg[i], lv_color_hex(ui::theme::card()), 0);
     }
   }
+}
+
+lv_obj_t* history_add_row(StatsWidgets& w, const char* when, const char* stats,
+                          const ScreenProfile& screen) {
+  const bool compact = is_compact(screen);
+  const bool xl = is_xl(screen);
+  const lv_font_t* font = ui::font_dp(compact ? 13 : xl ? 24 : 17);
+
+  lv_obj_t* row = lv_obj_create(w.history_list);
+  lv_obj_remove_style_all(row);
+  lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_width(row, lv_pct(100));
+  lv_obj_set_height(row, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_ver(row, ui::dp(compact ? 7 : 10), 0);
+  lv_obj_set_style_pad_hor(row, ui::dp(4), 0);
+  lv_obj_set_style_border_side(row, LV_BORDER_SIDE_BOTTOM, 0);
+  lv_obj_set_style_border_width(row, 1, 0);
+  lv_obj_set_style_border_color(row, lv_color_hex(ui::theme::rail()), 0);
+  // Row must stay opaque for cheap list scrolling, matching the list card bg.
+  lv_obj_set_style_bg_color(row, lv_color_hex(ui::theme::card()), 0);
+  lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
+  lv_obj_set_style_bg_color(row, lv_color_hex(ui::theme::rail()), LV_STATE_PRESSED);
+
+  lv_obj_t* when_lbl = lv_label_create(row);
+  lv_label_set_text(when_lbl, when);
+  lv_obj_set_style_text_color(when_lbl, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(when_lbl, font, 0);
+
+  lv_obj_t* stats_lbl = lv_label_create(row);
+  lv_label_set_text(stats_lbl, stats);
+  lv_obj_set_style_text_color(stats_lbl, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(stats_lbl, font, 0);
+  return row;
+}
+
+void history_clear_rows(StatsWidgets& w) {
+  if (w.history_list != nullptr) lv_obj_clean(w.history_list);
+}
+
+void history_show_guidance(StatsWidgets& w, const char* text) {
+  if (w.history_guidance == nullptr) return;
+  if (text != nullptr) lv_label_set_text(w.history_guidance_label, text);
+  lv_obj_add_flag(w.history_content, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_remove_flag(w.history_guidance, LV_OBJ_FLAG_HIDDEN);
+}
+
+void history_show_content(StatsWidgets& w) {
+  if (w.history_guidance == nullptr) return;
+  lv_obj_add_flag(w.history_guidance, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_remove_flag(w.history_content, LV_OBJ_FLAG_HIDDEN);
 }
 
 }  // namespace ui
