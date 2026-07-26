@@ -80,6 +80,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      # Needed for CHANGELOG.md, which supplies the release notes below. (This
+      # job used to be artifacts-only — no checkout — so leaving it out makes
+      # the notes step fail with an unhelpful "exit code 2".)
+      - uses: actions/checkout@v7
+
       - uses: actions/download-artifact@v8
         with:
           path: dist
