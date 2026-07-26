@@ -16,6 +16,15 @@ bool reached(uint32_t now, uint32_t deadline) {
 void BrewController::poll(uint32_t now_ms) {
   last_now_ms_ = now_ms;
 
+  // Cleaning owns the drive line exclusively while it runs — the shot
+  // machinery and the auto-flush are skipped entirely, so nothing can reach
+  // in and change the line mid-cycle. poll_clean hands the line back on its
+  // way out (paddle takeover, completion, cancel).
+  if (clean_ != CleanMode::kOff) {
+    poll_clean(now_ms);
+    if (clean_ != CleanMode::kOff) return;
+  }
+
   if (wired()) {
     poll_wired(now_ms);
   } else {
@@ -138,6 +147,120 @@ void BrewController::poll_flush(uint32_t now_ms) {
     default:
       break;
   }
+}
+
+bool BrewController::can_clean() const {
+  if (!relay()) return false;
+  // A closed line on a standby machine is its WAKE switch — no water moves.
+  // Running a cleaning cycle there would silently power the machine on and
+  // pulse a dry group; make the user turn it on first.
+  if (standby_ && standby_()) return false;
+  return phase_ != ShotPhase::kBrewing && phase_ != ShotPhase::kSettling;
+}
+
+void BrewController::poll_clean(uint32_t now_ms) {
+  // Losing the drive line (the "Wired paddle" setting flipped mid-cycle) ends
+  // cleaning safely — end_clean opens the line if we were holding it.
+  if (!relay()) {
+    end_clean();
+    return;
+  }
+
+  // A physical paddle flip is the user taking the machine back. Stop the
+  // sequence and honor their level immediately — the edge is consumed here, so
+  // the shot path never sees it (an ON flip during cleaning aborts the clean;
+  // it does not also start a shot. The next flip runs normally).
+  const int edge = sense_paddle_edge(now_ms);
+  if (edge >= 0) {
+    logf("Brew: paddle edge during cleaning -> cancelled\n");
+    end_clean();
+    paddle_.drive(edge == 1);
+    driving_ = edge == 1;
+    return;
+  }
+
+  if (clean_ == CleanMode::kManual) {
+    if (reached(now_ms, clean_until_ms_)) {
+      logf("Brew: manual flush done\n");
+      end_clean();
+    }
+    return;
+  }
+
+  // Backflush: alternate run/pause until the cycles are used up. Each phase
+  // boundary is a single drive change, so a missed poll just makes a phase a
+  // few ms long — never a stuck line.
+  if (!reached(now_ms, clean_until_ms_)) return;
+  if (bf_on_) {
+    paddle_.drive(false);
+    driving_ = false;
+    bf_on_ = false;
+    if (bf_cycle_ >= kBackflushCycles) {
+      clean_ = CleanMode::kOff;
+      bf_done_ = true;  // the UI shows "complete" instead of "cancelled"
+      logf("Brew: backflush complete\n");
+      return;
+    }
+    clean_until_ms_ = now_ms + kBackflushOffMs;
+  } else {
+    ++bf_cycle_;
+    paddle_.drive(true);
+    driving_ = true;
+    bf_on_ = true;
+    clean_until_ms_ = now_ms + kBackflushOnMs;
+    logf("Brew: backflush cycle %d/%d\n", bf_cycle_, kBackflushCycles);
+  }
+}
+
+void BrewController::end_clean() {
+  if (clean_ == CleanMode::kOff) return;
+  clean_ = CleanMode::kOff;
+  bf_on_ = false;
+  if (driving_) {
+    paddle_.drive(false);
+    driving_ = false;
+  }
+}
+
+void BrewController::toggle_manual_flush() {
+  if (clean_ == CleanMode::kManual) {  // tapping again stops it early
+    end_clean();
+    logf("Brew: manual flush stopped\n");
+    return;
+  }
+  if (clean_ == CleanMode::kBackflush) return;  // the sequence owns the line
+  if (!can_clean()) return;
+  cancel_shot();  // clears any review/auto-flush and opens the line first
+  // Same run time as the post-shot auto-flush — one duration to reason about.
+  const int secs = flush_s_ > 0 ? flush_s_ : kManualFlushDefaultS;
+  clean_ = CleanMode::kManual;
+  clean_until_ms_ = last_now_ms_ + static_cast<uint32_t>(secs) * 1000u;
+  paddle_.drive(true);
+  driving_ = true;
+  logf("Brew: manual flush running (%ds)\n", secs);
+}
+
+bool BrewController::start_backflush() {
+  if (!can_clean()) return false;
+  cancel_shot();  // clears any review/auto-flush and opens the line first
+  clean_ = CleanMode::kBackflush;
+  bf_cycle_ = 1;
+  bf_on_ = true;
+  bf_done_ = false;
+  // Drive the first pulse HERE rather than waiting for the next poll, so the
+  // Go button gives instant feedback.
+  clean_until_ms_ = last_now_ms_ + kBackflushOnMs;
+  paddle_.drive(true);
+  driving_ = true;
+  logf("Brew: backflush started (%d cycles)\n", kBackflushCycles);
+  return true;
+}
+
+void BrewController::cancel_backflush() {
+  if (clean_ != CleanMode::kBackflush) return;
+  end_clean();
+  bf_done_ = false;  // cancelled, not completed
+  logf("Brew: backflush cancelled at cycle %d\n", bf_cycle_);
 }
 
 void BrewController::cancel_flush() {
@@ -418,6 +541,18 @@ BrewSnapshot BrewController::snapshot() const {
       .stop_hint = stop_hint_,
       .flush_s = flush_s_,
       .flush_delay_s = flush_delay_s_,
+      .relay = relay(),
+      .clean_ready = can_clean(),
+      .manual_flush = clean_ == CleanMode::kManual,
+      .backflush_active = clean_ == CleanMode::kBackflush,
+      .backflush_on = bf_on_,
+      .backflush_cycle = clean_ == CleanMode::kBackflush ? bf_cycle_ : 0,
+      .backflush_phase_ms =
+          (clean_ == CleanMode::kBackflush &&
+           static_cast<int32_t>(clean_until_ms_ - last_now_ms_) > 0)
+              ? clean_until_ms_ - last_now_ms_
+              : 0,
+      .backflush_done = bf_done_,
   };
 }
 
@@ -470,6 +605,7 @@ void BrewController::set_flush_delay_s(int seconds) {
 }
 
 void BrewController::cancel_shot() {
+  end_clean();     // a cleaning cycle holds the line too (and outranks a shot)
   cancel_flush();  // before driving_: a running flush holds the line too
   if (driving_) {
     paddle_.drive(false);  // never leave the machine running across a mode flip

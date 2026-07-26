@@ -345,6 +345,34 @@ void build_device_wifi_rows(lv_obj_t* page, const lv_font_t* text_font,
   lv_obj_set_size(out.ntp_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 }
 
+// A tappable card row "<label>   <glyph>" that runs an action instead of
+// drilling into a page (Restart display, Lock for cleaning, Backflush). The
+// caller adds the CLICKED handler; App greys it via set_clickable where the
+// action isn't always available.
+lv_obj_t* action_row(lv_obj_t* page, const char* label, const char* symbol,
+                     const lv_font_t* font, int btn_h) {
+  lv_obj_t* cont = lv_menu_cont_create(page);
+  lv_obj_set_style_bg_color(cont, lv_color_hex(ui::theme::card()), 0);
+  lv_obj_set_style_bg_opa(cont, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(cont, ui::dp(8), 0);
+  lv_obj_set_style_pad_all(cont, ui::dp(10), 0);
+  lv_obj_set_height(cont, btn_h);
+  lv_obj_add_flag(cont, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_style_opa(cont, LV_OPA_40, LV_STATE_DISABLED);
+
+  lv_obj_t* lbl = lv_label_create(cont);
+  lv_label_set_text(lbl, label);
+  lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(lbl, font, 0);
+  lv_obj_set_flex_grow(lbl, 1);
+
+  lv_obj_t* glyph = lv_label_create(cont);
+  lv_label_set_text(glyph, symbol);
+  lv_obj_set_style_text_color(glyph, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(glyph, font, 0);
+  return cont;
+}
+
 // A root-page navigation entry: a card row "<label>  ›" that drills into `target`.
 void root_entry(lv_obj_t* menu, lv_obj_t* root_page, lv_obj_t* target,
                 const char* label, const lv_font_t* font, int btn_h) {
@@ -527,6 +555,27 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
       out.flush_delay_row = out.flush_delay_btn = out.flush_delay_value = nullptr;
     }
   }
+  // Micra > Cleaning: its own page rather than a row at the bottom of the
+  // settings list — cleaning is a task you come here to DO, and burying it
+  // under nine setting rows would mean scrolling past all of them. Only on
+  // paddle-capable boards: the sequence drives the group through the relay.
+  if (with_wired_paddle) {
+    out.micra_cleaning_page = lv_menu_page_create(menu, "Cleaning");
+    page_column(out.micra_cleaning_page, compact);
+    out.backflush_btn = action_row(out.micra_cleaning_page, "Backflush cleaning",
+                                   LV_SYMBOL_LOOP, font, btn_h);
+    lv_obj_t* hint = lv_label_create(out.micra_cleaning_page);
+    lv_label_set_text(hint,
+                      "Runs the group in short pulses to push detergent "
+                      "through the valve. Fit the blind filter first.");
+    lv_obj_set_width(hint, lv_pct(100));
+    lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_color(hint, lv_color_hex(ui::theme::muted()), 0);
+    lv_obj_set_style_text_font(hint, font, 0);
+  } else {
+    out.micra_cleaning_page = nullptr;
+    out.backflush_btn = nullptr;
+  }
   section_label(out.micra_settings_page, "Brew", font);
   {
     lv_obj_t* r = make_setting_row(out.micra_settings_page, "Temperature", font);
@@ -591,6 +640,8 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   page_column(out.device_page, compact);
   root_entry(menu, out.micra_page, out.micra_bt_page, "Bluetooth", font, btn_h);
   root_entry(menu, out.micra_page, out.micra_settings_page, "Settings", font, btn_h);
+  if (out.micra_cleaning_page != nullptr)
+    root_entry(menu, out.micra_page, out.micra_cleaning_page, "Cleaning", font, btn_h);
   root_entry(menu, out.scale_page, out.scale_bt_page, "Bluetooth", font, btn_h);
   root_entry(menu, out.scale_page, out.scale_settings_page, "Settings", font, btn_h);
   root_entry(menu, out.device_page, out.device_display_page, "Display", font, btn_h);
@@ -609,29 +660,10 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   //  - Restart display: heals the RGB panel's shifted/ghosted raster (latched
   //    DMA desync) — in-place resync on RGB boards, soft reboot elsewhere.
   //  - Lock for cleaning: 30 s touch lockout so the glass can be wiped.
-  auto action_row = [&](const char* label, const char* symbol) {
-    lv_obj_t* cont = lv_menu_cont_create(out.root_page);
-    lv_obj_set_style_bg_color(cont, lv_color_hex(ui::theme::card()), 0);
-    lv_obj_set_style_bg_opa(cont, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(cont, ui::dp(8), 0);
-    lv_obj_set_style_pad_all(cont, ui::dp(10), 0);
-    lv_obj_set_height(cont, btn_h);
-    lv_obj_add_flag(cont, LV_OBJ_FLAG_CLICKABLE);
-
-    lv_obj_t* lbl = lv_label_create(cont);
-    lv_label_set_text(lbl, label);
-    lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text()), 0);
-    lv_obj_set_style_text_font(lbl, font, 0);
-    lv_obj_set_flex_grow(lbl, 1);
-
-    lv_obj_t* glyph = lv_label_create(cont);
-    lv_label_set_text(glyph, symbol);
-    lv_obj_set_style_text_color(glyph, lv_color_hex(ui::theme::muted()), 0);
-    lv_obj_set_style_text_font(glyph, font, 0);
-    return cont;
-  };
-  out.restart_btn = action_row("Restart display", LV_SYMBOL_REFRESH);
-  out.clean_lock_btn = action_row("Lock display for cleaning", LV_SYMBOL_TINT);
+  out.restart_btn = action_row(out.root_page, "Restart display", LV_SYMBOL_REFRESH,
+                               font, btn_h);
+  out.clean_lock_btn = action_row(out.root_page, "Lock display for cleaning",
+                                  LV_SYMBOL_TINT, font, btn_h);
 
   lv_menu_set_page(menu, out.root_page);
 }
@@ -641,6 +673,7 @@ lv_obj_t* settings_section_page(const SettingsWidgets& w, int section) {
     case kSectionMicra:         return w.micra_page;
     case kSectionMicraBt:       return w.micra_bt_page;
     case kSectionMicraSettings: return w.micra_settings_page;
+    case kSectionMicraCleaning: return w.micra_cleaning_page;
     case kSectionScale:         return w.scale_page;
     case kSectionScaleBt:       return w.scale_bt_page;
     case kSectionScaleSettings: return w.scale_settings_page;

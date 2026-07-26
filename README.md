@@ -29,7 +29,9 @@ to the machine instead of a phone app.
   your target weight, learning the drip overshoot per shot), **Shot detect**
   (start/stop inferred from the weight stream alone — works on every board, no
   wiring), or **Manual**. Finished shots freeze into a review graph, and wired
-  boards can **auto‑flush** the group after you lift the cup.
+  boards can **auto‑flush** the group after you lift the cup, flush it on
+  demand from Home, and run a **backflush cleaning** cycle (10 × 4 s on / 4 s
+  off) from Settings.
 - **Shot history on SD card** *(P4 boards and the S3 4.3C)* —
   every finished shot is recorded to a FAT‑formatted microSD card (any size —
   a shot is a few tens of KB, so a small old card holds decades): stats and

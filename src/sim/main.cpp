@@ -36,7 +36,8 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             core::INetwork& network, core::IShotStore& shots, ui::ScreenProfile screen,
             const char* out_path, int tab = 0, int settings_section = -1,
             bool token_modal = false, int theme = 0, int stats_section = -1,
-            bool clean_lock = false, int shot_modal_id = -1, int history_ym = 0) {
+            bool clean_lock = false, int shot_modal_id = -1, int history_ym = 0,
+            bool backflush = false) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
@@ -52,6 +53,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   if (history_ym != 0) app.set_history_filter(history_ym);
   if (token_modal) app.open_token_setup();
   if (clean_lock) app.start_clean_lock();
+  if (backflush) app.open_backflush();
   if (shot_modal_id >= 0) app.open_shot_card(static_cast<uint32_t>(shot_modal_id));
   display.render_frame();
   if (!display.save_png(out_path)) {
@@ -80,10 +82,10 @@ int main() {
   // One PNG per supported layout. Add a line here when a new form factor lands.
   auto r = [&](ui::ScreenProfile s, const char* path, int tab = 0, int sec = -1,
                bool modal = false, int theme = 0, int stats = -1, bool clean_lock = false,
-               int shot_id = -1, int history_ym = 0) {
+               int shot_id = -1, int history_ym = 0, bool backflush = false) {
     return render(machine, provisioner, battery, disp, clock, history, scale,
                   scale_provisioner, brew, network, shots, s, path, tab, sec, modal, theme,
-                  stats, clean_lock, shot_id, history_ym);
+                  stats, clean_lock, shot_id, history_ym, backflush);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
@@ -123,10 +125,25 @@ int main() {
   // token modal — the overlay hides the tabview either way).
   ok &= r({800, 480}, "renders/clean_lock_800x480.png", 0, -1, false, 0, -1, true);
   ok &= r({320, 240}, "renders/clean_lock_320x240.png", 0, -1, false, 0, -1, true);
+  // Backflush cleaning (Settings > Micra): the prompt screen, and mid-sequence
+  // with the cycle readout (the fake poses a running sequence the real
+  // controller would advance from its poll).
+  ok &= r({800, 480}, "renders/backflush_prompt_800x480.png", 1, -1, false, 0, -1,
+          false, -1, 0, true);
+  ok &= r({320, 240}, "renders/backflush_prompt_320x240.png", 1, -1, false, 0, -1,
+          false, -1, 0, true);
+  brew.set_backflush(true, 3, true, 2400);
+  ok &= r({800, 480}, "renders/backflush_running_800x480.png", 1, -1, false, 0, -1,
+          false, -1, 0, true);
+  ok &= r({320, 240}, "renders/backflush_running_320x240.png", 1, -1, false, 0, -1,
+          false, -1, 0, true);
+  brew.set_backflush(false, 0, false, 0);
   ok &= r({320, 240}, "renders/settings_320x240.png", 1);
   ok &= r({320, 240}, "renders/micra_320x240.png", 1, ui::kSectionMicra);  // chooser
   ok &= r({320, 240}, "renders/micra_bt_320x240.png", 1, ui::kSectionMicraBt);
   ok &= r({320, 240}, "renders/micra_settings_320x240.png", 1, ui::kSectionMicraSettings);
+  ok &= r({320, 240}, "renders/micra_cleaning_320x240.png", 1, ui::kSectionMicraCleaning);
+  ok &= r({800, 480}, "renders/micra_cleaning_800x480.png", 1, ui::kSectionMicraCleaning);
   ok &= r({320, 240}, "renders/scale_bt_320x240.png", 1, ui::kSectionScaleBt);
   ok &= r({320, 240}, "renders/scale_settings_320x240.png", 1, ui::kSectionScaleSettings);
   ok &= r({800, 480}, "renders/micra_bt_800x480.png", 1, ui::kSectionMicraBt);

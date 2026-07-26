@@ -35,6 +35,14 @@ class FakeBrewController : public core::IBrewController {
         .stop_hint = false,
         .flush_s = flush_s_,
         .flush_delay_s = flush_delay_s_,
+        .relay = relay,
+        .clean_ready = relay && clean_ready_,
+        .manual_flush = manual_flush_,
+        .backflush_active = bf_active_,
+        .backflush_on = bf_on_,
+        .backflush_cycle = bf_active_ ? bf_cycle_ : 0,
+        .backflush_phase_ms = bf_phase_ms_,
+        .backflush_done = bf_done_,
     };
   }
   void set_target_weight_g(float grams) override { target_g_ = grams; }
@@ -46,12 +54,37 @@ class FakeBrewController : public core::IBrewController {
   void dismiss_review() override {
     if (phase_ == core::ShotPhase::kReview) phase_ = core::ShotPhase::kIdle;
   }
+  void toggle_manual_flush() override { manual_flush_ = !manual_flush_; }
+  bool start_backflush() override {
+    if (!(paddle_hw_ && wired_ && clean_ready_)) return false;
+    bf_active_ = true;
+    bf_on_ = true;
+    bf_cycle_ = 1;
+    bf_phase_ms_ = core::kBackflushOnMs;
+    bf_done_ = false;
+    return true;
+  }
+  void cancel_backflush() override {
+    bf_active_ = false;
+    bf_on_ = false;
+    bf_cycle_ = 0;
+  }
 
   void set_paddle_hw(bool hw) { paddle_hw_ = hw; }
   void set_paddle(bool p) { paddle_ = p; }
   void set_brewing(bool b) { brewing_ = b; }
   void set_phase(core::ShotPhase ph) { phase_ = ph; }
   void set_shot_ms(uint32_t ms) { shot_ms_ = ms; }
+  void set_clean_ready(bool r) { clean_ready_ = r; }
+  // Pose a mid-sequence backflush for the render (the real controller advances
+  // these from its poll).
+  void set_backflush(bool active, int cycle, bool on, uint32_t phase_ms) {
+    bf_active_ = active;
+    bf_cycle_ = cycle;
+    bf_on_ = on;
+    bf_phase_ms_ = phase_ms;
+  }
+  void set_backflush_done(bool done) { bf_done_ = done; }
 
  private:
   bool paddle_hw_ = true;  // board has the paddle harness (wired-capable)
@@ -68,6 +101,13 @@ class FakeBrewController : public core::IBrewController {
   int review_hold_s_ = 30;
   int flush_s_ = 0;
   int flush_delay_s_ = 3;
+  bool clean_ready_ = true;   // machine on, no shot in flight
+  bool manual_flush_ = false;
+  bool bf_active_ = false;
+  bool bf_on_ = false;
+  int bf_cycle_ = 0;
+  uint32_t bf_phase_ms_ = 0;
+  bool bf_done_ = false;
 };
 
 }  // namespace host

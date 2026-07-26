@@ -56,6 +56,26 @@ void on_clean_lock_timer(lv_timer_t* t) {
   static_cast<ui::App*>(lv_timer_get_user_data(t))->clean_lock_tick();
 }
 
+void on_flush_clicked_home(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->toggle_manual_flush();
+}
+
+void on_backflush_open(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->open_backflush();
+}
+void on_backflush_go(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->backflush_go();
+}
+void on_backflush_cancel(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->backflush_cancel();
+}
+void on_backflush_back(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->close_backflush();
+}
+void on_backflush_timer(lv_timer_t* t) {
+  static_cast<ui::App*>(lv_timer_get_user_data(t))->backflush_tick();
+}
+
 void on_flow_unit_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->toggle_flow_units();
 }
@@ -606,6 +626,7 @@ namespace ui {
 App::~App() {
   if (screensaver_timer_ != nullptr) lv_timer_delete(screensaver_timer_);
   if (clean_lock_timer_ != nullptr) lv_timer_delete(clean_lock_timer_);
+  if (bf_timer_ != nullptr) lv_timer_delete(bf_timer_);
   if (home_.shot_flash_timer != nullptr) lv_timer_delete(home_.shot_flash_timer);
   if (home_.stop_flash_timer != nullptr) lv_timer_delete(home_.stop_flash_timer);
   if (home_.heat_pulse_timer != nullptr) lv_timer_delete(home_.heat_pulse_timer);
@@ -761,6 +782,8 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   if (home_.scale_connect_btn != nullptr)  // in-card connect toggle (sleep/wake)
     lv_obj_add_event_cb(home_.scale_connect_btn, on_scale_connect_clicked,
                         LV_EVENT_CLICKED, this);
+  if (home_.flush_btn != nullptr)  // manual group flush (large layouts)
+    lv_obj_add_event_cb(home_.flush_btn, on_flush_clicked_home, LV_EVENT_CLICKED, this);
   if (home_.shot_btn != nullptr)
     lv_obj_add_event_cb(home_.shot_btn, on_shot_clicked, LV_EVENT_CLICKED, this);
   if (home_.flow_unit_btn != nullptr)
@@ -863,6 +886,8 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     lv_obj_add_event_cb(settings_.flush_delay_btn, on_flush_delay_clicked,
                         LV_EVENT_CLICKED, this);
   }
+  if (settings_.backflush_btn != nullptr)  // paddle-capable boards only
+    lv_obj_add_event_cb(settings_.backflush_btn, on_backflush_open, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.perf_overlay_switch, on_perf_overlay_switch,
                       LV_EVENT_VALUE_CHANGED, this);
   if (settings_.click_sound_switch != nullptr) {
@@ -1696,6 +1721,215 @@ void App::end_clean_lock() {
     lv_obj_remove_flag(tabview_, LV_OBJ_FLAG_HIDDEN);
 }
 
+// --- Backflush cleaning (Settings > Micra) ---------------------------------
+// A full-screen mode like the cleaning lock, but interactive: it prompts for
+// the blind filter, runs core's pulse sequence, and shows the cycle/countdown.
+// The sequence itself lives in BrewController — this only starts, cancels, and
+// reports it, so a UI teardown can never leave the group running.
+
+void App::open_backflush() {
+  if (brew_ == nullptr || bf_overlay_ != nullptr) return;
+  close_modal();  // never stack this over another overlay
+
+  const bool compact = is_compact(screen_);
+  const bool xl = is_xl(screen_);
+  const lv_font_t* body_font = ui::font_dp(compact ? 14 : xl ? 24 : 18);
+  const lv_font_t* btn_font = ui::font_dp(compact ? 14 : xl ? 24 : 20);
+  const int btn_h = ui::dp(compact ? 38 : xl ? 72 : 54);
+
+  lv_obj_t* bg = lv_obj_create(lv_layer_top());
+  lv_obj_remove_style_all(bg);
+  lv_obj_set_size(bg, lv_pct(100), lv_pct(100));
+  lv_obj_set_style_bg_color(bg, lv_color_hex(ui::theme::bg()), 0);
+  lv_obj_set_style_bg_opa(bg, LV_OPA_COVER, 0);
+  lv_obj_add_flag(bg, LV_OBJ_FLAG_CLICKABLE);  // swallow taps outside the buttons
+  lv_obj_set_flex_flow(bg, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(bg, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_all(bg, ui::dp(compact ? 10 : 24), 0);
+  lv_obj_set_style_pad_row(bg, ui::dp(compact ? 6 : 12), 0);
+  bf_overlay_ = bg;
+  // Nothing behind an opaque overlay is visible; don't render it (same
+  // reasoning as open_modal / the cleaning lock).
+  if (tabview_ != nullptr) lv_obj_add_flag(tabview_, LV_OBJ_FLAG_HIDDEN);
+
+  lv_obj_t* title = lv_label_create(bg);
+  lv_label_set_text(title, "Backflush cleaning");
+  lv_obj_set_style_text_color(title, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(title, ui::font_dp(compact ? 20 : xl ? 36 : 28), 0);
+
+  // Cycle counter + phase countdown: the whole point of the running screen, so
+  // they get the biggest type on it.
+  bf_cycle_label_ = lv_label_create(bg);
+  lv_obj_set_style_text_color(bf_cycle_label_, lv_color_hex(ui::theme::accent()), 0);
+  lv_obj_set_style_text_font(bf_cycle_label_, ui::font_dp(compact ? 24 : xl ? 48 : 40), 0);
+
+  bf_phase_label_ = lv_label_create(bg);
+  lv_obj_set_style_text_color(bf_phase_label_, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(bf_phase_label_, ui::font_dp(compact ? 16 : xl ? 28 : 22), 0);
+
+  bf_msg_ = lv_label_create(bg);
+  lv_obj_set_width(bf_msg_, lv_pct(compact ? 96 : 80));
+  lv_label_set_long_mode(bf_msg_, LV_LABEL_LONG_WRAP);
+  lv_obj_set_style_text_align(bf_msg_, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_color(bf_msg_, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(bf_msg_, body_font, 0);
+
+  lv_obj_t* row = lv_obj_create(bg);
+  lv_obj_remove_style_all(row);
+  lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_style_pad_column(row, ui::dp(compact ? 8 : 16), 0);
+  lv_obj_set_style_pad_top(row, ui::dp(compact ? 4 : 10), 0);
+
+  auto big_button = [&](const char* text, uint32_t color, lv_event_cb_t cb,
+                        lv_obj_t** out_label) {
+    lv_obj_t* b = ui::make_button(row);
+    lv_obj_set_height(b, btn_h);
+    lv_obj_set_style_pad_hor(b, ui::dp(compact ? 14 : 28), 0);
+    lv_obj_set_style_radius(b, ui::dp(12), 0);
+    lv_obj_set_style_bg_color(b, lv_color_hex(color), 0);
+    lv_obj_set_style_opa(b, LV_OPA_40, LV_STATE_DISABLED);
+    lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, this);
+    lv_obj_t* l = lv_label_create(b);
+    lv_label_set_text(l, text);
+    lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(l, btn_font, 0);
+    lv_obj_center(l);
+    if (out_label != nullptr) *out_label = l;
+    return b;
+  };
+  bf_go_btn_ = big_button("Go", ui::theme::accent(), on_backflush_go, &bf_go_label_);
+  bf_cancel_btn_ = big_button("Cancel", ui::theme::alert(), on_backflush_cancel, nullptr);
+  // Back always leaves the mode (stopping the sequence on its way out), so the
+  // user is never trapped on this screen.
+  bf_back_btn_ = big_button("Back", ui::theme::rail(), on_backflush_back, nullptr);
+
+  // Reopening while a sequence runs (left and came back) picks it up live.
+  bf_state_ = brew_->snapshot().backflush_active ? kBackflushRunning : kBackflushPrompt;
+  if (bf_timer_ == nullptr) bf_timer_ = lv_timer_create(on_backflush_timer, 250, this);
+  backflush_tick();  // paint the initial state now, not a tick later
+}
+
+void App::close_backflush() {
+  if (brew_ != nullptr) brew_->cancel_backflush();  // never leave it running
+  if (bf_timer_ != nullptr) {
+    lv_timer_delete(bf_timer_);
+    bf_timer_ = nullptr;
+  }
+  if (bf_overlay_ != nullptr) {
+    lv_obj_delete(bf_overlay_);
+    bf_overlay_ = nullptr;
+    bf_msg_ = bf_cycle_label_ = bf_phase_label_ = nullptr;
+    bf_go_btn_ = bf_go_label_ = bf_cancel_btn_ = bf_back_btn_ = nullptr;
+  }
+  if (tabview_ != nullptr && modal_ == nullptr)
+    lv_obj_remove_flag(tabview_, LV_OBJ_FLAG_HIDDEN);
+}
+
+void App::backflush_go() {
+  if (brew_ == nullptr) return;
+  if (brew_->start_backflush()) bf_state_ = kBackflushRunning;
+  backflush_tick();  // reflect the new state immediately
+}
+
+void App::backflush_cancel() {
+  if (brew_ != nullptr) brew_->cancel_backflush();
+  bf_state_ = kBackflushPrompt;  // back to the prompt, ready to run again
+  backflush_tick();
+}
+
+void App::backflush_tick() {
+  if (bf_overlay_ == nullptr || brew_ == nullptr) return;
+  const core::BrewSnapshot b = brew_->snapshot();
+
+  // The sequence ending on its own while we're showing "running" is either
+  // completion or a takeover (a paddle flip, or the harness setting going off
+  // mid-run) — the two deserve different words.
+  if (bf_state_ == kBackflushRunning && !b.backflush_active)
+    bf_state_ = b.backflush_done ? kBackflushDone : kBackflushAborted;
+
+  char cycle[32] = "";
+  char phase[40] = "";
+  const char* msg = "";
+  const bool running = bf_state_ == kBackflushRunning;
+
+  switch (bf_state_) {
+    case kBackflushRunning:
+      std::snprintf(cycle, sizeof(cycle), "Cycle %d of %d", b.backflush_cycle,
+                    core::kBackflushCycles);
+      std::snprintf(phase, sizeof(phase), "%s  %us",
+                    b.backflush_on ? "Running" : "Pause",
+                    static_cast<unsigned>((b.backflush_phase_ms + 999) / 1000));
+      msg = "Leave the portafilter in place until the cycles finish.";
+      break;
+    case kBackflushDone:
+      msg = "Backflush complete.\nRinse the basket, then run it again with "
+            "plain water to clear any detergent.";
+      break;
+    case kBackflushAborted:
+      msg = "Backflush stopped: the paddle was used, or the wired-paddle "
+            "setting changed.";
+      break;
+    case kBackflushPrompt:
+    default:
+      if (!b.relay) {
+        msg = "Backflushing needs the paddle harness. Turn on Wired paddle in "
+              "Micra settings first.";
+      } else if (!b.clean_ready) {
+        msg = "Turn the machine on (and finish any shot) first.";
+      } else {
+        // Plain ASCII punctuation only: the bundled Montserrat subset has no
+        // em-dash (it renders as a missing-glyph box).
+        static char prompt[200];
+        std::snprintf(prompt, sizeof(prompt),
+                      "Fit the blind filter with cleaning detergent, then tap "
+                      "Go.\n\n%d cycles of %us on, %us off. About %us total.",
+                      core::kBackflushCycles,
+                      static_cast<unsigned>(core::kBackflushOnMs / 1000),
+                      static_cast<unsigned>(core::kBackflushOffMs / 1000),
+                      static_cast<unsigned>(core::kBackflushCycles *
+                                            (core::kBackflushOnMs +
+                                             core::kBackflushOffMs) / 1000));
+        msg = prompt;
+      }
+      break;
+  }
+
+  // Empty labels still occupy a line box; hide them so the idle screens don't
+  // carry a gap where the running readout goes.
+  auto set_or_hide = [](lv_obj_t* label, const char* text) {
+    if (text[0] == '\0') {
+      lv_obj_add_flag(label, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_label_set_text(label, text);
+      lv_obj_remove_flag(label, LV_OBJ_FLAG_HIDDEN);
+    }
+  };
+  set_or_hide(bf_cycle_label_, cycle);
+  set_or_hide(bf_phase_label_, phase);
+  lv_label_set_text(bf_msg_, msg);
+
+  // Go and Cancel swap places by state; Back is always available.
+  if (running) {
+    lv_obj_add_flag(bf_go_btn_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(bf_cancel_btn_, LV_OBJ_FLAG_HIDDEN);
+  } else {
+    lv_obj_remove_flag(bf_go_btn_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(bf_cancel_btn_, LV_OBJ_FLAG_HIDDEN);
+    lv_label_set_text(bf_go_label_,
+                      bf_state_ == kBackflushPrompt ? "Go" : "Run again");
+    set_clickable(bf_go_btn_, b.clean_ready);
+  }
+}
+
+void App::toggle_manual_flush() {
+  if (brew_ == nullptr) return;
+  brew_->toggle_manual_flush();
+  refresh();  // flip the button to Stop (or back) now, not at the next 2 Hz tick
+}
+
 // Spinner shown while the pairing-mode token read runs (gives "it's working"
 // feedback). Replaced by success (Home) or the token-choice modal on failure.
 void App::show_pairing_modal() {
@@ -2366,6 +2600,11 @@ void App::update_stats_view() {
 
 void App::update_settings_view() {
   update_scale_view();  // refresh the Scale page (independent change-detection)
+
+  // Backflush needs the drive line: grey the entry when the harness setting is
+  // off (the screen itself explains why if they get there another way).
+  if (settings_.backflush_btn != nullptr && brew_ != nullptr)
+    set_clickable(settings_.backflush_btn, brew_->snapshot().relay);
 
   // WiFi status line (Device page): reflect the live connection state.
   if (network_ != nullptr && settings_.wifi_status != nullptr) {

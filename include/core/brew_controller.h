@@ -61,6 +61,9 @@ class BrewController : public IBrewController {
   void set_wired_paddle(bool on) override;
   void set_flush_s(int seconds) override;
   void set_flush_delay_s(int seconds) override;
+  void toggle_manual_flush() override;
+  bool start_backflush() override;
+  void cancel_backflush() override;
 
  private:
   void end_shot(uint32_t now_ms);  // Brewing -> Review
@@ -80,6 +83,12 @@ class BrewController : public IBrewController {
   void poll_unwired(uint32_t now_ms);  // detector-driven phases (+ pass-through relay)
   void poll_flush(uint32_t now_ms);    // post-shot auto-flush (cup-off -> run the group)
   void cancel_flush();                 // any flush state -> idle, line opened if we held it
+  void poll_clean(uint32_t now_ms);    // manual flush / backflush sequencing
+  void end_clean();                    // any cleaning mode -> off, line opened
+  // A cleaning cycle could start right now: the drive line exists, the machine
+  // isn't in standby (where a closed line is its wake switch, not water), and
+  // no shot is in flight. kReview is fine — cancel_shot dismisses it.
+  bool can_clean() const;
   // Debounced paddle edge since the last call: -1 none, 0 OFF, 1 ON. Shared by
   // the wired shot path and the unwired pass-through relay (same glitch filter
   // and boot safety either way).
@@ -127,6 +136,17 @@ class BrewController : public IBrewController {
   // level — after a target auto-stop the physical paddle is naturally still
   // ON when the flush arms, and flipping it back OFF is routine cleanup, not
   // a takeover. The human still outranks the automation on the drive line.
+  // Cleaning modes (Home "Flush" / Settings "Backflush cleaning"). They own the
+  // drive line EXCLUSIVELY while active: the shot machinery and the auto-flush
+  // are skipped entirely, so nothing else can touch the line mid-cycle. A
+  // physical paddle flip cancels — the human always outranks the automation.
+  enum class CleanMode : uint8_t { kOff, kManual, kBackflush };
+  CleanMode clean_ = CleanMode::kOff;
+  uint32_t clean_until_ms_ = 0;  // end of the current phase (manual: the cap)
+  int bf_cycle_ = 0;             // 1..kBackflushCycles while running
+  bool bf_on_ = false;           // current backflush phase (true = running)
+  bool bf_done_ = false;         // the last sequence completed
+
   enum class FlushState : uint8_t { kOff, kArmed, kDelay, kRunning };
   FlushState flush_state_ = FlushState::kOff;
   bool flush_paddle_ref_ = false;  // paddle level last seen by the flush (edge detect)

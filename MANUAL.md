@@ -27,6 +27,10 @@ The Home screen adapts to the screen size and to whether a scale is paired.
 - **Power button** — `Standby` / `Turn on` when connected. When the machine is
   configured but disconnected it becomes **Connect** and starts the Bluetooth
   link.
+- **Flush** *(paddle‑wired boards, screens 4.3" and larger)* — runs the group
+  for a quick rinse, for the same time as **Auto flush** (3 s when Auto flush
+  is Off). Tap again while it runs to stop early. Greyed out while a shot is
+  in flight or the machine is in standby.
 
 ### SCALE card (when a scale is paired)
 
@@ -122,6 +126,18 @@ Plots the live flow rate (or weight) from the scale.
 - **Steam Boiler → Enable** — steam boiler on/off.
 - **Steam Boiler → Temperature** — one of the Micra's three steam levels
   (shown as Level 1–3 with the temperature underneath).
+### Cleaning *(paddle‑capable boards)*
+
+- **Backflush cleaning** — opens a
+  full‑screen cleaning mode. Fit the blind filter with detergent, tap **Go**,
+  and the device pulses the group **10 times: 4 seconds on, 4 seconds off**
+  (about 80 seconds), showing the cycle count and a countdown as it runs.
+  **Cancel** stops the sequence and stays on the screen so you can run it
+  again; **Back** stops it and leaves. Flipping the physical paddle also stops
+  it — you always outrank the automation. When it finishes, rinse the basket
+  and run it again with plain water to clear the detergent. The entry needs
+  the paddle harness (it drives the group through the relay) and a machine
+  that's powered on; it's greyed out otherwise.
 
 ---
 

@@ -18,9 +18,10 @@ namespace ui {
 // Navigation targets (a page each). select_settings_section() loads the page;
 // the sim + the post-theme-rebuild restore use these.
 enum SettingsSection {
-  kSectionMicra = 0,       // Micra chooser (Bluetooth | Settings)
+  kSectionMicra = 0,       // Micra chooser (Bluetooth | Settings | Cleaning)
   kSectionMicraBt,         // Micra > Bluetooth
   kSectionMicraSettings,   // Micra > Settings (Brew + Steam Boiler)
+  kSectionMicraCleaning,   // Micra > Cleaning (backflush)
   kSectionScale,           // Scale chooser
   kSectionScaleBt,         // Scale > Bluetooth
   kSectionScaleSettings,   // Scale > Settings (Target weight)
@@ -34,9 +35,10 @@ enum SettingsSection {
 struct SettingsWidgets {
   lv_obj_t* menu = nullptr;
   lv_obj_t* root_page = nullptr;
-  lv_obj_t* micra_page = nullptr;           // chooser: Bluetooth | Settings
+  lv_obj_t* micra_page = nullptr;           // chooser: Bluetooth | Settings | Cleaning
   lv_obj_t* micra_bt_page = nullptr;        // connection
   lv_obj_t* micra_settings_page = nullptr;  // brew + boiler
+  lv_obj_t* micra_cleaning_page = nullptr;  // backflush (paddle boards only)
   lv_obj_t* scale_page = nullptr;           // chooser: Bluetooth | Settings
   lv_obj_t* scale_bt_page = nullptr;        // connection
   lv_obj_t* scale_settings_page = nullptr;  // target weight
@@ -99,6 +101,8 @@ struct SettingsWidgets {
   lv_obj_t* flush_delay_row = nullptr;       // Micra: cup-off -> flush pause cycle
   lv_obj_t* flush_delay_btn = nullptr;       // (3/6/9/15 s); row hidden while the
   lv_obj_t* flush_delay_value = nullptr;     // flush itself is Off
+  lv_obj_t* backflush_btn = nullptr;         // Micra: opens the backflush screen
+                                             // (paddle-capable boards only)
 
   // --- Brew temp stepper (continuous, tenths) ------------------------------
   lv_obj_t* brew_minus = nullptr;
