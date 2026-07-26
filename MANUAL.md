@@ -114,30 +114,41 @@ Plots the live flow rate (or weight) from the scale.
   the paddle harness is physically wired. This enables the **Auto shot** mode
   and the auto‑flush. Off, the board behaves like an unwired one (Shot detect
   / Manual only). Flipping it mid‑shot cancels the shot.
-- **Auto flush** *(wired paddle boards; Off / 3 s / 6 s; default Off)* — after
-  a finished shot, when the scale sees the cup lift off, the firmware waits
-  (see **Flush delay**) and then runs the group for this long to rinse the
-  puck's surface. Any paddle activity, a new shot, or the machine being in
-  standby cancels it.
-- **Flush delay** *(shown while Auto flush is on; 3 / 6 / 9 / 15 s; default
-  3 s)* — the pause between the cup coming off and the flush running.
 - **Brew → Temperature** — coffee boiler set‑point stepper (0.1 °C steps;
   long‑press for 0.5 °C).
 - **Steam Boiler → Enable** — steam boiler on/off.
 - **Steam Boiler → Temperature** — one of the Micra's three steam levels
   (shown as Level 1–3 with the temperature underneath).
+
 ### Cleaning *(paddle‑capable boards)*
 
-- **Backflush cleaning** — opens a
-  full‑screen cleaning mode. Fit the blind filter with detergent, tap **Go**,
-  and the device pulses the group **10 times: 4 seconds on, 4 seconds off**
-  (about 80 seconds), showing the cycle count and a countdown as it runs.
-  **Cancel** stops the sequence and stays on the screen so you can run it
-  again; **Back** stops it and leaves. Flipping the physical paddle also stops
-  it — you always outrank the automation. When it finishes, rinse the basket
-  and run it again with plain water to clear the detergent. The entry needs
-  the paddle harness (it drives the group through the relay) and a machine
-  that's powered on; it's greyed out otherwise.
+Everything that deliberately runs water through the group. The whole page
+needs the paddle harness, since that's what drives it.
+
+- **Auto flush** *(Off / 3 / 6 / 9 / 15 s; default Off)* — after a finished
+  shot, when the scale sees the cup lift off, the firmware waits (see **Flush
+  delay**) and then runs the group for this long to rinse the puck's surface.
+  Any paddle activity, a new shot, or the machine being in standby cancels it.
+  **This one duration drives every timed group run**: the auto‑flush, the Home
+  **Flush** button, and each backflush pulse. With Auto flush Off the other two
+  fall back to 3 s.
+- **Flush delay** *(shown while Auto flush is on; 3 / 6 / 9 / 15 s; default
+  3 s)* — the pause between the cup coming off and the flush running.
+- **Backflush cleaning** — opens a full‑screen cleaning mode. Fit the blind
+  filter with detergent, tap **Go**, and the device pulses the group **10
+  times: ⟨Auto flush⟩ seconds on, 3 seconds off**, showing the cycle count, a
+  countdown, and the total up front. **Cancel** stops the sequence and stays on
+  the screen so you can run it again; **Back** stops it and leaves. Flipping
+  the physical paddle also stops it — you always outrank the automation. When
+  it finishes, rinse the basket and run it again with plain water to clear the
+  detergent. Greyed out unless the machine is on and no shot is in flight.
+  - **Preinfusion/prebrew matters here.** Each pulse starts a fresh brew, so
+    the machine preinfuses *every time*. A pulse shorter than your preinfusion
+    never engages the pump, so it runs at line pressure only — water still
+    flows and it still rinses, just with far less force than a pump‑pressure
+    backflush. If that's not what you want, either raise **Auto flush** until
+    the pulse comfortably outlasts preinfusion, or turn preinfusion off while
+    you backflush.
 
 ---
 

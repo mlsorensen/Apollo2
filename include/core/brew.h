@@ -59,14 +59,22 @@ enum class ShotMode : uint8_t { kManual = 0, kAuto = 1, kDetect = 2 };
 // to run the group). Backflush = detergent in a blind filter, pushed through
 // the three-way valve by pulsing the group; the pause between pulses is what
 // does the work, so the cycle count and timings are fixed rather than tunable.
+// Each pulse RUNS for the auto-flush duration (BrewSnapshot::flush_s) so a
+// single setting controls every timed group run — and so a machine with
+// preinfusion/prebrew, which restarts on every pulse and can swallow a short
+// one entirely, can be given longer pulses by raising Auto flush.
 constexpr int kBackflushCycles = 10;
-constexpr uint32_t kBackflushOnMs = 4000;
-constexpr uint32_t kBackflushOffMs = 4000;
-// The Home "Flush" button runs the group for the SAME time as the post-shot
-// auto-flush (BrewSnapshot::flush_s), so there's one duration to reason about.
-// With auto-flush switched Off there's no duration to borrow, so the manual
-// button falls back to this.
+constexpr uint32_t kBackflushOffMs = 3000;
+// The Home "Flush" button and the backflush pulses both run for the same time
+// as the post-shot auto-flush (BrewSnapshot::flush_s), so there's one duration
+// to reason about. With auto-flush switched Off there's no duration to borrow,
+// so they fall back to this.
 constexpr int kManualFlushDefaultS = 3;
+
+// The run time those three share: the auto-flush setting, or the fallback.
+inline uint32_t flush_run_ms(int flush_s) {
+  return static_cast<uint32_t>(flush_s > 0 ? flush_s : kManualFlushDefaultS) * 1000u;
+}
 
 // Where the shot machinery is in its lifecycle (BrewSnapshot::phase).
 enum class ShotPhase : uint8_t {

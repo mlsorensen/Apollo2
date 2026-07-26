@@ -1258,9 +1258,17 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     }
   }
 
-  // Action button: Power when connected; otherwise it doubles as a connect /
-  // setup affordance so the old dead "Offline" button does something. Disabled in
-  // states where a tap can't help (mid-connect, or needs setup/token first).
+  // Action button: it names the ACTION, not the link state — the status line
+  // above already spells the state out, and the old state labels ("Connecting
+  // ...", "Set up in Settings") no longer fit beside Flush. In every transient
+  // or not-yet-set-up state the action is simply unavailable, so the button
+  // reads "Connect" and is disabled.
+  // EXCEPTION: the compact scale layout's card header is dot-only (no status
+  // text anywhere), so there the button keeps the fuller wording — nothing
+  // else would tell the user what's happening. Its row is Power + Tare, the
+  // same width as before, so the long labels still fit.
+  const bool has_status_text =
+      w.micra_status_label != nullptr || w.status_label != nullptr;
   // Neutral fill: card() on the classic layouts (button sits on the bg), rail()
   // when the button lives inside the MICRA card (card-on-card is invisible).
   const uint32_t pow_neutral =
@@ -1278,20 +1286,20 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
       ui::set_text(w.power_label, LV_SYMBOL_REFRESH "  Connect");
       break;
     case core::Link::Connecting:
-      lv_obj_add_state(w.power_btn, LV_STATE_DISABLED);
-      ui::set_bg_color(w.power_btn, pow_neutral);
-      ui::set_text(w.power_label, LV_SYMBOL_REFRESH "  Connecting...");
-      break;
     case core::Link::NeedsToken:
-      lv_obj_add_state(w.power_btn, LV_STATE_DISABLED);
-      ui::set_bg_color(w.power_btn, pow_neutral);
-      ui::set_text(w.power_label, LV_SYMBOL_WARNING "  Token needed");
-      break;
     case core::Link::Unconfigured:
     default:
       lv_obj_add_state(w.power_btn, LV_STATE_DISABLED);
       ui::set_bg_color(w.power_btn, pow_neutral);
-      ui::set_text(w.power_label, LV_SYMBOL_SETTINGS "  Set up in Settings");
+      if (has_status_text) {
+        ui::set_text(w.power_label, LV_SYMBOL_REFRESH "  Connect");
+      } else if (state.link == core::Link::Connecting) {
+        ui::set_text(w.power_label, LV_SYMBOL_REFRESH "  Connecting...");
+      } else if (state.link == core::Link::NeedsToken) {
+        ui::set_text(w.power_label, LV_SYMBOL_WARNING "  Token needed");
+      } else {
+        ui::set_text(w.power_label, LV_SYMBOL_SETTINGS "  Set up in Settings");
+      }
       break;
   }
 

@@ -527,55 +527,48 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
       lv_obj_t* rw = make_setting_row(out.micra_settings_page, "Wired paddle", font);
       out.wired_paddle_switch = lv_switch_create(rw);
       lv_obj_set_size(out.wired_paddle_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
-      // Post-shot auto-flush: tap cycles Off / 3 s / 6 s. Wired-relay boards
-      // only — it drives the paddle line, so unwired-only boards can't flush.
-      lv_obj_t* rf = make_setting_row(out.micra_settings_page, "Auto flush", font);
-      out.flush_btn = ui::make_button(rf);
-      lv_obj_set_height(out.flush_btn, btn_size);
-      lv_obj_set_style_pad_hor(out.flush_btn, ui::dp(14), 0);
-      lv_obj_set_style_bg_color(out.flush_btn, lv_color_hex(ui::theme::card()), 0);
-      out.flush_value = lv_label_create(out.flush_btn);
-      lv_obj_set_style_text_color(out.flush_value, lv_color_hex(ui::theme::text()), 0);
-      lv_obj_set_style_text_font(out.flush_value, font, 0);
-      lv_obj_center(out.flush_value);
-      // Cup-off -> flush pause: tap cycles 3 / 6 / 9 / 15 s. Only meaningful
-      // (and only shown — App manages the HIDDEN flag) while the flush is on.
-      out.flush_delay_row = make_setting_row(out.micra_settings_page, "Flush delay", font);
-      out.flush_delay_btn = ui::make_button(out.flush_delay_row);
-      lv_obj_set_height(out.flush_delay_btn, btn_size);
-      lv_obj_set_style_pad_hor(out.flush_delay_btn, ui::dp(14), 0);
-      lv_obj_set_style_bg_color(out.flush_delay_btn, lv_color_hex(ui::theme::card()), 0);
-      out.flush_delay_value = lv_label_create(out.flush_delay_btn);
-      lv_obj_set_style_text_color(out.flush_delay_value, lv_color_hex(ui::theme::text()), 0);
-      lv_obj_set_style_text_font(out.flush_delay_value, font, 0);
-      lv_obj_center(out.flush_delay_value);
     } else {
       out.wired_paddle_switch = nullptr;
-      out.flush_btn = out.flush_value = nullptr;
-      out.flush_delay_row = out.flush_delay_btn = out.flush_delay_value = nullptr;
     }
   }
-  // Micra > Cleaning: its own page rather than a row at the bottom of the
-  // settings list — cleaning is a task you come here to DO, and burying it
-  // under nine setting rows would mean scrolling past all of them. Only on
-  // paddle-capable boards: the sequence drives the group through the relay.
+  // Micra > Cleaning: everything that runs water through the group on purpose —
+  // the post-shot auto-flush, its delay, and the backflush sequence. All of it
+  // needs the wired relay, so the whole page only exists on paddle-capable
+  // boards (the chooser entry is omitted otherwise).
   if (with_wired_paddle) {
     out.micra_cleaning_page = lv_menu_page_create(menu, "Cleaning");
     page_column(out.micra_cleaning_page, compact);
+    // Post-shot auto-flush: tap cycles Off / 3 s / 6 s.
+    lv_obj_t* rf = make_setting_row(out.micra_cleaning_page, "Auto flush", font);
+    out.flush_btn = ui::make_button(rf);
+    lv_obj_set_height(out.flush_btn, btn_size);
+    lv_obj_set_style_pad_hor(out.flush_btn, ui::dp(14), 0);
+    lv_obj_set_style_bg_color(out.flush_btn, lv_color_hex(ui::theme::card()), 0);
+    out.flush_value = lv_label_create(out.flush_btn);
+    lv_obj_set_style_text_color(out.flush_value, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(out.flush_value, font, 0);
+    lv_obj_center(out.flush_value);
+    // Cup-off -> flush pause: tap cycles 3 / 6 / 9 / 15 s. Only meaningful
+    // (and only shown — App manages the HIDDEN flag) while the flush is on.
+    out.flush_delay_row = make_setting_row(out.micra_cleaning_page, "Flush delay", font);
+    out.flush_delay_btn = ui::make_button(out.flush_delay_row);
+    lv_obj_set_height(out.flush_delay_btn, btn_size);
+    lv_obj_set_style_pad_hor(out.flush_delay_btn, ui::dp(14), 0);
+    lv_obj_set_style_bg_color(out.flush_delay_btn, lv_color_hex(ui::theme::card()), 0);
+    out.flush_delay_value = lv_label_create(out.flush_delay_btn);
+    lv_obj_set_style_text_color(out.flush_delay_value, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(out.flush_delay_value, font, 0);
+    lv_obj_center(out.flush_delay_value);
+    // The backflush sequence itself (opens its own full-screen mode).
     out.backflush_btn = action_row(out.micra_cleaning_page, "Backflush cleaning",
                                    LV_SYMBOL_LOOP, font, btn_h);
-    lv_obj_t* hint = lv_label_create(out.micra_cleaning_page);
-    lv_label_set_text(hint,
-                      "Runs the group in short pulses to push detergent "
-                      "through the valve. Fit the blind filter first.");
-    lv_obj_set_width(hint, lv_pct(100));
-    lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
-    lv_obj_set_style_text_color(hint, lv_color_hex(ui::theme::muted()), 0);
-    lv_obj_set_style_text_font(hint, font, 0);
   } else {
     out.micra_cleaning_page = nullptr;
+    out.flush_btn = out.flush_value = nullptr;
+    out.flush_delay_row = out.flush_delay_btn = out.flush_delay_value = nullptr;
     out.backflush_btn = nullptr;
   }
+
   section_label(out.micra_settings_page, "Brew", font);
   {
     lv_obj_t* r = make_setting_row(out.micra_settings_page, "Temperature", font);
