@@ -55,6 +55,19 @@ namespace core {
 // (a persisted kAuto degrades to kDetect, which snapshot() reports).
 enum class ShotMode : uint8_t { kManual = 0, kAuto = 1, kDetect = 2 };
 
+// Cleaning cycles, both of which need the wired relay (there is no other way
+// to run the group). Backflush = detergent in a blind filter, pushed through
+// the three-way valve by pulsing the group; the pause between pulses is what
+// does the work, so the cycle count and timings are fixed rather than tunable.
+constexpr int kBackflushCycles = 10;
+constexpr uint32_t kBackflushOnMs = 4000;
+constexpr uint32_t kBackflushOffMs = 4000;
+// The Home "Flush" button runs the group for the SAME time as the post-shot
+// auto-flush (BrewSnapshot::flush_s), so there's one duration to reason about.
+// With auto-flush switched Off there's no duration to borrow, so the manual
+// button falls back to this.
+constexpr int kManualFlushDefaultS = 3;
+
 // Where the shot machinery is in its lifecycle (BrewSnapshot::phase).
 enum class ShotPhase : uint8_t {
   kIdle,      // ready — the next paddle ON edge / detection starts a shot
@@ -100,6 +113,21 @@ struct BrewSnapshot {
                           // scale sees the cup come off, wait a beat and run
                           // the group for this long to rinse the puck's surface.
   int   flush_delay_s;    // cup-off -> flush pause (seconds; user setting)
+
+  // --- Drive line + cleaning (see the kBackflush* constants) ---------------
+  bool  relay;            // the drive line is usable: paddle hardware + the
+                          // "Wired paddle" setting. Unlike paddle_wired this
+                          // ignores the shot mode — a detect-mode wired rig
+                          // can still flush and backflush.
+  bool  clean_ready;      // a flush/backflush could START right now: relay,
+                          // machine not in standby, no shot in flight
+  bool  manual_flush;     // the Home "Flush" button is holding the line open
+  bool  backflush_active; // the backflush sequence is running
+  bool  backflush_on;     // its current phase (true = group running, false = pause)
+  int   backflush_cycle;  // 1..kBackflushCycles while active (0 otherwise)
+  uint32_t backflush_phase_ms;  // ms left in the current on/off phase
+  bool  backflush_done;   // the last sequence ran to completion (cleared when
+                          // the next one starts, or on cancel)
 };
 
 // True when the ESP-side shot timer is the authoritative shot-time source:
@@ -145,6 +173,20 @@ class IBrewController {
   // How long after the cup comes off before the flush runs (seconds; the UI
   // offers 3/6/9/15). Persisted.
   virtual void set_flush_delay_s(int seconds) = 0;
+
+  // Manual group flush (the Home "Flush" button): runs the group for flush_s
+  // seconds — the same duration as the post-shot auto-flush, or
+  // kManualFlushDefaultS when that's Off. Tapping again mid-run stops it early.
+  // No-op unless clean_ready.
+  virtual void toggle_manual_flush() = 0;
+
+  // Start the backflush cleaning sequence (kBackflushCycles on/off pulses).
+  // False when it can't run right now (snapshot().clean_ready says the same,
+  // so the UI can disable the entry before the user taps it).
+  virtual bool start_backflush() = 0;
+
+  // Stop a running backflush and open the line. Safe to call when idle.
+  virtual void cancel_backflush() = 0;
 };
 
 }  // namespace core

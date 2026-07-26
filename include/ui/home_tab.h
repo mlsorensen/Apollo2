@@ -50,6 +50,12 @@ struct HomeWidgets {
   lv_obj_t* boiler_plus = nullptr;
   lv_obj_t* power_btn = nullptr;
   lv_obj_t* power_label = nullptr;
+  // Manual group flush, beside Standby on the large layouts (the compact tier
+  // has no room — its actions row is already Power + Tare). Null elsewhere;
+  // update_home hides it on boards without the drive line (BrewSnapshot::relay)
+  // and flips it to a "Stop" affordance while the flush runs.
+  lv_obj_t* flush_btn = nullptr;
+  lv_obj_t* flush_label = nullptr;
 
   // Scale-aware widgets (null unless scale_enabled):
   bool scale_enabled = false;

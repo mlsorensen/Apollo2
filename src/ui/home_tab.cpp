@@ -403,6 +403,35 @@ void build_power_button(lv_obj_t* parent, int btn_h, const lv_font_t* btn_font,
   lv_obj_center(out.power_label);
 }
 
+// Power + Flush side by side (large layouts), mirroring the SCALE card's
+// Connect + Tare pair. Both grow equally; update_home hides Flush — and lets
+// Power take the whole row back — on boards with no drive line.
+void build_micra_actions(lv_obj_t* parent, int btn_h, const lv_font_t* btn_font,
+                         int gap, ui::HomeWidgets& out) {
+  lv_obj_t* row = lv_obj_create(parent);
+  lv_obj_remove_style_all(row);
+  lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_width(row, lv_pct(100));
+  lv_obj_set_height(row, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_style_pad_column(row, gap, 0);
+
+  build_power_button(row, btn_h, btn_font, out);
+  lv_obj_set_width(out.power_btn, 0);
+  lv_obj_set_flex_grow(out.power_btn, 1);
+
+  out.flush_btn = ui::make_button(row);
+  lv_obj_set_height(out.flush_btn, btn_h);
+  lv_obj_set_width(out.flush_btn, 0);
+  lv_obj_set_flex_grow(out.flush_btn, 1);
+  lv_obj_set_style_radius(out.flush_btn, ui::dp(14), 0);
+  lv_obj_set_style_opa(out.flush_btn, LV_OPA_40, LV_STATE_DISABLED);
+  out.flush_label = lv_label_create(out.flush_btn);
+  lv_obj_set_style_text_color(out.flush_label, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(out.flush_label, btn_font, 0);
+  lv_obj_center(out.flush_label);
+}
+
 // A Tare button (icon + label). Returns it (the caller sizes/places it).
 void build_tare_button(lv_obj_t* parent, const lv_font_t* font, ui::HomeWidgets& out) {
   out.tare_btn = ui::make_button(parent);
@@ -635,7 +664,7 @@ void build_micra_panel(lv_obj_t* parent, const lv_font_t* cap_font,
                         LV_FLEX_ALIGN_CENTER);
   lv_obj_set_flex_align(scol, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  build_power_button(card, action_h, action_font, out);
+  build_micra_actions(card, action_h, action_font, pad, out);
 }
 
 // SCALE panel: centered WEIGHT + TIMER columns, with the target stepper tucked
@@ -804,6 +833,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   out.brew_set = out.boiler_set = nullptr;
   out.scale_weight = out.scale_target = nullptr;
   out.tare_btn = out.tare_label = nullptr;
+  out.flush_btn = out.flush_label = nullptr;  // large layouts only
   out.scale_connect_btn = out.scale_connect_label = nullptr;
   out.scale_batt_label = nullptr;
   out.status_dot = out.status_label = nullptr;
@@ -941,7 +971,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
                        &out.boiler_minus, &out.boiler_plus);
     lv_obj_set_width(out.boiler_set, ui::dp(xl ? 96 : 78));
 
-    build_power_button(parent, btn_h, btn_font, out);
+    build_micra_actions(parent, btn_h, btn_font, gap, out);
     return;
   }
 
@@ -1263,6 +1293,34 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
       ui::set_bg_color(w.power_btn, pow_neutral);
       ui::set_text(w.power_label, LV_SYMBOL_SETTINGS "  Set up in Settings");
       break;
+  }
+
+  // Flush (manual group rinse), beside Standby. Only boards with the drive
+  // line have it at all — elsewhere the button is hidden and Power keeps the
+  // whole row. While the flush runs it becomes a loud "Stop": the pump is
+  // running and stopping it must be the obvious next tap.
+  if (w.flush_btn != nullptr) {
+    if (!brew.relay) {
+      if (!lv_obj_has_flag(w.flush_btn, LV_OBJ_FLAG_HIDDEN))
+        lv_obj_add_flag(w.flush_btn, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      if (lv_obj_has_flag(w.flush_btn, LV_OBJ_FLAG_HIDDEN))
+        lv_obj_remove_flag(w.flush_btn, LV_OBJ_FLAG_HIDDEN);
+      if (brew.manual_flush) {
+        lv_obj_remove_state(w.flush_btn, LV_STATE_DISABLED);
+        ui::set_bg_color(w.flush_btn, ui::theme::alert());
+        ui::set_text(w.flush_label, LV_SYMBOL_STOP "  Stop");
+      } else {
+        // Backflush owns the line while it runs, and a shot in flight blocks a
+        // flush — clean_ready covers both (plus a standby machine).
+        if (brew.clean_ready && !brew.backflush_active)
+          lv_obj_remove_state(w.flush_btn, LV_STATE_DISABLED);
+        else
+          lv_obj_add_state(w.flush_btn, LV_STATE_DISABLED);
+        ui::set_bg_color(w.flush_btn, pow_neutral);
+        ui::set_text(w.flush_label, LV_SYMBOL_TINT "  Flush");
+      }
+    }
   }
 }
 

@@ -118,6 +118,15 @@ class App {
   void restart_device() { if (restart_handler_) restart_handler_(); }
   void start_clean_lock();  // Settings "Lock display for cleaning": 30 s touch lockout
   void clean_lock_tick();   // countdown update (from an lv_timer, 4 Hz)
+  // Backflush cleaning (Settings > Micra): a full-screen mode that prompts for
+  // the blind filter, then runs core's pulse sequence with a live cycle
+  // readout. Cancel stops it; Back stops it AND leaves.
+  void open_backflush();
+  void close_backflush();
+  void backflush_go();      // "Go" / "Run again"
+  void backflush_cancel();  // "Cancel": stop, stay on the screen
+  void backflush_tick();    // readout update (from an lv_timer, 4 Hz)
+  void toggle_manual_flush();  // Home "Flush"/"Stop" button
   void review_hold_adjust(int dir);  // Scale settings: review-hold stepper (5s steps)
   void cycle_flow_smooth();          // Scale settings: Off/Light/Medium/Strong
   void cycle_flush();                // Micra settings "Auto flush": Off / 3 s / 6 s
@@ -205,6 +214,21 @@ class App {
   lv_timer_t* clean_lock_timer_ = nullptr;
   uint32_t clean_lock_t0_ = 0;   // lv_tick at lock start
   int clean_lock_shown_s_ = -1;  // last rendered value (redraw on change only)
+  // Backflush mode. The SEQUENCE lives in BrewController (so it can't outlive
+  // or be orphaned by this UI); these are just the screen's widgets + which of
+  // the four screens is showing.
+  enum BackflushState { kBackflushPrompt = 0, kBackflushRunning, kBackflushDone,
+                        kBackflushAborted };
+  lv_obj_t* bf_overlay_ = nullptr;
+  lv_obj_t* bf_msg_ = nullptr;
+  lv_obj_t* bf_cycle_label_ = nullptr;   // "Cycle 3 of 10"
+  lv_obj_t* bf_phase_label_ = nullptr;   // "Running 3s" / "Pause 2s"
+  lv_obj_t* bf_go_btn_ = nullptr;
+  lv_obj_t* bf_go_label_ = nullptr;      // "Go" / "Run again"
+  lv_obj_t* bf_cancel_btn_ = nullptr;
+  lv_obj_t* bf_back_btn_ = nullptr;
+  lv_timer_t* bf_timer_ = nullptr;
+  int bf_state_ = kBackflushPrompt;
   bool theme_rebuild_pending_ = false;  // coalesce rapid theme cycling into one rebuild
   bool layout_rebuild_pending_ = false; // coalesce a scale pair/forget rebuild
   int rebuild_section_ = kSectionDeviceDisplay;  // Settings section to return to
