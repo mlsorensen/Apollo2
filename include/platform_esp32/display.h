@@ -20,6 +20,14 @@ class Display {
   int height() const;  // logical height after rotation
 
   void set_brightness(int percent);  // backlight PWM, 0..100
+
+  // RGB boards only: restart the panel's pixel pipeline from frame zero
+  // (esp_lcd_panel_init) — heals the shifted/ghosted raster that a
+  // bounce-buffer underrun latches, without rebooting. ~One frame of cost,
+  // visually imperceptible (HW-verified). Returns false on non-RGB boards
+  // (caller falls back to a full soft reboot). verbose=false for the
+  // periodic auto-resync so it doesn't spam serial.
+  bool rgb_resync(bool verbose = true);
 };
 
 }  // namespace platform

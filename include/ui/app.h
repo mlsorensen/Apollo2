@@ -110,8 +110,8 @@ class App {
   void open_reset_stats_modal();          // metric-card tap -> confirm dialog
   void confirm_reset_stats();             // modal "Reset": set the marker
   void shot_button();  // shot-mode toggle, or Reset while a shot is in review
-  // Soft-reboot handler (Settings > Device "Restart"): wired by device main to
-  // esp_restart(); no-op in the sim.
+  // Settings "Restart display" handler: wired by device main to an RGB panel
+  // DMA resync (falls back to esp_restart on other boards); no-op in the sim.
   void set_restart_handler(std::function<void()> h) { restart_handler_ = std::move(h); }
   void restart_device() { if (restart_handler_) restart_handler_(); }
   void start_clean_lock();  // Settings "Lock display for cleaning": 30 s touch lockout

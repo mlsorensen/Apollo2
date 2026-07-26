@@ -24,6 +24,13 @@
 
 #include "platform_esp32/io_extension.h"
 #endif
+#if defined(BOARD_DISPLAY_RGB)
+#include <esp_lcd_panel_ops.h>
+#include <esp_lcd_panel_rgb.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+#include <freertos/task.h>
+#endif
 
 // A single panel exists per device, and LVGL's flush callback is a plain
 // function pointer, so the Arduino_GFX objects live here at file scope rather
@@ -34,6 +41,60 @@ namespace {
 
 Arduino_GFX* g_gfx = nullptr;
 lv_color_t* g_draw_buf = nullptr;
+
+#if defined(BOARD_DISPLAY_RGB)
+// esp_lcd handle of the RGB panel, needed for esp_lcd_rgb_panel_restart()
+// (see Display::rgb_resync). Arduino_ESP32RGBPanel keeps it private with no
+// accessor, so we lift it out via explicit template instantiation, which is
+// exempt from member access control ([temp.explicit]) — legal C++, no library
+// patch, breaks loudly at compile time if the field is ever renamed.
+esp_lcd_panel_handle_t g_rgb_panel = nullptr;
+
+using RgbHandleMember = esp_lcd_panel_handle_t Arduino_ESP32RGBPanel::*;
+RgbHandleMember rgb_handle_member();  // defined by the friend injection below
+template <RgbHandleMember M>
+struct RgbHandleRobber {
+  friend RgbHandleMember rgb_handle_member() { return M; }
+};
+template struct RgbHandleRobber<&Arduino_ESP32RGBPanel::_panel_handle>;
+
+// VSYNC-aligned resync. Calling esp_lcd_panel_init() straight from task
+// context restarts the pipeline mid-scanline: visibly (truncated frame) and
+// dangerously — a bounce-DMA interrupt already pending at that instant can
+// refill a buffer after the counters were zeroed, creating the very latch
+// we're healing (both observed on the 4.3C, 2026-07-25). The driver's own
+// restart runs only inside vertical blanking for the same reason. So:
+// rgb_resync() just arms a flag; the on_vsync ISR wakes a high-priority task
+// that runs the re-init immediately — inside blanking, when the bounce DMA
+// is quiescent and the panel is between frames.
+SemaphoreHandle_t g_resync_sem = nullptr;
+volatile bool g_resync_armed = false;
+volatile bool g_resync_verbose = false;
+
+bool IRAM_ATTR rgb_vsync_cb(esp_lcd_panel_handle_t,
+                            const esp_lcd_rgb_panel_event_data_t*, void*) {
+  if (!g_resync_armed) return false;
+  g_resync_armed = false;
+  BaseType_t hpw = pdFALSE;
+  xSemaphoreGiveFromISR(g_resync_sem, &hpw);
+  return hpw == pdTRUE;
+}
+
+void rgb_resync_task(void*) {
+  for (;;) {
+    xSemaphoreTake(g_resync_sem, portMAX_DELAY);
+    // esp_lcd_panel_init re-runs lcd_rgb_panel_start_transmission: engine
+    // stop, DMA+FIFO reset, bounce_pos_px = 0, both bounce buffers refilled,
+    // restart. The engine is stopped while this runs, so overshooting the
+    // back porch only starts the next frame late — never mid-scanline.
+    const esp_err_t err = esp_lcd_panel_init(g_rgb_panel);
+    if (g_resync_verbose || err != ESP_OK) {
+      Serial.printf("RGB: panel re-init resync -> %s\n", esp_err_to_name(err));
+    }
+    g_resync_verbose = false;
+  }
+}
+#endif
 
 // Number of screen rows LVGL renders per flush in partial mode. Larger = fewer
 // bands/flushes per refresh (the flow graph's ~200px plot renders in ~1 band).
@@ -591,6 +652,19 @@ bool Display::begin() {
     return false;
   }
   Serial.printf("RGB: RGB panel up %dx%d\n", g_gfx->width(), g_gfx->height());
+  // begin() created the esp_lcd panel (inside getFrameBuffer); grab the handle
+  // and stand up the VSYNC-aligned resync machinery (see rgb_resync_task).
+  // Priority 10 on core 1 (where the LCD interrupt lives): wakes within a few
+  // us of the vsync ISR, well inside the ~470 us back porch. Arduino_GFX
+  // registers no RGB event callbacks of its own, so on_vsync is free.
+  g_rgb_panel = rgbpanel->*rgb_handle_member();
+  g_resync_sem = xSemaphoreCreateBinary();
+  xTaskCreatePinnedToCore(rgb_resync_task, "rgb_resync", 4096, nullptr, 10,
+                          nullptr, 1);
+  const esp_lcd_rgb_panel_event_callbacks_t rgb_cbs = {
+      .on_vsync = rgb_vsync_cb,
+  };
+  esp_lcd_rgb_panel_register_event_callbacks(g_rgb_panel, &rgb_cbs, nullptr);
   g_gfx->fillScreen(0x0000);
   io_extension().set(board::kIoExtBacklight, true);  // backlight on
 #else
@@ -701,6 +775,29 @@ void Display::set_brightness(int percent) {
   ledcWrite(board::kLcdBacklight, board::kBacklightActiveLow ? 255 - duty : duty);
 #else
   ledcWrite(board::kLcdBacklight, percent * 255 / 100);
+#endif
+}
+
+bool Display::rgb_resync(bool verbose) {
+#if defined(BOARD_DISPLAY_RGB)
+  // The ghosted/shifted raster is a latched frame-position offset in the
+  // driver's bounce-buffer bookkeeping (bounce_pos_px), left behind by an
+  // underrun (PSRAM bus oversubscribed by flash reads / WiFi / rendering).
+  // esp_lcd_rgb_panel_restart() does NOT heal it — its bounce-mode path only
+  // zeroes bounce_pos_px when the counter overshot PAST two bounce buffers,
+  // and an underrun leaves it SHORT, so the restart re-feeds from the stale
+  // mid-frame position (verified on the 4.3C, 2026-07-25: ESP_OK, no change;
+  // IDF 5.5.4 esp_lcd_panel_rgb.c lcd_rgb_panel_try_restart_transmission).
+  // The heal is a full esp_lcd_panel_init(), but it must run inside vertical
+  // blanking (see rgb_resync_task) — this only arms it; the work happens at
+  // the next VSYNC, so expect the effect within one frame (~30 ms).
+  if (g_rgb_panel == nullptr || g_resync_sem == nullptr) return false;
+  if (verbose) g_resync_verbose = true;
+  g_resync_armed = true;
+  return true;
+#else
+  (void)verbose;
+  return false;
 #endif
 }
 

@@ -565,8 +565,8 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
 
   // Root-level action rows (not drill-ins). Same card styling as the entries,
   // an action glyph instead of a chevron:
-  //  - Restart display: soft reboot — the escape hatch for the RGB panel's
-  //    occasional shifted-raster boot glitch (ghost lines ~10-20px off).
+  //  - Restart display: heals the RGB panel's shifted/ghosted raster (latched
+  //    DMA desync) — in-place resync on RGB boards, soft reboot elsewhere.
   //  - Lock for cleaning: 30 s touch lockout so the glass can be wiped.
   auto action_row = [&](const char* label, const char* symbol) {
     lv_obj_t* cont = lv_menu_cont_create(out.root_page);
