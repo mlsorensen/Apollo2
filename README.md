@@ -31,7 +31,8 @@ to the machine instead of a phone app.
   wiring), or **Manual**. Finished shots freeze into a review graph, and wired
   boards can **auto‑flush** the group after you lift the cup.
 - **Shot history on SD card** *(P4 boards and the S3 4.3C)* —
-  every finished shot is recorded to a FAT‑formatted microSD card: stats and
+  every finished shot is recorded to a FAT‑formatted microSD card (any size —
+  a shot is a few tens of KB, so a small old card holds decades): stats and
   the full weight/flow series as CSV under `/Apollo2/` — a take‑away database
   you can read on any computer. The Stats
   tab's **History** section shows totals, lifetime/30‑day accuracy, and a
@@ -55,7 +56,7 @@ absent — the UI just shows the relevant part as offline.
 
 <p align="center">
   <img src="docs/img/home-noscale.png" width="49%" alt="Home without a scale — brew/steam hero card">
-  <img src="docs/img/settings-device.png" width="49%" alt="Device settings — Wi-Fi, timezone, theme">
+  <img src="docs/img/settings-device.png" width="49%" alt="Device display settings — brightness, theme, units">
 </p>
 <p align="center">
   <img src="docs/img/stats.png" width="49%" alt="Temperature history">

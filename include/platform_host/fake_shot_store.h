@@ -20,6 +20,7 @@ class FakeShotStore : public core::IShotStore {
   int count() const override;
   int list(core::ShotSummary* out, int max, int offset) const override;
   bool read(uint32_t id, core::ShotRecord& out) const override;
+  bool remove(uint32_t id) override;
   core::ShotStats stats(int64_t now_unix) const override;
 
   core::StorageInfo storage() const override { return storage_; }

@@ -21,6 +21,7 @@ class DirShotStore : public core::IShotStore {
   int count() const override { return static_cast<int>(index_.size()); }
   int list(core::ShotSummary* out, int max, int offset) const override;
   bool read(uint32_t id, core::ShotRecord& out) const override;
+  bool remove(uint32_t id) override;  // deletes samples CSV, rewrites the index
   core::ShotStats stats(int64_t now_unix) const override;
   core::StorageInfo storage() const override;  // real filesystem free space
   int64_t stats_since() const override { return stats_since_; }

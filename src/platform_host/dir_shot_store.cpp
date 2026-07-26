@@ -106,6 +106,36 @@ bool DirShotStore::read(uint32_t id, core::ShotRecord& out) const {
   return false;
 }
 
+bool DirShotStore::remove(uint32_t id) {
+  bool found = false;
+  for (auto it = index_.begin(); it != index_.end(); ++it) {
+    if (it->id == id) {
+      index_.erase(it);
+      found = true;
+      break;
+    }
+  }
+  if (!found) return false;
+
+  char path[256];
+  std::snprintf(path, sizeof(path), "%s/shots/%06u.csv", dir_.c_str(), id);
+  std::error_code ec;
+  fs::remove(path, ec);  // missing samples file is fine
+
+  // Rewrite the index (disk is oldest-first).
+  const std::string index = dir_ + "/shots.csv";
+  if (FILE* f = std::fopen(index.c_str(), "w")) {
+    std::fputs(core::kShotIndexHeader, f);
+    char row[160];
+    for (auto it = index_.rbegin(); it != index_.rend(); ++it) {
+      core::format_shot_index_row(row, sizeof(row), *it);
+      std::fputs(row, f);
+    }
+    std::fclose(f);
+  }
+  return true;
+}
+
 core::ShotStats DirShotStore::stats(int64_t now_unix) const {
   return core::compute_shot_stats(index_.data(), static_cast<int>(index_.size()),
                                   now_unix, stats_since_);

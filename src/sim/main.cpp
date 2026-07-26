@@ -130,8 +130,14 @@ int main() {
   ok &= r({320, 240}, "renders/scale_bt_320x240.png", 1, ui::kSectionScaleBt);
   ok &= r({320, 240}, "renders/scale_settings_320x240.png", 1, ui::kSectionScaleSettings);
   ok &= r({800, 480}, "renders/micra_bt_800x480.png", 1, ui::kSectionMicraBt);
-  ok &= r({320, 240}, "renders/device_320x240.png", 1, ui::kSectionDevice);
+  ok &= r({320, 240}, "renders/device_320x240.png", 1, ui::kSectionDevice);  // chooser
   ok &= r({800, 480}, "renders/device_800x480.png", 1, ui::kSectionDevice);
+  ok &= r({320, 240}, "renders/device_display_320x240.png", 1, ui::kSectionDeviceDisplay);
+  ok &= r({320, 240}, "renders/device_time_320x240.png", 1, ui::kSectionDeviceTime);
+  ok &= r({320, 240}, "renders/device_wifi_320x240.png", 1, ui::kSectionDeviceWifi);
+  ok &= r({800, 480}, "renders/device_display_800x480.png", 1, ui::kSectionDeviceDisplay);
+  ok &= r({800, 480}, "renders/device_time_800x480.png", 1, ui::kSectionDeviceTime);
+  ok &= r({800, 480}, "renders/device_wifi_800x480.png", 1, ui::kSectionDeviceWifi);
 
   // 7" 1024x600 (ESP32-S3-Touch-LCD-7B): the XL tier.
   ok &= r({1024, 600}, "renders/home_1024x600.png");
@@ -139,6 +145,7 @@ int main() {
   ok &= r({1024, 600}, "renders/micra_bt_1024x600.png", 1, ui::kSectionMicraBt);
   ok &= r({1024, 600}, "renders/scale_settings_1024x600.png", 1, ui::kSectionScaleSettings);
   ok &= r({1024, 600}, "renders/device_1024x600.png", 1, ui::kSectionDevice);
+  ok &= r({1024, 600}, "renders/device_display_1024x600.png", 1, ui::kSectionDeviceDisplay);
 
   // 5" 1280x720 (ESP32-P4-WIFI6-Touch-LCD-5): the wide (800x480) layout at
   // 1.5x — high pixel density, so elements keep (slightly exceed) the 4.3"'s
@@ -148,6 +155,7 @@ int main() {
   ok &= r(p5, "renders/settings_1280x720.png", 1);
   ok &= r(p5, "renders/micra_bt_1280x720.png", 1, ui::kSectionMicraBt);
   ok &= r(p5, "renders/device_1280x720.png", 1, ui::kSectionDevice);
+  ok &= r(p5, "renders/device_display_1280x720.png", 1, ui::kSectionDeviceDisplay);
   ok &= r(p5, "renders/stats_brew_1280x720.png", 2, -1, false, 0, ui::kStatsBrew);
   // Token modal over Home (modal over Settings hits a known LVGL draw loop).
   ok &= r(p5, "renders/token_modal_1280x720.png", 0, -1, true);
@@ -207,7 +215,8 @@ int main() {
     std::snprintf(path, sizeof(path), "renders/theme%d_320x240.png", i);
     ok &= r({320, 240}, path, 0, -1, false, i);
   }
-  ok &= r({320, 240}, "renders/device_espresso_320x240.png", 1, ui::kSectionDevice, false, 2);
+  ok &= r({320, 240}, "renders/device_espresso_320x240.png", 1,
+          ui::kSectionDeviceDisplay, false, 2);
 
   // Exercise the on-disk store format end-to-end: push one canned record
   // through DirShotStore -> sim_sd/Apollo2 — the exact CSV files the device
@@ -218,6 +227,16 @@ int main() {
       host::DirShotStore dir_store("sim_sd");
       dir_store.save(rec);
       std::printf("wrote sim_sd/%s (index + samples)\n", core::kShotDirName);
+      // Exercise remove(): save a second record and delete it again — the
+      // samples unlink + index rewrite is the same flow the device store runs.
+      const int before = dir_store.count();
+      dir_store.save(rec);
+      core::ShotSummary newest;
+      if (dir_store.list(&newest, 1, 0) != 1 || !dir_store.remove(newest.id) ||
+          dir_store.count() != before) {
+        std::fprintf(stderr, "error: DirShotStore remove() round-trip failed\n");
+        ok = false;
+      }
     } else {
       ok = false;
     }

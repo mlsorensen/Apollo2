@@ -19,9 +19,12 @@ void format_shot_datetime(char* buf, size_t n, int64_t unix_time, bool use_24h,
 
 // Build the card's widgets into `parent` (fills it; parent should be a plain
 // container). `rec` must OUTLIVE the card — the graph paints from it on every
-// redraw. Returns the card root.
+// redraw. Returns the card root. When out_delete_btn is non-null, a trash
+// button is added to the header (its events do NOT bubble, so tapping it
+// won't close a tap-anywhere modal) and returned for the caller to wire.
 lv_obj_t* build_shot_card(lv_obj_t* parent, const core::ShotRecord& rec,
-                          const ScreenProfile& screen, bool use_24h);
+                          const ScreenProfile& screen, bool use_24h,
+                          lv_obj_t** out_delete_btn = nullptr);
 
 
 }  // namespace ui
