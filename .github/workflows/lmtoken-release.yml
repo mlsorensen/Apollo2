@@ -37,7 +37,7 @@ jobs:
       # `go test ./...` compiles the GUI package too, which needs the X11/GL
       # headers Fyne links against on Linux.
       - name: Fyne build dependencies
-        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev xorg-dev libxkbcommon-dev
+        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev xorg-dev libxkbcommon-dev libwayland-dev wayland-protocols
 
       - name: Test
         run: go test ./...
@@ -87,7 +87,7 @@ jobs:
           cache-dependency-path: tools/lmtoken/go.sum
 
       - name: Fyne build dependencies
-        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev xorg-dev libxkbcommon-dev
+        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev xorg-dev libxkbcommon-dev libwayland-dev wayland-protocols
 
       # fyne package on Linux emits a tar.xz (binary + .desktop + icon).
       - name: Package LM Token (linux amd64)
