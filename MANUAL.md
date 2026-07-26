@@ -235,6 +235,24 @@ machine is already warming up when you arrive.
   target — `36.2/36g (+0.2)` — green within 2 g, amber beyond. Tap a shot for
   a full‑screen card with its result/target/diff, time, average flow, and the
   weight + flow graph.
+  - **SD card**: use a card formatted **FAT32** (FAT16 also works). exFAT —
+    the factory format of most cards over 32 GB — and NTFS are **not**
+    supported: History detects what's on an unusable card and names it
+    ("This SD card is exFAT‑formatted…") instead of pretending the slot is
+    empty. Reformat on a computer; the device never formats or erases a card
+    on its own.
+  - **Hot‑swap friendly**: no reboot needed in either direction. The device
+    looks for a card every 5 seconds, so a freshly inserted card is picked
+    up within ~5 s; a removed card is likewise noticed within a few seconds
+    and History switches back to the insert‑a‑card guidance. If the card
+    fills up, new shots stop being saved and History says so.
+  - **What's recorded and when**: recorded shots are viewable immediately —
+    no clock needed. Recording NEW shots additionally needs a real date/time
+    (NTP, or Settings → Device) — until the clock is set the footer warns
+    that shots aren't being saved. Records live on the card under `/Apollo2`
+    — an index CSV plus one samples CSV per shot — so the whole history can
+    be read on any computer (graphs are drawn from the data by the device
+    and the web page; nothing is pre‑rendered — the CSVs are the database).
   - **Reset stats**: tap any headline card. Non‑destructive — the three
     headline numbers restart from now (the Total card shows "Since ⟨date⟩")
     while every recorded shot stays on the card. Undo by deleting
@@ -242,15 +260,11 @@ machine is already warming up when you arrive.
   - **Browse from your phone or computer**: with WiFi connected, open
     `http://⟨device IP⟩/` (the IP is on **Stats → Info**). The device serves
     its own web page — the same stats, month filters, and shot list, with a
-    live graph per shot and PNG/CSV downloads — styled to match whatever
-    theme the device is currently using. The same built‑in web server also
-    carries the setup pages during pairing/WiFi setup, so nothing conflicts. Requires a FAT‑formatted SD card; recorded
-  shots are viewable immediately. Recording NEW shots additionally needs a
-  real date/time (NTP, or Settings → Device) — until the clock is set the
-  footer warns that shots aren't being saved. Records live on the card under `/Apollo2` — an index CSV plus one
-  samples CSV per shot — so the whole history can be read on any computer
-  (graphs are drawn from the data by the device and the web page; nothing is
-  pre-rendered).
+    live graph per shot, a **Download card** button that saves any shot as a
+    PNG image (composed in your browser from the raw data), and CSV
+    downloads — all styled to match whatever theme the device is currently
+    using. The same built‑in web server also carries the setup pages during
+    pairing/WiFi setup, so nothing conflicts.
 - **Info** — device details: our firmware version + git revision, uptime,
   battery/USB state with a runtime estimate, and the machine's Device
   Information (manufacturer, model, serial, firmware) read over Bluetooth.
