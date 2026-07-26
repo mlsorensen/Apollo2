@@ -8,6 +8,17 @@ DIST   := dist
 # cross-builds only the app, not the tool itself.
 FYNE := $(CURDIR)/$(BIN)/fyne-tool
 
+# macOS code signing: "-" = ad-hoc (default, what CI uses). Set CODESIGN_ID
+# to a Developer ID (substring match, e.g. "Developer ID Application") for a
+# real signature — that also turns on the hardened runtime + secure timestamp
+# notarization requires.
+CODESIGN_ID ?= -
+ifneq ($(CODESIGN_ID),-)
+CODESIGN_FLAGS := --options runtime --timestamp
+endif
+# Keychain profile created once via: xcrun notarytool store-credentials lmtoken ...
+NOTARY_PROFILE ?= lmtoken
+
 # Strip debug info + symbol table (-s -w) and drop absolute build paths (-trimpath)
 # for smaller, reproducible binaries. Quoted in the recipes so -s -w stay one flag.
 LDFLAGS := -s -w
@@ -19,7 +30,7 @@ PLATFORMS := linux/arm64 linux/amd64 darwin/arm64 darwin/amd64 windows/amd64
 
 .DEFAULT_GOAL := build
 
-.PHONY: build build-all package package-gui package-gui-cross format test vet clean
+.PHONY: build build-all package package-gui package-gui-cross release-mac format test vet clean
 
 # Host-native CLI + GUI binaries.
 build:
@@ -69,13 +80,39 @@ package-gui: $(FYNE)
 		arch=$$($(GO) env GOARCH); \
 		rm -rf "$(DIST)/LM Token.app" $(DIST)/$(BINARY)-gui-darwin-$$arch.zip; \
 		mv "cmd/lmtoken-gui/LM Token.app" $(DIST)/; \
-		codesign --force --deep --sign - "$(DIST)/LM Token.app"; \
+		codesign --force --deep --sign "$(CODESIGN_ID)" $(CODESIGN_FLAGS) "$(DIST)/LM Token.app"; \
 		( cd $(DIST) && zip -qr $(BINARY)-gui-darwin-$$arch.zip "LM Token.app" ); \
 		echo "packaged $(DIST)/$(BINARY)-gui-darwin-$$arch.zip"; \
 	else \
 		mv cmd/lmtoken-gui/LM\ Token* cmd/lmtoken-gui/$(BINARY)-gui* $(DIST)/ 2>/dev/null || true; \
 		ls $(DIST); \
 	fi
+
+# Signed + notarized macOS GUI zips, replacing the ad-hoc CI ones on an
+# existing GitHub release. Run on a Mac with a Developer ID cert in the
+# keychain and notary credentials stored once via
+#   xcrun notarytool store-credentials lmtoken --apple-id you@example.com --team-id TEAMID
+# Usage: make release-mac TAG=lmtoken-vX.Y.Z
+release-mac:
+	@test -n "$(TAG)" || { echo "usage: make release-mac TAG=lmtoken-vX.Y.Z"; exit 1; }
+	@for arch in arm64 amd64; do \
+		GOARCH=$$arch CGO_ENABLED=1 CODESIGN_ID="Developer ID Application" $(MAKE) package-gui || exit 1; \
+		echo "notarizing $$arch (takes a minute or two)..."; \
+		xcrun notarytool submit $(DIST)/$(BINARY)-gui-darwin-$$arch.zip \
+			--keychain-profile $(NOTARY_PROFILE) --wait || exit 1; \
+		xcrun stapler staple "$(DIST)/LM Token.app" || exit 1; \
+		( cd $(DIST) && rm $(BINARY)-gui-darwin-$$arch.zip && \
+			zip -qr $(BINARY)-gui-darwin-$$arch.zip "LM Token.app" ) || exit 1; \
+	done
+	gh release upload $(TAG) $(DIST)/$(BINARY)-gui-darwin-arm64.zip $(DIST)/$(BINARY)-gui-darwin-amd64.zip --clobber
+	@tmp=$$(mktemp -d); \
+	gh release download $(TAG) -p SHA256SUMS.txt -D $$tmp && \
+	grep -v '$(BINARY)-gui-darwin' $$tmp/SHA256SUMS.txt > $$tmp/keep && \
+	( cd $(DIST) && shasum -a 256 $(BINARY)-gui-darwin-*.zip ) >> $$tmp/keep && \
+	mv $$tmp/keep $$tmp/SHA256SUMS.txt && \
+	gh release upload $(TAG) $$tmp/SHA256SUMS.txt --clobber; \
+	rm -rf $$tmp
+	@echo "release $(TAG): darwin GUI zips replaced with signed + notarized builds"
 
 # Cross-platform GUI packages (linux/windows from any host) via fyne-cross,
 # which drives per-OS docker toolchains: https://github.com/fyne-io/fyne-cross
