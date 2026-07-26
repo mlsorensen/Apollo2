@@ -69,6 +69,7 @@ package-gui: $(FYNE)
 		arch=$$($(GO) env GOARCH); \
 		rm -rf "$(DIST)/LM Token.app" $(DIST)/$(BINARY)-gui-darwin-$$arch.zip; \
 		mv "cmd/lmtoken-gui/LM Token.app" $(DIST)/; \
+		codesign --force --deep --sign - "$(DIST)/LM Token.app"; \
 		( cd $(DIST) && zip -qr $(BINARY)-gui-darwin-$$arch.zip "LM Token.app" ); \
 		echo "packaged $(DIST)/$(BINARY)-gui-darwin-$$arch.zip"; \
 	else \

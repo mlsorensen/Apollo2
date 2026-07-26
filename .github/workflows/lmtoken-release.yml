@@ -155,7 +155,10 @@ jobs:
             repository README for what to do with it.
 
             - **LM Token app** (no terminal needed): `lmtoken-gui-<os>-<arch>` — unzip and
-              double-click. macOS: the app is unsigned, so the first launch needs
-              right-click → Open (or System Settings → Privacy & Security → Open Anyway).
+              double-click. macOS: the app is not notarized (no Apple developer
+              subscription), so the first launch warns "Apple could not verify…" — click
+              Done, then System Settings → Privacy & Security → **Open Anyway**. If macOS
+              instead calls the app "damaged", run `xattr -cr "LM Token.app"` and open it
+              again.
             - **lmtoken CLI** (for terminals and scripting): `lmtoken-<os>-<arch>` — unzip
               and run; prints the token to stdout.
