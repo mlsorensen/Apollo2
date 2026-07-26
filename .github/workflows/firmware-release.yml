@@ -88,6 +88,39 @@ jobs:
       - name: Checksums
         run: (cd dist && rm -f *.chip && shasum -a 256 *.bin > SHA256SUMS.txt)
 
+      # Body = this version's CHANGELOG.md section + the constant install
+      # instructions. The notes live in the repo (not in this file) so that
+      # re-running the workflow for an existing tag — which republishes the
+      # release — can't clobber hand-written notes, and so they're reviewed
+      # with the code. A missing section is a loud warning, not a failure:
+      # publishing binaries always wins over perfect prose.
+      - name: Compose release notes
+        run: |
+          awk -v tag="${RELEASE_TAG}" '
+            $0 == "## " tag { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > dist/NOTES.md
+          if [ ! -s dist/NOTES.md ]; then
+            echo "::warning::CHANGELOG.md has no '## ${RELEASE_TAG}' section - publishing with install notes only"
+          fi
+          cat >> dist/NOTES.md <<EOF
+
+          ---
+
+          Apollo 2 firmware ${RELEASE_TAG} — one flashable image per supported
+          Waveshare board (bootloader + partitions + app combined; flash at
+          offset 0).
+
+          **Easiest install: the [web flasher](https://mlsorensen.github.io/Apollo2/)** —
+          plug the board in and flash from Chrome, no tools needed.
+
+          Command-line alternative:
+          \`\`\`
+          esptool.py write_flash 0 apollo2-<board>-${RELEASE_TAG}.bin
+          \`\`\`
+          EOF
+
       - name: Publish release
         uses: softprops/action-gh-release@v3
         with:
@@ -96,18 +129,7 @@ jobs:
           files: |
             dist/*.bin
             dist/SHA256SUMS.txt
-          body: |
-            Apollo 2 firmware ${{ env.RELEASE_TAG }} — one flashable image per
-            supported Waveshare board (bootloader + partitions + app combined;
-            flash at offset 0).
-
-            **Easiest install: the [web flasher](https://mlsorensen.github.io/Apollo2/)** —
-            plug the board in and flash from Chrome, no tools needed.
-
-            Command-line alternative:
-            ```
-            esptool.py write_flash 0 apollo2-<board>-${{ env.RELEASE_TAG }}.bin
-            ```
+          body_path: dist/NOTES.md
 
   # Each release deploys into its own version directory (vX.Y.Z/firmware +
   # vX.Y.Z/manifests) and past versions are KEPT (keep_files) — the page's
