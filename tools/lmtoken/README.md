@@ -26,11 +26,13 @@ dev headers on Linux, MinGW on Windows). To cross-package Linux/Windows apps
 from one machine use [fyne-cross](https://github.com/fyne-io/fyne-cross)
 (needs Docker): `make package-gui-cross`.
 
-The macOS app is ad-hoc signed (`package-gui` runs `codesign --deep -s -`;
-without it Gatekeeper reports downloaded copies as "damaged") but not
-notarized, so a downloaded copy's first launch warns "Apple could not
-verify…" — approve it via System Settings → Privacy & Security → Open
-Anyway.
+macOS signing: `package-gui` ad-hoc signs the bundle by default (without
+*any* bundle signature Gatekeeper reports downloaded copies as "damaged" —
+the Go linker only signs the binary). Releases go one step further:
+`make release-mac TAG=lmtoken-vX.Y.Z` rebuilds both arches signed with a
+Developer ID (`CODESIGN_ID`), notarizes them (`notarytool`, keychain
+profile `lmtoken`), staples, and replaces the darwin zips + checksums on
+the GitHub release — so downloads open with no Gatekeeper prompt at all.
 
 Sign in with your La Marzocco account email + password; if the account has
 several machines you'll get a picker. The token screen shows the token with a
