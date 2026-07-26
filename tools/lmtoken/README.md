@@ -26,6 +26,12 @@ dev headers on Linux, MinGW on Windows). To cross-package Linux/Windows apps
 from one machine use [fyne-cross](https://github.com/fyne-io/fyne-cross)
 (needs Docker): `make package-gui-cross`.
 
+The macOS app is ad-hoc signed (`package-gui` runs `codesign --deep -s -`;
+without it Gatekeeper reports downloaded copies as "damaged") but not
+notarized, so a downloaded copy's first launch warns "Apple could not
+verify…" — approve it via System Settings → Privacy & Security → Open
+Anyway.
+
 Sign in with your La Marzocco account email + password; if the account has
 several machines you'll get a picker. The token screen shows the token with a
 **Copy token** button — paste it into the remote's setup page
