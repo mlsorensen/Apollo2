@@ -1,9 +1,11 @@
 name: lmtoken release
 
-# Cross-compile the lmtoken CLI and publish the binaries to a GitHub Release.
-# Trigger by pushing a tag like `lmtoken-v1.0.0`, or run it manually from the
-# Actions tab (supply the tag). Free on public repositories — the build runs on
-# GitHub-hosted runners and the binaries are hosted on GitHub Releases.
+# Build and publish lmtoken to a GitHub Release: the CLI is cross-compiled in
+# one job (pure Go), while the Fyne GUI (LM Token) needs CGO/OpenGL and is
+# built on a native runner per OS. Trigger by pushing a tag like
+# `lmtoken-v1.0.0`, or run it manually from the Actions tab (supply the tag).
+# Free on public repositories — the builds run on GitHub-hosted runners and
+# the binaries are hosted on GitHub Releases.
 
 on:
   push:
@@ -19,7 +21,7 @@ permissions:
   contents: write  # needed to create the Release
 
 jobs:
-  release:
+  cli:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -30,16 +32,115 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: 'stable'
-          cache: false  # lmtoken is stdlib-only (no go.sum) — nothing to cache
+          cache-dependency-path: tools/lmtoken/go.sum
+
+      # `go test ./...` compiles the GUI package too, which needs the X11/GL
+      # headers Fyne links against on Linux.
+      - name: Fyne build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev xorg-dev libxkbcommon-dev
 
       - name: Test
         run: go test ./...
 
-      - name: Cross-compile + package (dist/*.zip)
+      - name: Cross-compile CLI + package (dist/*.zip)
         run: make package
 
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cli
+          path: tools/lmtoken/dist/*.zip
+
+  gui-darwin:
+    runs-on: macos-latest  # arm64; the amd64 app is cross-built on the same runner
+    defaults:
+      run:
+        working-directory: tools/lmtoken
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: 'stable'
+          cache-dependency-path: tools/lmtoken/go.sum
+
+      - name: Package LM Token.app (arm64 + amd64)
+        run: |
+          make package-gui
+          GOARCH=amd64 CGO_ENABLED=1 make package-gui
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: gui-darwin
+          path: tools/lmtoken/dist/lmtoken-gui-darwin-*.zip
+
+  gui-linux:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/lmtoken
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: 'stable'
+          cache-dependency-path: tools/lmtoken/go.sum
+
+      - name: Fyne build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev xorg-dev libxkbcommon-dev
+
+      # fyne package on Linux emits a tar.xz (binary + .desktop + icon).
+      - name: Package LM Token (linux amd64)
+        run: |
+          mkdir -p dist
+          cd cmd/lmtoken-gui
+          go run fyne.io/tools/cmd/fyne@latest package --release
+          mv *.tar.xz ../../dist/lmtoken-gui-linux-amd64.tar.xz
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: gui-linux
+          path: tools/lmtoken/dist/lmtoken-gui-linux-*.tar.xz
+
+  gui-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: tools/lmtoken
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: 'stable'
+          cache-dependency-path: tools/lmtoken/go.sum
+
+      # fyne package on Windows emits "LM Token.exe" (GUI subsystem, icon
+      # embedded) next to the sources.
+      - name: Package LM Token.exe (windows amd64)
+        shell: pwsh
+        run: |
+          mkdir dist -Force
+          cd cmd/lmtoken-gui
+          go run fyne.io/tools/cmd/fyne@latest package --release
+          Compress-Archive -Path 'LM Token.exe' -DestinationPath ../../dist/lmtoken-gui-windows-amd64.zip
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: gui-windows
+          path: tools/lmtoken/dist/lmtoken-gui-windows-*.zip
+
+  publish:
+    needs: [cli, gui-darwin, gui-linux, gui-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
       - name: Checksums
-        run: (cd dist && shasum -a 256 *.zip > SHA256SUMS.txt)
+        run: (cd dist && shasum -a 256 * > SHA256SUMS.txt)
 
       - name: Publish release
         uses: softprops/action-gh-release@v3
@@ -47,9 +148,14 @@ jobs:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           files: |
-            tools/lmtoken/dist/*.zip
-            tools/lmtoken/dist/SHA256SUMS.txt
+            dist/*
           body: |
-            Prebuilt **lmtoken** binaries. Download the zip for your OS, unzip, and run it —
-            it asks for your La Marzocco account email + password and prints your machine's
-            Bluetooth token. See the repository README for what to do with the token.
+            **LM Token** fetches your La Marzocco machine's Bluetooth token: sign in with
+            your La Marzocco account, pick your machine, and copy the token. See the
+            repository README for what to do with it.
+
+            - **LM Token app** (no terminal needed): `lmtoken-gui-<os>-<arch>` — unzip and
+              double-click. macOS: the app is unsigned, so the first launch needs
+              right-click → Open (or System Settings → Privacy & Security → Open Anyway).
+            - **lmtoken CLI** (for terminals and scripting): `lmtoken-<os>-<arch>` — unzip
+              and run; prints the token to stdout.

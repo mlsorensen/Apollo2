@@ -1,0 +1,9 @@
+[Details]
+Icon = "Icon.png"
+Name = "LM Token"
+ID = "com.turboio.lmtoken"
+Version = "0.1.0"
+Build = 1
+
+[Migrations]
+fyneDo = true
