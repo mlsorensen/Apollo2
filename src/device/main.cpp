@@ -256,9 +256,13 @@ void setup() {
               g_scale, g_scale_provisioner, g_brew, g_network, platform::sound(), g_shots,
               screen);
 
-  // Settings > Device "Restart": soft reboot — re-runs the whole panel init,
-  // the escape hatch for the RGB panel's occasional shifted-raster boot glitch.
+  // Settings "Restart display": on RGB boards this is a panel DMA resync, not
+  // a reboot — the shifted/ghosted raster is a latched bounce-buffer underrun,
+  // and esp_lcd_rgb_panel_restart() realigns it at the next VSYNC in place.
+  // Non-RGB boards (and a missing panel handle) fall back to the old full
+  // soft reboot.
   g_app.set_restart_handler([] {
+    if (g_display.rgb_resync()) return;
     Serial.println("User-requested restart");
     Serial.flush();
     esp_restart();
@@ -346,6 +350,24 @@ void loop() {
   lv_timer_handler();        // LVGL render/input
   g_token_setup.handle();    // portal auto-close timeout
   g_web_ui.poll();           // S3 boards serve here; no-op on the P4s (task)
+
+#if defined(BOARD_DISPLAY_RGB)
+  // One-shot raster resync at 2 s for the boot ghost (~1/4 of cold boots come
+  // up latched a few px off from underruns while setup floods the PSRAM bus).
+  // The resync is VSYNC-aligned (armed here, executed inside vertical
+  // blanking by the display's resync task) but still shows a one-frame ~5 px
+  // jump — the bounce-buffer refill runs with the timing engine stopped —
+  // which is why it's NOT on a periodic timer: the user found a 5 s cadence
+  // distracting. Runtime ghosts are healed manually via Settings > "Restart
+  // display" instead. (An earlier mid-frame, non-VSYNC-aligned version was
+  // far worse: full blank AND could itself latch a fresh ghost — keep the
+  // alignment if refactoring.)
+  static bool boot_resync_done = false;
+  if (!boot_resync_done && millis() >= 2000) {
+    boot_resync_done = true;
+    g_display.rgb_resync(/*verbose=*/false);
+  }
+#endif
 
   // Internal-heap telltale, once a minute: the S3 boards live close to the
   // internal-RAM ceiling (on-chip WiFi+BLE + task stacks + DMA buffers), and

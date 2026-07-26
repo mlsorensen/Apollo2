@@ -258,8 +258,19 @@ constexpr int  kRgbB[5] = {14, 38, 18, 17, 10};      // B3..B7
 constexpr int  kRgbHsyncFront = 8,   kRgbHsyncPulse = 4,  kRgbHsyncBack = 8;
 constexpr int  kRgbVsyncFront = 8,   kRgbVsyncPulse = 4,  kRgbVsyncBack = 8;
 constexpr int  kRgbPclkActiveNeg = 1;
-constexpr long kRgbPclkHz = 16000000;  // 16 MHz (Waveshare 4.3C demo value)
-constexpr int  kRgbBouncePx = kLcdNativeW * 10;
+// Underrun-margin tuning (ghost-raster prevention, 2026-07-25): the ghosted/
+// shifted raster is a bounce-buffer underrun latching a frame-position offset
+// (see Display::rgb_resync). Two knobs widen the refill margin:
+//  - PCLK 16 -> 14 MHz (demo value was 16). Refresh ~39 -> ~34 fps; LVGL only
+//    delivers 25-30 fps here, so nothing visible is lost. Mind the floor:
+//    the 7B's panel showed no image below its stable range — if this panel
+//    misbehaves, go back to 16 MHz and rely on bounce size alone.
+//  - Bounce buffer 10 -> 12 lines/buffer: each refill window is 20% longer.
+//    Costs +6.4KB internal RAM (2x 19.2KB total); the S3 runtime floor was
+//    ~42KB free, and WiFi historically dies below ~9KB — don't go past
+//    x14 without re-checking the heap telltale.
+constexpr long kRgbPclkHz = 14000000;
+constexpr int  kRgbBouncePx = kLcdNativeW * 12;
 
 // --- Touch: GT911 on the shared I2C bus (same as the 4.3B) ---
 constexpr int  kTouchSda = 8;

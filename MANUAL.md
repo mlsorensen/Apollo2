@@ -211,8 +211,11 @@ machine is already warming up when you arrive.
 
 ### Root page
 
-- **Restart display** — soft reboot. Escape hatch for the rare RGB‑panel boot
-  glitch where the image comes up shifted by a few pixels.
+- **Restart display** — escape hatch for the rare RGB‑panel glitch where the
+  image comes up (or drifts) shifted by a few pixels. On RGB boards this
+  re‑aligns the panel in place — you'll see a single one‑frame hop, then a
+  clean image; nothing is lost and nothing reboots. Other boards do a soft
+  reboot. The firmware also re‑aligns itself once shortly after every boot.
 - **Lock display for cleaning** — disables touch for 30 seconds so you can
   wipe the screen. A full‑screen countdown shows the time remaining; the lock
   ends on its own (touching the screen does nothing until then).
