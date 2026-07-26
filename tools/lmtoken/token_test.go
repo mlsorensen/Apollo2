@@ -1,4 +1,4 @@
-package main
+package lmtoken
 
 import (
 	"crypto/ecdsa"

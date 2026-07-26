@@ -1,24 +1,15 @@
-// Command lmtoken fetches a La Marzocco machine's BLE auth token from the
+// Package lmtoken fetches a La Marzocco machine's BLE auth token from the
 // cloud, given an account email + password. It mints a fresh installation key
 // each run (so it never collides with a previously registered one), registers
-// it, signs in, lists the account's devices, and prints the selected device's
+// it, signs in, lists the account's devices, and exposes each device's
 // bleAuthToken.
 //
-// Zero third-party dependencies: only the Go standard library. Build a single
-// distributable binary with `go build`, or cross-compile, e.g.
-//
-//	GOOS=darwin  GOARCH=arm64 go build -o lmtoken-macos-arm64 .
-//	GOOS=linux   GOARCH=amd64 go build -o lmtoken-linux-amd64 .
-//	GOOS=windows GOARCH=amd64 go build -o lmtoken.exe .
-//
-// Credentials: read from $LAMARZOCCO_USERNAME / $LAMARZOCCO_PASSWORD if set,
-// otherwise prompted (password input is hidden on Unix via stty). The BLE token
-// is printed to stdout; everything else (prompts, device list) goes to stderr,
-// so `TOKEN=$(lmtoken)` works.
-package main
+// The package itself has zero third-party dependencies (Go standard library
+// only). Frontends live under cmd/: a terminal CLI (cmd/lmtoken) and a Fyne
+// GUI (cmd/lmtoken-gui).
+package lmtoken
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -27,12 +18,9 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -131,6 +119,18 @@ func uuidV4() (string, error) {
 
 // ---------------------------------------------------------------- HTTP client
 
+// Thing is one device on the La Marzocco account.
+type Thing struct {
+	SerialNumber string `json:"serialNumber"`
+	Name         string `json:"name"`
+	ModelName    string `json:"modelName"`
+	BleAuthToken string `json:"bleAuthToken"`
+}
+
+// ErrBadCredentials is returned by FetchThings when the cloud rejects the
+// username/password (HTTP 401).
+var ErrBadCredentials = fmt.Errorf("invalid username or password")
+
 type client struct {
 	http *http.Client
 	key  *installationKey
@@ -191,7 +191,7 @@ func (c *client) signIn(username, password string) (string, error) {
 		return "", err
 	}
 	if status == 401 {
-		return "", fmt.Errorf("invalid username or password")
+		return "", ErrBadCredentials
 	}
 	if status < 200 || status >= 300 {
 		return "", fmt.Errorf("signin failed (HTTP %d): %s", status, strings.TrimSpace(string(data)))
@@ -208,14 +208,7 @@ func (c *client) signIn(username, password string) (string, error) {
 	return tok.AccessToken, nil
 }
 
-type thing struct {
-	SerialNumber string `json:"serialNumber"`
-	Name         string `json:"name"`
-	ModelName    string `json:"modelName"`
-	BleAuthToken string `json:"bleAuthToken"`
-}
-
-func (c *client) listThings(accessToken string) ([]thing, error) {
+func (c *client) listThings(accessToken string) ([]Thing, error) {
 	headers, err := c.key.extraHeaders()
 	if err != nil {
 		return nil, err
@@ -228,164 +221,40 @@ func (c *client) listThings(accessToken string) ([]thing, error) {
 	if status < 200 || status >= 300 {
 		return nil, fmt.Errorf("list things failed (HTTP %d): %s", status, strings.TrimSpace(string(data)))
 	}
-	var things []thing
+	var things []Thing
 	if err := json.Unmarshal(data, &things); err != nil {
 		return nil, fmt.Errorf("parsing things: %w", err)
 	}
 	return things, nil
 }
 
-// ---------------------------------------------------------------- credentials
+// ---------------------------------------------------------------- public API
 
-func readCredentials(flagUser string) (string, string, error) {
-	username := strings.TrimSpace(flagUser)
-	if username == "" {
-		username = strings.TrimSpace(os.Getenv("LAMARZOCCO_USERNAME"))
-	}
-	if username == "" {
-		fmt.Fprint(os.Stderr, "La Marzocco email: ")
-		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
-		if err != nil && line == "" {
-			return "", "", err
+// FetchThings runs the whole cloud flow — mint + register a fresh
+// installation key, sign in, list devices — and returns the account's
+// devices. progress (may be nil) is called with a short human-readable label
+// as each stage starts.
+func FetchThings(username, password string, progress func(stage string)) ([]Thing, error) {
+	report := func(s string) {
+		if progress != nil {
+			progress(s)
 		}
-		username = strings.TrimSpace(line)
 	}
-	password := os.Getenv("LAMARZOCCO_PASSWORD")
-	if password == "" {
-		p, err := promptHidden("La Marzocco password: ")
-		if err != nil {
-			return "", "", err
-		}
-		password = p
-	}
-	if username == "" || password == "" {
-		return "", "", fmt.Errorf("username and password are required")
-	}
-	return username, password, nil
-}
-
-// promptHidden reads a line from the terminal with echo disabled (via stty on
-// Unix). Falls back to visible input if stty is unavailable (e.g. Windows).
-func promptHidden(prompt string) (string, error) {
-	fmt.Fprint(os.Stderr, prompt)
-	restore := disableEcho()
-	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
-	if restore != nil {
-		restore()
-		fmt.Fprintln(os.Stderr)
-	}
-	if err != nil && line == "" {
-		return "", err
-	}
-	return strings.TrimSpace(line), nil
-}
-
-func disableEcho() func() {
-	stty, err := exec.LookPath("stty")
-	if err != nil {
-		return nil
-	}
-	run := func(arg string) error {
-		c := exec.Command(stty, arg)
-		c.Stdin = os.Stdin
-		return c.Run()
-	}
-	if run("-echo") != nil {
-		return nil
-	}
-	return func() { _ = run("echo") }
-}
-
-// ---------------------------------------------------------------- device pick
-
-func chooseThing(things []thing) (thing, error) {
-	if len(things) == 0 {
-		return thing{}, fmt.Errorf("no devices found on this account")
-	}
-	if len(things) == 1 {
-		return things[0], nil
-	}
-	fmt.Fprintln(os.Stderr, "\nMultiple devices on this account:")
-	for i, t := range things {
-		fmt.Fprintf(os.Stderr, "  [%d] %s  serial=%s  model=%s\n", i+1, t.Name, t.SerialNumber, t.ModelName)
-	}
-	for {
-		fmt.Fprintf(os.Stderr, "Choose a device [1-%d]: ", len(things))
-		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
-		if err != nil && line == "" {
-			return thing{}, err
-		}
-		n, err := strconv.Atoi(strings.TrimSpace(line))
-		if err == nil && n >= 1 && n <= len(things) {
-			return things[n-1], nil
-		}
-		fmt.Fprintln(os.Stderr, "  invalid selection")
-	}
-}
-
-// ---------------------------------------------------------------- main
-
-func main() {
-	flagUser := flag.String("u", "", "La Marzocco account email (else $LAMARZOCCO_USERNAME or prompt)")
-	flagSerial := flag.String("serial", "", "select device by serial number (skip the interactive picker)")
-	flag.Parse()
-
-	if err := run(*flagUser, *flagSerial); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
-	}
-}
-
-func run(flagUser, serial string) error {
-	username, password, err := readCredentials(flagUser)
-	if err != nil {
-		return err
-	}
-
 	key, err := newInstallationKey()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	c := &client{http: &http.Client{Timeout: 30 * time.Second}, key: key}
 
-	fmt.Fprintln(os.Stderr, "registering client...")
+	report("registering client...")
 	if err := c.register(); err != nil {
-		return err
+		return nil, err
 	}
-	fmt.Fprintln(os.Stderr, "signing in...")
+	report("signing in...")
 	accessToken, err := c.signIn(username, password)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	fmt.Fprintln(os.Stderr, "listing devices...")
-	things, err := c.listThings(accessToken)
-	if err != nil {
-		return err
-	}
-
-	var t thing
-	if serial != "" {
-		found := false
-		for _, x := range things {
-			if strings.EqualFold(x.SerialNumber, serial) {
-				t, found = x, true
-				break
-			}
-		}
-		if !found {
-			return fmt.Errorf("no device with serial %q on this account", serial)
-		}
-	} else {
-		t, err = chooseThing(things)
-		if err != nil {
-			return err
-		}
-	}
-
-	fmt.Fprintf(os.Stderr, "device: %s (serial=%s, model=%s)\n", t.Name, t.SerialNumber, t.ModelName)
-	if t.BleAuthToken == "" {
-		return fmt.Errorf("cloud returned an empty bleAuthToken for %s", t.SerialNumber)
-	}
-	fmt.Println(t.BleAuthToken) // the one machine-readable line on stdout
-	return nil
+	report("listing devices...")
+	return c.listThings(accessToken)
 }

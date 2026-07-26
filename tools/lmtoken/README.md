@@ -1,28 +1,55 @@
 # lmtoken
 
-A single, dependency-free binary that logs into your La Marzocco cloud account
-and prints a machine's **BLE auth token** (the `bleAuthToken` used for local
-Bluetooth control). Written in Go using only the standard library — no
-`pylamarzocco`, no Python runtime, no external modules.
+Logs into your La Marzocco cloud account and fetches a machine's **BLE auth
+token** (the `bleAuthToken` used for local Bluetooth control). Two frontends
+share the same Go implementation — no `pylamarzocco`, no Python runtime:
 
-## Build
+- **LM Token** (`cmd/lmtoken-gui`) — a small [Fyne](https://fyne.io) desktop
+  app: double-click, sign in, pick your machine, hit **Copy token**. No
+  terminal needed.
+- **lmtoken** (`cmd/lmtoken`) — the original dependency-free CLI, unchanged
+  behavior, still ideal for scripting.
+
+The cloud protocol lives in the root `lmtoken` package (standard library
+only); the Fyne dependency is confined to the GUI binary.
+
+## GUI app
 
 ```sh
-go build -o lmtoken .
+make build          # builds bin/lmtoken and bin/lmtoken-gui for this machine
+make package-gui    # clickable app for THIS OS (macOS: "LM Token.app" → dist/)
 ```
 
-Cross-compile a binary for any platform (no C toolchain needed):
+Fyne renders with OpenGL through CGO, so the GUI is built **per-OS** (each OS
+packages its own; a C toolchain is required — Xcode CLT on macOS, gcc + X11/GL
+dev headers on Linux, MinGW on Windows). To cross-package Linux/Windows apps
+from one machine use [fyne-cross](https://github.com/fyne-io/fyne-cross)
+(needs Docker): `make package-gui-cross`.
+
+Sign in with your La Marzocco account email + password; if the account has
+several machines you'll get a picker. The token screen shows the token with a
+**Copy token** button — paste it into the remote's setup page
+(`Micra-Setup` Wi-Fi → http://192.168.4.1). The app remembers your email (not
+your password) for next time.
+
+## CLI
 
 ```sh
-GOOS=darwin  GOARCH=arm64 go build -o lmtoken-macos-arm64 .   # Apple Silicon
-GOOS=darwin  GOARCH=amd64 go build -o lmtoken-macos-amd64 .   # Intel Mac
-GOOS=linux   GOARCH=amd64 go build -o lmtoken-linux-amd64 .
-GOOS=windows GOARCH=amd64 go build -o lmtoken.exe .
+go build -o lmtoken ./cmd/lmtoken
 ```
 
-Ship the resulting file as-is; it has no runtime dependencies.
+Cross-compile for any platform (no C toolchain needed):
 
-## Usage
+```sh
+GOOS=darwin  GOARCH=arm64 go build -o lmtoken-macos-arm64 ./cmd/lmtoken
+GOOS=linux   GOARCH=amd64 go build -o lmtoken-linux-amd64 ./cmd/lmtoken
+GOOS=windows GOARCH=amd64 go build -o lmtoken.exe ./cmd/lmtoken
+```
+
+or `make build-all` / `make package` for the full release matrix. Ship the
+resulting file as-is; it has no runtime dependencies.
+
+### Usage
 
 ```sh
 ./lmtoken
@@ -67,4 +94,4 @@ a previously registered one (the cause of the intermittent HTTP 400s when an id
 is reused).
 
 The proof algorithm and key derivation are cross-checked byte-for-byte against
-the reference Python implementation in `main_test.go` (`go test`).
+the reference Python implementation in `token_test.go` (`go test`).

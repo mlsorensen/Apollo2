@@ -182,15 +182,16 @@ access point closes on its own.
 
 Where to get the token:
 
-- **Machine already paired to the LM app** → download **lmtoken** for your OS from
-  the [Releases](../../releases) page, unzip, and run it. It asks for your La
-  Marzocco account email + password and prints the current token. This is the only
-  step that uses the internet, and it runs on your computer.
+- **Machine already paired to the LM app** → download the **LM Token** app for
+  your OS from the [Releases](../../releases) page, unzip, and double-click it.
+  Sign in with your La Marzocco account, pick your machine, and hit **Copy
+  token**. This is the only step that uses the internet, and it runs on your
+  computer. (Prefer a terminal? The `lmtoken` CLI is on the same page.)
 - **Machine never paired to the LM app** → its default token is also printed as a
   **QR code inside the machine**, if you'd rather scan and paste it than let
   step 2 read it automatically.
 
-> Prefer to build `lmtoken` from source (Go), or script it? See
+> Prefer to build **LM Token** / `lmtoken` from source (Go), or script it? See
 > [`tools/lmtoken/README.md`](tools/lmtoken/README.md).
 
 ### 4. (Optional) Wi‑Fi + automatic time
