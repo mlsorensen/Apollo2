@@ -120,6 +120,12 @@ class IShotStore {
   // Load one full record (with samples) by id. False if unknown/unreadable.
   virtual bool read(uint32_t id, ShotRecord& out) const = 0;
 
+  // Permanently delete one shot (index row + samples file). Stats need no
+  // separate recalculation: stats() derives from the index on every call, so
+  // the removed shot simply stops counting. False if unknown or the store
+  // can't take the deletion right now. Default: unsupported.
+  virtual bool remove(uint32_t) { return false; }
+
   // Headline metrics; `now_unix` anchors the 30-day window.
   virtual ShotStats stats(int64_t now_unix) const = 0;
 

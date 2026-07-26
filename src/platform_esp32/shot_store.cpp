@@ -376,6 +376,10 @@ void ShotStore::unmount() {
 
 void ShotStore::write_job(SaveJob& job) {
   if (!available_) return;
+  if (job.rec == nullptr && job.remove_id != 0) {  // delete a shot's files
+    remove_files(job.remove_id);
+    return;
+  }
   if (job.rec == nullptr) {  // persist the stats-reset marker
     FILE* m = std::fopen(stats_since_path(), "w");
     if (m == nullptr) {
@@ -439,7 +443,7 @@ void ShotStore::save(const core::ShotRecord& record) {
   if (rec == nullptr) return;
   std::memcpy(rec, &record, sizeof(core::ShotRecord));
 
-  SaveJob job{rec};
+  SaveJob job{rec, 0};
   if (xQueueSend(queue_, &job, 0) != pdTRUE) {
     // Queue full (two shots mid-write?) — drop rather than block the UI.
     heap_caps_free(rec);
@@ -514,6 +518,79 @@ bool ShotStore::read(uint32_t id, core::ShotRecord& out) const {
 }
 
 
+bool ShotStore::remove(uint32_t id) {
+  if (!available_) return false;
+  // Drop from the RAM index first (list/stats/count see the deletion at once);
+  // the writer's rewrite snapshots the index, so it persists what the UI shows.
+  bool found = false;
+  core::ShotSummary removed{};
+  size_t pos = 0;
+  xSemaphoreTake(mutex_, portMAX_DELAY);
+  for (size_t i = 0; i < index_.size(); ++i) {
+    if (index_[i].id == id) {
+      removed = index_[i];
+      pos = i;
+      index_.erase(index_.begin() + static_cast<long>(i));
+      found = true;
+      break;
+    }
+  }
+  xSemaphoreGive(mutex_);
+  if (!found) return false;
+
+  SaveJob job{nullptr, id};
+  if (xQueueSend(queue_, &job, pdMS_TO_TICKS(250)) != pdTRUE) {
+    // Writer jammed: put the summary back so RAM and card can't drift apart.
+    xSemaphoreTake(mutex_, portMAX_DELAY);
+    if (pos > index_.size()) pos = index_.size();  // saves may have shifted it
+    index_.insert(index_.begin() + static_cast<long>(pos), removed);
+    xSemaphoreGive(mutex_);
+    Serial.println("ShotStore: delete queue full, shot kept");
+    return false;
+  }
+  return true;
+}
+
+void ShotStore::remove_files(uint32_t id) {
+  // Samples file first; a missing file is fine (summary-only shots exist).
+  ::remove(shot_file_path(id, "csv"));
+
+  // Rewrite the index from a RAM snapshot: temp file, then swap. A power cut
+  // mid-swap can at worst lose the index between unlink and rename — the
+  // samples files (the real data) are untouched either way.
+  std::vector<core::ShotSummary> snap;
+  xSemaphoreTake(mutex_, portMAX_DELAY);
+  snap = index_;
+  xSemaphoreGive(mutex_);
+
+  char tmp[64], final_path[64];
+  std::snprintf(tmp, sizeof(tmp), "%s/%s/shots.csv.tmp", kMount,
+                core::kShotDirName);
+  std::snprintf(final_path, sizeof(final_path), "%s/%s/shots.csv", kMount,
+                core::kShotDirName);
+  FILE* f = std::fopen(tmp, "w");
+  if (f == nullptr) {
+    unmount();
+    return;
+  }
+  std::fputs(core::kShotIndexHeader, f);
+  char row[128];
+  for (auto it = snap.rbegin(); it != snap.rend(); ++it) {  // disk is oldest-first
+    core::format_shot_index_row(row, sizeof(row), *it);
+    std::fputs(row, f);
+  }
+  if (std::fclose(f) != 0) {
+    unmount();
+    return;
+  }
+  ::remove(final_path);  // FATFS rename won't overwrite an existing target
+  if (::rename(tmp, final_path) != 0) {
+    unmount();
+    return;
+  }
+  Serial.printf("ShotStore: deleted shot %lu\n", static_cast<unsigned long>(id));
+}
+
 core::ShotStats ShotStore::stats(int64_t now_unix) const {
   if (!available_) return {};
   xSemaphoreTake(mutex_, portMAX_DELAY);
@@ -535,7 +612,7 @@ void ShotStore::set_stats_since(int64_t t) {
   stats_since_ = t;
   xSemaphoreGive(mutex_);
   // Persist off-thread: a marker job is a SaveJob with no record attached.
-  SaveJob job{nullptr};
+  SaveJob job{nullptr, 0};
   xQueueSend(queue_, &job, 0);  // queue full -> marker lost until next reset; fine
 }
 

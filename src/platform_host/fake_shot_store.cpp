@@ -121,6 +121,17 @@ bool FakeShotStore::read(uint32_t id, core::ShotRecord& out) const {
   return false;
 }
 
+bool FakeShotStore::remove(uint32_t id) {
+  if (!available_) return false;
+  for (auto it = shots_.begin(); it != shots_.end(); ++it) {
+    if (it->summary.id == id) {
+      shots_.erase(it);
+      return true;
+    }
+  }
+  return false;
+}
+
 core::ShotStats FakeShotStore::stats(int64_t now_unix) const {
   if (!available_) return {};
   std::vector<core::ShotSummary> sums;

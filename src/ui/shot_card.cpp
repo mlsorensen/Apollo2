@@ -294,7 +294,8 @@ void format_shot_datetime(char* buf, size_t n, int64_t unix_time, bool use_24h,
 }
 
 lv_obj_t* build_shot_card(lv_obj_t* parent, const core::ShotRecord& rec,
-                          const ScreenProfile& screen, bool use_24h) {
+                          const ScreenProfile& screen, bool use_24h,
+                          lv_obj_t** out_delete_btn) {
   const bool compact = is_compact(screen);
   const bool xl = is_xl(screen);
   // One value size for every stat (a shared baseline, not a size-per-stat
@@ -332,14 +333,38 @@ lv_obj_t* build_shot_card(lv_obj_t* parent, const core::ShotRecord& rec,
   lv_obj_set_style_text_color(when_lbl, lv_color_hex(theme::muted()), 0);
   lv_obj_set_style_text_font(when_lbl, small, 0);
 
+  // Right side of the header: mode text, plus the optional delete button.
+  lv_obj_t* hdr_right = lv_obj_create(header);
+  lv_obj_remove_style_all(hdr_right);
+  lv_obj_remove_flag(hdr_right, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(hdr_right, LV_OBJ_FLAG_EVENT_BUBBLE);
+  lv_obj_set_size(hdr_right, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(hdr_right, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(hdr_right, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(hdr_right, ui::dp(compact ? 8 : 12), 0);
+
   const char* mode_txt = rec.summary.wired ? "Auto shot"
                          : rec.summary.mode == core::ShotMode::kDetect
                              ? "Detected"
                              : "Manual";
-  lv_obj_t* mode_lbl = lv_label_create(header);
+  lv_obj_t* mode_lbl = lv_label_create(hdr_right);
   lv_label_set_text(mode_lbl, mode_txt);
   lv_obj_set_style_text_color(mode_lbl, lv_color_hex(theme::muted()), 0);
   lv_obj_set_style_text_font(mode_lbl, small, 0);
+
+  if (out_delete_btn != nullptr) {
+    lv_obj_t* del = ui::make_button(hdr_right);
+    lv_obj_set_height(del, ui::dp(compact ? 26 : 38));
+    lv_obj_set_style_pad_hor(del, ui::dp(compact ? 10 : 14), 0);
+    lv_obj_set_style_bg_color(del, lv_color_hex(theme::alert()), 0);
+    lv_obj_t* l = lv_label_create(del);
+    lv_label_set_text(l, LV_SYMBOL_TRASH);
+    lv_obj_set_style_text_color(l, lv_color_hex(theme::text()), 0);
+    lv_obj_set_style_text_font(l, small, 0);
+    lv_obj_center(l);
+    *out_delete_btn = del;
+  }
 
   // Hero metrics: five equal columns, always all five (untargeted shots show
   // "-" for target/diff) so every card lays out identically.

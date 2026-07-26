@@ -4,11 +4,11 @@
 
 #include "ui/screen.h"
 
-// Settings tab: an lv_menu drill-in, grouped by device with a Bluetooth/Settings
-// split under each:
+// Settings tab: an lv_menu drill-in, grouped by device with short leaf pages
+// under each (short = little to no scrolling, the whole point of the split):
 //   - Micra  -> Bluetooth (scan/save/connect/forget) | Settings (Brew + Boiler)
 //   - Scale  -> Bluetooth (scan/save/connect/forget) | Settings (Target weight)
-//   - Device -> brightness / clock / units / theme (a leaf)
+//   - Device -> Display (brightness/theme/units) | Time & date | WiFi
 // ui::App owns it — builds the frame here, navigates pages, and (re)populates the
 // scan lists. lv_menu provides the page stack + back navigation so we don't
 // hand-roll it.
@@ -24,7 +24,10 @@ enum SettingsSection {
   kSectionScale,           // Scale chooser
   kSectionScaleBt,         // Scale > Bluetooth
   kSectionScaleSettings,   // Scale > Settings (Target weight)
-  kSectionDevice,          // Device (leaf)
+  kSectionDevice,          // Device chooser (Display | Time & date | WiFi)
+  kSectionDeviceDisplay,   // Device > Display (brightness/dim/theme/units/sound)
+  kSectionDeviceTime,      // Device > Time & date (clock + calendar steppers)
+  kSectionDeviceWifi,      // Device > WiFi (enable/setup/timezone/NTP)
   kSectionCount
 };
 
@@ -37,7 +40,10 @@ struct SettingsWidgets {
   lv_obj_t* scale_page = nullptr;           // chooser: Bluetooth | Settings
   lv_obj_t* scale_bt_page = nullptr;        // connection
   lv_obj_t* scale_settings_page = nullptr;  // target weight
-  lv_obj_t* device_page = nullptr;
+  lv_obj_t* device_page = nullptr;          // chooser: Display | Time & date | WiFi
+  lv_obj_t* device_display_page = nullptr;  // brightness/dim/theme/units/sound
+  lv_obj_t* device_time_page = nullptr;     // clock + calendar steppers
+  lv_obj_t* device_wifi_page = nullptr;     // enable/status/setup/timezone/NTP
 
   // --- Micra connection (Bluetooth) ---------------------------------------
   lv_obj_t* saved_row = nullptr;    // "Saved: <name>  [Setup/Connect] [Forget]"
@@ -123,23 +129,16 @@ struct SettingsWidgets {
   lv_obj_t* dim_value = nullptr;
   int screen_timeout_min = 0;
 
-  lv_obj_t* hour_minus = nullptr;
-  lv_obj_t* hour_plus = nullptr;
-  lv_obj_t* hour_value = nullptr;
-  lv_obj_t* minute_minus = nullptr;
-  lv_obj_t* minute_plus = nullptr;
-  lv_obj_t* minute_value = nullptr;
-  // Calendar date steppers (shot history needs a real date; NTP sets it
-  // automatically when WiFi is on — these are for the offline path).
-  lv_obj_t* year_minus = nullptr;
-  lv_obj_t* year_plus = nullptr;
-  lv_obj_t* year_value = nullptr;
-  lv_obj_t* month_minus = nullptr;
-  lv_obj_t* month_plus = nullptr;
-  lv_obj_t* month_value = nullptr;
-  lv_obj_t* day_minus = nullptr;
-  lv_obj_t* day_plus = nullptr;
-  lv_obj_t* day_value = nullptr;
+  // Time & date dropdowns ("Time" = hour/minute, "Date" = month/day/year; a
+  // stepper per field made the page scroll). App owns the options + selection
+  // (hour labels depend on 12/24h, day count on the month; shot history needs
+  // a real date — NTP sets all of this automatically when WiFi is on, these
+  // are the offline path).
+  lv_obj_t* hour_dd = nullptr;
+  lv_obj_t* minute_dd = nullptr;
+  lv_obj_t* month_dd = nullptr;
+  lv_obj_t* day_dd = nullptr;
+  lv_obj_t* year_dd = nullptr;
   lv_obj_t* clock_mode_switch = nullptr;  // on = 24-hour, off = 12-hour
   lv_obj_t* units_switch = nullptr;       // on = Fahrenheit, off = Celsius
   int set_hour = 12;
@@ -158,7 +157,8 @@ struct SettingsWidgets {
   lv_obj_t* wifi_status = nullptr;      // "Connected  192.168.1.42" / "Not connected"
   lv_obj_t* wifi_setup_btn = nullptr;   // "Set up" -> AP credential portal
   lv_obj_t* wifi_forget_btn = nullptr;  // clear saved credentials
-  lv_obj_t* tz_dropdown = nullptr;      // timezone picker (POSIX TZ under the hood)
+  lv_obj_t* tz_dropdown = nullptr;      // timezone picker (POSIX TZ under the
+                                        // hood; lives on the Time & date page)
   lv_obj_t* ntp_switch = nullptr;       // sync clock from NTP while connected (default on)
   lv_obj_t* click_sound_switch = nullptr;  // button-press click (audio boards only)
 };
@@ -171,5 +171,9 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
 
 // Navigate to a section's page (kSectionMicra / kSectionScale / kSectionDevice).
 void settings_select_section(SettingsWidgets& w, int section);
+
+// The lv_menu page a section navigates to (nullptr before build). App uses it
+// to save/restore a page's scroll position across a theme rebuild.
+lv_obj_t* settings_section_page(const SettingsWidgets& w, int section);
 
 }  // namespace ui

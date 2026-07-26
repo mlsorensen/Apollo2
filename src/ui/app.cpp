@@ -173,6 +173,18 @@ void on_hist_metric_card(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->open_reset_stats_modal();
 }
 
+void on_shot_delete(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->open_delete_shot_modal();
+}
+
+void on_delete_shot_confirm(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->confirm_delete_shot();
+}
+
+void on_delete_shot_cancel(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->dismiss_modal();
+}
+
 void on_reset_stats_confirm(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->confirm_reset_stats();
 }
@@ -255,28 +267,63 @@ void set_brightness_label(ui::SettingsWidgets& s) {
   lv_label_set_text(s.brightness_value, b);
 }
 
-void set_time_labels(ui::SettingsWidgets& s) {
+// (Re)fill the hour dropdown's options for the active clock format. Option
+// index == hour 0-23 in BOTH formats ("12 AM" sits at index 0), so the
+// selection code never maps between them.
+void set_hour_dd_options(ui::SettingsWidgets& s) {
+  if (s.hour_dd == nullptr) return;
+  std::string opts;
   char b[8];
-  if (s.clock_24h) {
-    std::snprintf(b, sizeof(b), "%02d", s.set_hour);
-  } else {
-    const int h12 = (s.set_hour % 12 == 0) ? 12 : s.set_hour % 12;
-    std::snprintf(b, sizeof(b), "%d %s", h12, s.set_hour < 12 ? "AM" : "PM");
+  for (int h = 0; h < 24; ++h) {
+    if (s.clock_24h) {
+      std::snprintf(b, sizeof(b), "%02d", h);
+    } else {
+      const int h12 = (h % 12 == 0) ? 12 : h % 12;
+      std::snprintf(b, sizeof(b), "%d %s", h12, h < 12 ? "AM" : "PM");
+    }
+    if (h) opts += '\n';
+    opts += b;
   }
-  lv_label_set_text(s.hour_value, b);
-  std::snprintf(b, sizeof(b), "%02d", s.set_minute);
-  lv_label_set_text(s.minute_value, b);
+  lv_dropdown_set_options(s.hour_dd, opts.c_str());
 }
 
-void set_date_labels(ui::SettingsWidgets& s) {
-  if (s.year_value == nullptr) return;
+// Day options track the selected month's length (index = day - 1).
+void set_day_dd_options(ui::SettingsWidgets& s, int days) {
+  if (s.day_dd == nullptr) return;
+  std::string opts;
+  char b[4];
+  for (int d = 1; d <= days; ++d) {
+    std::snprintf(b, sizeof(b), "%d", d);
+    if (d > 1) opts += '\n';
+    opts += b;
+  }
+  lv_dropdown_set_options(s.day_dd, opts.c_str());
+}
+
+// Static option sets: minutes 00-59, month names, years 2024-2099.
+void set_static_time_dd_options(ui::SettingsWidgets& s) {
+  if (s.minute_dd == nullptr) return;
+  std::string opts;
   char b[8];
-  std::snprintf(b, sizeof(b), "%04d", s.set_year);
-  lv_label_set_text(s.year_value, b);
-  std::snprintf(b, sizeof(b), "%02d", s.set_month);
-  lv_label_set_text(s.month_value, b);
-  std::snprintf(b, sizeof(b), "%02d", s.set_day);
-  lv_label_set_text(s.day_value, b);
+  for (int m = 0; m < 60; ++m) {
+    std::snprintf(b, sizeof(b), "%02d", m);
+    if (m) opts += '\n';
+    opts += b;
+  }
+  lv_dropdown_set_options(s.minute_dd, opts.c_str());
+  opts.clear();
+  for (int m = 0; m < 12; ++m) {
+    if (m) opts += '\n';
+    opts += kMonthNames[m];
+  }
+  lv_dropdown_set_options(s.month_dd, opts.c_str());
+  opts.clear();
+  for (int y = core::kClockBaseYear; y <= 2099; ++y) {
+    std::snprintf(b, sizeof(b), "%d", y);
+    if (y > core::kClockBaseYear) opts += '\n';
+    opts += b;
+  }
+  lv_dropdown_set_options(s.year_dd, opts.c_str());
 }
 
 int days_in_month(int year, int month) {
@@ -288,40 +335,27 @@ int days_in_month(int year, int month) {
   return kDays[month - 1];
 }
 
-// Hour/Minute steppers: tap = +/-1, hold = repeat (spin through values).
-bool is_step_event(lv_event_t* e) {
-  const lv_event_code_t c = lv_event_get_code(e);
-  return c == LV_EVENT_SHORT_CLICKED || c == LV_EVENT_LONG_PRESSED_REPEAT;
+// Time/date dropdowns: the selected index maps straight to the field value
+// (hour index == hour, minute index == minute, month/day are 1-based, year is
+// offset from kClockBaseYear).
+int dd_selected(lv_event_t* e) {
+  auto* dd = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  return static_cast<int>(lv_dropdown_get_selected(dd));
 }
-void on_hour_minus(lv_event_t* e) {
-  if (is_step_event(e)) static_cast<ui::App*>(lv_event_get_user_data(e))->hour_adjust(-1);
+void on_hour_dd(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->hour_select(dd_selected(e));
 }
-void on_hour_plus(lv_event_t* e) {
-  if (is_step_event(e)) static_cast<ui::App*>(lv_event_get_user_data(e))->hour_adjust(+1);
+void on_minute_dd(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->minute_select(dd_selected(e));
 }
-void on_minute_minus(lv_event_t* e) {
-  if (is_step_event(e)) static_cast<ui::App*>(lv_event_get_user_data(e))->minute_adjust(-1);
+void on_month_dd(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->month_select(dd_selected(e));
 }
-void on_minute_plus(lv_event_t* e) {
-  if (is_step_event(e)) static_cast<ui::App*>(lv_event_get_user_data(e))->minute_adjust(+1);
+void on_day_dd(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->day_select(dd_selected(e));
 }
-void on_year_minus(lv_event_t* e) {
-  if (is_step_event(e)) static_cast<ui::App*>(lv_event_get_user_data(e))->year_adjust(-1);
-}
-void on_year_plus(lv_event_t* e) {
-  if (is_step_event(e)) static_cast<ui::App*>(lv_event_get_user_data(e))->year_adjust(+1);
-}
-void on_month_minus(lv_event_t* e) {
-  if (is_step_event(e)) static_cast<ui::App*>(lv_event_get_user_data(e))->month_adjust(-1);
-}
-void on_month_plus(lv_event_t* e) {
-  if (is_step_event(e)) static_cast<ui::App*>(lv_event_get_user_data(e))->month_adjust(+1);
-}
-void on_day_minus(lv_event_t* e) {
-  if (is_step_event(e)) static_cast<ui::App*>(lv_event_get_user_data(e))->day_adjust(-1);
-}
-void on_day_plus(lv_event_t* e) {
-  if (is_step_event(e)) static_cast<ui::App*>(lv_event_get_user_data(e))->day_adjust(+1);
+void on_year_dd(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->year_select(dd_selected(e));
 }
 void on_clock_mode_switch(lv_event_t* e) {
   auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
@@ -791,16 +825,11 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   }
   if (settings_.dim_btn != nullptr)
     lv_obj_add_event_cb(settings_.dim_btn, on_dim_clicked, LV_EVENT_CLICKED, this);
-  lv_obj_add_event_cb(settings_.hour_minus, on_hour_minus, LV_EVENT_ALL, this);
-  lv_obj_add_event_cb(settings_.hour_plus, on_hour_plus, LV_EVENT_ALL, this);
-  lv_obj_add_event_cb(settings_.minute_minus, on_minute_minus, LV_EVENT_ALL, this);
-  lv_obj_add_event_cb(settings_.minute_plus, on_minute_plus, LV_EVENT_ALL, this);
-  lv_obj_add_event_cb(settings_.year_minus, on_year_minus, LV_EVENT_ALL, this);
-  lv_obj_add_event_cb(settings_.year_plus, on_year_plus, LV_EVENT_ALL, this);
-  lv_obj_add_event_cb(settings_.month_minus, on_month_minus, LV_EVENT_ALL, this);
-  lv_obj_add_event_cb(settings_.month_plus, on_month_plus, LV_EVENT_ALL, this);
-  lv_obj_add_event_cb(settings_.day_minus, on_day_minus, LV_EVENT_ALL, this);
-  lv_obj_add_event_cb(settings_.day_plus, on_day_plus, LV_EVENT_ALL, this);
+  lv_obj_add_event_cb(settings_.hour_dd, on_hour_dd, LV_EVENT_VALUE_CHANGED, this);
+  lv_obj_add_event_cb(settings_.minute_dd, on_minute_dd, LV_EVENT_VALUE_CHANGED, this);
+  lv_obj_add_event_cb(settings_.month_dd, on_month_dd, LV_EVENT_VALUE_CHANGED, this);
+  lv_obj_add_event_cb(settings_.day_dd, on_day_dd, LV_EVENT_VALUE_CHANGED, this);
+  lv_obj_add_event_cb(settings_.year_dd, on_year_dd, LV_EVENT_VALUE_CHANGED, this);
   lv_obj_add_event_cb(settings_.clock_mode_switch, on_clock_mode_switch,
                       LV_EVENT_VALUE_CHANGED, this);
   lv_obj_add_event_cb(settings_.units_switch, on_units_switch, LV_EVENT_VALUE_CHANGED, this);
@@ -905,7 +934,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     }
   }
   ui::apply_flow_xaxis_labels(home_);  // initial x-axis label set (no plot reset)
-  seed_time_steppers();
+  seed_time_controls();
 
   settings_.theme_index = ui::theme::active_index();
   set_theme_label(settings_);
@@ -1060,8 +1089,8 @@ void App::brightness_adjust(int dir) {
   if (display_ != nullptr) display_->set_brightness(b);  // live + persisted
 }
 
-void App::seed_time_steppers() {
-  if (clock_ == nullptr) return;
+void App::seed_time_controls() {
+  if (clock_ == nullptr || settings_.hour_dd == nullptr) return;
   const core::WallTime t = clock_->now();
   settings_.set_hour = t.valid ? t.hour : 12;
   settings_.set_minute = t.valid ? t.minute : 0;
@@ -1070,64 +1099,74 @@ void App::seed_time_steppers() {
     settings_.set_month = t.month;
     settings_.set_day = t.day;
   }  // else keep the SettingsWidgets seed defaults — a plausible starting point
-  set_time_labels(settings_);
-  set_date_labels(settings_);
+  // Rebuild all option sets (hour labels follow 12/24h, day count the month;
+  // the static ones are cheap) and select the current values. Programmatic
+  // selection fires no VALUE_CHANGED, so nothing loops back into the clock.
+  set_hour_dd_options(settings_);
+  set_static_time_dd_options(settings_);
+  set_day_dd_options(settings_,
+                     days_in_month(settings_.set_year, settings_.set_month));
+  lv_dropdown_set_selected(settings_.hour_dd, settings_.set_hour);
+  lv_dropdown_set_selected(settings_.minute_dd, settings_.set_minute);
+  lv_dropdown_set_selected(settings_.month_dd, settings_.set_month - 1);
+  lv_dropdown_set_selected(settings_.day_dd, settings_.set_day - 1);
+  lv_dropdown_set_selected(settings_.year_dd,
+                           settings_.set_year - core::kClockBaseYear);
 }
 
 void App::on_settings_page_shown() {
-  // Re-seed the Hour/Minute steppers from the live clock whenever the Device page is
-  // opened, so they reflect the current time instead of the boot-time seed.
+  // Re-seed the Hour/Minute steppers from the live clock whenever the Time & date
+  // page is opened, so they reflect the current time instead of the boot-time seed.
   if (settings_.menu != nullptr &&
-      lv_menu_get_cur_main_page(settings_.menu) == settings_.device_page) {
-    seed_time_steppers();
+      lv_menu_get_cur_main_page(settings_.menu) == settings_.device_time_page) {
+    seed_time_controls();
   }
 }
 
-void App::hour_adjust(int dir) {
-  settings_.set_hour = (settings_.set_hour + dir + 24) % 24;
-  set_time_labels(settings_);
+void App::hour_select(int idx) {
+  settings_.set_hour = idx;  // option index == hour in both clock formats
   if (clock_ != nullptr) clock_->set(settings_.set_hour, settings_.set_minute);
 }
 
-void App::minute_adjust(int dir) {
-  settings_.set_minute = (settings_.set_minute + dir + 60) % 60;
-  set_time_labels(settings_);
+void App::minute_select(int idx) {
+  settings_.set_minute = idx;
   if (clock_ != nullptr) clock_->set(settings_.set_hour, settings_.set_minute);
 }
 
-// Date steppers write the full date on every step (like the time steppers).
-// The RTC stores 2000-2099, so the year clamps there; day re-clamps whenever
-// the month/year changes shorten the month.
-void App::apply_date_steppers() {
+// Any date selection writes the full date (like the time dropdowns). Day
+// re-clamps — and its option list resizes — whenever a month/year change
+// shortens the month.
+void App::apply_date_selection() {
   const int dim = days_in_month(settings_.set_year, settings_.set_month);
   if (settings_.set_day > dim) settings_.set_day = dim;
-  set_date_labels(settings_);
+  set_day_dd_options(settings_, dim);
+  if (settings_.day_dd != nullptr)
+    lv_dropdown_set_selected(settings_.day_dd, settings_.set_day - 1);
   if (clock_ != nullptr)
     clock_->set_date(settings_.set_year, settings_.set_month, settings_.set_day);
 }
 
-void App::year_adjust(int dir) {
-  settings_.set_year = settings_.set_year + dir;
-  if (settings_.set_year < core::kClockBaseYear) settings_.set_year = core::kClockBaseYear;
-  if (settings_.set_year > 2099) settings_.set_year = 2099;
-  apply_date_steppers();
+void App::month_select(int idx) {
+  settings_.set_month = idx + 1;
+  apply_date_selection();
 }
 
-void App::month_adjust(int dir) {
-  settings_.set_month = ((settings_.set_month - 1 + dir + 12) % 12) + 1;
-  apply_date_steppers();
+void App::day_select(int idx) {
+  settings_.set_day = idx + 1;
+  apply_date_selection();
 }
 
-void App::day_adjust(int dir) {
-  const int dim = days_in_month(settings_.set_year, settings_.set_month);
-  settings_.set_day = ((settings_.set_day - 1 + dir + dim) % dim) + 1;
-  apply_date_steppers();
+void App::year_select(int idx) {
+  settings_.set_year = core::kClockBaseYear + idx;
+  apply_date_selection();
 }
 
 void App::set_clock_24h(bool on) {
   settings_.clock_24h = on;
   if (clock_ != nullptr) clock_->set_24h(on);
-  set_time_labels(settings_);  // re-render the Hour stepper; Home updates on refresh
+  set_hour_dd_options(settings_);  // relabel the hour options; index == hour
+  if (settings_.hour_dd != nullptr)
+    lv_dropdown_set_selected(settings_.hour_dd, settings_.set_hour);
 }
 
 void App::set_use_fahrenheit(bool on) {
@@ -1198,21 +1237,21 @@ void App::request_layout_rebuild(int section) {
 void App::rebuild() {
   if (machine_ == nullptr) return;  // never built yet
   const int section = rebuild_section_;
-  rebuild_section_ = kSectionDevice;  // reset to the default for the next rebuild
-  // Preserve the Device panel's scroll position (the theme button sits below the
-  // fold, so a naive rebuild would bounce the user back to the top each cycle).
+  rebuild_section_ = kSectionDeviceDisplay;  // default (the theme button's page)
+  // Preserve the section page's scroll position so a rebuild (theme cycling)
+  // doesn't bounce the user back to the top each tap.
   int32_t scroll_y = 0;
-  if (section == kSectionDevice && settings_.device_page != nullptr)
-    scroll_y = lv_obj_get_scroll_y(settings_.device_page);
+  if (lv_obj_t* old_page = settings_section_page(settings_, section))
+    scroll_y = lv_obj_get_scroll_y(old_page);
 
   build(*machine_, *provisioner_, *battery_, *display_, *clock_, *history_, *scale_,
         *scale_provisioner_, *brew_, *network_, *sound_, *shots_, screen_);
   show_tab(1);                       // back to Settings...
   select_settings_section(section);  // ...on the section that triggered the rebuild
 
-  if (section == kSectionDevice && settings_.device_page != nullptr) {
-    lv_obj_update_layout(settings_.device_page);  // compute the scroll range first
-    lv_obj_scroll_to_y(settings_.device_page, scroll_y, LV_ANIM_OFF);
+  if (lv_obj_t* new_page = settings_section_page(settings_, section)) {
+    lv_obj_update_layout(new_page);  // compute the scroll range first
+    lv_obj_scroll_to_y(new_page, scroll_y, LV_ANIM_OFF);
   }
 }
 
@@ -1788,7 +1827,7 @@ void App::handle_pairing(core::Link link) {
 void App::select_settings_section(int section) {
   commit_temp_edits();  // write pending edits from the section we're leaving
   settings_select_section(settings_, section);
-  if (section == kSectionDevice) seed_time_steppers();  // show the current time
+  if (section == kSectionDeviceTime) seed_time_controls();  // show the current time
 }
 
 void App::select_stats_section(int section) {
@@ -2114,8 +2153,37 @@ void App::open_shot_card(uint32_t id) {
   lv_obj_add_flag(holder, LV_OBJ_FLAG_EVENT_BUBBLE);  // card taps bubble to bg
   lv_obj_set_size(holder, lv_pct(96), lv_pct(94));
   lv_obj_center(holder);
+  lv_obj_t* delete_btn = nullptr;
   ui::build_shot_card(holder, *shot_view_, screen_,
-                      clock_ != nullptr && clock_->use_24h());
+                      clock_ != nullptr && clock_->use_24h(), &delete_btn);
+  pending_delete_id_ = id;
+  if (delete_btn != nullptr)
+    lv_obj_add_event_cb(delete_btn, on_shot_delete, LV_EVENT_CLICKED, this);
+}
+
+void App::open_delete_shot_modal() {
+  if (shots_ == nullptr) return;
+  // open_modal closes the shot-card modal; pending_delete_id_ carries the id.
+  lv_obj_t* card = open_modal(
+      "Delete this shot?",
+      "Removes it from the SD card. The headline stats recalculate without "
+      "it. This can't be undone.");
+  lv_obj_t* row = lv_obj_create(card);
+  lv_obj_remove_style_all(row);
+  lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_style_pad_column(row, ui::dp(10), 0);
+  modal_button(row, "Delete", ui::theme::alert(), on_delete_shot_confirm, this);
+  modal_button(row, "Cancel", ui::theme::rail(), on_delete_shot_cancel, this);
+}
+
+void App::confirm_delete_shot() {
+  if (shots_ != nullptr && pending_delete_id_ != 0)
+    shots_->remove(pending_delete_id_);
+  pending_delete_id_ = 0;
+  close_modal();
+  hist_built_count_ = -1;  // rebuild the list + metrics on the next pass
+  update_history_view();
 }
 
 void App::zoom_step(int dir) {

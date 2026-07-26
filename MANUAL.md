@@ -177,26 +177,36 @@ machine is already warming up when you arrive.
 
 ## Settings → Device
 
+Three short sub‑pages — **Display**, **Time & date**, and **WiFi** — so each
+page fits on screen with little to no scrolling.
+
+### Display
+
 - **Brightness** *(dimmable boards)* — backlight level.
 - **Screen dim** *(Off / 15 min / 30 min, default 30 min)* — after this idle
   time the screen dims to 5 % (or switches off where the backlight can't dim);
   any touch restores it.
-- **Hour / Minute** — set the clock by hand. (With Wi‑Fi + NTP the clock sets
-  itself on every boot; alternatively, boards with an RTC and an optional coin
-  cell installed keep time through a power‑off.)
-- **Year / Month / Day** — set the calendar date by hand. NTP fills it in
-  automatically; without NTP a real date is needed for features that stamp
-  records (shot history). Setting only the time leaves the date unset.
-- **24‑hour** *(default on)* — clock format.
-- **Fahrenheit** *(default off)* — display unit for temperatures. Set‑points
-  are still stored in Celsius.
 - **Theme** — tap to cycle the color scheme: Midnight, Graphite, Espresso,
   Nord, Solarized, Plum, Forest, Rose, Mono (black & white), Contrast (high
   contrast), Ferrari, Sunset, Citrus.
-- **Performance overlay** *(default off)* — LVGL FPS/CPU overlay, for
-  debugging.
+- **Fahrenheit** *(default off)* — display unit for temperatures. Set‑points
+  are still stored in Celsius.
 - **Button sounds** *(boards with a speaker; default on)* — click on button
   presses.
+- **Performance overlay** *(default off)* — LVGL FPS/CPU overlay, for
+  debugging.
+
+### Time & date
+
+- **Time** — hour and minute pickers, to set the clock by hand. (With Wi‑Fi +
+  NTP the clock sets itself on every boot; alternatively, boards with an RTC
+  and an optional coin cell installed keep time through a power‑off.)
+- **Date** — month / day / year pickers. NTP fills the date in automatically;
+  without NTP a real date is needed for features that stamp records (shot
+  history). Setting only the time leaves the date unset.
+- **24‑hour** *(default on)* — clock format.
+- **Timezone** — city picker (handles daylight saving). Governs how all
+  times display and how NTP time is converted.
 
 ### WiFi
 
@@ -206,8 +216,8 @@ machine is already warming up when you arrive.
 - **Set up WiFi** — starts the device's own access point (`Micra-Setup`) and
   setup page for entering credentials (same page as token entry).
 - **Forget** — clears the saved network.
-- **Timezone** — city picker (handles daylight saving).
-- **Auto time (NTP)** *(default on)* — sync the clock while connected.
+- **Auto time (NTP)** *(default on)* — sync the clock over WiFi while
+  connected. (The timezone it applies is set under **Time & date**.)
 
 ### Root page
 
@@ -235,8 +245,11 @@ machine is already warming up when you arrive.
   target — `36.2/36g (+0.2)` — green within 2 g, amber beyond. Tap a shot for
   a full‑screen card with its result/target/diff, time, average flow, and the
   weight + flow graph.
-  - **SD card**: use a card formatted **FAT32** (FAT16 also works). exFAT —
-    the factory format of most cards over 32 GB — and NTFS are **not**
+  - **SD card**: any size — a **small card is more than enough**. A shot is
+    a few tens of KB, so even a 1 GB card holds decades of daily espresso;
+    an old card from a drawer is perfect. Use a card formatted **FAT32**
+    (FAT16 also works) — small cards usually ship that way. exFAT — the
+    factory format of most cards over 32 GB — and NTFS are **not**
     supported: History detects what's on an unusable card and names it
     ("This SD card is exFAT‑formatted…") instead of pretending the slot is
     empty. Reformat on a computer; the device never formats or erases a card
@@ -253,6 +266,10 @@ machine is already warming up when you arrive.
     — an index CSV plus one samples CSV per shot — so the whole history can
     be read on any computer (graphs are drawn from the data by the device
     and the web page; nothing is pre‑rendered — the CSVs are the database).
+  - **Delete a shot**: open its card and tap the red trash button, then
+    confirm. The shot's files are removed from the card and the headline
+    stats recalculate without it — handy for throwing out dial‑in or
+    practice shots. This one *is* destructive (unlike Reset stats below).
   - **Reset stats**: tap any headline card. Non‑destructive — the three
     headline numbers restart from now (the Total card shows "Since ⟨date⟩")
     while every recorded shot stays on the card. Undo by deleting

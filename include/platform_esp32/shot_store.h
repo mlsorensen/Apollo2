@@ -35,6 +35,9 @@ class ShotStore : public core::IShotStore {
   int count() const override;
   int list(core::ShotSummary* out, int max, int offset) const override;
   bool read(uint32_t id, core::ShotRecord& out) const override;
+  // Drops the shot from the RAM index immediately (the UI refreshes off it);
+  // the samples-file delete + index rewrite run on the writer task.
+  bool remove(uint32_t id) override;
   core::ShotStats stats(int64_t now_unix) const override;
   // Cached by the writer task (mount, idle probe, every save) — FATFS free
   // -space queries aren't safe alongside a concurrent write, so the UI
@@ -51,8 +54,9 @@ class ShotStore : public core::IShotStore {
 
  private:
   struct SaveJob {
-    core::ShotRecord* rec;  // PSRAM copy, owned by the writer; null = the
-                            // stats-reset marker job (persist stats_since_)
+    core::ShotRecord* rec;  // PSRAM copy, owned by the writer. null jobs:
+    uint32_t remove_id;     //   0 = stats-reset marker (persist stats_since_),
+                            //   else = delete this shot's files off the card
   };
 
   static void task_entry(void* self);
@@ -60,6 +64,7 @@ class ShotStore : public core::IShotStore {
   bool try_mount();           // mount + load index; true if usable
   void unmount();             // failure path: drop the card, retry later
   void write_job(SaveJob& job);
+  void remove_files(uint32_t id);  // writer task only: samples + index rewrite
   void refresh_storage();     // writer task only: requery + cache capacity
 
   void* card_ = nullptr;  // sdmmc_card_t* while mounted (IDF type kept out

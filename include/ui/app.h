@@ -89,11 +89,11 @@ class App {
   void brightness_adjust(int dir);       // Display brightness +/-
   void cycle_screen_timeout();           // Device "Screen dim": Off / 15 min / 30 min
   void screensaver_tick();               // idle-dim poll (from an lv_timer, ~4 Hz)
-  void hour_adjust(int dir);             // Device clock hour +/- (wraps)
-  void minute_adjust(int dir);           // Device clock minute +/- (wraps)
-  void year_adjust(int dir);             // Device calendar date +/- (day clamps
-  void month_adjust(int dir);            // to the month's length; month wraps)
-  void day_adjust(int dir);
+  void hour_select(int idx);             // Time & date dropdowns: selection ->
+  void minute_select(int idx);           // clock/date write (hour idx == hour,
+  void month_select(int idx);            // month/day 1-based, year offset from
+  void day_select(int idx);              // kClockBaseYear; day clamps + its
+  void year_select(int idx);             // option list resizes with the month)
   void set_clock_24h(bool on);           // Device "24-hour" switch
   void set_use_fahrenheit(bool on);      // Device "Fahrenheit" switch
   void set_drop_negative_flow(bool on);  // Scale "Drop negative g/s" switch
@@ -107,6 +107,8 @@ class App {
   void set_history_filter(int year_month); // History month filter: 0 = all,
                                            // else year*100 + month (1-12)
   void open_shot_card(uint32_t id);       // History row tap -> full-screen card
+  void open_delete_shot_modal();          // shot-card trash tap -> confirm dialog
+  void confirm_delete_shot();             // modal "Delete": remove + refresh
   void open_reset_stats_modal();          // metric-card tap -> confirm dialog
   void confirm_reset_stats();             // modal "Reset": set the marker
   void shot_button();  // shot-mode toggle, or Reset while a shot is in review
@@ -139,8 +141,8 @@ class App {
   void update_temp_panels(const core::MachineSnapshot& state);
   void sync_home_setpoints(bool connected);  // mirror set-points to the Home steppers
   void update_battery_runtime(const core::BatteryState& b);  // track drain for the estimate
-  void seed_time_steppers();  // load the clock into the Hour/Minute/date steppers
-  void apply_date_steppers(); // clamp day, repaint labels, write clock_->set_date
+  void seed_time_controls();   // load the clock into the time/date dropdowns
+  void apply_date_selection(); // clamp day, resize its options, write set_date
   // Re-derive the inferred Heating state (hysteresis bit = heating_) and
   // start/stop the status-dot pulse. Call once per machine-snapshot pass,
   // before update_home.
@@ -205,7 +207,8 @@ class App {
   int clean_lock_shown_s_ = -1;  // last rendered value (redraw on change only)
   bool theme_rebuild_pending_ = false;  // coalesce rapid theme cycling into one rebuild
   bool layout_rebuild_pending_ = false; // coalesce a scale pair/forget rebuild
-  int rebuild_section_ = kSectionDevice;  // Settings section to return to after rebuild()
+  int rebuild_section_ = kSectionDeviceDisplay;  // Settings section to return to
+                                                 // after rebuild() (theme button)
   HomeWidgets home_{};
   SettingsWidgets settings_{};
   StatsWidgets stats_{};
@@ -247,6 +250,7 @@ class App {
   core::ShotRecord* shot_capture_ = nullptr;
   int hist_built_count_ = -1;   // count() the rows were last built from
   int hist_built_filter_ = -1;  // filter the rows were last built from
+  uint32_t pending_delete_id_ = 0;  // shot the delete-confirm modal is about
 };
 
 }  // namespace ui

@@ -168,13 +168,13 @@ void make_inline_stepper(lv_obj_t* row, const lv_font_t* text_font,
   *out_plus = ui::make_step_button(grp, LV_SYMBOL_PLUS, btn_size, symbol_font);
 }
 
-// Device rows: Brightness + clock (Hour/Minute) + 24-hour + Fahrenheit + Theme.
-void build_device_rows(lv_obj_t* page, const lv_font_t* text_font,
-                       const lv_font_t* symbol_font, int btn_size, bool compact,
-                       bool with_brightness, bool with_sound,
-                       ui::SettingsWidgets& out) {
-  // Brightness only where the backlight can dim; else the row is omitted and the
-  // pointers stay null (App guards on them).
+// Device > Display: how the UI looks and sounds. Brightness only where the
+// backlight can dim, button sounds only on boards with a speaker (omitted rows
+// leave their pointers null; App guards on them).
+void build_device_display_rows(lv_obj_t* page, const lv_font_t* text_font,
+                               const lv_font_t* symbol_font, int btn_size,
+                               bool with_brightness, bool with_sound,
+                               ui::SettingsWidgets& out) {
   if (with_brightness) {
     lv_obj_t* rb = make_setting_row(page, "Brightness", text_font);
     make_inline_stepper(rb, text_font, symbol_font, btn_size, &out.brightness_minus,
@@ -195,36 +195,6 @@ void build_device_rows(lv_obj_t* page, const lv_font_t* text_font,
   lv_obj_set_style_text_font(out.dim_value, text_font, 0);
   lv_obj_center(out.dim_value);
 
-  lv_obj_t* rh = make_setting_row(page, "Hour", text_font);
-  make_inline_stepper(rh, text_font, symbol_font, btn_size, &out.hour_minus,
-                      &out.hour_value, &out.hour_plus, nullptr);
-
-  lv_obj_t* rm = make_setting_row(page, "Minute", text_font);
-  make_inline_stepper(rm, text_font, symbol_font, btn_size, &out.minute_minus,
-                      &out.minute_value, &out.minute_plus, nullptr);
-
-  // Calendar date. NTP fills it in automatically when WiFi is on; these rows
-  // are the offline path (shot history needs a real date to record).
-  lv_obj_t* ry = make_setting_row(page, "Year", text_font);
-  make_inline_stepper(ry, text_font, symbol_font, btn_size, &out.year_minus,
-                      &out.year_value, &out.year_plus, nullptr);
-
-  lv_obj_t* rmo = make_setting_row(page, "Month", text_font);
-  make_inline_stepper(rmo, text_font, symbol_font, btn_size, &out.month_minus,
-                      &out.month_value, &out.month_plus, nullptr);
-
-  lv_obj_t* rday = make_setting_row(page, "Day", text_font);
-  make_inline_stepper(rday, text_font, symbol_font, btn_size, &out.day_minus,
-                      &out.day_value, &out.day_plus, nullptr);
-
-  lv_obj_t* rc = make_setting_row(page, "24-hour", text_font);
-  out.clock_mode_switch = lv_switch_create(rc);
-  lv_obj_set_size(out.clock_mode_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
-
-  lv_obj_t* ru = make_setting_row(page, "Fahrenheit", text_font);
-  out.units_switch = lv_switch_create(ru);
-  lv_obj_set_size(out.units_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
-
   lv_obj_t* rt = make_setting_row(page, "Theme", text_font);
   out.theme_btn = ui::make_button(rt);
   lv_obj_set_style_bg_color(out.theme_btn, lv_color_hex(ui::theme::card()), 0);
@@ -233,9 +203,9 @@ void build_device_rows(lv_obj_t* page, const lv_font_t* text_font,
   lv_obj_set_style_text_font(out.theme_value, text_font, 0);
   lv_obj_center(out.theme_value);
 
-  lv_obj_t* rp = make_setting_row(page, "Performance overlay", text_font);
-  out.perf_overlay_switch = lv_switch_create(rp);
-  lv_obj_set_size(out.perf_overlay_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
+  lv_obj_t* ru = make_setting_row(page, "Fahrenheit", text_font);
+  out.units_switch = lv_switch_create(ru);
+  lv_obj_set_size(out.units_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 
   // Button-press click, only on boards with a speaker (core::ISound).
   if (with_sound) {
@@ -246,9 +216,90 @@ void build_device_rows(lv_obj_t* page, const lv_font_t* text_font,
     out.click_sound_switch = nullptr;
   }
 
-  // --- WiFi: enable + status + setup/forget + timezone --------------------
-  section_label(page, "WiFi", text_font);
+  lv_obj_t* rp = make_setting_row(page, "Performance overlay", text_font);
+  out.perf_overlay_switch = lv_switch_create(rp);
+  lv_obj_set_size(out.perf_overlay_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
+}
 
+// A bare dropdown for a time/date field: tier font on the button AND the popup
+// list (which does not inherit it — same lesson as the timezone dropdown), a
+// bounded list height so long option sets (minutes, years) stay scrollable.
+// App owns the options + selection.
+lv_obj_t* make_field_dropdown(lv_obj_t* parent, const lv_font_t* font, int width,
+                              bool compact) {
+  lv_obj_t* dd = lv_dropdown_create(parent);
+  lv_dropdown_set_options(dd, "");
+  lv_obj_set_style_text_font(dd, font, 0);
+  lv_obj_set_width(dd, width);
+  if (lv_obj_t* list = lv_dropdown_get_list(dd)) {
+    lv_obj_set_style_text_font(list, font, 0);
+    lv_obj_set_style_max_height(list, ui::dp(compact ? 160 : 320), 0);
+  }
+  return dd;
+}
+
+// The right-side container a dropdown row packs its fields into.
+lv_obj_t* make_field_group(lv_obj_t* row) {
+  lv_obj_t* grp = lv_obj_create(row);
+  lv_obj_remove_style_all(grp);
+  lv_obj_remove_flag(grp, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_size(grp, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(grp, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(grp, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(grp, ui::dp(6), 0);
+  return grp;
+}
+
+// Device > Time & date: Time (hour/minute) + Date (month/day/year) as dropdown
+// rows, 24-hour format, timezone. NTP overwrites the clock whenever WiFi is
+// on; the dropdowns are the offline path (shot history needs a real date).
+// Timezone lives HERE, not under WiFi: it also governs how stored shot
+// timestamps display, so it's a time preference that merely feeds NTP too.
+void build_device_time_rows(lv_obj_t* page, const lv_font_t* text_font,
+                            int btn_size, bool compact,
+                            ui::SettingsWidgets& out) {
+  lv_obj_t* rt = make_setting_row(page, "Time", text_font);
+  lv_obj_t* tg = make_field_group(rt);
+  out.hour_dd = make_field_dropdown(tg, text_font, ui::dp(compact ? 92 : 128), compact);
+  out.minute_dd = make_field_dropdown(tg, text_font, ui::dp(compact ? 66 : 92), compact);
+
+  lv_obj_t* rd = make_setting_row(page, "Date", text_font);
+  lv_obj_t* dg = make_field_group(rd);
+  out.month_dd = make_field_dropdown(dg, text_font, ui::dp(compact ? 74 : 100), compact);
+  out.day_dd = make_field_dropdown(dg, text_font, ui::dp(compact ? 62 : 84), compact);
+  out.year_dd = make_field_dropdown(dg, text_font, ui::dp(compact ? 82 : 112), compact);
+
+  lv_obj_t* rc = make_setting_row(page, "24-hour", text_font);
+  out.clock_mode_switch = lv_switch_create(rc);
+  lv_obj_set_size(out.clock_mode_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
+
+  lv_obj_t* rtz = make_setting_row(page, "Timezone", text_font);
+  out.tz_dropdown = lv_dropdown_create(rtz);
+  std::string opts;
+  for (int i = 0; i < ui::kTimezoneCount; ++i) {
+    if (i) opts += '\n';
+    opts += ui::kTimezones[i].label;
+  }
+  lv_dropdown_set_options(out.tz_dropdown, opts.c_str());
+  lv_obj_set_style_text_font(out.tz_dropdown, text_font, 0);
+  // The dropdown's default width comes from LVGL's DPI constant (not dp-scaled)
+  // — on the scaled 5" the selected label ran under the arrow. Size it for the
+  // widest label ("Athens / Helsinki") at this tier's font.
+  lv_obj_set_width(out.tz_dropdown, ui::dp(compact ? 170 : 240));
+  // The popup LIST is a separate object that does NOT inherit the button's
+  // style — unstyled it renders at the 14px default (tiny at 1.5x). Give it
+  // the tier font and enough height that a good stretch of zones shows.
+  if (lv_obj_t* tz_list = lv_dropdown_get_list(out.tz_dropdown)) {
+    lv_obj_set_style_text_font(tz_list, text_font, 0);
+    lv_obj_set_style_max_height(tz_list, ui::dp(compact ? 180 : 360), 0);
+  }
+}
+
+// Device > WiFi: enable + status + setup/forget + NTP. (Timezone lives on the
+// Time & date page — it's a time preference, not a network one.)
+void build_device_wifi_rows(lv_obj_t* page, const lv_font_t* text_font,
+                            int btn_size, ui::SettingsWidgets& out) {
   lv_obj_t* rw = make_setting_row(page, "Enable", text_font);
   out.wifi_switch = lv_switch_create(rw);
   lv_obj_set_size(out.wifi_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
@@ -288,27 +339,6 @@ void build_device_rows(lv_obj_t* page, const lv_font_t* text_font,
   lv_obj_set_style_text_color(fg, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(fg, text_font, 0);
   lv_obj_center(fg);
-
-  lv_obj_t* rtz = make_setting_row(page, "Timezone", text_font);
-  out.tz_dropdown = lv_dropdown_create(rtz);
-  std::string opts;
-  for (int i = 0; i < ui::kTimezoneCount; ++i) {
-    if (i) opts += '\n';
-    opts += ui::kTimezones[i].label;
-  }
-  lv_dropdown_set_options(out.tz_dropdown, opts.c_str());
-  lv_obj_set_style_text_font(out.tz_dropdown, text_font, 0);
-  // The dropdown's default width comes from LVGL's DPI constant (not dp-scaled)
-  // — on the scaled 5" the selected label ran under the arrow. Size it for the
-  // widest label ("Athens / Helsinki") at this tier's font.
-  lv_obj_set_width(out.tz_dropdown, ui::dp(compact ? 170 : 240));
-  // The popup LIST is a separate object that does NOT inherit the button's
-  // style — unstyled it renders at the 14px default (tiny at 1.5x). Give it
-  // the tier font and enough height that a good stretch of zones shows.
-  if (lv_obj_t* tz_list = lv_dropdown_get_list(out.tz_dropdown)) {
-    lv_obj_set_style_text_font(tz_list, text_font, 0);
-    lv_obj_set_style_max_height(tz_list, ui::dp(compact ? 180 : 360), 0);
-  }
 
   lv_obj_t* rnt = make_setting_row(page, "Auto time (NTP)", text_font);
   out.ntp_switch = lv_switch_create(rnt);
@@ -438,12 +468,16 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   out.micra_settings_page = lv_menu_page_create(menu, "Settings");
   out.scale_bt_page = lv_menu_page_create(menu, "Bluetooth");
   out.scale_settings_page = lv_menu_page_create(menu, "Settings");
-  out.device_page = lv_menu_page_create(menu, "Device");
+  out.device_display_page = lv_menu_page_create(menu, "Display");
+  out.device_time_page = lv_menu_page_create(menu, "Time & date");
+  out.device_wifi_page = lv_menu_page_create(menu, "WiFi");
   page_column(out.micra_bt_page, compact);
   page_column(out.micra_settings_page, compact);
   page_column(out.scale_bt_page, compact);
   page_column(out.scale_settings_page, compact);
-  page_column(out.device_page, compact);
+  page_column(out.device_display_page, compact);
+  page_column(out.device_time_page, compact);
+  page_column(out.device_wifi_page, compact);
 
   // Micra > Bluetooth: connection
   build_connection_panel(out.micra_bt_page, font, btn_h, &out.saved_row,
@@ -542,19 +576,26 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_set_size(out.scope_graph_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
   }
 
-  // Device (leaf)
-  build_device_rows(out.device_page, font, symbol_font, btn_size, compact, with_brightness,
-                    with_sound, out);
+  // Device leaves
+  build_device_display_rows(out.device_display_page, font, symbol_font, btn_size,
+                            with_brightness, with_sound, out);
+  build_device_time_rows(out.device_time_page, font, btn_size, compact, out);
+  build_device_wifi_rows(out.device_wifi_page, font, btn_size, out);
 
-  // --- Chooser pages: Bluetooth | Settings under each device ---------------
+  // --- Chooser pages: short nav lists under each root entry -----------------
   out.micra_page = lv_menu_page_create(menu, "Micra");
   out.scale_page = lv_menu_page_create(menu, "Scale");
+  out.device_page = lv_menu_page_create(menu, "Device");
   page_column(out.micra_page, compact);
   page_column(out.scale_page, compact);
+  page_column(out.device_page, compact);
   root_entry(menu, out.micra_page, out.micra_bt_page, "Bluetooth", font, btn_h);
   root_entry(menu, out.micra_page, out.micra_settings_page, "Settings", font, btn_h);
   root_entry(menu, out.scale_page, out.scale_bt_page, "Bluetooth", font, btn_h);
   root_entry(menu, out.scale_page, out.scale_settings_page, "Settings", font, btn_h);
+  root_entry(menu, out.device_page, out.device_display_page, "Display", font, btn_h);
+  root_entry(menu, out.device_page, out.device_time_page, "Time & date", font, btn_h);
+  root_entry(menu, out.device_page, out.device_wifi_page, "WiFi", font, btn_h);
 
   // --- Root page: Micra / Scale / Device -----------------------------------
   out.root_page = lv_menu_page_create(menu, "Settings");
@@ -595,20 +636,26 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   lv_menu_set_page(menu, out.root_page);
 }
 
+lv_obj_t* settings_section_page(const SettingsWidgets& w, int section) {
+  switch (section) {
+    case kSectionMicra:         return w.micra_page;
+    case kSectionMicraBt:       return w.micra_bt_page;
+    case kSectionMicraSettings: return w.micra_settings_page;
+    case kSectionScale:         return w.scale_page;
+    case kSectionScaleBt:       return w.scale_bt_page;
+    case kSectionScaleSettings: return w.scale_settings_page;
+    case kSectionDevice:        return w.device_page;
+    case kSectionDeviceDisplay: return w.device_display_page;
+    case kSectionDeviceTime:    return w.device_time_page;
+    case kSectionDeviceWifi:    return w.device_wifi_page;
+    default:                    return w.root_page;
+  }
+}
+
 void settings_select_section(SettingsWidgets& w, int section) {
   if (w.menu == nullptr) return;
-  lv_obj_t* page = w.root_page;
-  switch (section) {
-    case kSectionMicra:         page = w.micra_page; break;
-    case kSectionMicraBt:       page = w.micra_bt_page; break;
-    case kSectionMicraSettings: page = w.micra_settings_page; break;
-    case kSectionScale:         page = w.scale_page; break;
-    case kSectionScaleBt:       page = w.scale_bt_page; break;
-    case kSectionScaleSettings: page = w.scale_settings_page; break;
-    case kSectionDevice:        page = w.device_page; break;
-    default:                    page = w.root_page; break;
-  }
-  lv_menu_set_page(w.menu, page);
+  lv_obj_t* page = settings_section_page(w, section);
+  lv_menu_set_page(w.menu, page != nullptr ? page : w.root_page);
 }
 
 }  // namespace ui
