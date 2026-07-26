@@ -207,7 +207,7 @@ void BrewController::poll_clean(uint32_t now_ms) {
     paddle_.drive(true);
     driving_ = true;
     bf_on_ = true;
-    clean_until_ms_ = now_ms + kBackflushOnMs;
+    clean_until_ms_ = now_ms + flush_run_ms(flush_s_);
     logf("Brew: backflush cycle %d/%d\n", bf_cycle_, kBackflushCycles);
   }
 }
@@ -232,12 +232,12 @@ void BrewController::toggle_manual_flush() {
   if (!can_clean()) return;
   cancel_shot();  // clears any review/auto-flush and opens the line first
   // Same run time as the post-shot auto-flush — one duration to reason about.
-  const int secs = flush_s_ > 0 ? flush_s_ : kManualFlushDefaultS;
   clean_ = CleanMode::kManual;
-  clean_until_ms_ = last_now_ms_ + static_cast<uint32_t>(secs) * 1000u;
+  clean_until_ms_ = last_now_ms_ + flush_run_ms(flush_s_);
   paddle_.drive(true);
   driving_ = true;
-  logf("Brew: manual flush running (%ds)\n", secs);
+  logf("Brew: manual flush running (%ums)\n",
+       static_cast<unsigned>(flush_run_ms(flush_s_)));
 }
 
 bool BrewController::start_backflush() {
@@ -249,10 +249,11 @@ bool BrewController::start_backflush() {
   bf_done_ = false;
   // Drive the first pulse HERE rather than waiting for the next poll, so the
   // Go button gives instant feedback.
-  clean_until_ms_ = last_now_ms_ + kBackflushOnMs;
+  clean_until_ms_ = last_now_ms_ + flush_run_ms(flush_s_);
   paddle_.drive(true);
   driving_ = true;
-  logf("Brew: backflush started (%d cycles)\n", kBackflushCycles);
+  logf("Brew: backflush started (%d cycles, %ums on)\n", kBackflushCycles,
+       static_cast<unsigned>(flush_run_ms(flush_s_)));
   return true;
 }
 
@@ -587,7 +588,10 @@ void BrewController::set_review_hold_s(int seconds) {
 
 void BrewController::set_flush_s(int seconds) {
   if (seconds < 0) seconds = 0;
-  if (seconds > 10) seconds = 10;
+  // Headroom over the UI's longest choice (15 s): this duration also drives
+  // the manual flush and the backflush pulses, which need to outlast a
+  // machine's preinfusion.
+  if (seconds > 30) seconds = 30;
   if (seconds == flush_s_) return;
   flush_s_ = seconds;
   if (persist_flush_) persist_flush_(seconds);

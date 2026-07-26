@@ -432,8 +432,10 @@ void on_flush_delay_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_flush_delay();
 }
 
-// Auto-flush run-time choices (seconds; 0 = off).
-constexpr int kFlushChoices[] = {0, 3, 6};
+// Auto-flush run-time choices (seconds; 0 = off). Also the pulse length for
+// the Home Flush button and the backflush cycles, so the range runs long
+// enough to outlast a machine's preinfusion.
+constexpr int kFlushChoices[] = {0, 3, 6, 9, 15};
 constexpr int kFlushCount = static_cast<int>(sizeof(kFlushChoices) / sizeof(kFlushChoices[0]));
 // Cup-off -> flush pause choices (seconds).
 constexpr int kFlushDelayChoices[] = {3, 6, 9, 15};
@@ -1880,18 +1882,20 @@ void App::backflush_tick() {
       } else if (!b.clean_ready) {
         msg = "Turn the machine on (and finish any shot) first.";
       } else {
-        // Plain ASCII punctuation only: the bundled Montserrat subset has no
-        // em-dash (it renders as a missing-glyph box).
-        static char prompt[200];
+        // Pulse length follows the Auto flush setting, so spell out what THIS
+        // machine will actually do. Plain ASCII punctuation only: the bundled
+        // Montserrat subset has no em-dash (it renders as a missing-glyph box).
+        const uint32_t on_ms = core::flush_run_ms(b.flush_s);
+        static char prompt[220];
         std::snprintf(prompt, sizeof(prompt),
                       "Fit the blind filter with cleaning detergent, then tap "
-                      "Go.\n\n%d cycles of %us on, %us off. About %us total.",
+                      "Go.\n\n%d cycles of %us on, %us off. About %us total.\n"
+                      "Pulse length follows Auto flush.",
                       core::kBackflushCycles,
-                      static_cast<unsigned>(core::kBackflushOnMs / 1000),
+                      static_cast<unsigned>(on_ms / 1000),
                       static_cast<unsigned>(core::kBackflushOffMs / 1000),
                       static_cast<unsigned>(core::kBackflushCycles *
-                                            (core::kBackflushOnMs +
-                                             core::kBackflushOffMs) / 1000));
+                                            (on_ms + core::kBackflushOffMs) / 1000));
         msg = prompt;
       }
       break;

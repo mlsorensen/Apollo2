@@ -60,7 +60,7 @@ class FakeBrewController : public core::IBrewController {
     bf_active_ = true;
     bf_on_ = true;
     bf_cycle_ = 1;
-    bf_phase_ms_ = core::kBackflushOnMs;
+    bf_phase_ms_ = core::flush_run_ms(flush_s_);
     bf_done_ = false;
     return true;
   }
