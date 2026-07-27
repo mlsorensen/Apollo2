@@ -5,6 +5,42 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## v0.4.1
+
+A bug-fix release — no new features.
+
+### Fixes
+
+- **Acaia scales no longer get stuck "connected" with no weight.** A link could
+  sit connected and acking, and never deliver a reading. Several separate
+  causes: liveness was judged on any Bluetooth traffic (which a scale keeps
+  sending even when its weight events were never registered), the event
+  registration itself was subtly malformed, incoming frames were mis-parsed the
+  moment a fixed-length one arrived, and the handshake could be written before
+  the scale was ready to hear it. The link now watches the *weight* stream
+  specifically, re-handshakes when it stalls, and reconnects if it stays silent.
+  Connecting is also faster to first reading.
+- **Acaia weights could read 100× high** on scales that report their decimal
+  place as 0.
+- **The graph smoothing setting now affects the live graph**, not just the
+  frozen shot review. Previously the sweep you watch while pulling a shot
+  stayed unsmoothed at every setting. *Strong* is now a wider filter than
+  before; Off, Light and Medium behave as they did.
+- **Shots freeze for review when the drips actually stop**, instead of after a
+  fixed 3 seconds — so the final weight is a settled one. This also makes the
+  learned overshoot compensation more accurate, since that's the number it
+  grades itself against.
+- **The stop hint (unwired mode) learns its own timing.** It shares nothing
+  with the wired auto-stop now, because it also has to cover your reaction time
+  between seeing the hint and flipping the paddle; one shared value had the two
+  modes pulling against each other on a wired machine.
+- **The 2-inch board no longer fails to start with "display init failed"** — it
+  was the only board taking its drawing buffer from the same scarce internal
+  memory that Wi-Fi and Bluetooth need, and the request had grown too large to
+  fit.
+- **An empty SD slot no longer floods the serial log.** Boards without a card
+  were logging a mount failure every 5 seconds, burying everything else.
+
 ## v0.4.0
 
 ### Features
