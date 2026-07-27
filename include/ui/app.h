@@ -187,7 +187,7 @@ class App {
   core::ISound* sound_ = nullptr;
   core::IShotStore* shots_ = nullptr;
   bool click_sound_on_ = true;  // cached from IDisplaySettings (checked per press)
-  int ready_chime_vol_ = 100;   // cached likewise, 0..100 (0 = chime off)
+  int ready_chime_vol_ = 50;    // cached likewise, 0..100 (0 = chime off)
   lv_obj_t* tabview_ = nullptr;
   ScreenProfile screen_{};          // stored so we can rebuild on a theme change
   lv_obj_t* modal_ = nullptr;       // current overlay modal, if open

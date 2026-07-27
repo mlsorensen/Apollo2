@@ -20,6 +20,9 @@ constexpr char kPerfOverlayKey[] = "perfovl";
 constexpr char kClickSoundKey[] = "clicksnd";
 constexpr char kReadyChimeKey[] = "rdychime";    // legacy on/off, migrated below
 constexpr char kReadyChimeVolKey[] = "rdychimev";
+// Half volume out of the box: loud enough to carry, quiet enough that the
+// first warm-up after a flash doesn't startle anyone.
+constexpr int kReadyChimeDefaultVol = 50;
 constexpr char kScaleMacKey[] = "smac";
 constexpr char kScaleNameKey[] = "sname";
 constexpr char kTargetKey[] = "tgtg";
@@ -429,13 +432,14 @@ void Config::set_click_sound(bool on) {
 
 int Config::ready_chime_volume() const {
   Preferences p;
-  if (!p.begin(kNamespace, /*readOnly=*/true)) return 100;
-  int v = 100;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return kReadyChimeDefaultVol;
+  int v = kReadyChimeDefaultVol;
   if (p.isKey(kReadyChimeVolKey)) {
-    v = p.getInt(kReadyChimeVolKey, 100);
+    v = p.getInt(kReadyChimeVolKey, kReadyChimeDefaultVol);
   } else if (p.isKey(kReadyChimeKey)) {
-    // Migrate the on/off key this setting shipped as first: off stays off,
-    // on means the full level it used to play at.
+    // Migrate the on/off key this setting shipped as first: off stays off, on
+    // keeps the full level it used to play at rather than dropping to the new
+    // default — migration preserves what a device was doing.
     v = p.getBool(kReadyChimeKey, true) ? 100 : 0;
   }
   p.end();
