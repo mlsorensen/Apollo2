@@ -1471,6 +1471,7 @@ void reset_flow_history(HomeWidgets& w) {
   w.flow_hist_n = 0;  // rate reads 0 for ~kFlowMinSpanS while it re-warms
   w.flow_hist_head = 0;
   w.flow_hist_last_ms = 0;
+  w.flow_dl_n = 0;    // smoothing delay line: reprime off the next real sample
 }
 
 // Sample the weight into the rate history and return the current flow rate
@@ -1555,17 +1556,22 @@ static uint32_t shot_t_last(const HomeWidgets& w) {
   return w.shot_ts[shot_sample_idx(w, w.shot_n - 1)];
 }
 
-// Logical sample i (0..shot_n-1) of `vals`, smoothed by the draw-time 3-point
-// kernel [k, 1-2k, k] (neighbors clamped at the ends; k = shot_smooth_k, a
-// user setting — stored samples stay raw). The 2.2-interval display lag
-// guarantees a painted sample's next neighbor already exists, so the
-// smoothing is stable — painted columns never need revisiting.
+// Logical sample i (0..shot_n-1) of `vals`, smoothed by the draw-time
+// symmetric kernel in smooth_w (neighbors clamped at the ends). Stored samples
+// stay RAW: review re-renders at whatever level is set, and CSV export ships
+// the unfiltered series. The display lag (shot_display_time) is sized off
+// smooth_hw so a painted sample's neighbors already exist — that is what makes
+// the smoothing stable, since painted columns are never revisited.
 static float shot_val(const HomeWidgets& w, const float* vals, int i) {
-  const float c = vals[shot_sample_idx(w, i)];
-  if (w.shot_smooth_k <= 0.0f) return c;
-  const float p = vals[shot_sample_idx(w, i > 0 ? i - 1 : i)];
-  const float n = vals[shot_sample_idx(w, i + 1 < w.shot_n ? i + 1 : i)];
-  return c * (1.0f - 2.0f * w.shot_smooth_k) + (p + n) * w.shot_smooth_k;
+  if (w.smooth_hw <= 0) return vals[shot_sample_idx(w, i)];
+  float acc = 0.0f;
+  for (int d = -w.smooth_hw; d <= w.smooth_hw; ++d) {
+    int j = i + d;
+    if (j < 0) j = 0;
+    if (j >= w.shot_n) j = w.shot_n - 1;
+    acc += w.smooth_w[d < 0 ? -d : d] * vals[shot_sample_idx(w, j)];
+  }
+  return acc;
 }
 
 // Paint columns x0..x1 under the given mapping, advancing the sample cursor
@@ -1643,14 +1649,23 @@ static uint32_t shot_display_time(const HomeWidgets& w) {
   float interval = w.shot_store_interval_ms;
   if (interval < static_cast<float>(kShotSampleMs))
     interval = static_cast<float>(kShotSampleMs);
-  uint32_t lag = static_cast<uint32_t>(2.2f * interval);
+  // A wider kernel reaches further ahead, so the lag has to cover it: hw+1.2
+  // intervals, floored at the 2.2 that sizes the edge animation. Off/Light/
+  // Medium (hw <= 1) therefore keep exactly today's timing; only Strong pays.
+  float lag_iv = static_cast<float>(w.smooth_hw) + 1.2f;
+  if (lag_iv < 2.2f) lag_iv = 2.2f;
+  uint32_t lag = static_cast<uint32_t>(lag_iv * interval);
   if (lag < 150) lag = 150;
   if (lag > 1200) lag = 1200;
   uint32_t t = w.shot_elapsed_ms > lag ? w.shot_elapsed_ms - lag : 0;
   uint32_t t_safe = 0;
-  if (w.shot_n >= 3) {
-    const int idx2 = (w.shot_head - 2 + 2 * ui::HomeWidgets::kShotCap) %
-                     ui::HomeWidgets::kShotCap;  // second-newest sample
+  // Data-availability cap. A column interpolates si..si+1 and shot_val(si+1)
+  // reaches smooth_hw further, so the newest usable sample is hw+1 back from
+  // the head — head-2 at hw=1 (as before), head-3 at hw=2.
+  const int back = w.smooth_hw + 1;
+  if (w.shot_n >= back + 1) {
+    const int idx2 = (w.shot_head - back + 2 * ui::HomeWidgets::kShotCap) %
+                     ui::HomeWidgets::kShotCap;
     const uint32_t ts2 = w.shot_ts[idx2];
     t_safe = ts2 > 0 ? ts2 - 1 : 0;
   }
@@ -1924,11 +1939,77 @@ int export_shot_series(const HomeWidgets& w, core::ShotSample* out, int max) {
   return n;
 }
 
-void set_shot_smoothing(HomeWidgets& w, float k) {
-  w.shot_smooth_k = k;
+// Smoothing levels. Light and Medium stay 3-point and differ only in how hard
+// they average; Strong widens to 5-point, so it is both smoother AND further
+// behind. Capping at 5 is deliberate: half-width 2 is the most the shot plot's
+// existing 2.2-interval lag can absorb without the edge animation changing for
+// the lower levels. Weights are centre, +-1, +-2 and must sum to 1 over the
+// full symmetric span (w0 + 2*w1 + 2*w2 == 1).
+struct SmoothLevel {
+  int hw;
+  float w[HomeWidgets::kSmoothMaxHw + 1];
+};
+static constexpr SmoothLevel kSmoothLevels[] = {
+    {0, {1.00f, 0.00f, 0.00f}},  // Off    — raw, no lag
+    {1, {0.70f, 0.15f, 0.00f}},  // Light  — 3-point, unchanged
+    {1, {0.50f, 0.25f, 0.00f}},  // Medium — 3-point, unchanged
+    {2, {0.28f, 0.22f, 0.14f}},  // Strong — 5-point
+};
+
+void set_shot_smoothing(HomeWidgets& w, int level) {
+  const SmoothLevel& s = kSmoothLevels[level & 3];
+  w.smooth_hw = s.hw;
+  for (int i = 0; i <= HomeWidgets::kSmoothMaxHw; ++i) w.smooth_w[i] = s.w[i];
+  w.flow_dl_n = 0;  // span changed: reprime rather than mix two kernel widths
   // Repaint an on-screen shot plot in place (frozen review, or mid-shot — the
   // live edge briefly runs unlagged, then resumes normally).
+  //
+  // The live sweep is deliberately NOT repainted: already-painted columns keep
+  // the old kernel and the new one applies from here on, so the boundary
+  // scrolls left over the window and you can see both settings side by side on
+  // the same data. That is the point — it is the only way to actually compare
+  // levels — so the asymmetry with the shot plot is intended, not an
+  // oversight. (It is also the only option as built: the live ring stores
+  // post-filter values, so there is no raw history to re-derive from. Adding
+  // parallel raw rings would allow an instant repaint; that was considered and
+  // rejected in favour of the side-by-side comparison.)
   if (w.flow_shot_plot) shot_plot_redraw_full(w, UINT32_MAX);
+}
+
+// Push one live sample pair into the delay line and return the kernel-weighted
+// centre — the sample smooth_hw steps back. Called once per scroll step (NOT
+// per frame: the sweep advances far slower than the render loop, and advancing
+// the line per frame would race the plot). hw = 0 is the identity.
+static void flow_smooth_push(HomeWidgets& w, float rw, float rf, float* out_w,
+                             float* out_f) {
+  const int span = 2 * w.smooth_hw + 1;
+  if (span <= 1) {
+    *out_w = rw;
+    *out_f = rf;
+    return;
+  }
+  if (w.flow_dl_n < span) {  // cold: prime flat so the trace doesn't ramp from 0
+    for (int i = 0; i < span; ++i) {
+      w.flow_dl_w[i] = rw;
+      w.flow_dl_f[i] = rf;
+    }
+    w.flow_dl_n = span;
+  } else {
+    for (int i = 0; i + 1 < span; ++i) {
+      w.flow_dl_w[i] = w.flow_dl_w[i + 1];
+      w.flow_dl_f[i] = w.flow_dl_f[i + 1];
+    }
+    w.flow_dl_w[span - 1] = rw;
+    w.flow_dl_f[span - 1] = rf;
+  }
+  float aw = 0.0f, af = 0.0f;
+  for (int d = -w.smooth_hw; d <= w.smooth_hw; ++d) {
+    const float k = w.smooth_w[d < 0 ? -d : d];
+    aw += k * w.flow_dl_w[w.smooth_hw + d];
+    af += k * w.flow_dl_f[w.smooth_hw + d];
+  }
+  *out_w = aw;
+  *out_f = af;
 }
 
 void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
@@ -1969,8 +2050,14 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
   // Flow = trailing-window derivative over the time-stamped weight history
   // (update_flow_rate — shared with the shot plot). A rising weight is real
   // flow; a falling one (cup removed) is negative, handled per drop-negative.
-  const float rw = scale.weight_g;   // g (signed; the scale streams weight, not flow)
-  const float rf = update_flow_rate(w, scale, now);
+  const float rrw = scale.weight_g;  // g (signed; the scale streams weight, not flow)
+  const float rrf = update_flow_rate(w, scale, now);
+  // Smooth on the way IN, gated on a step actually happening this frame — the
+  // delay line advances with the plot, not with the render loop. What lands in
+  // the ring is therefore already filtered, which keeps the Y auto-range, the
+  // mode toggle and every redraw-from-ring path consistent with no extra work.
+  float rw = rrw, rf = rrf;
+  if (w.flow_accum_ms >= ms_per_step) flow_smooth_push(w, rrw, rrf, &rw, &rf);
   const float raw = (w.flow_mode == 1) ? rw : rf;
 
   const uint16_t bright = flow_bright_color();

@@ -468,8 +468,8 @@ void set_flush_delay_label(ui::SettingsWidgets& s, int delay_s) {
   lv_label_set_text(s.flush_delay_value, b);
 }
 
-// Shot-graph smoothing levels (IDisplaySettings::flow_smooth 0..3).
-constexpr float kSmoothK[] = {0.0f, 0.15f, 0.25f, 0.33f};
+// Graph smoothing levels (IDisplaySettings::flow_smooth 0..3). The kernels
+// themselves live with the painters in home_tab.cpp (kSmoothLevels).
 constexpr const char* kSmoothName[] = {"Off", "Light", "Medium", "Strong"};
 
 // Screen-dim timeout choices (IDisplaySettings::screen_timeout_min).
@@ -835,7 +835,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     const int level = display_ != nullptr ? display_->flow_smooth() : 1;
     if (settings_.smooth_value != nullptr)
       lv_label_set_text(settings_.smooth_value, kSmoothName[level & 3]);
-    home_.shot_smooth_k = kSmoothK[level & 3];
+    ui::set_shot_smoothing(home_, level & 3);
     lv_obj_add_event_cb(settings_.smooth_btn, on_smooth_clicked, LV_EVENT_CLICKED, this);
   }
   lv_obj_add_event_cb(settings_.target_plus, on_target_plus, LV_EVENT_CLICKED, this);
@@ -1387,7 +1387,7 @@ void App::cycle_flow_smooth() {
   display_->set_flow_smooth(level);
   if (settings_.smooth_value != nullptr)
     lv_label_set_text(settings_.smooth_value, kSmoothName[level]);
-  ui::set_shot_smoothing(home_, kSmoothK[level]);
+  ui::set_shot_smoothing(home_, level);
 }
 
 void App::cycle_screen_timeout() {
