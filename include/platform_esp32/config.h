@@ -33,6 +33,8 @@ class Config {
   void set_shot_mode(int mode);        // 2=Detect); migrates the legacy bool key
   float overshoot_g() const;           // learned drip/lag compensation (default 2.0)
   void set_overshoot_g(float grams);
+  float hint_overshoot_g() const;      // learned lag for the unwired stop hint
+  void set_hint_overshoot_g(float grams);
 
   // Last known wall-clock time (unix, UTC), saved hourly while the clock is
   // valid. Boot seeds the system clock from it when no real RTC survived —

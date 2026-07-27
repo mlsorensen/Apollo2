@@ -33,6 +33,7 @@ class BrewController : public IBrewController {
   void set_target_persister(std::function<void(float)> p) { persist_target_ = std::move(p); }
   void set_shot_mode_persister(std::function<void(int)> p) { persist_mode_ = std::move(p); }
   void set_overshoot_persister(std::function<void(float)> p) { persist_overshoot_ = std::move(p); }
+  void set_hint_overshoot_persister(std::function<void(float)> p) { persist_hint_overshoot_ = std::move(p); }
   void set_review_hold_persister(std::function<void(int)> p) { persist_review_ = std::move(p); }
   void set_wired_paddle_persister(std::function<void(bool)> p) { persist_wired_ = std::move(p); }
   void set_flush_persister(std::function<void(int)> p) { persist_flush_ = std::move(p); }
@@ -41,10 +42,14 @@ class BrewController : public IBrewController {
   // Seed from persisted config at boot (does not re-persist). `mode` is the
   // persisted ShotMode as an int (clamped here so a stale NVS value is safe).
   void seed(float target_g, int mode, float overshoot_g, int review_hold_s,
-            bool wired_paddle, int flush_s, int flush_delay_s) {
+            bool wired_paddle, int flush_s, int flush_delay_s,
+            float hint_overshoot_g) {
     target_g_ = target_g;
     mode_ = (mode < 0 || mode > 2) ? ShotMode::kDetect : static_cast<ShotMode>(mode);
     overshoot_g_ = overshoot_g;
+    overshoot_saved_ = overshoot_g;
+    hint_overshoot_g_ = hint_overshoot_g;
+    hint_overshoot_saved_ = hint_overshoot_g;
     review_hold_s_ = review_hold_s;
     wired_paddle_ = wired_paddle;
     flush_s_ = flush_s;
@@ -66,7 +71,13 @@ class BrewController : public IBrewController {
   void cancel_backflush() override;
 
  private:
-  void end_shot(uint32_t now_ms);  // Brewing -> Review
+  // end_ms = when brewing ACTUALLY ceased, which is not always now: the unwired
+  // detector confirms the end retroactively, ~kEndSustainMs after the fact, and
+  // the drip settle should be timed from the real end rather than the confirm.
+  void end_shot(uint32_t now_ms, uint32_t end_ms);
+  bool settled(uint32_t now_ms, const ScaleSnapshot& s);
+  void learn_overshoot(float& est, float& saved, float err,
+                       const std::function<void(float)>& persist);  // Brewing -> Review
   // The wired relay exists and the user says the harness is in use. Gates the
   // pass-through drive line, the auto-flush, and offering kAuto at all.
   bool relay() const { return paddle_.available() && wired_paddle_; }
@@ -107,6 +118,7 @@ class BrewController : public IBrewController {
   std::function<void(bool)> persist_wired_;
   std::function<void(int)> persist_flush_;
   std::function<void(int)> persist_flush_delay_;
+  std::function<void(float)> persist_hint_overshoot_;
 
   ShotPhase phase_ = ShotPhase::kIdle;
   ShotMode mode_ = ShotMode::kDetect;
@@ -126,6 +138,18 @@ class BrewController : public IBrewController {
   // Drip/lag compensation: the shot is stopped overshoot_g_ EARLY, and each
   // auto-stopped shot's settled final weight nudges the estimate (learned, NVS).
   float overshoot_g_ = 2.0f;
+  // The SAME idea for the unwired stop hint, kept separate on purpose: this one
+  // also contains the user's reaction time (hint shown -> they flip the paddle
+  // -> drips land), so it is a different number from the relay's drip lag. One
+  // shared value would have the two modes fighting each other on a wired rig.
+  float hint_overshoot_g_ = 2.0f;
+  // Last values actually written to NVS. The dead-band compares against these,
+  // not the live estimate, so a long slow drift in one direction still gets
+  // stored — it just does not write once per shot to record hundredths of a
+  // gram the scale cannot resolve.
+  float overshoot_saved_ = 2.0f;
+  float hint_overshoot_saved_ = 2.0f;
+  bool hint_fired_ = false;  // stop hint shown during THIS shot (gates learning)
   int review_hold_s_ = 30;  // review linger before auto-dismiss (user setting)
   int flush_s_ = 0;         // auto-flush run seconds (0 = off; user setting)
   int flush_delay_s_ = 3;   // cup-off -> flush pause seconds (user setting)
@@ -162,6 +186,11 @@ class BrewController : public IBrewController {
   uint32_t baseline_at_ms_ = 0;
 
   uint32_t settle_until_ms_ = 0;
+  uint32_t settle_floor_ms_ = 0;  // earliest the drip test may freeze
+  uint32_t settle_mark_ms_ = 0;   // rate-window start (0 = not yet opened)
+  float settle_mark_g_ = 0.0f;
+  uint32_t settle_mark_seq_ = 0;  // stream liveness for that window
+  uint8_t settle_calm_ = 0;       // consecutive windows under the drip threshold
   uint32_t review_until_ms_ = 0;
   uint32_t review_reject_seq_ = 0;  // paddle ON edges swallowed during kReview
   uint32_t blind_since_ms_ = 0;  // scale dark since (kBrewing); 0 = seeing it
@@ -177,10 +206,23 @@ class BrewController : public IBrewController {
   static constexpr uint8_t kSenseStablePolls = 3;
   static constexpr uint32_t kBaselineDelayMs = 1200;  // tare settle before baseline
   static constexpr float kPreTaredG = 0.5f;           // |weight| under this = already tared
-  static constexpr uint32_t kSettleMs = 3000;         // drip tail before the freeze
+  // Drip settle before the freeze. The window ENDS when the drips stop, not on
+  // a fixed timer: the weight the overshoot learner grades against has to be a
+  // settled one, and how long that takes varies per grind/basket/flow. kSettleMs
+  // is now only the ceiling. The rate test wants a generous threshold — chasing
+  // a perfectly flat reading would just wait out scale noise.
+  static constexpr uint32_t kSettleMs = 3000;         // ceiling
+  static constexpr uint32_t kSettleFloorMs = 1000;    // never freeze before this
+  static constexpr uint32_t kSettleWindowMs = 500;    // drip rate measured over this
+  static constexpr uint8_t kSettleCalmWindows = 2;    // consecutive calm windows needed
+  // 0.2 g/s over a 500ms window is 0.1g — one LSB on a 0.1g scale, so a single
+  // window is noise-dominated; requiring two consecutive ones is what makes the
+  // test mean "settled" rather than "one quiet sample".
+  static constexpr float kSettleRateGps = 0.2f;
   static constexpr uint32_t kBlindGraceMs = 4000;     // tolerated mid-shot scale blackout
   static constexpr float kOvershootLearnRate = 0.5f;  // fraction of the error absorbed per shot
   static constexpr float kOvershootMaxG = 8.0f;       // sanity clamp (0..max)
+  static constexpr float kOvershootPersistEpsG = 0.05f;  // NVS dead-band (half an LSB)
   // Minimum-shot gate, ALL modes (end_shot): a run shorter than this never
   // reaches settle/review — it's a flush/rinse, not a shot, whether it came
   // from a manual paddle cut, the auto-stop, or the detector.

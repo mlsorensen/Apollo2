@@ -24,6 +24,7 @@ constexpr char kTargetKey[] = "tgtg";
 constexpr char kShotModeKey[] = "shotmode";  // LEGACY bool (armed) — migration only
 constexpr char kShotMode3Key[] = "shotmd";   // tri-state core::ShotMode as int
 constexpr char kOvershootKey[] = "ovshoot";
+constexpr char kHintOvershootKey[] = "hintovs";  // unwired stop-hint lag (separate: includes reaction time)
 constexpr char kLastUnixKey[] = "lastunix";
 constexpr char kReviewHoldKey[] = "revhold";
 constexpr char kAutoConnectKey[] = "autoconn";
@@ -150,6 +151,21 @@ void Config::set_overshoot_g(float grams) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putFloat(kOvershootKey, grams);
+  p.end();
+}
+
+float Config::hint_overshoot_g() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 2.0f;
+  const float v = p.isKey(kHintOvershootKey) ? p.getFloat(kHintOvershootKey, 2.0f) : 2.0f;
+  p.end();
+  return v;
+}
+
+void Config::set_hint_overshoot_g(float grams) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putFloat(kHintOvershootKey, grams);
   p.end();
 }
 

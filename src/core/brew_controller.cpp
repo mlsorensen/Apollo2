@@ -36,19 +36,25 @@ void BrewController::poll(uint32_t now_ms) {
     const ScaleSnapshot s = scale_.snapshot();
     if (!s.connected) {
       phase_ = ShotPhase::kIdle;  // scale gone -> nothing left to review
-    } else if (reached(now_ms, settle_until_ms_)) {
-      // Overshoot learning (apollo-style): the shot stopped overshoot_g_ early;
+    } else if (settled(now_ms, s) || reached(now_ms, settle_until_ms_)) {
+      // Overshoot learning (apollo-style): the stop happened overshoot early;
       // the drips have now settled, so the miss vs target is exactly the error
-      // in that estimate. Absorb a fraction per shot. Only target-triggered
-      // stops teach — a manual paddle cut says nothing about drip lag (and
-      // unwired shots never auto-stop, so they never teach either).
-      if (auto_stopped_ && baseline_set_) {
+      // in that estimate. Only TARGET-TRIGGERED stops teach — a stop the user
+      // chose says nothing about drip lag, so a bare manual paddle cut is
+      // ignored in both modes.
+      //   - auto_stopped_: the relay cut it. Teaches overshoot_g_.
+      //   - hint_fired_:   unwired, and we had told the user to stop before it
+      //                    ended, so the stop was target-driven. Teaches
+      //                    hint_overshoot_g_ — a different number, see the
+      //                    field comment.
+      if (baseline_set_) {
         const float err = (s.weight_g - start_g_) - target_g_;  // + = overshot
-        float next = overshoot_g_ + kOvershootLearnRate * err;
-        if (next < 0.0f) next = 0.0f;
-        if (next > kOvershootMaxG) next = kOvershootMaxG;
-        overshoot_g_ = next;
-        if (persist_overshoot_) persist_overshoot_(next);
+        if (auto_stopped_) {
+          learn_overshoot(overshoot_g_, overshoot_saved_, err, persist_overshoot_);
+        } else if (hint_fired_) {
+          learn_overshoot(hint_overshoot_g_, hint_overshoot_saved_, err,
+                          persist_hint_overshoot_);
+        }
       }
       phase_ = ShotPhase::kReview;
       review_until_ms_ = now_ms + static_cast<uint32_t>(review_hold_s_) * 1000u;
@@ -340,6 +346,7 @@ void BrewController::poll_wired(uint32_t now_ms) {
           if (s0.connected) {
             phase_ = ShotPhase::kBrewing;
             auto_stopped_ = false;
+            hint_fired_ = false;  // per-shot: only THIS shot's hint may teach
             blind_since_ms_ = 0;
             if (s0.weight_g > -kPreTaredG && s0.weight_g < kPreTaredG) {
               // Scale already reads ~0 (tared with the cup on — the natural
@@ -361,7 +368,7 @@ void BrewController::poll_wired(uint32_t now_ms) {
         paddle_.drive(false);
         driving_ = false;
         timer_.stop(now_ms);
-        if (phase_ == ShotPhase::kBrewing) end_shot(now_ms);  // manual cut -> settle
+        if (phase_ == ShotPhase::kBrewing) end_shot(now_ms, now_ms);  // manual cut -> settle
       }
     }
   }
@@ -400,7 +407,7 @@ void BrewController::poll_wired(uint32_t now_ms) {
       driving_ = false;
       timer_.stop(now_ms);
       auto_stopped_ = true;
-      end_shot(now_ms);
+      end_shot(now_ms, now_ms);
     } else {
       blind_since_ms_ = 0;
     }
@@ -447,6 +454,7 @@ void BrewController::poll_unwired(uint32_t now_ms) {
       auto_stopped_ = false;
       blind_since_ms_ = 0;
       stop_hint_ = false;
+      hint_fired_ = false;  // per-shot: only THIS shot's hint may teach
       stop_hint_over_ = 0;
       stop_hint_seq_ = s.seq;
       // Delta-based baseline — no tare, so it's confirmed instantly.
@@ -470,11 +478,12 @@ void BrewController::poll_unwired(uint32_t now_ms) {
   if (!stop_hint_ && s.connected && s.seq != stop_hint_seq_) {
     stop_hint_seq_ = s.seq;
     const bool over = s.weight_g - start_g_ >=
-                      target_g_ - overshoot_g_ -
+                      target_g_ - hint_overshoot_g_ -
                           detector_.current_flow_gps() * kStopHintLeadS;
     stop_hint_over_ = over ? static_cast<uint8_t>(stop_hint_over_ + 1) : 0;
     if (stop_hint_over_ >= 2) {
       stop_hint_ = true;
+      hint_fired_ = true;  // this stop is target-driven: it may teach
       logf("Brew: stop hint at %.1fg (flow %.1f g/s)\n",
            static_cast<double>(s.weight_g - start_g_),
            static_cast<double>(detector_.current_flow_gps()));
@@ -487,7 +496,10 @@ void BrewController::poll_unwired(uint32_t now_ms) {
       logf("Brew: unwired shot ended (%.1fs, %.1fg)\n",
            static_cast<double>(timer_.elapsed_ms(now_ms)) / 1000.0,
            static_cast<double>(net));
-      end_shot(now_ms);  // duration gate (kMinShotMs) applies in there
+      // Settle is timed from st.end_ms, when flow actually ceased — the
+      // detector only confirms it ~kEndSustainMs later, and that wait has
+      // already done part of the settling for us.
+      end_shot(now_ms, st.end_ms);  // duration gate (kMinShotMs) applies in there
     } else {
       // A splash/bump, not espresso. Silent idle; the timer resets (not
       // stops) so the display doesn't advertise the discarded detection's
@@ -505,7 +517,60 @@ void BrewController::poll_unwired(uint32_t now_ms) {
   }
 }
 
-void BrewController::end_shot(uint32_t now_ms) {
+// Has the drip tail stopped? Measures the weight change over consecutive
+// kSettleWindowMs windows and calls it settled once kSettleCalmWindows of them
+// come in under kSettleRateGps. Deliberately generous: the point is "the cup
+// isn't meaningfully filling any more", not a perfectly flat reading, which on
+// a 0.1g scale would mean waiting out quantization noise.
+//
+// Two guards keep it honest. The floor stops a momentary flat spot right at
+// cutoff from freezing before the tail has even started, and the seq check
+// requires the window to contain FRESH samples — a stalled BLE stream also
+// holds the weight perfectly still, and freezing on that would grade the
+// overshoot learner against a stale reading.
+bool BrewController::settled(uint32_t now_ms, const ScaleSnapshot& s) {
+  if (settle_mark_ms_ == 0) {  // open the first window
+    settle_mark_ms_ = now_ms;
+    settle_mark_g_ = s.weight_g;
+    settle_mark_seq_ = s.seq;
+    return false;
+  }
+  if (now_ms - settle_mark_ms_ < kSettleWindowMs) return false;
+
+  const float d = s.weight_g - settle_mark_g_;
+  const float span_s = static_cast<float>(now_ms - settle_mark_ms_) / 1000.0f;
+  const float rate = (d < 0.0f ? -d : d) / span_s;
+  const bool fresh = s.seq != settle_mark_seq_;
+  if (fresh && rate < kSettleRateGps) {
+    if (settle_calm_ < 255) ++settle_calm_;
+  } else {
+    settle_calm_ = 0;
+  }
+  settle_mark_ms_ = now_ms;
+  settle_mark_g_ = s.weight_g;
+  settle_mark_seq_ = s.seq;
+  return settle_calm_ >= kSettleCalmWindows && reached(now_ms, settle_floor_ms_);
+}
+
+// Absorb a fraction of the error, clamp, and persist only on a move worth
+// storing. Converged, the estimate jitters by hundredths of a gram every shot;
+// writing each of those to NVS would record a change finer than the scale can
+// resolve. The dead-band is measured against what is actually on flash, so a
+// slow one-way drift still gets saved once it adds up.
+void BrewController::learn_overshoot(float& est, float& saved, float err,
+                                     const std::function<void(float)>& persist) {
+  float next = est + kOvershootLearnRate * err;
+  if (next < 0.0f) next = 0.0f;
+  if (next > kOvershootMaxG) next = kOvershootMaxG;
+  est = next;
+  const float moved = next > saved ? next - saved : saved - next;
+  if (persist && moved >= kOvershootPersistEpsG) {
+    saved = next;
+    persist(next);
+  }
+}
+
+void BrewController::end_shot(uint32_t now_ms, uint32_t end_ms) {
   stop_hint_ = false;  // the shot is over; the signal must not outlive it
   // Universal flush gate: a run this short — manual paddle cut, auto-stop, or
   // detector-ended alike — is the user flushing/rinsing, not pulling a shot.
@@ -520,7 +585,10 @@ void BrewController::end_shot(uint32_t now_ms) {
     return;
   }
   phase_ = ShotPhase::kSettling;
-  settle_until_ms_ = now_ms + kSettleMs;
+  settle_until_ms_ = end_ms + kSettleMs;      // ceiling, from the REAL end
+  settle_floor_ms_ = end_ms + kSettleFloorMs;
+  settle_mark_ms_ = 0;  // 0 = the rate window opens on the next poll
+  settle_calm_ = 0;
 }
 
 BrewSnapshot BrewController::snapshot() const {
@@ -619,6 +687,7 @@ void BrewController::cancel_shot() {
   timer_.reset();  // a cancelled half-shot's time must not display as a real one
   phase_ = ShotPhase::kIdle;
   stop_hint_ = false;
+  hint_fired_ = false;  // a cancelled shot teaches nothing
 }
 
 void BrewController::set_wired_paddle(bool on) {
