@@ -732,9 +732,48 @@ bool Display::begin() {
   Serial.printf("RGB: LVGL draw buffer %s (%u bytes)\n",
                 g_draw_buf ? "ok" : "FAILED", static_cast<unsigned>(buf_bytes));
 #else
-  // SPI pushes this buffer over the bus via DMA -> must be DMA-capable.
-  g_draw_buf = static_cast<lv_color_t*>(
-      heap_caps_malloc(buf_bytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+  // SPI (2-inch ST7789): PSRAM, like every other board. This used to ask for
+  // INTERNAL + DMA memory, on two wrong premises:
+  //
+  //   1. "SPI pushes this buffer over the bus via DMA." It does not. Arduino_GFX's
+  //      ESP32SPI backend is programmed I/O — writePixels() copies pixels word by
+  //      word into the SPI peripheral's data_buf FIFO registers with the CPU and
+  //      polls for completion. The only DMA-capable allocation it makes is its own
+  //      64-byte _buffer (ESP32SPI_MAX_PIXELS_AT_ONCE * 2). Nothing ever DMAs out
+  //      of the LVGL draw buffer, so MALLOC_CAP_DMA bought nothing. (The premise
+  //      IS true on the original ESP32, whose DMA cannot reach PSRAM at all —
+  //      that's where the recipe comes from. The S3's GDMA can.)
+  //   2. sizeof(lv_color_t) is the pixel size. It isn't: LVGL 9's lv_color_t is a
+  //      3-byte RGB888 struct, but LV_COLOR_DEPTH is 16 and flush_cb hands the
+  //      buffer to draw16bitRGBBitmap as uint16_t* — so the buffer is used as
+  //      RGB565 and 1/3 of every allocation was never addressed.
+  //
+  // Together those asked for 192,000 bytes of CONTIGUOUS internal DMA RAM at boot
+  // (320 * 200 * 3) on the board that also runs on-chip WiFi + BLE. Internal SRAM
+  // is one budget shared by every board's features, and as it grew the largest
+  // free block fell under that ask (measured: 180,212 free contiguous vs 192,000
+  // needed) — heap_caps_malloc returned null, begin() returned false, and the
+  // panel stayed black with "display init failed". No 2-inch code had changed.
+  //
+  // PSRAM costs nothing measurable here, unlike on the RGB boards: 80 MHz SPI is
+  // ~10 MB/s, so shifting a 150KB frame out takes ~15 ms and the bus — not memory
+  // bandwidth — is the limit. This panel also has its own GRAM and self-refreshes,
+  // so nothing scans PSRAM continuously the way an RGB panel does; the draw buffer
+  // has the bus to itself. And it hands 192KB of internal SRAM back to the BLE and
+  // WiFi stacks on the tightest board we ship.
+  //
+  // Internal RAM is now the FALLBACK (half the lines, since it is the scarce one):
+  // a failure here degrades to slower rendering instead of no display at all.
+  buf_bytes = static_cast<size_t>(w) * kBufferLines * (LV_COLOR_DEPTH / 8);
+  g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM));
+  if (g_draw_buf == nullptr) {
+    buf_bytes = static_cast<size_t>(w) * (kBufferLines / 2) * (LV_COLOR_DEPTH / 8);
+    g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_INTERNAL));
+    Serial.println("SPI: no PSRAM for the draw buffer; falling back to internal RAM");
+  }
+  Serial.printf("SPI: LVGL draw buffer %s (%u bytes, %d lines)\n",
+                g_draw_buf ? "ok" : "FAILED", static_cast<unsigned>(buf_bytes),
+                static_cast<int>(buf_bytes / (w * (LV_COLOR_DEPTH / 8))));
 #endif
   if (g_draw_buf == nullptr) return false;
 
