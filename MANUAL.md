@@ -120,7 +120,7 @@ Plots the live flow rate (or weight) from the scale.
   and the auto‑flush. Off, the board behaves like an unwired one (Shot detect
   / Manual only). Flipping it mid‑shot cancels the shot.
 - **Chime volume** *(boards with a speaker; Off / 25 / 50 / 75 / 100 %, default
-  100 %)* — a short chime when the machine finishes warming up, so you can walk
+  50 %)* — a short chime when the machine finishes warming up, so you can walk
   away and be called back. Each tap cycles to the next level **and plays a note
   at it**, so you can set it by ear; `Off` silences it.
 

@@ -65,7 +65,7 @@ class IDisplaySettings {
   virtual void set_click_sound(bool on) = 0;
 
   // Volume of the warm-up chime (core::Cue::Ready), 0..100 in 25% steps —
-  // 0 is off, 100 the default. Same speaker requirement as click_sound. Sound
+  // 0 is off, 50 the default. Same speaker requirement as click_sound. Sound
   // preferences live here rather than with the machine because the speaker is
   // a property of the device.
   virtual int ready_chime_volume() const = 0;

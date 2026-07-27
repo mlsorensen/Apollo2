@@ -41,7 +41,7 @@ class FakeDisplaySettings : public core::IDisplaySettings {
   int flow_smooth_ = 1;      // light
   bool perf_overlay_ = false;
   bool click_sound_ = true;
-  int ready_chime_volume_ = 100;
+  int ready_chime_volume_ = 50;  // matches the device default
 };
 
 }  // namespace host
