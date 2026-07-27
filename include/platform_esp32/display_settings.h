@@ -33,6 +33,8 @@ class DisplaySettings : public core::IDisplaySettings {
   void set_perf_overlay(bool on) override;
   bool click_sound() const override;
   void set_click_sound(bool on) override;
+  int ready_chime_volume() const override;
+  void set_ready_chime_volume(int percent) override;
 
  private:
   Display& display_;

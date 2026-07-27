@@ -11,6 +11,7 @@
 #include "core/machine.h"
 #include "core/network.h"
 #include "core/provisioner.h"
+#include "core/ready_chime.h"
 #include "core/scale.h"
 #include "core/scale_provisioner.h"
 #include "core/shot_store.h"
@@ -100,6 +101,7 @@ class App {
   void set_scope_graph(bool on);         // Scale "Oscilloscope graph" switch
   void set_perf_overlay(bool on);        // Device "Performance overlay" switch
   void set_click_sound(bool on);         // Device "Button sounds" switch
+  void cycle_ready_chime();              // Micra "Chime volume": Off/25/50/75/100%
   void theme_select(int index);          // Device theme roller selection
   void apply_pending_theme();            // deferred rebuild (from lv_async_call)
   void apply_layout_rebuild();           // deferred rebuild after scale pair/forget
@@ -185,6 +187,7 @@ class App {
   core::ISound* sound_ = nullptr;
   core::IShotStore* shots_ = nullptr;
   bool click_sound_on_ = true;  // cached from IDisplaySettings (checked per press)
+  int ready_chime_vol_ = 100;   // cached likewise, 0..100 (0 = chime off)
   lv_obj_t* tabview_ = nullptr;
   ScreenProfile screen_{};          // stored so we can rebuild on a theme change
   lv_obj_t* modal_ = nullptr;       // current overlay modal, if open
@@ -262,6 +265,10 @@ class App {
   // Inferred Heating state (see core::derive_heating); doubles as the
   // hysteresis "previous result" bit.
   bool heating_ = false;
+  // Warm-up-complete latch behind the ready chime. A member (not a local) so
+  // it survives refreshes AND theme rebuilds — its whole job is remembering
+  // that this warm-up has already been announced.
+  core::ReadyChime ready_chime_;
 
   // Shot-history view state. shot_view_ backs the open shot-card modal (the
   // card's graph paints from it on every redraw, so it must outlive the

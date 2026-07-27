@@ -61,8 +61,14 @@ struct MachineSnapshot {
 // short of its set point. Asymmetric deadbands give hysteresis so the state
 // can't flicker at the boundary; the caller keeps the previous result and
 // passes it back in.
-constexpr float kHeatingOnDeltaC = 2.0f;    // below target by this => heating
-constexpr float kHeatingOffDeltaC = 0.75f;  // within this of target => ready
+//
+// The ready band has to be generous, because the machine's own thermostat is:
+// a steam boiler set to 128 C routinely settles at 127 and stops heating there,
+// and a tighter band would leave it reading "Heating" forever — and would never
+// let the ready chime fire. Anything within kHeatingOffDeltaC of the set point
+// is the machine saying "close enough", so we agree with it.
+constexpr float kHeatingOnDeltaC = 4.0f;   // below target by this => heating
+constexpr float kHeatingOffDeltaC = 2.0f;  // within this of target => ready
 
 inline bool boiler_heating(float temp_c, float target_c, bool prev) {
   const float delta = prev ? kHeatingOffDeltaC : kHeatingOnDeltaC;

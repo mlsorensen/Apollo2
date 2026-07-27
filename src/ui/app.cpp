@@ -407,6 +407,9 @@ void on_click_sound_switch(lv_event_t* e) {
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
   app->set_click_sound(lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
+void on_chime_vol_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_ready_chime();
+}
 void on_wifi_switch(lv_event_t* e) {
   auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
@@ -441,6 +444,22 @@ constexpr int kFlushCount = static_cast<int>(sizeof(kFlushChoices) / sizeof(kFlu
 constexpr int kFlushDelayChoices[] = {3, 6, 9, 15};
 constexpr int kFlushDelayCount =
     static_cast<int>(sizeof(kFlushDelayChoices) / sizeof(kFlushDelayChoices[0]));
+// Ready-chime levels (percent; 0 = off). Linear amplitude, so the label means
+// what it says.
+constexpr int kChimeVolChoices[] = {0, 25, 50, 75, 100};
+constexpr int kChimeVolCount =
+    static_cast<int>(sizeof(kChimeVolChoices) / sizeof(kChimeVolChoices[0]));
+
+void set_chime_vol_label(ui::SettingsWidgets& s, int percent) {
+  if (s.chime_vol_value == nullptr) return;
+  if (percent <= 0) {
+    lv_label_set_text(s.chime_vol_value, "Off");
+  } else {
+    char b[8];
+    std::snprintf(b, sizeof(b), "%d%%", percent);
+    lv_label_set_text(s.chime_vol_value, b);
+  }
+}
 
 // The delay row only matters (and only shows) while the flush itself is on.
 void set_flush_label(ui::SettingsWidgets& s, int flush_s) {
@@ -672,9 +691,10 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   // Button-press click on audio boards. The hook is read at event time and
   // checks the cached setting, so the switch takes effect immediately.
   click_sound_on_ = display_->click_sound();
+  ready_chime_vol_ = display_->ready_chime_volume();
   if (sound_->available()) {
     ui::set_button_press_hook([this] {
-      if (click_sound_on_ && sound_ != nullptr) sound_->click();
+      if (click_sound_on_ && sound_ != nullptr) sound_->play(core::Cue::ButtonPress);
     });
   } else {
     ui::set_button_press_hook(nullptr);
@@ -897,6 +917,11 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     lv_obj_add_event_cb(settings_.click_sound_switch, on_click_sound_switch,
                         LV_EVENT_VALUE_CHANGED, this);
   }
+  if (settings_.chime_vol_btn != nullptr) {  // audio boards only
+    set_chime_vol_label(settings_, ready_chime_vol_);
+    lv_obj_add_event_cb(settings_.chime_vol_btn, on_chime_vol_clicked,
+                        LV_EVENT_CLICKED, this);
+  }
   if (settings_.theme_btn != nullptr)
     lv_obj_add_event_cb(settings_.theme_btn, on_theme_clicked, LV_EVENT_CLICKED, this);
   // WiFi (Device section):
@@ -970,6 +995,13 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
 void App::update_heating(const core::MachineSnapshot& state) {
   heating_ = core::derive_heating(state, heating_);
   ui::set_heating_pulse(home_, heating_);  // idempotent; re-arms after rebuild
+  // Fed on every refresh whether or not the chime is enabled, so the latch
+  // always reflects the machine rather than the setting: enabling it on an
+  // already-warm machine stays silent instead of firing a warm-up that
+  // finished an hour ago.
+  const bool ready = ready_chime_.update(state, heating_);
+  if (ready && ready_chime_vol_ > 0 && sound_ != nullptr)
+    sound_->play(core::Cue::Ready, ready_chime_vol_);
 }
 
 void App::refresh() {
@@ -1222,6 +1254,17 @@ void App::set_scope_graph(bool on) {
 void App::set_click_sound(bool on) {
   click_sound_on_ = on;
   if (display_ != nullptr) display_->set_click_sound(on);  // persist
+}
+
+void App::cycle_ready_chime() {
+  int i = 0;
+  while (i < kChimeVolCount && kChimeVolChoices[i] != ready_chime_vol_) ++i;
+  const int next = kChimeVolChoices[(i + 1) % kChimeVolCount];  // unknown -> Off
+  ready_chime_vol_ = next;
+  if (display_ != nullptr) display_->set_ready_chime_volume(next);  // persist
+  set_chime_vol_label(settings_, next);
+  // Audition the level you just landed on — one note, so cycling stays quick.
+  if (next > 0 && sound_ != nullptr) sound_->sample(core::Cue::Ready, next);
 }
 
 void App::set_perf_overlay(bool on) {

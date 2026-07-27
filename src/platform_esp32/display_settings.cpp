@@ -60,6 +60,12 @@ bool DisplaySettings::click_sound() const { return config_.click_sound(); }
 
 void DisplaySettings::set_click_sound(bool on) { config_.set_click_sound(on); }
 
+int DisplaySettings::ready_chime_volume() const { return config_.ready_chime_volume(); }
+
+void DisplaySettings::set_ready_chime_volume(int percent) {
+  config_.set_ready_chime_volume(percent);
+}
+
 void DisplaySettings::set_perf_overlay(bool on) { config_.set_perf_overlay(on); }
 
 }  // namespace platform

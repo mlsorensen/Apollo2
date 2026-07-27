@@ -232,10 +232,10 @@ void setup() {
 
   // Speaker (audio boards): codec + I2S set up front so button clicks are
   // instant. Needs Wire + the IO extension, which the display init above
-  // brought up. Gated on the setting so "Button sounds" OFF + Restart leaves
-  // the whole audio stack cold — the escape hatch if audio ever interferes
-  // with BLE again (the always-clocking first cut broke connects).
-  if (g_config.click_sound()) platform::sound_begin();
+  // brought up. Gated on the sound settings so turning them ALL off + Restart
+  // leaves the whole audio stack cold — the escape hatch if audio ever
+  // interferes with BLE again (the always-clocking first cut broke connects).
+  if (g_config.click_sound() || g_config.ready_chime_volume() > 0) platform::sound_begin();
 
   // Build the UI bound to the machine + provisioner + battery + display.
   const ui::ScreenProfile screen{g_display.width(), g_display.height(),

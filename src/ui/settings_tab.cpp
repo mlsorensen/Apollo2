@@ -31,12 +31,16 @@ void page_column(lv_obj_t* page, bool compact) {
 // Connection panel (saved row + Scan + status + results list), shared by Micra
 // and Scale. `out_setup` is the Micra-only token "Setup" button — pass nullptr to
 // omit it (scales need no token). The list sizes to content so the page scrolls.
+// `out_prefs` (optional) receives an empty container just under the saved row
+// for link preferences: they belong with the saved device, and putting them
+// after the results list would let a scan push them off-screen.
 void build_connection_panel(lv_obj_t* panel, const lv_font_t* font, int btn_h,
                             lv_obj_t** out_saved_row, lv_obj_t** out_saved_label,
                             lv_obj_t** out_setup, lv_obj_t** out_connect,
                             lv_obj_t** out_connect_label, lv_obj_t** out_forget,
-                            lv_obj_t** out_scan, lv_obj_t** out_status,
-                            lv_obj_t** out_list, const char* scan_hint) {
+                            lv_obj_t** out_prefs, lv_obj_t** out_scan,
+                            lv_obj_t** out_status, lv_obj_t** out_list,
+                            const char* scan_hint) {
   // Saved name + action buttons inline. The name (no "Saved:" prefix) may wrap to
   // two lines on compact — that's fine.
   *out_saved_row = lv_obj_create(panel);
@@ -83,6 +87,17 @@ void build_connection_panel(lv_obj_t* panel, const lv_font_t* font, int btn_h,
   lv_obj_set_style_text_color(forget_lbl, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(forget_lbl, font, 0);
   lv_obj_center(forget_lbl);
+
+  if (out_prefs != nullptr) {
+    *out_prefs = lv_obj_create(panel);
+    lv_obj_remove_style_all(*out_prefs);
+    lv_obj_set_width(*out_prefs, lv_pct(100));
+    lv_obj_set_height(*out_prefs, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(*out_prefs, LV_FLEX_FLOW_COLUMN);
+    // Inherit the page's row gap so extra rows sit on the same rhythm as the
+    // panel's own children rather than butting together.
+    lv_obj_set_style_pad_row(*out_prefs, lv_obj_get_style_pad_row(panel, LV_PART_MAIN), 0);
+  }
 
   *out_scan = ui::make_button(panel);
   lv_obj_set_width(*out_scan, lv_pct(100));
@@ -493,42 +508,63 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
 
   // --- Leaf pages (the actual content) -------------------------------------
   out.micra_bt_page = lv_menu_page_create(menu, "Bluetooth");
-  out.micra_settings_page = lv_menu_page_create(menu, "Settings");
+  out.micra_controls_page = lv_menu_page_create(menu, "Controls");
   out.scale_bt_page = lv_menu_page_create(menu, "Bluetooth");
   out.scale_settings_page = lv_menu_page_create(menu, "Settings");
   out.device_display_page = lv_menu_page_create(menu, "Display");
   out.device_time_page = lv_menu_page_create(menu, "Time & date");
   out.device_wifi_page = lv_menu_page_create(menu, "WiFi");
   page_column(out.micra_bt_page, compact);
-  page_column(out.micra_settings_page, compact);
+  page_column(out.micra_controls_page, compact);
   page_column(out.scale_bt_page, compact);
   page_column(out.scale_settings_page, compact);
   page_column(out.device_display_page, compact);
   page_column(out.device_time_page, compact);
   page_column(out.device_wifi_page, compact);
 
-  // Micra > Bluetooth: connection
+  // Micra > Bluetooth: connection, and the one preference about it
+  lv_obj_t* micra_bt_prefs = nullptr;
   build_connection_panel(out.micra_bt_page, font, btn_h, &out.saved_row,
                          &out.saved_label, &out.setup_btn, &out.connect_btn,
-                         &out.connect_label, &out.forget_btn, &out.scan_btn,
-                         &out.status, &out.list, "Tap Scan to find your machine");
-  // Micra > Settings: connection behavior + brew + steam boiler
+                         &out.connect_label, &out.forget_btn, &micra_bt_prefs,
+                         &out.scan_btn, &out.status, &out.list,
+                         "Tap Scan to find your machine");
   {
     // Connect to the saved machine at power-up. ON by default (the natural
     // expectation for a dedicated remote); turn off when another controller
-    // needs the Micra's single BLE slot.
-    lv_obj_t* ra = make_setting_row(out.micra_settings_page, "Auto connect", font);
+    // needs the Micra's single BLE slot. It lives on this page because it is a
+    // fact about the link, not about the coffee.
+    lv_obj_t* ra = make_setting_row(micra_bt_prefs, "Auto connect", font);
     out.auto_connect_switch = lv_switch_create(ra);
     lv_obj_set_size(out.auto_connect_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
+  }
+  // Micra > Controls: how the machine behaves + brew + steam boiler
+  {
     // Paddle harness in use. OFF = "unwired": shots are detected from the
     // scale's weight stream instead of paddle edges. Only offered where the
     // paddle hardware exists — other boards are permanently unwired.
     if (with_wired_paddle) {
-      lv_obj_t* rw = make_setting_row(out.micra_settings_page, "Wired paddle", font);
+      lv_obj_t* rw = make_setting_row(out.micra_controls_page, "Wired paddle", font);
       out.wired_paddle_switch = lv_switch_create(rw);
       lv_obj_set_size(out.wired_paddle_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
     } else {
       out.wired_paddle_switch = nullptr;
+    }
+    // Chime when the machine reaches temperature (audio boards only): tap
+    // cycles Off / 25% / 50% / 75% / 100%, playing each level as you land on
+    // it so the choice is made by ear.
+    if (with_sound) {
+      lv_obj_t* rc = make_setting_row(out.micra_controls_page, "Chime volume", font);
+      out.chime_vol_btn = ui::make_button(rc);
+      lv_obj_set_height(out.chime_vol_btn, btn_size);
+      lv_obj_set_style_pad_hor(out.chime_vol_btn, ui::dp(14), 0);
+      lv_obj_set_style_bg_color(out.chime_vol_btn, lv_color_hex(ui::theme::card()), 0);
+      out.chime_vol_value = lv_label_create(out.chime_vol_btn);
+      lv_obj_set_style_text_color(out.chime_vol_value, lv_color_hex(ui::theme::text()), 0);
+      lv_obj_set_style_text_font(out.chime_vol_value, font, 0);
+      lv_obj_center(out.chime_vol_value);
+    } else {
+      out.chime_vol_btn = out.chime_vol_value = nullptr;
     }
   }
   // Micra > Cleaning: everything that runs water through the group on purpose —
@@ -569,18 +605,18 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     out.backflush_btn = nullptr;
   }
 
-  section_label(out.micra_settings_page, "Brew", font);
+  section_label(out.micra_controls_page, "Brew", font);
   {
-    lv_obj_t* r = make_setting_row(out.micra_settings_page, "Temperature", font);
+    lv_obj_t* r = make_setting_row(out.micra_controls_page, "Temperature", font);
     make_inline_stepper(r, font, symbol_font, btn_size, &out.brew_minus,
                         &out.brew_value, &out.brew_plus, nullptr);
   }
-  section_label(out.micra_settings_page, "Steam Boiler", font);
+  section_label(out.micra_controls_page, "Steam Boiler", font);
   {
-    lv_obj_t* r1 = make_setting_row(out.micra_settings_page, "Enable", font);
+    lv_obj_t* r1 = make_setting_row(out.micra_controls_page, "Enable", font);
     out.steam_switch = lv_switch_create(r1);
     lv_obj_set_size(out.steam_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
-    lv_obj_t* r2 = make_setting_row(out.micra_settings_page, "Temperature", font);
+    lv_obj_t* r2 = make_setting_row(out.micra_controls_page, "Temperature", font);
     make_inline_stepper(r2, font, symbol_font, btn_size, &out.boiler_minus,
                         &out.boiler_value, &out.boiler_plus, &out.boiler_sub);
   }
@@ -588,7 +624,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   // Scale > Bluetooth: connection
   build_connection_panel(out.scale_bt_page, font, btn_h, &out.scale_saved_row,
                          &out.scale_saved_label, nullptr, &out.scale_connect_btn,
-                         &out.scale_connect_label, &out.scale_forget_btn,
+                         &out.scale_connect_label, &out.scale_forget_btn, nullptr,
                          &out.scale_scan_btn, &out.scale_status, &out.scale_list,
                          "Tap Scan to find your scale");
   // Scale > Settings: target weight + flow-graph options
@@ -632,7 +668,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   page_column(out.scale_page, compact);
   page_column(out.device_page, compact);
   root_entry(menu, out.micra_page, out.micra_bt_page, "Bluetooth", font, btn_h);
-  root_entry(menu, out.micra_page, out.micra_settings_page, "Settings", font, btn_h);
+  root_entry(menu, out.micra_page, out.micra_controls_page, "Controls", font, btn_h);
   if (out.micra_cleaning_page != nullptr)
     root_entry(menu, out.micra_page, out.micra_cleaning_page, "Cleaning", font, btn_h);
   root_entry(menu, out.scale_page, out.scale_bt_page, "Bluetooth", font, btn_h);
@@ -665,7 +701,7 @@ lv_obj_t* settings_section_page(const SettingsWidgets& w, int section) {
   switch (section) {
     case kSectionMicra:         return w.micra_page;
     case kSectionMicraBt:       return w.micra_bt_page;
-    case kSectionMicraSettings: return w.micra_settings_page;
+    case kSectionMicraControls: return w.micra_controls_page;
     case kSectionMicraCleaning: return w.micra_cleaning_page;
     case kSectionScale:         return w.scale_page;
     case kSectionScaleBt:       return w.scale_bt_page;

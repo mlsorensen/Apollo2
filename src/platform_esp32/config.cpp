@@ -18,6 +18,8 @@ constexpr char kDropNegFlowKey[] = "dropnegf";
 constexpr char kScopeGraphKey[] = "scopegraph";
 constexpr char kPerfOverlayKey[] = "perfovl";
 constexpr char kClickSoundKey[] = "clicksnd";
+constexpr char kReadyChimeKey[] = "rdychime";    // legacy on/off, migrated below
+constexpr char kReadyChimeVolKey[] = "rdychimev";
 constexpr char kScaleMacKey[] = "smac";
 constexpr char kScaleNameKey[] = "sname";
 constexpr char kTargetKey[] = "tgtg";
@@ -422,6 +424,28 @@ void Config::set_click_sound(bool on) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putBool(kClickSoundKey, on);
+  p.end();
+}
+
+int Config::ready_chime_volume() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 100;
+  int v = 100;
+  if (p.isKey(kReadyChimeVolKey)) {
+    v = p.getInt(kReadyChimeVolKey, 100);
+  } else if (p.isKey(kReadyChimeKey)) {
+    // Migrate the on/off key this setting shipped as first: off stays off,
+    // on means the full level it used to play at.
+    v = p.getBool(kReadyChimeKey, true) ? 100 : 0;
+  }
+  p.end();
+  return v < 0 ? 0 : v > 100 ? 100 : v;
+}
+
+void Config::set_ready_chime_volume(int percent) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putInt(kReadyChimeVolKey, percent < 0 ? 0 : percent > 100 ? 100 : percent);
   p.end();
 }
 

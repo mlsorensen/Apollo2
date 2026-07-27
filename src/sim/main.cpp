@@ -141,7 +141,8 @@ int main() {
   ok &= r({320, 240}, "renders/settings_320x240.png", 1);
   ok &= r({320, 240}, "renders/micra_320x240.png", 1, ui::kSectionMicra);  // chooser
   ok &= r({320, 240}, "renders/micra_bt_320x240.png", 1, ui::kSectionMicraBt);
-  ok &= r({320, 240}, "renders/micra_settings_320x240.png", 1, ui::kSectionMicraSettings);
+  ok &= r({320, 240}, "renders/micra_controls_320x240.png", 1, ui::kSectionMicraControls);
+  ok &= r({800, 480}, "renders/micra_controls_800x480.png", 1, ui::kSectionMicraControls);
   ok &= r({320, 240}, "renders/micra_cleaning_320x240.png", 1, ui::kSectionMicraCleaning);
   ok &= r({800, 480}, "renders/micra_cleaning_800x480.png", 1, ui::kSectionMicraCleaning);
   ok &= r({320, 240}, "renders/scale_bt_320x240.png", 1, ui::kSectionScaleBt);
