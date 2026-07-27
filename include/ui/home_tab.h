@@ -193,8 +193,25 @@ struct HomeWidgets {
   // the wall clock — not the newest-sample cap — is always what limits the
   // edge; fast scales (Umbra ~20Hz, bursty) otherwise ride the cap and jerk.
   float shot_store_interval_ms = 150.0f;
-  float shot_smooth_k = 0.15f;          // 3-point kernel neighbor weight (0 = off);
-                                        // set by App from IDisplaySettings::flow_smooth
+  // Symmetric smoothing kernel, shared by the shot plot AND the live sweep —
+  // set by App from IDisplaySettings::flow_smooth (see set_shot_smoothing).
+  // smooth_hw is the half-width: 0 = off, 1 = 3-point, 2 = 5-point. It doubles
+  // as the number of FUTURE samples a smoothed point needs, which is why the
+  // shot plot's display lag is derived from it instead of being a constant.
+  // smooth_w[0] is the centre weight, [1] the +-1 neighbours, [2] the +-2.
+  static constexpr int kSmoothMaxHw = 2;
+  int smooth_hw = 1;
+  float smooth_w[kSmoothMaxHw + 1] = {0.70f, 0.15f, 0.00f};
+  // Live-sweep delay line: the last 2*smooth_hw+1 stepped samples of each
+  // series, oldest first. The sweep plots the MIDDLE one, so the trace runs
+  // smooth_hw steps behind — that lateness is the point, not a side effect.
+  // (The shot plot smooths at draw time over raw stored samples instead; its
+  // samples are exported to CSV and re-rendered on review, so they must stay
+  // raw. The live ring is display state only, so filtering on the way in is
+  // both cheaper and automatically consistent across every redraw path.)
+  float flow_dl_w[2 * kSmoothMaxHw + 1] = {};
+  float flow_dl_f[2 * kSmoothMaxHw + 1] = {};
+  int flow_dl_n = 0;                    // 0 = cold, needs priming
   // Unwired mode: the shot_* arrays double as an ALWAYS-ON sample ring
   // (absolute lv_tick stamps, ~60s at <=10Hz) fed by unwired_ring_tick while
   // the live sweep runs — a shot is detected retroactively, so the data must
@@ -299,7 +316,8 @@ void review_shot_plot(HomeWidgets& w, uint32_t t_start, uint32_t t_end,
 
 // Apply a smoothing-kernel weight (0/0.15/0.25/0.33); repaints the shot plot
 // if one is on screen (live or frozen in review) so the change shows at once.
-void set_shot_smoothing(HomeWidgets& w, float k);
+// Apply smoothing level 0..3 (Off / Light / Medium / Strong) to both graphs.
+void set_shot_smoothing(HomeWidgets& w, int level);
 
 // Pulse the shot button a few times in the warn color — "look here first".
 // Used when a paddle flip is swallowed during shot review (the button says
