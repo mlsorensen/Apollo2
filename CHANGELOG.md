@@ -5,6 +5,49 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## v0.5.0
+
+### Features
+
+- **The machine chimes when it's up to temperature** *(boards with a speaker —
+  the 4.3C and the P4s)*. Switch it on, walk away, and a short rising chime
+  tells you it's ready. It marks the *end of a warm-up*, so it sounds **once**
+  and then stays quiet through all the small dips and reheats that hold
+  temperature. It re-arms when a new warm-up is genuinely coming: the machine
+  goes to standby (or off, or disconnects), the steam boiler is switched on or
+  off, or a boiler falls 10 °C below its set point. With the steam boiler off
+  the chime follows the coffee boiler alone; with it on, both have to be there.
+  - **Settings → Micra → Controls → Chime volume** — Off / 25 / 50 / 75 / 100 %,
+    default 50 %. Each tap plays a note at the new level, so you can set it by
+    ear.
+
+### Improvements
+
+- **Settings → Micra → Settings is now Settings → Micra → Controls** — a
+  "Settings" page inside Settings read poorly, and the page is the machine's
+  controls: brew temperature, steam boiler, wired paddle.
+- **Auto connect moved to Settings → Micra → Bluetooth**, next to the saved
+  machine it applies to, where a scan can no longer push it off the screen.
+
+### Fixes
+
+- **"Ready" is recognised properly again.** The machine's own thermostat works
+  to about 2 °C — a steam boiler set to 128 °C routinely settles at 127 °C and
+  stops heating there — but the display insisted on 0.75 °C and so could show
+  **Heating** indefinitely on a machine that was long since ready. Anything
+  within 2 °C of the set point now counts as ready. (This is also what the new
+  chime waits for, so on affected machines it would never have fired at all.)
+- **Opening a shot in the web app is fast** — a fraction of a second instead of
+  seven or eight, on the same data.
+- **Loading the web page no longer starves the device.** Serving it briefly
+  consumed most of the free internal memory, which showed up as display
+  glitches and dropped Bluetooth traffic while a page was open.
+- **The display stops falling back to slow software copies** on the P4 5" while
+  Wi-Fi and Bluetooth are busy, so the interface keeps its frame rate during a
+  web page load.
+- **A Micra sitting connected in standby no longer floods the serial log**, which
+  was costing enough time per frame to visibly stall the interface.
+
 ## v0.4.1
 
 A bug-fix release — no new features.
