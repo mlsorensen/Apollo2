@@ -19,7 +19,10 @@ to the machine instead of a phone app.
 
 - **Micra control over Bluetooth (BLE)** — brew temperature set‑point, steam
   boiler level + on/off, power / standby, and live status (connecting, ready,
-  disconnected) with the real brew and steam temperatures.
+  disconnected) with the real brew and steam temperatures. On boards with a
+  speaker it **chimes once when the machine finishes warming up** — so you can
+  start it and walk away — and stays quiet through the reheats that follow;
+  the chime has its own volume setting (Off / 25 / 50 / 75 / 100 %).
 - **Bluetooth scale integration** — pair a supported scale (**Bookoo Themis**,
   or an **Acaia** — Umbra, Lunar, Prochef, or Pyxis, the last untested) for a
   live weight readout, an automatic shot timer, a live flow‑rate graph (g/s or
@@ -241,7 +244,9 @@ src/core/            Portable protocol logic: the La Marzocco Micra link and
                      the Bookoo scale driver, written only against ble::ICentral
                      — so a new platform (Linux/BlueZ, Pico/btstack) reuses the
                      Bluetooth protocol code unchanged and implements only the
-                     transport.
+                     transport. Also the device-independent decisions: which
+                     event makes which sound (sound.cpp), when a warm-up counts
+                     as finished (ready_chime.h).
 
 src/ui/              The LVGL user interface. Depends ONLY on core/ interfaces,
                      never on a concrete platform. Portable.
@@ -306,7 +311,8 @@ config block.
 
 ```
 include/core/          Domain interfaces + types
-src/core/              Portable protocol implementations (Micra BLE, scales)
+src/core/              Portable protocol implementations (Micra BLE, scales,
+                       audio cues)
 include/platform_esp32/ Device driver headers + board_config.h
 include/platform_host/  Host fakes
 include/ui/             UI headers (widgets, screen profiles, timezones)

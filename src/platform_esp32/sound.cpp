@@ -7,6 +7,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 
+#include <atomic>
 #include <cmath>
 
 #include "driver/i2s_std.h"
@@ -14,6 +15,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 #if defined(BOARD_AUDIO_PA_IOEXT)
 #include "platform_esp32/io_extension.h"
 #endif
@@ -30,10 +32,51 @@ namespace {
 using namespace board;  // kAudio* / kEs8311Addr / kIoExtPaEnable pin constants
 
 constexpr uint32_t kRate = 44100;
-constexpr int kClickHz = 1900;        // tick pitch
-constexpr float kClickDecayS = 0.0035f;
-constexpr float kClickAmp = 0.45f;
-constexpr int kClickFrames = static_cast<int>(kRate * 14 / 1000);  // ~14 ms
+constexpr int kChunkFrames = 256;  // render granularity (~6 ms per write)
+constexpr int kMaxNotes = 12;      // longest cue we'll copy; longer is truncated
+
+// Envelope, in fractions of the note's own length so one shape serves both a
+// 14 ms tick and a 300 ms chime note: a hair of attack so a note doesn't start
+// with a step discontinuity (itself an audible click), an exponential decay,
+// and a short release ramp to zero at the very end. The release matters for
+// the bell: it still has real amplitude when its slot runs out, and cutting
+// that off mid-cycle would put a click between every pair of notes.
+constexpr float kAttackFrac = 0.10f;
+constexpr float kMaxAttackS = 0.0015f;
+constexpr float kReleaseS = 0.006f;
+
+// Voices. The click is one bare sine that dies in a few milliseconds. The bell
+// is a struck-metal stack: a fundamental that rings for most of its slot under
+// overtones that fade faster, exactly as a real bell's do. The 4.2x partial is
+// deliberately inharmonic — that slight beating against the harmonics is the
+// "clang" your ear reads as struck metal rather than a tone generator.
+struct Partial {
+  float ratio;      // multiple of the note's fundamental
+  float amp;        // relative level at the strike
+  float decay_mul;  // multiple of the note's decay time
+};
+constexpr Partial kBellPartials[] = {
+    {1.00f, 1.00f, 1.00f},
+    {2.00f, 0.55f, 0.65f},
+    {3.00f, 0.32f, 0.45f},
+    {4.20f, 0.16f, 0.22f},
+};
+constexpr Partial kClickPartials[] = {{1.00f, 1.00f, 1.00f}};
+
+// Per-voice strike level and decay as a fraction of the note. The bell is
+// louder and rings far longer than the tick: it has to carry from another room,
+// the tick only has to be felt under your fingertip.
+//
+// These are the level the partials are normalized to at the strike, NOT the
+// waveform's peak — the partials don't crest together, so the bell's actual
+// peak lands near 0.85 of full scale at 1.07. That's deliberate: it uses
+// nearly all the DAC's range (the codec is already at 0 dB, and this is the
+// last place to get loudness for free) while keeping headroom so no sample
+// ever wraps. Re-measure if you change the partial table.
+constexpr float kBellAmp = 1.07f;
+constexpr float kBellDecayFrac = 0.55f;
+constexpr float kClickAmp = 0.40f;
+constexpr float kClickDecayFrac = 0.30f;
 
 bool es_write(uint8_t reg, uint8_t val) {
   Wire.beginTransmission(kEs8311Addr);
@@ -109,13 +152,22 @@ void codec_start() {
   es_write(0x31, es_read(0x31) & 0x9F);  // unmute
 }
 
-// The I2S engine runs ONLY while a click is playing. Idle, the channel is
+// The tone renderer behind core::ISound. It knows nothing about buttons or
+// boilers — it sounds a pitch for a duration, and core/sound.cpp decides which
+// pitches mean what.
+//
+// Playback runs on its own small task, synthesizing a chunk at a time and
+// letting i2s_channel_write() block for pacing. A cue is therefore only as
+// expensive as its length (a 1.5 s chime does not need a 260 KB buffer), and
+// play() itself just drops a request in a mailbox and returns — it is called
+// from the UI thread on every button press.
+//
+// The I2S engine runs ONLY while something is playing. Idle, the channel is
 // disabled — no MCLK/BCLK toggling, no DMA traffic, no per-descriptor
 // interrupts — because this board's BLE has proven sensitive to standing
 // internal-RAM/bus load (a continuously-clocking I2S broke Micra + scale
-// connects outright on first bring-up). click() enables the channel, queues
-// the pre-rendered tick, and arms a one-shot esp_timer that disables the
-// channel again once the tail has drained.
+// connects outright on first bring-up). The player enables the channel, and a
+// one-shot esp_timer disables it again once the tail has drained.
 class Es8311Sound : public core::ISound {
  public:
   void begin() {
@@ -128,9 +180,10 @@ class Es8311Sound : public core::ISound {
 
     i2s_chan_config_t chan_cfg =
         I2S_CHANNEL_DEFAULT_CONFIG(static_cast<i2s_port_t>(kAudioI2sPort), I2S_ROLE_MASTER);
-    chan_cfg.auto_clear = true;  // underrun plays silence, never loops the click
-    // Just enough DMA to hold one whole click, so a write never blocks: 4 x 180
-    // frames = 720 >= kClickFrames (~617). Roughly half the default footprint.
+    chan_cfg.auto_clear = true;  // underrun plays silence, never loops a stale note
+    // 4 x 180 = 720 frames, ~16 ms of audio and roughly half the default
+    // footprint. The player writes kChunkFrames at a time and blocks on a full
+    // buffer, so this only has to cover the task's scheduling jitter.
     chan_cfg.dma_desc_num = 4;
     chan_cfg.dma_frame_num = 180;
     if (i2s_new_channel(&chan_cfg, &tx_, nullptr) != ESP_OK) return;
@@ -148,29 +201,23 @@ class Es8311Sound : public core::ISound {
         },
     };
     if (i2s_channel_init_std_mode(tx_, &std_cfg) != ESP_OK) return;
-    // NOT enabled here — see click(). The codec keeps its register config with
-    // the clocks stopped and picks the stream back up when they return.
+    // NOT enabled here — the player enables it per cue (see take_pending). The
+    // codec keeps its register config with the clocks stopped and picks the
+    // stream back up when they return.
 
     codec_open();
     codec_set_fs();
     codec_start();
 
-    // Pre-render the click: a short decaying sine tick, same sample in both
-    // slots (the codec takes the left). PSRAM — i2s_channel_write copies into
-    // the DMA descriptors, so the source needn't be DMA-capable.
-    click_ = static_cast<int16_t*>(
-        heap_caps_malloc(sizeof(int16_t) * 2 * kClickFrames,
+    // Scratch for one render chunk, same sample in both slots (the codec takes
+    // the left). PSRAM — i2s_channel_write copies into the DMA descriptors, so
+    // the source needn't be DMA-capable.
+    chunk_ = static_cast<int16_t*>(
+        heap_caps_malloc(sizeof(int16_t) * 2 * kChunkFrames,
                          MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-    if (click_ == nullptr) click_ = static_cast<int16_t*>(malloc(sizeof(int16_t) * 2 * kClickFrames));
-    if (click_ == nullptr) return;
-    for (int i = 0; i < kClickFrames; ++i) {
-      const float t = static_cast<float>(i) / kRate;
-      const float s =
-          sinf(2.0f * static_cast<float>(M_PI) * kClickHz * t) * expf(-t / kClickDecayS);
-      const int16_t v = static_cast<int16_t>(s * kClickAmp * 32767.0f);
-      click_[2 * i] = v;
-      click_[2 * i + 1] = v;
-    }
+    if (chunk_ == nullptr)
+      chunk_ = static_cast<int16_t*>(malloc(sizeof(int16_t) * 2 * kChunkFrames));
+    if (chunk_ == nullptr) return;
 
     lock_ = xSemaphoreCreateMutex();
     const esp_timer_create_args_t targs = {
@@ -181,6 +228,13 @@ class Es8311Sound : public core::ISound {
         .skip_unhandled_events = true,
     };
     if (esp_timer_create(&targs, &idle_timer_) != ESP_OK) return;
+
+    // Player task. Priority 4 (above the Arduino loop / LVGL, below the BLE
+    // link tasks): it must wake promptly so the button tick stays instant, but
+    // it spends nearly all its time blocked inside i2s_channel_write.
+    if (xTaskCreate(&Es8311Sound::player_entry, "snd_play", 3584, this, 4,
+                    &player_) != pdPASS)
+      return;
 
     // Prime the DAC before the amp comes up. Between PA-on and the first click
     // the on-demand I2S leaves the codec unclocked, and its floating output
@@ -206,29 +260,160 @@ class Es8311Sound : public core::ISound {
 #endif
 
     ok_ = true;
-    log_i("sound: ES8311 up (44.1 kHz, click %d frames, on-demand I2S)", kClickFrames);
+    log_i("sound: ES8311 up (44.1 kHz, on-demand I2S, tone player)");
   }
 
   bool available() const override { return ok_; }
 
-  void click() override {
-    if (!ok_) return;
+  using core::ISound::play;  // keep the play(Cue) convenience overload visible
+
+  void play(const core::Playback& req) override {
+    if (!ok_ || req.notes == nullptr || req.count <= 0) return;
+    const int volume = req.volume < 0 ? 0 : req.volume > 100 ? 100 : req.volume;
+    if (volume == 0) return;  // muted: don't even wake the codec
+    const int count = req.count > kMaxNotes ? kMaxNotes : req.count;
     xSemaphoreTake(lock_, portMAX_DELAY);
-    if (!running_ && i2s_channel_enable(tx_) == ESP_OK) running_ = true;
-    if (running_) {
-      size_t written = 0;  // fits the DMA buffers; returns without blocking
-      i2s_channel_write(tx_, click_, sizeof(int16_t) * 2 * kClickFrames, &written, 30);
-      esp_timer_stop(idle_timer_);  // (re)arm the stop for after the tail drains
-      esp_timer_start_once(idle_timer_, 250 * 1000);
+    // Only take the speaker from something at least as important, and never
+    // let a queued cue be displaced by a less important one. Equal priority
+    // wins, so re-requesting the same cue restarts it — that's what makes
+    // tapping a volume setting audition each level instead of dropping every
+    // tap after the first. A lower-priority cue (the button tick under that
+    // very tap) is still turned away.
+    const bool beats_playing = !playing_ || req.priority >= playing_priority_;
+    const bool beats_pending = !have_pending_ || req.priority >= pending_.priority;
+    if (beats_playing && beats_pending) {
+      for (int i = 0; i < count; ++i) pending_.notes[i] = req.notes[i];
+      pending_.count = count;
+      pending_.priority = req.priority;
+      pending_.timbre = req.timbre;
+      pending_.volume = volume;
+      have_pending_ = true;
+      if (playing_) cancel_.store(true);  // cut the current cue short for this one
     }
     xSemaphoreGive(lock_);
+    if (player_ != nullptr) xTaskNotifyGive(player_);
   }
 
  private:
+  struct Request {
+    core::Tone notes[kMaxNotes];
+    int count = 0;
+    int priority = 0;
+    core::Timbre timbre = core::Timbre::Click;
+    int volume = 100;  // 0..100, already clamped by play()
+  };
+
+  static void player_entry(void* arg) { static_cast<Es8311Sound*>(arg)->player_loop(); }
+
+  // Drain the mailbox, then park the I2S channel again.
+  void player_loop() {
+    for (;;) {
+      ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+      Request req;
+      while (take_pending(req)) render(req);
+      xSemaphoreTake(lock_, portMAX_DELAY);
+      playing_ = false;
+      if (running_) esp_timer_start_once(idle_timer_, 250 * 1000);
+      xSemaphoreGive(lock_);
+    }
+  }
+
+  // Claim the queued request (if any) and make sure the clocks are running.
+  bool take_pending(Request& out) {
+    bool got = false;
+    xSemaphoreTake(lock_, portMAX_DELAY);
+    if (have_pending_) {
+      out = pending_;
+      have_pending_ = false;
+      cancel_.store(false);
+      playing_ = true;
+      playing_priority_ = out.priority;
+      esp_timer_stop(idle_timer_);
+      if (!running_ && i2s_channel_enable(tx_) == ESP_OK) running_ = true;
+      got = running_;
+    }
+    xSemaphoreGive(lock_);
+    return got;
+  }
+
+  // Synthesize the sequence chunk by chunk. The write blocks on a full DMA
+  // buffer, which is what paces playback to real time — no timers involved.
+  void render(const Request& req) {
+    const bool bell = req.timbre == core::Timbre::Bell;
+    const Partial* partials = bell ? kBellPartials : kClickPartials;
+    const int voices = bell ? static_cast<int>(sizeof(kBellPartials) / sizeof(Partial))
+                            : static_cast<int>(sizeof(kClickPartials) / sizeof(Partial));
+    const float peak = bell ? kBellAmp : kClickAmp;
+    const float decay_frac = bell ? kBellDecayFrac : kClickDecayFrac;
+    // Scale so the partials sum to `peak` at the strike instead of clipping,
+    // then apply the request's volume on top.
+    float amp_sum = 0.0f;
+    for (int k = 0; k < voices; ++k) amp_sum += partials[k].amp;
+    const float gain = peak / amp_sum * (req.volume / 100.0f);
+
+    for (int i = 0; i < req.count && !cancel_.load(); ++i) {
+      const core::Tone& note = req.notes[i];
+      const int frames = static_cast<int>(kRate * note.ms / 1000);
+      const float note_s = static_cast<float>(note.ms) / 1000.0f;
+      const float attack_s = fminf(kMaxAttackS, kAttackFrac * note_s);
+      const int attack_frames = static_cast<int>(attack_s * kRate);
+      const int release_frames =
+          static_cast<int>(fminf(kReleaseS, note_s * 0.25f) * kRate);
+      const float decay_s = decay_frac * note_s;
+
+      // Per-partial state. The decay is stepped by a constant multiply per
+      // frame rather than an expf() per sample — same curve, a fraction of the
+      // cost, which matters with four voices at 44.1 kHz.
+      float phase[8] = {0.0f};
+      float env[8];
+      float dphi[8];
+      float step[8];
+      for (int k = 0; k < voices; ++k) {
+        env[k] = partials[k].amp;
+        dphi[k] = 2.0f * static_cast<float>(M_PI) * note.hz * partials[k].ratio / kRate;
+        step[k] = expf(-1.0f / (kRate * decay_s * partials[k].decay_mul));
+      }
+
+      for (int done = 0; done < frames && !cancel_.load();) {
+        const int n = frames - done < kChunkFrames ? frames - done : kChunkFrames;
+        for (int j = 0; j < n; ++j) {
+          int16_t v = 0;
+          if (note.hz > 0.0f) {
+            float s = 0.0f;
+            for (int k = 0; k < voices; ++k) {
+              s += sinf(phase[k]) * env[k];
+              phase[k] += dphi[k];
+              if (phase[k] > 2.0f * static_cast<float>(M_PI))
+                phase[k] -= 2.0f * static_cast<float>(M_PI);
+              env[k] *= step[k];
+            }
+            const int frame = done + j;
+            if (frame < attack_frames)
+              s *= static_cast<float>(frame) / attack_frames;
+            const int left = frames - frame;
+            if (left < release_frames) s *= static_cast<float>(left) / release_frames;
+            // Clamp, don't wrap: an int16_t cast of an out-of-range float wraps
+            // sign and turns a loud note into a burst of noise. The levels
+            // above leave headroom, but a partial-table edit shouldn't be able
+            // to make that mistake audible.
+            v = static_cast<int16_t>(fmaxf(-1.0f, fminf(1.0f, s * gain)) * 32767.0f);
+          }
+          chunk_[2 * j] = v;
+          chunk_[2 * j + 1] = v;
+        }
+        size_t written = 0;
+        if (i2s_channel_write(tx_, chunk_, sizeof(int16_t) * 2 * n, &written,
+                              portMAX_DELAY) != ESP_OK)
+          return;
+        done += n;
+      }
+    }
+  }
+
   static void idle_cb(void* arg) {
     auto* self = static_cast<Es8311Sound*>(arg);
     xSemaphoreTake(self->lock_, portMAX_DELAY);
-    if (self->running_) {
+    if (self->running_ && !self->playing_) {
       i2s_channel_disable(self->tx_);
       self->running_ = false;
     }
@@ -236,10 +421,16 @@ class Es8311Sound : public core::ISound {
   }
 
   i2s_chan_handle_t tx_ = nullptr;
-  int16_t* click_ = nullptr;
+  int16_t* chunk_ = nullptr;  // one render chunk, player-task only
   esp_timer_handle_t idle_timer_ = nullptr;
   SemaphoreHandle_t lock_ = nullptr;
-  bool running_ = false;  // guarded by lock_
+  TaskHandle_t player_ = nullptr;
+  Request pending_;              // guarded by lock_
+  bool have_pending_ = false;    // guarded by lock_
+  bool playing_ = false;         // guarded by lock_
+  int playing_priority_ = 0;     // guarded by lock_
+  std::atomic<bool> cancel_{false};  // read by render(), set under lock_
+  bool running_ = false;         // I2S channel enabled; guarded by lock_
   bool ok_ = false;
 };
 
@@ -261,7 +452,8 @@ namespace {
 class NoSound : public core::ISound {
  public:
   bool available() const override { return false; }
-  void click() override {}
+  using core::ISound::play;
+  void play(const core::Playback&) override {}
 };
 
 NoSound g_sound;

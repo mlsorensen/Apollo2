@@ -6,7 +6,8 @@
 
 // Settings tab: an lv_menu drill-in, grouped by device with short leaf pages
 // under each (short = little to no scrolling, the whole point of the split):
-//   - Micra  -> Bluetooth (scan/save/connect/forget) | Settings (Brew + Boiler)
+//   - Micra  -> Bluetooth (scan/save/connect/forget/auto-connect)
+//               | Controls (Brew + Boiler) | Cleaning
 //   - Scale  -> Bluetooth (scan/save/connect/forget) | Settings (Target weight)
 //   - Device -> Display (brightness/theme/units) | Time & date | WiFi
 // ui::App owns it — builds the frame here, navigates pages, and (re)populates the
@@ -18,9 +19,9 @@ namespace ui {
 // Navigation targets (a page each). select_settings_section() loads the page;
 // the sim + the post-theme-rebuild restore use these.
 enum SettingsSection {
-  kSectionMicra = 0,       // Micra chooser (Bluetooth | Settings | Cleaning)
-  kSectionMicraBt,         // Micra > Bluetooth
-  kSectionMicraSettings,   // Micra > Settings (Brew + Steam Boiler)
+  kSectionMicra = 0,       // Micra chooser (Bluetooth | Controls | Cleaning)
+  kSectionMicraBt,         // Micra > Bluetooth (connection + auto connect)
+  kSectionMicraControls,   // Micra > Controls (Brew + Steam Boiler)
   kSectionMicraCleaning,   // Micra > Cleaning (flush settings + backflush)
   kSectionScale,           // Scale chooser
   kSectionScaleBt,         // Scale > Bluetooth
@@ -35,9 +36,9 @@ enum SettingsSection {
 struct SettingsWidgets {
   lv_obj_t* menu = nullptr;
   lv_obj_t* root_page = nullptr;
-  lv_obj_t* micra_page = nullptr;           // chooser: Bluetooth | Settings | Cleaning
-  lv_obj_t* micra_bt_page = nullptr;        // connection
-  lv_obj_t* micra_settings_page = nullptr;  // brew + boiler
+  lv_obj_t* micra_page = nullptr;           // chooser: Bluetooth | Controls | Cleaning
+  lv_obj_t* micra_bt_page = nullptr;        // connection + auto connect
+  lv_obj_t* micra_controls_page = nullptr;  // brew + boiler
   lv_obj_t* micra_cleaning_page = nullptr;  // flush settings + backflush
                                             // (paddle-capable boards only)
   lv_obj_t* scale_page = nullptr;           // chooser: Bluetooth | Settings
@@ -93,7 +94,11 @@ struct SettingsWidgets {
   lv_obj_t* perf_overlay_switch = nullptr;   // on = show LVGL FPS/CPU overlay
   lv_obj_t* restart_btn = nullptr;           // soft reboot (display-glitch escape hatch)
   lv_obj_t* clean_lock_btn = nullptr;        // 30 s touch lockout for wiping the screen
-  lv_obj_t* auto_connect_switch = nullptr;   // Micra: connect to saved machine at boot
+  lv_obj_t* auto_connect_switch = nullptr;   // Micra > Bluetooth: connect to the
+                                             // saved machine at boot
+  lv_obj_t* chime_vol_btn = nullptr;         // Micra > Controls: warm-up chime
+  lv_obj_t* chime_vol_value = nullptr;       // level cycle (Off / 25 / 50 / 75
+                                             // / 100%); audio boards only
   lv_obj_t* wired_paddle_switch = nullptr;   // Micra: paddle harness in use (off =
                                              // detector-driven "unwired" shots);
                                              // only built on paddle-capable boards

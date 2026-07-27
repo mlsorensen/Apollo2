@@ -63,6 +63,13 @@ class IDisplaySettings {
   // the row is hidden entirely when the board can't make sound.
   virtual bool click_sound() const = 0;
   virtual void set_click_sound(bool on) = 0;
+
+  // Volume of the warm-up chime (core::Cue::Ready), 0..100 in 25% steps —
+  // 0 is off, 100 the default. Same speaker requirement as click_sound. Sound
+  // preferences live here rather than with the machine because the speaker is
+  // a property of the device.
+  virtual int ready_chime_volume() const = 0;
+  virtual void set_ready_chime_volume(int percent) = 0;
 };
 
 }  // namespace core

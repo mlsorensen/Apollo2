@@ -20,7 +20,12 @@ The Home screen adapts to the screen size and to whether a scale is paired.
   `Disconnected`, `Connecting...`, `Heating` (powered on, boilers still coming
   up to temperature — the dot pulses amber), `Ready` (at temperature), or
   `Standby`. The Micra itself doesn't report a warm‑up state; `Heating` is
-  inferred from the live boiler temperatures vs their set‑points.
+  inferred from the live boiler temperatures vs their set‑points. A boiler
+  within **2 °C** of its set‑point counts as ready, because the machine's own
+  thermostat works to about that tolerance — a steam boiler set to 128 °C
+  routinely settles at 127 °C and stops heating there. Boards with a speaker
+  can also chime when it turns `Ready` — see
+  [Settings → Micra → Controls](#controls).
 - **BREW / STEAM** — live boiler temperatures. On larger screens each has a
   **−/+** stepper that edits the set‑point directly; the small grey number is
   the current target. Edits are written to the machine as you tap.
@@ -104,16 +109,28 @@ Plots the live flow rate (or weight) from the scale.
     Bluetooth client, so Disconnect frees it for another remote or the phone
     app.
   - **Forget** — clears the machine, its name, and its token.
-
-### Settings
-
 - **Auto connect** *(default on)* — connect to the saved machine automatically
   at power‑up. Turn off if another controller needs the Micra's single
   Bluetooth slot.
+
+### Controls
+
 - **Wired paddle** *(paddle‑capable boards; default off)* — tell the firmware
   the paddle harness is physically wired. This enables the **Auto shot** mode
   and the auto‑flush. Off, the board behaves like an unwired one (Shot detect
   / Manual only). Flipping it mid‑shot cancels the shot.
+- **Chime volume** *(boards with a speaker; Off / 25 / 50 / 75 / 100 %, default
+  100 %)* — a short chime when the machine finishes warming up, so you can walk
+  away and be called back. Each tap cycles to the next level **and plays a note
+  at it**, so you can set it by ear; `Off` silences it.
+
+  The chime marks the *end of a warm‑up*, not every moment the boilers are at
+  temperature, so it sounds **once** and then stays quiet through all the small
+  dips and reheats that hold the temperature. It re‑arms when a new warm‑up is
+  genuinely coming: the machine goes to standby (or off, or disconnects), the
+  steam boiler is switched on or off, or a boiler falls 10 °C below its set
+  point. With the steam boiler **off** the chime follows the coffee boiler
+  alone; with it **on**, both boilers have to be there.
 - **Brew → Temperature** — coffee boiler set‑point stepper (0.1 °C steps;
   long‑press for 0.5 °C).
 - **Steam Boiler → Enable** — steam boiler on/off.
@@ -219,7 +236,10 @@ page fits on screen with little to no scrolling.
 - **Fahrenheit** *(default off)* — display unit for temperatures. Set‑points
   are still stored in Celsius.
 - **Button sounds** *(boards with a speaker; default on)* — click on button
-  presses.
+  presses. (The other sound, the warm‑up chime, is under
+  [Settings → Micra → Controls](#controls) since it's about the machine.) With
+  button sounds off *and* the chime volume `Off`, the audio hardware stays
+  powered down until the next restart.
 - **Performance overlay** *(default off)* — LVGL FPS/CPU overlay, for
   debugging.
 
