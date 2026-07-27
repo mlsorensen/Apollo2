@@ -207,13 +207,25 @@ void setup() {
   g_brew.set_standby_provider([] {
     const core::MachineSnapshot s = g_micra.snapshot();
     const bool wake_only = s.link == core::Link::Connected && s.power != core::Power::On;
-    // Called exactly once per paddle ON edge — log the decision inputs (a
-    // "shot instead of wake" report hinges on what power read here).
-    Serial.printf("Paddle ON edge: link=%d power=%s -> %s\n", static_cast<int>(s.link),
-                  s.power == core::Power::On        ? "On"
-                  : s.power == core::Power::Standby ? "Standby"
-                                                    : "Off",
-                  wake_only ? "wake only" : "shot path");
+    // This is a PREDICATE, not an edge hook: BrewController::snapshot() asks it
+    // (via can_clean) on every call, and pump_scale_chart takes a snapshot every
+    // loop iteration — so logging unconditionally printed at frame rate for as
+    // long as the machine sat connected in standby. On a UART that write BLOCKS,
+    // which is milliseconds stolen from every frame (see the DSI sync's own note
+    // in display.cpp) and enough to visibly stall rendering.
+    //
+    // Log the TRANSITIONS instead: a "shot instead of wake" report still hinges
+    // on what link/power read here, and that answer only changes when they do.
+    static int last_link = -1, last_power = -1;
+    if (static_cast<int>(s.link) != last_link || static_cast<int>(s.power) != last_power) {
+      last_link = static_cast<int>(s.link);
+      last_power = static_cast<int>(s.power);
+      Serial.printf("Paddle standby check: link=%d power=%s -> %s\n", last_link,
+                    s.power == core::Power::On        ? "On"
+                    : s.power == core::Power::Standby ? "Standby"
+                                                      : "Off",
+                    wake_only ? "wake only" : "shot path");
+    }
     return wake_only;
   });
   g_brew.set_target_persister([](float g) { g_config.set_target_weight_g(g); });
@@ -235,7 +247,21 @@ void setup() {
   // brought up. Gated on the sound settings so turning them ALL off + Restart
   // leaves the whole audio stack cold — the escape hatch if audio ever
   // interferes with BLE again (the always-clocking first cut broke connects).
-  if (g_config.click_sound() || g_config.ready_chime_volume() > 0) platform::sound_begin();
+  // Report what the audio stack costs in INTERNAL ram. The P4 5" runs close to
+  // the ceiling (720x1280 framebuffers + hosted WiFi/BLE + the DSI sync's DMA
+  // descriptor lists), and there a few KB decides whether esp_lcd can allocate
+  // a GDMA link list at all. A silent starvation bug is the expensive kind.
+  {
+    const unsigned before = static_cast<unsigned>(
+        heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    if (g_config.click_sound() || g_config.ready_chime_volume() > 0) platform::sound_begin();
+    const unsigned after = static_cast<unsigned>(
+        heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    Serial.printf("heap: internal free=%u after sound (cost %d, largest=%u)\n", after,
+                  static_cast<int>(before) - static_cast<int>(after),
+                  static_cast<unsigned>(heap_caps_get_largest_free_block(
+                      MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)));
+  }
 
   // Build the UI bound to the machine + provisioner + battery + display.
   const ui::ScreenProfile screen{g_display.width(), g_display.height(),
