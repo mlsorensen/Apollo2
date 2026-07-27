@@ -280,6 +280,18 @@ size_t g_dma_bytes = 0;
 
 volatile bool g_dma_ok = false;        // last kicked copy actually queued
 volatile esp_err_t g_dma_err = ESP_OK; // why the last kick failed (diagnosis)
+// Times the big descriptor list wouldn't allocate and the copy fell back to
+// small chunks. Not a failure — the frame still goes out over DMA — but it IS
+// the DMA-capable heap running short, which is worth seeing before it becomes
+// an outright miss.
+volatile uint32_t g_dma_degraded = 0;
+// Stay on small chunks until this time. Without it the big list is retried on
+// EVERY transfer while the pool is short, and each failure costs two
+// unrate-limited driver error lines — blocking UART writes on the frame path,
+// the same cost that was stalling rendering elsewhere. Retrying every couple of
+// seconds is plenty to notice the pool recovering.
+uint32_t g_dma_small_until_ms = 0;
+constexpr uint32_t kDmaSmallHoldMs = 2000;
 SemaphoreHandle_t g_dma_chunk_sem = nullptr;  // per-chunk completion (ISR -> task)
 
 bool dma_chunk_done_cb(async_memcpy_handle_t, async_memcpy_event_t*, void*) {
@@ -296,18 +308,58 @@ void dma_copy_task(void*) {
     // — a full-frame dirty box (~1.5MB on the 5") wants ~23KB x2 CONTIGUOUS,
     // which the fragmented runtime heap reliably lacks (measured: largest free
     // block ~31KB mid-scroll -> ESP_ERR_NO_MEM on every full-screen frame,
-    // CPU fallback each time). ~128KB ops keep each transient list ~2KB.
-    // Serialized chunks still run at DMA speed, overlapped with LVGL's render.
-    constexpr size_t kChunkBytes = 128 * 1024;
+    // CPU fallback each time).
+    //
+    // Two sizes, because the right one depends on memory that moves:
+    //   128KB (list ~2KB) is the profiled fast path — 12 kicks for a full-screen
+    //     box, each with one semaphore round-trip.
+    //   32KB (list ~512B) is the fallback. A descriptor list must be
+    //     DMA-CAPABLE, and that pool is far tighter than MALLOC_CAP_INTERNAL
+    //     suggests: measured 10KB free with the largest block at 1,140 bytes
+    //     while WiFi + BLE + a page load were active. A 2KB list cannot fit
+    //     there; 512B can.
+    // Running 32KB unconditionally cost 21.5 -> 17-19 fps at 85% CPU (45 kicks
+    // and 45 task wakeups per frame), so only drop to it when the big list
+    // actually fails to allocate, and only for the rest of that transfer — the
+    // next frame tries the fast path again. A failed alloc costs microseconds,
+    // far less than the CPU copy it avoids.
+    // To revert: delete the fallback branch and use kChunkBig alone.
+    constexpr size_t kChunkBig = 128 * 1024;
+    constexpr size_t kChunkSmall = 32 * 1024;
+    // A recent failure means the pool is still short — don't re-prove it every
+    // frame (see kDmaSmallHoldMs).
+    size_t chunk =
+        millis() < g_dma_small_until_ms ? kChunkSmall : kChunkBig;
     xSemaphoreTake(g_dma_chunk_sem, 0);  // drain a stale completion
     const uint8_t* src = reinterpret_cast<const uint8_t*>(g_dma_src);
     uint8_t* dst = reinterpret_cast<uint8_t*>(g_dma_dst);
     size_t left = g_dma_bytes;
     g_dma_err = ESP_OK;
+    // Slave the vendor tags to our own cadence, the way shot_store.cpp does for
+    // the SD mount retries. A NO_MEM here is the EXPECTED, handled path — we
+    // retry smaller and report it in plain language — but the driver ESP_LOGEs
+    // twice per failure, which reads like a fault and invites bug reports. Mute
+    // them for the copy only; anything failing outside this window (install,
+    // another GDMA user) still shouts, and both outcomes of the copy itself are
+    // covered by our own messages: "using small DMA chunks" when handled,
+    // "DMA sync missed" when not.
+    esp_log_level_set("gdma-link", ESP_LOG_NONE);
+    esp_log_level_set("async_mcp.gdma", ESP_LOG_NONE);
     while (left > 0) {
-      const size_t n = left < kChunkBytes ? left : kChunkBytes;
+      size_t n = left < chunk ? left : chunk;
       g_dma_err = esp_async_memcpy(g_mcp, dst, const_cast<uint8_t*>(src), n,
                                    dma_chunk_done_cb, nullptr);
+      if (g_dma_err == ESP_ERR_NO_MEM && chunk > kChunkSmall) {
+        // The big descriptor list didn't fit the DMA-capable heap. Shrink for
+        // the rest of this transfer and retry this chunk immediately, rather
+        // than dropping the whole box to the CPU copy.
+        chunk = kChunkSmall;
+        ++g_dma_degraded;
+        g_dma_small_until_ms = millis() + kDmaSmallHoldMs;
+        n = left < chunk ? left : chunk;
+        g_dma_err = esp_async_memcpy(g_mcp, dst, const_cast<uint8_t*>(src), n,
+                                     dma_chunk_done_cb, nullptr);
+      }
       if (g_dma_err != ESP_OK) break;
       if (xSemaphoreTake(g_dma_chunk_sem, pdMS_TO_TICKS(100)) != pdTRUE) {
         g_dma_err = ESP_ERR_TIMEOUT;
@@ -317,6 +369,8 @@ void dma_copy_task(void*) {
       dst += n;
       left -= n;
     }
+    esp_log_level_set("gdma-link", ESP_LOG_ERROR);
+    esp_log_level_set("async_mcp.gdma", ESP_LOG_ERROR);
     g_dma_ok = g_dma_err == ESP_OK;
     // Success or failure, unblock the waiter; on failure it sees !g_dma_ok and
     // does the CPU copy itself (a partial chunked copy is harmless — the
@@ -327,6 +381,27 @@ void dma_copy_task(void*) {
 
 void dsi_sync_back_buffer() {
   if (!g_sync_pending) return;
+  // The DMA-capable heap was too short for the big descriptor list, so the copy
+  // ran in small chunks instead. This is the designed behaviour under load, NOT
+  // a fault: the frame still goes out over DMA, nothing is dropped, and the
+  // only cost is a few more kicks. Worded so a serial log doesn't read as a
+  // bug report — the numbers are here to show how much headroom is left.
+  // Checked ahead of the success return below, because success is the norm.
+  if (g_dma_degraded != 0) {
+    static uint32_t last_degraded_ms = 0;
+    const uint32_t now_ms = millis();
+    if (now_ms - last_degraded_ms >= 1000) {
+      Serial.printf("DSI: using small DMA chunks x%u (expected while WiFi/BLE "
+                    "are busy; frames still DMA'd) dma_free=%u dma_largest=%u\n",
+                    static_cast<unsigned>(g_dma_degraded),
+                    static_cast<unsigned>(heap_caps_get_free_size(
+                        MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)),
+                    static_cast<unsigned>(heap_caps_get_largest_free_block(
+                        MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)));
+      last_degraded_ms = now_ms;
+    }
+    g_dma_degraded = 0;
+  }
   if (g_dma_inflight) {
     // The DMA copy was kicked at the flip boundary and has been running while
     // LVGL rendered this frame — usually finished by now; wait out the rest
@@ -344,13 +419,22 @@ void dsi_sync_back_buffer() {
     ++miss_count;
     const uint32_t now = millis();
     if (now - last_report_ms >= 1000) {
-      Serial.printf("DSI: DMA sync missed x%u — err=%s bytes=%u free=%u largest=%u\n",
-                    static_cast<unsigned>(miss_count),
-                    g_dma_ok ? "TIMEOUT" : esp_err_to_name(g_dma_err),
-                    static_cast<unsigned>(g_dma_bytes),
-                    static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)),
-                    static_cast<unsigned>(
-                        heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)));
+      // Report the DMA-capable pool too, not just plain internal: a GDMA
+      // descriptor list must be DMA-capable, so `largest` alone has repeatedly
+      // read a healthy ~31KB while a ~2KB list allocation failed — the wrong
+      // pool for this question.
+      Serial.printf(
+          "DSI: DMA sync missed x%u — err=%s bytes=%u free=%u largest=%u "
+          "dma_free=%u dma_largest=%u\n",
+          static_cast<unsigned>(miss_count),
+          g_dma_ok ? "TIMEOUT" : esp_err_to_name(g_dma_err),
+          static_cast<unsigned>(g_dma_bytes),
+          static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)),
+          static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)),
+          static_cast<unsigned>(
+              heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)),
+          static_cast<unsigned>(
+              heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)));
       last_report_ms = now;
       miss_count = 0;
     }
@@ -596,11 +680,11 @@ bool Display::begin() {
   if (esp_async_memcpy_install_gdma_axi(&mcp_cfg, &g_mcp) == ESP_OK &&
       xTaskCreate(dma_copy_task, "dsi_sync", 3072, nullptr, 4, &g_dma_task) == pdPASS) {
     Serial.println("DSI: DMA-overlapped dirty sync enabled");
-    // The driver allocates its descriptor list per transaction from internal
-    // heap; under momentary contention that alloc fails and it error-logs.
-    // We fall back to the CPU copy for that frame (logged above).
-    // DIAGNOSIS ROUND (was ESP_LOG_NONE): full-screen scrolls report a miss
-    // every frame — let the driver say why before we silence it again.
+    // Baseline level for the vendor tags. dma_copy_task drops them to NONE for
+    // the duration of each copy, where a NO_MEM is expected and handled, and
+    // restores them to this — so they stay loud for anything that fails outside
+    // that window (install, another GDMA user) and silent for the routine
+    // small-chunk fallback we report ourselves.
     esp_log_level_set("gdma-link", ESP_LOG_ERROR);
     esp_log_level_set("async_mcp.gdma", ESP_LOG_ERROR);
   } else {

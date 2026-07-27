@@ -32,7 +32,12 @@ namespace {
 using namespace board;  // kAudio* / kEs8311Addr / kIoExtPaEnable pin constants
 
 constexpr uint32_t kRate = 44100;
-constexpr int kChunkFrames = 256;  // render granularity (~6 ms per write)
+// Render granularity (~3 ms per write). Kept well under the DMA ring's 360
+// frames so a write blocks only once the ring still holds ~230 frames (~5 ms)
+// — the slack the player task has to wake and refill before an underrun. The
+// scratch buffer this sizes lives in PSRAM, so shrinking it costs nothing that
+// matters.
+constexpr int kChunkFrames = 128;
 constexpr int kMaxNotes = 12;      // longest cue we'll copy; longer is truncated
 
 // Envelope, in fractions of the note's own length so one shape serves both a
@@ -181,11 +186,19 @@ class Es8311Sound : public core::ISound {
     i2s_chan_config_t chan_cfg =
         I2S_CHANNEL_DEFAULT_CONFIG(static_cast<i2s_port_t>(kAudioI2sPort), I2S_ROLE_MASTER);
     chan_cfg.auto_clear = true;  // underrun plays silence, never loops a stale note
-    // 4 x 180 = 720 frames, ~16 ms of audio and roughly half the default
-    // footprint. The player writes kChunkFrames at a time and blocks on a full
-    // buffer, so this only has to cover the task's scheduling jitter.
-    chan_cfg.dma_desc_num = 4;
-    chan_cfg.dma_frame_num = 180;
+    // 3 x 120 = 360 frames, ~8 ms. This ring is DMA-CAPABLE INTERNAL ram, held
+    // from boot — the scarcest pool on the P4 (measured 10KB free / 1,140 B
+    // largest with WiFi + BLE + a page load active, tight enough to starve the
+    // display's GDMA descriptors and BLE's transport). At 4 x 180 it cost
+    // 2,880 B of that pool; this halves it to 1,440 B.
+    //
+    // Kept STATIC rather than allocating per cue: a boot-time allocation always
+    // succeeds, where a runtime one would fail exactly when memory is tight and
+    // would silently kill sound at random. The player writes kChunkFrames at a
+    // time and blocks on a full buffer, so the ring only has to cover the
+    // task's scheduling jitter — ~8 ms of slack for a priority-4 task.
+    chan_cfg.dma_desc_num = 3;
+    chan_cfg.dma_frame_num = 120;
     if (i2s_new_channel(&chan_cfg, &tx_, nullptr) != ESP_OK) return;
     i2s_std_config_t std_cfg = {
         .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(kRate),  // MCLK = 256 * fs
