@@ -12,6 +12,7 @@
 #include "core/shot_csv.h"
 #include "driver/sdmmc_host.h"
 #include "esp_heap_caps.h"
+#include "esp_log.h"
 #include "esp_vfs_fat.h"
 #if !defined(BOARD_SD_MMC_1BIT)
 #include "sd_pwr_ctrl_by_on_chip_ldo.h"
@@ -256,7 +257,22 @@ bool ShotStore::try_mount() {
   // so a present-but-unmountable card explains itself on serial too (the UI
   // gets the probe verdict either way).
   static uint32_t attempts = 0;
-  const bool log_this = (attempts++ % 12) == 0;
+  static esp_err_t last_err = ESP_OK;  // ESP_OK: nothing established yet
+  const uint32_t attempt = ++attempts;
+  const bool log_this = (attempt % 12) == 1;
+
+  // The IDF mount path ESP_LOGEs twice on every cardless attempt
+  // ("send_op_cond returned 0x107" + "sdmmc_card_init failed"), which at the
+  // retry cadence buries everything else on serial. Let those tags through only
+  // while the failure is still news: once we have established that the bus is
+  // simply empty (ESP_ERR_TIMEOUT — nothing answering) they repeat the same
+  // non-event forever, so they go quiet until the error CHANGES, when the
+  // vendor detail is worth seeing again. Nothing else logs under these tags.
+  const bool vendor_is_news = log_this && last_err != ESP_ERR_TIMEOUT;
+  const esp_log_level_t vendor_level =
+      vendor_is_news ? ESP_LOG_ERROR : ESP_LOG_NONE;
+  esp_log_level_set("sdmmc_common", vendor_level);
+  esp_log_level_set("vfs_fat_sdmmc", vendor_level);
 
   // BSP-style mount on the persistent bus (see sd_host_config/sd_slot_config
   // for the per-board wiring). The host is pre-initialized (ensure_bus), so
@@ -276,6 +292,7 @@ bool ShotStore::try_mount() {
   sdmmc_card_t* card = nullptr;
   const esp_err_t err =
       esp_vfs_fat_sdmmc_mount(kMount, &host, &slot_config, &mount_config, &card);
+  last_err = err;  // gates the vendor tags above; ESP_OK re-arms them
   if (err != ESP_OK) {
     // ESP_FAIL = the card answered but the filesystem didn't mount — probe
     // what's actually on it so the UI can say "reformat as FAT32".
@@ -285,13 +302,26 @@ bool ShotStore::try_mount() {
     xSemaphoreTake(mutex_, portMAX_DELAY);
     storage_info_ = info;
     xSemaphoreGive(mutex_);
+    // The attempt number is printed because the retries themselves are now
+    // silent: it should climb by exactly 12 per line. Anything else means the
+    // loop is not running at kRetryMs and the quiet is hiding something.
     if (log_this) {
       if (info.state == core::MediumState::kBadFormat)
         Serial.printf(
-            "ShotStore: SD card present but %s-formatted — reformat as FAT32\n",
-            info.fs_type);
+            "ShotStore: SD card present but %s-formatted — reformat as FAT32 "
+            "(attempt %u)\n",
+            info.fs_type, static_cast<unsigned>(attempt));
+      else if (err == ESP_ERR_TIMEOUT)
+        // The overwhelmingly common case: no card in the slot. Says so plainly
+        // rather than as a failure, because it isn't one — the probe exists so
+        // a card inserted later is picked up within kRetryMs.
+        Serial.printf("ShotStore: no SD card — normal if the slot is empty; "
+                      "probing every %us (attempt %u)\n",
+                      static_cast<unsigned>(kRetryMs / 1000),
+                      static_cast<unsigned>(attempt));
       else
-        Serial.printf("ShotStore: SD mount failed (%s)\n", esp_err_to_name(err));
+        Serial.printf("ShotStore: SD mount failed (%s) (attempt %u)\n",
+                      esp_err_to_name(err), static_cast<unsigned>(attempt));
     }
     return false;
   }
