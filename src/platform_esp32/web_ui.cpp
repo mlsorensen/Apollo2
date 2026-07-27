@@ -2,9 +2,13 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include <esp_heap_caps.h>
 
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <ctime>
+#include <new>
 
 #include "core/shot_csv.h"
 #include "platform_esp32/board_config.h"
@@ -16,6 +20,48 @@ namespace platform {
 namespace {
 
 const char* mode_name(core::ShotMode m) { return core::shot_mode_name(m); }
+
+// Row batcher for the chunked JSON/CSV bodies.
+//
+// WebServer::sendContent costs THREE socket writes per call in chunked mode
+// (chunk-size line, body, CRLF) plus a malloc/free for the size line — so a
+// row-at-a-time loop turned a 600-sample shot into ~1800 tiny TCP segments.
+// Each one is its own select()+send() and its own packet across the SDIO link
+// to the C6: measured 7-8 s to serve a 7 KB CSV (~1 KB/s), and the buffer churn
+// starved the BLE transport outright ("vhci_drv: Tx ... malloc failed").
+//
+// Accumulating ~1 KB per flush cuts that to a few dozen writes with identical
+// bytes on the wire. Rows longer than the buffer pass straight through, so
+// correctness never depends on the size chosen here.
+class RowBatch {
+ public:
+  explicit RowBatch(WebServer& server) : server_(server) {}
+  ~RowBatch() { flush(); }
+
+  void add(const char* row) {
+    const size_t n = std::strlen(row);
+    if (n == 0) return;
+    if (n >= sizeof(buf_)) {  // oversized row: flush order, then pass through
+      flush();
+      server_.sendContent(row, n);
+      return;
+    }
+    if (used_ + n > sizeof(buf_)) flush();
+    std::memcpy(buf_ + used_, row, n);
+    used_ += n;
+  }
+
+  void flush() {
+    if (used_ == 0) return;
+    server_.sendContent(buf_, used_);
+    used_ = 0;
+  }
+
+ private:
+  WebServer& server_;
+  char buf_[1024];
+  size_t used_ = 0;
+};
 
 // "shot-20260615-0455" — sortable, locale-free, matches when the shot ran.
 void shot_basename(const core::IShotStore& shots, uint32_t id, char* out,
@@ -122,9 +168,26 @@ void WebUi::handle_root() {
     setup_->handle_root();  // the portal page (token or WiFi form)
     return;
   }
+  // The app is ~100KB (gzipped at build time; the browser inflates it). Handing
+  // all of it to send_P in one call bottoms out INTERNAL ram: that becomes a
+  // single send() of 100KB, and since the source is memory-mapped flash the
+  // stack has to stage the whole thing into DMA-capable internal buffers on its
+  // way to the C6 over SDIO. Measured on the 5": internal free 121KB -> 15KB,
+  // largest block 82KB -> 4KB, which is low enough that the DSI dirty sync
+  // can't allocate its GDMA descriptor list and drops to a CPU copy.
+  //
+  // Slicing bounds what's in flight to kSlice, so payload size stops driving
+  // peak ram. setContentLength with a REAL length keeps the WebServer's
+  // _chunked flag false, so these appends carry no chunk framing — the bytes on
+  // the wire are identical to the single-call version.
+  constexpr size_t kSlice = 8 * 1024;
   server_.sendHeader("Content-Encoding", "gzip");
-  server_.send_P(200, "text/html", reinterpret_cast<const char*>(kWebAppGz),
-                 kWebAppGzLen);
+  server_.setContentLength(kWebAppGzLen);
+  server_.send(200, "text/html", "");
+  for (size_t off = 0; off < kWebAppGzLen; off += kSlice) {
+    const size_t n = kWebAppGzLen - off < kSlice ? kWebAppGzLen - off : kSlice;
+    server_.sendContent_P(reinterpret_cast<const char*>(kWebAppGz + off), n);
+  }
 }
 
 void WebUi::handle_summary() {
@@ -157,7 +220,8 @@ void WebUi::handle_shots() {
   // Chunked: constant memory no matter how long the history is.
   server_.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server_.send(200, "application/json", "");
-  server_.sendContent("{\"shots\":[");
+  RowBatch batch(server_);
+  batch.add("{\"shots\":[");
   constexpr int kPage = 16;
   core::ShotSummary page[kPage];
   char row[192];
@@ -180,11 +244,12 @@ void WebUi::handle_shots() {
                     static_cast<double>(s.final_g),
                     static_cast<double>(s.avg_gps), mode_name(s.mode),
                     s.wired ? "true" : "false");
-      server_.sendContent(row);
+      batch.add(row);
       first = false;
     }
   }
-  server_.sendContent("]}");
+  batch.add("]}");
+  batch.flush();
   server_.sendContent("");  // end of chunked body
 }
 
@@ -192,9 +257,18 @@ void WebUi::handle_shot_csv() {
   const uint32_t id = static_cast<uint32_t>(server_.arg("id").toInt());
   // Regenerated from the record via the shared format helpers — no filesystem
   // coupling, and it works for any store implementation.
-  auto* rec = new (std::nothrow) core::ShotRecord;
+  //
+  // PSRAM: a ShotRecord is ~7KB and plain `new` would take that from the
+  // internal heap, which is the scarce pool here (ui/app.cpp keeps its two
+  // staging records in the LVGL pool for the same reason). Falls back to the
+  // default heap on boards without PSRAM.
+  void* mem = heap_caps_malloc(sizeof(core::ShotRecord),
+                               MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+  if (mem == nullptr) mem = malloc(sizeof(core::ShotRecord));
+  auto* rec = mem != nullptr ? new (mem) core::ShotRecord : nullptr;
   if (rec == nullptr || !shots_->read(id, *rec)) {
-    delete rec;
+    if (rec != nullptr) rec->~ShotRecord();
+    free(mem);
     server_.send(404, "text/plain", "no such shot");
     return;
   }
@@ -204,14 +278,18 @@ void WebUi::handle_shot_csv() {
   server_.sendHeader("Content-Disposition", disp);
   server_.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server_.send(200, "text/csv", "");
-  server_.sendContent(core::kShotSamplesHeader);
-  char row[48];
-  for (int i = 0; i < rec->n_samples; ++i) {
-    core::format_shot_sample_row(row, sizeof(row), rec->samples[i]);
-    server_.sendContent(row);
-  }
+  {
+    RowBatch batch(server_);
+    batch.add(core::kShotSamplesHeader);
+    char row[48];
+    for (int i = 0; i < rec->n_samples; ++i) {
+      core::format_shot_sample_row(row, sizeof(row), rec->samples[i]);
+      batch.add(row);
+    }
+  }  // batch flushes here, before the terminating empty chunk
   server_.sendContent("");
-  delete rec;
+  rec->~ShotRecord();
+  free(rec);
 }
 
 
