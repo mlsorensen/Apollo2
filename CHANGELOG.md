@@ -19,6 +19,15 @@ for someone reading the diff.
   already recorded — the mode was being saved to the SD card all along, it just
   wasn't shown in the list.
 
+### Fixes
+
+- **The web page can no longer lag behind the firmware it ships with.** The
+  History page a board serves was baked in from a pre-built file kept in the
+  repo, so it was only ever as current as the last time someone remembered to
+  regenerate it by hand — a page could go out with an older version of itself
+  than the firmware around it. It is now rebuilt from source as part of every
+  firmware build and every release, so what you flash is what you get.
+
 ## v0.5.0
 
 ### Features
