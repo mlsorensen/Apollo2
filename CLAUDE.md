@@ -29,6 +29,13 @@ auto-detect the port and can probe a running board's serial banner (pre-rename
 names like `build-p4`/`flash-7b` remain as aliases). All envs + `sim` must
 compile before committing platform changes.
 
+The firmware embeds the History web page as a GENERATED, git-ignored header
+(`include/platform_esp32/webapp_dist.h`). Every device build/flash target
+depends on it, so `make build` rebuilds it from `tools/webapp/` when stale —
+that needs **node** (a real dev dependency; `make sim` does not need it). Bare
+`pio run` does NOT generate it: run `make webapp` first. Never commit the
+header or hand-edit `tools/webapp/dist/`.
+
 ### ESP32-P4-WIFI6-Touch-LCD-5 (env `esp32-p4-micra-5`) — NOT yet HW-verified
 
 Electronically the P4 4.3 (same radio/audio/battery/paddle wiring — everything

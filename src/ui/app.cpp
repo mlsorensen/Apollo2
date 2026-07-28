@@ -2286,9 +2286,11 @@ void App::update_history_view() {
       ui::format_shot_datetime(when, sizeof(when), s.unix_time,
                                clock_ != nullptr && clock_->use_24h(),
                                !is_compact(screen_));
-      char result_txt[24], diff_txt[16], dur_txt[12];
+      char result_txt[24], diff_txt[16], dur_txt[12], mode_txt[24];
       std::snprintf(dur_txt, sizeof(dur_txt), "%us",
                     static_cast<unsigned>((s.duration_ms + 500) / 1000));
+      ui::format_shot_mode_tag(mode_txt, sizeof(mode_txt), s,
+                               ui::shot_mode_tag_glyph_only(screen_));
       uint32_t diff_color = ui::theme::muted();
       if (s.target_g > 0.0f) {
         std::snprintf(result_txt, sizeof(result_txt), "%.1f/%.0fg",
@@ -2305,8 +2307,9 @@ void App::update_history_view() {
                       static_cast<double>(s.final_g));
         diff_txt[0] = '\0';
       }
-      lv_obj_t* row = ui::history_add_row(stats_, when, result_txt, diff_txt,
-                                          diff_color, dur_txt, screen_);
+      lv_obj_t* row = ui::history_add_row(stats_, when, mode_txt, result_txt,
+                                          diff_txt, diff_color, dur_txt,
+                                          screen_);
       lv_obj_set_user_data(row, reinterpret_cast<void*>(static_cast<uintptr_t>(s.id)));
       lv_obj_add_event_cb(row, on_history_row, LV_EVENT_CLICKED, this);
       ++rows;

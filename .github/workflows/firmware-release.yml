@@ -60,6 +60,19 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio
 
+      # The device serves the shot-history browser from a gzipped C array
+      # (include/platform_esp32/webapp_dist.h) that is GENERATED, not committed
+      # — so the release builds it here, exactly as `make build` does locally.
+      # Without this step the firmware won't compile.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26'  # match the version developers build with
+          cache: npm
+          cache-dependency-path: tools/webapp/package-lock.json
+
+      - name: Build the embedded web app
+        run: tools/webapp/build.sh
+
       - name: Build ${{ matrix.env }}
         run: pio run -e ${{ matrix.env }}
 

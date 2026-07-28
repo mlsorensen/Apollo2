@@ -23,6 +23,15 @@ function fmtWhen(unix) {
   });
 }
 
+// How the shot was run. The stored mode is the whole story — the index's
+// `wired` column is redundant with it (see core/brew.h), and only armed modes
+// record at all, so "Manual" is what an old or hand-edited index carries.
+// Wording matches the device's ui::shot_mode_label / format_shot_mode_tag.
+const MODE_LABEL = { auto: 'Auto shot', detect: 'Detected', manual: 'Manual' };
+const MODE_TAG = { auto: 'Auto', detect: 'Detect', manual: 'Manual' };
+const modeLabel = (s) => MODE_LABEL[s.mode] ?? MODE_LABEL.auto;
+const modeTag = (s) => MODE_TAG[s.mode] ?? MODE_TAG.auto;
+
 function monthKey(unix) {
   const d = new Date(unix * 1000);
   return d.getFullYear() * 100 + d.getMonth() + 1;
@@ -57,8 +66,7 @@ function downloadCard(shot, svgEl, theme, textColor) {
   ctx.textBaseline = 'top';
   ctx.fillText(fmtWhen(shot.unix), M, M);
   ctx.textAlign = 'right';
-  ctx.fillText(shot.wired ? 'Auto shot' : shot.mode === 'detect' ? 'Detected' : 'Manual',
-               W - M, M);
+  ctx.fillText(modeLabel(shot), W - M, M);
   ctx.textAlign = 'left';
 
   const diff = shot.target_g > 0 ? shot.final_g - shot.target_g : null;
@@ -318,6 +326,7 @@ export default function App() {
                 <TableHead>
                   <TableRow>
                     <TableCell>When</TableCell>
+                    <TableCell>Mode</TableCell>
                     <TableCell align="right">Result</TableCell>
                     <TableCell align="right">Diff</TableCell>
                     <TableCell align="right">Time</TableCell>
@@ -331,6 +340,7 @@ export default function App() {
                       <TableRow key={s.id} hover sx={{ cursor: 'pointer' }}
                                 onClick={() => setOpen(s)}>
                         <TableCell>{fmtWhen(s.unix)}</TableCell>
+                        <TableCell sx={{ color: 'text.secondary' }}>{modeTag(s)}</TableCell>
                         <TableCell align="right">
                           {s.final_g.toFixed(1)}{s.target_g > 0 ? ` / ${s.target_g.toFixed(0)}` : ''} g
                         </TableCell>
@@ -345,7 +355,7 @@ export default function App() {
                     );
                   })}
                   {visible.length === 0 && (
-                    <TableRow><TableCell colSpan={5}>
+                    <TableRow><TableCell colSpan={6}>
                       <Typography color="text.secondary" align="center" sx={{ py: 2 }}>
                         No shots {filter ? 'in this month' : 'recorded yet'}
                       </Typography>
@@ -363,7 +373,7 @@ export default function App() {
             <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>{fmtWhen(open.unix)}</span>
               <Typography component="span" color="text.secondary">
-                {open.wired ? 'Auto shot' : open.mode === 'detect' ? 'Detected' : 'Manual'}
+                {modeLabel(open)}
               </Typography>
             </DialogTitle>
             <DialogContent>

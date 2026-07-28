@@ -5,6 +5,20 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## v0.5.1
+
+### Features
+
+- **History shows how each shot was run.** Every recorded shot now carries a
+  tag — a bolt for an **Auto** shot (the wired paddle stopped it at weight) or
+  an eye for a **Detect**ed one (inferred from the scale alone) — in its own
+  column in the shot list, on the shot card, and in the web app's table. Useful
+  when you switch modes: an auto shot that missed its target and a detected one
+  that was never going to stop at all are different stories, and the list used
+  to tell them identically. Nothing to enable, and it applies to shots you have
+  already recorded — the mode was being saved to the SD card all along, it just
+  wasn't shown in the list.
+
 ## v0.5.0
 
 ### Features

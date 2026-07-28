@@ -284,7 +284,22 @@ The `renders/` folder is git‑ignored build output; the README screenshots in
 the affected `docs/img/*.png` as part of the same change** so the README stays
 accurate.
 
+### Prerequisites
+
+**PlatformIO** (`pip install platformio`) builds everything, and **node** (any
+recent LTS — `brew install node`) builds the shot-history web page the device
+serves. That page is embedded in the firmware as a generated header,
+`include/platform_esp32/webapp_dist.h`, which is **not committed**: every
+`make build`/`make flash` target rebuilds it when anything under
+[`tools/webapp/`](tools/webapp) changes, and the release workflow does the same,
+so a board can never serve a page that has drifted from the source. `make sim`
+needs no node — the simulator has no web server.
+
 ### Building directly
+
+`pio run` does *not* generate the web-app header (that dependency lives in the
+Makefile), so run `make webapp` first — or just use the `make` targets, which
+handle it.
 
 ```sh
 pio run -e esp32-s3-micra        # 2-inch firmware (default)
