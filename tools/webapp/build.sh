@@ -7,8 +7,11 @@
 # whenever a web source changes, and CI does the same for releases. That way
 # the page a board serves always matches the source in the tree.
 #
-# `gzip -n` drops the mtime from the gzip header so the same input yields a
-# byte-identical asset on every machine.
+# `gzip -n` drops the mtime from the gzip header, so rebuilding unchanged
+# sources yields the same bytes instead of a fresh timestamp each time. It does
+# NOT make the asset byte-identical across platforms — BSD and GNU gzip encode
+# the same input differently — so compare the DECOMPRESSED page, not the blob,
+# when checking a CI build against a local one.
 set -e
 cd "$(dirname "$0")"
 
