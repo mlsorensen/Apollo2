@@ -5,6 +5,21 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## v0.5.2
+
+### Fixes
+
+- **Upgrading with the web flasher no longer wipes your settings.** Installing
+  a new version cleared the paired machine, the Wi-Fi credentials and every
+  setting — even when "Erase device" was left unchecked — and there was no way
+  to avoid it. The published image was a single blob covering the whole start
+  of the flash, and the unused space it padded along the way happened to be the
+  partition those settings live in, so writing it scrubbed them every time. The
+  flasher now installs the same firmware in pieces that step around that
+  partition, so an upgrade keeps everything and a deliberate "Erase device"
+  still starts you clean. Flashing the attached `.bin` by hand with `esptool`
+  is still a full image, and still clears settings — that's what it's for.
+
 ## v0.5.1
 
 ### Features
