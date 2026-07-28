@@ -1,5 +1,6 @@
 #include "ui/stats_tab.h"
 
+#include "ui/shot_card.h"  // shot-mode tag strings, for the history row column
 #include "ui/theme.h"
 #include "ui/units.h"
 #include "ui/widgets.h"
@@ -503,11 +504,13 @@ void stats_select_section(StatsWidgets& w, int section) {
   }
 }
 
-lv_obj_t* history_add_row(StatsWidgets& w, const char* when, const char* result,
-                          const char* diff, uint32_t diff_color,
-                          const char* duration, const ScreenProfile& screen) {
+lv_obj_t* history_add_row(StatsWidgets& w, const char* when, const char* mode,
+                          const char* result, const char* diff,
+                          uint32_t diff_color, const char* duration,
+                          const ScreenProfile& screen) {
   const bool compact = is_compact(screen);
   const bool xl = is_xl(screen);
+  const bool glyph_only = ui::shot_mode_tag_glyph_only(screen);
   const lv_font_t* font = ui::font_dp(compact ? 13 : xl ? 24 : 17);
 
   lv_obj_t* row = lv_obj_create(w.history_list);
@@ -517,9 +520,10 @@ lv_obj_t* history_add_row(StatsWidgets& w, const char* when, const char* result,
   lv_obj_set_width(row, lv_pct(100));
   lv_obj_set_height(row, LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
+  lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_ver(row, ui::dp(compact ? 7 : 10), 0);
+  lv_obj_set_style_pad_column(row, ui::dp(compact ? 6 : 10), 0);
   lv_obj_set_style_pad_hor(row, ui::dp(4), 0);
   lv_obj_set_style_border_side(row, LV_BORDER_SIDE_BOTTOM, 0);
   lv_obj_set_style_border_width(row, 1, 0);
@@ -529,17 +533,41 @@ lv_obj_t* history_add_row(StatsWidgets& w, const char* when, const char* result,
   lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
   lv_obj_set_style_bg_color(row, lv_color_hex(ui::theme::rail()), LV_STATE_PRESSED);
 
+  // Columns, not a run of labels: timestamps and tags are both variable width,
+  // so each gets a fixed cell sized to the widest string it can ever hold at
+  // this tier's font. Otherwise the tag hugs the date and the list reads
+  // ragged (dates alone vary by ~a character between "6/8" and "12/15").
+  auto text_w = [&](const char* s) {
+    lv_point_t sz;
+    lv_text_get_size(&sz, s, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    return sz.x;
+  };
+
   lv_obj_t* when_lbl = lv_label_create(row);
   lv_label_set_text(when_lbl, when);
+  lv_obj_set_width(when_lbl, text_w(ui::widest_shot_datetime(!compact)));
   lv_obj_set_style_text_color(when_lbl, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(when_lbl, font, 0);
+
+  // The mode cell is built even when empty so the columns after it stay put.
+  lv_obj_t* mode_lbl = lv_label_create(row);
+  lv_label_set_text(mode_lbl, mode != nullptr ? mode : "");
+  int32_t mode_w = 0;
+  for (const char* const* t = ui::shot_mode_tags(glyph_only); *t != nullptr; ++t)
+    if (text_w(*t) > mode_w) mode_w = text_w(*t);
+  lv_obj_set_width(mode_lbl, mode_w);
+  lv_obj_set_style_text_color(mode_lbl, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(mode_lbl, font, 0);
 
   lv_obj_t* right = lv_obj_create(row);
   lv_obj_remove_style_all(right);
   lv_obj_remove_flag(right, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_flag(right, LV_OBJ_FLAG_EVENT_BUBBLE);  // row tap works everywhere
-  lv_obj_set_size(right, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_height(right, LV_SIZE_CONTENT);
+  lv_obj_set_flex_grow(right, 1);  // takes the slack; its numbers stay pinned right
   lv_obj_set_flex_flow(right, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(right, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(right, ui::dp(6), 0);
 
   lv_obj_t* result_lbl = lv_label_create(right);

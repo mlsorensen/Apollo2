@@ -293,6 +293,40 @@ void format_shot_datetime(char* buf, size_t n, int64_t unix_time, bool use_24h,
   }
 }
 
+namespace {
+// Index the mode tables below. Order: auto, detect, manual.
+int mode_slot(core::ShotMode m) {
+  return m == core::ShotMode::kAuto ? 0 : m == core::ShotMode::kDetect ? 1 : 2;
+}
+}  // namespace
+
+const char* const* shot_mode_tags(bool glyph_only) {
+  static const char* const kGlyphs[] = {LV_SYMBOL_CHARGE, LV_SYMBOL_EYE_OPEN,
+                                        LV_SYMBOL_MINUS, nullptr};
+  static const char* const kWords[] = {LV_SYMBOL_CHARGE " Auto",
+                                       LV_SYMBOL_EYE_OPEN " Detect",
+                                       LV_SYMBOL_MINUS " Manual", nullptr};
+  return glyph_only ? kGlyphs : kWords;
+}
+
+const char* shot_mode_glyph(const core::ShotSummary& s) {
+  return shot_mode_tags(true)[mode_slot(s.mode)];
+}
+
+const char* shot_mode_label(const core::ShotSummary& s) {
+  static const char* const kLabels[] = {"Auto shot", "Detected", "Manual"};
+  return kLabels[mode_slot(s.mode)];
+}
+
+void format_shot_mode_tag(char* buf, size_t n, const core::ShotSummary& s,
+                          bool glyph_only) {
+  std::snprintf(buf, n, "%s", shot_mode_tags(glyph_only)[mode_slot(s.mode)]);
+}
+
+const char* widest_shot_datetime(bool include_year) {
+  return include_year ? "12/15/2026 12:55 PM" : "12/15 12:55 PM";
+}
+
 lv_obj_t* build_shot_card(lv_obj_t* parent, const core::ShotRecord& rec,
                           const ScreenProfile& screen, bool use_24h,
                           lv_obj_t** out_delete_btn) {
@@ -344,10 +378,9 @@ lv_obj_t* build_shot_card(lv_obj_t* parent, const core::ShotRecord& rec,
                         LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(hdr_right, ui::dp(compact ? 8 : 12), 0);
 
-  const char* mode_txt = rec.summary.wired ? "Auto shot"
-                         : rec.summary.mode == core::ShotMode::kDetect
-                             ? "Detected"
-                             : "Manual";
+  char mode_txt[32];
+  std::snprintf(mode_txt, sizeof(mode_txt), "%s  %s",
+                shot_mode_glyph(rec.summary), shot_mode_label(rec.summary));
   lv_obj_t* mode_lbl = lv_label_create(hdr_right);
   lv_label_set_text(mode_lbl, mode_txt);
   lv_obj_set_style_text_color(mode_lbl, lv_color_hex(theme::muted()), 0);

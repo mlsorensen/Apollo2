@@ -14,6 +14,8 @@
 #   make build-p4-5         compile the P4-WIFI6 5" (DSI 1280x720) firmware
 #   make monitor            open the serial monitor
 #   make sim                build + run the host simulator (writes renders/*.png)
+#   make webapp             rebuild the embedded web app (needs node; every
+#                           device build/flash target does this for you)
 #   make lmtoken            build the cloud token tool (tools/lmtoken)
 #   make lmtoken-release    cross-compile + zip lmtoken for all OSes (tools/lmtoken/dist/)
 #   make lmtoken-publish VERSION=1.0.0   tag lmtoken-v1.0.0 + push it -> CI builds the release
@@ -25,50 +27,67 @@
 PIO ?= pio
 BOARD ?=
 
+# --- Embedded web app --------------------------------------------------------
+# The firmware serves the shot-history browser from a gzipped C array. That
+# header is GENERATED, never committed: every device build (and flash) depends
+# on it, so the page the device serves can't drift from tools/webapp/src.
+# Building it needs node (see README "Developer documentation"); `make sim`
+# does not — the simulator has no web server.
+WEBAPP_HDR := include/platform_esp32/webapp_dist.h
+WEBAPP_SRC := $(wildcard tools/webapp/src/*) \
+              tools/webapp/index.html tools/webapp/vite.config.js \
+              tools/webapp/package.json tools/webapp/package-lock.json \
+              tools/webapp/build.sh tools/webapp/gen_header.py
+
+$(WEBAPP_HDR): $(WEBAPP_SRC)
+	@tools/webapp/build.sh
+
+webapp: $(WEBAPP_HDR)
+
 .DEFAULT_GOAL := build
 .PHONY: flash flash-s3-2 flash-s3-7b flash-s3-4-3b flash-s3-4-3c flash-p4-4-3 \
         flash-p4-5 flash-2inch flash-7b flash-4-3b flash-4-3c flash-p4 \
         build build-s3-7b build-s3-4-3b build-s3-4-3c build-p4-4-3 build-p4-5 \
         build-7b build-4-3b build-4-3c build-p4 \
-        monitor sim lmtoken lmtoken-release lmtoken-publish clean
+        webapp monitor sim lmtoken lmtoken-release lmtoken-publish clean
 
-flash:
+flash: $(WEBAPP_HDR)
 	@tools/flash.sh $(BOARD)
 
-flash-s3-2:
+flash-s3-2: $(WEBAPP_HDR)
 	@tools/flash.sh s3-2
 
-flash-s3-7b:
+flash-s3-7b: $(WEBAPP_HDR)
 	@tools/flash.sh s3-7b
 
-flash-s3-4-3b:
+flash-s3-4-3b: $(WEBAPP_HDR)
 	@tools/flash.sh s3-4-3b
 
-flash-s3-4-3c:
+flash-s3-4-3c: $(WEBAPP_HDR)
 	@tools/flash.sh s3-4-3c
 
-flash-p4-4-3:
+flash-p4-4-3: $(WEBAPP_HDR)
 	@tools/flash.sh p4-4-3
 
-flash-p4-5:
+flash-p4-5: $(WEBAPP_HDR)
 	@tools/flash.sh p4-5
 
-build:
+build: $(WEBAPP_HDR)
 	$(PIO) run -e esp32-s3-micra
 
-build-s3-7b:
+build-s3-7b: $(WEBAPP_HDR)
 	$(PIO) run -e esp32-s3-micra-7b
 
-build-s3-4-3b:
+build-s3-4-3b: $(WEBAPP_HDR)
 	$(PIO) run -e esp32-s3-micra-4-3b
 
-build-s3-4-3c:
+build-s3-4-3c: $(WEBAPP_HDR)
 	$(PIO) run -e esp32-s3-micra-4-3c
 
-build-p4-4-3:
+build-p4-4-3: $(WEBAPP_HDR)
 	$(PIO) run -e esp32-p4-micra-43
 
-build-p4-5:
+build-p4-5: $(WEBAPP_HDR)
 	$(PIO) run -e esp32-p4-micra-5
 
 # --- Pre-rename aliases (muscle memory + older docs) -------------------------
@@ -113,4 +132,4 @@ release-publish:
 	git push origin v$(VERSION)
 
 clean:
-	$(PIO) run -t clean ; rm -rf .pio/build/sim
+	$(PIO) run -t clean ; rm -rf .pio/build/sim $(WEBAPP_HDR)

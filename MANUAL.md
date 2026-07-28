@@ -289,9 +289,12 @@ page fits on screen with little to no scrolling.
   (actual vs target weight). Below, the shot list with a calendar filter —
   **All** plus a button for each month that has shots, so an old month is one
   tap away instead of a long scroll. Each row shows the signed miss against
-  target — `36.2/36g (+0.2)` — green within 2 g, amber beyond. Tap a shot for
-  a full‑screen card with its result/target/diff, time, average flow, and the
-  weight + flow graph.
+  target — `36.2/36g (+0.2)` — green within 2 g, amber beyond, and how the
+  shot was run: a bolt for an **Auto** shot (the paddle harness stopped it at
+  weight) or an eye for a **Detect**ed one (inferred from the scale). Only
+  those two modes record — a fully manual shot has no armed start/stop, so
+  nothing is saved. Tap a shot for a full‑screen card with its
+  result/target/diff, time, average flow, and the weight + flow graph.
   - **SD card**: any size — a **small card is more than enough**. A shot is
     a few tens of KB, so even a 1 GB card holds decades of daily espresso;
     an old card from a drawer is perfect. Use a card formatted **FAT32**
