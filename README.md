@@ -156,8 +156,10 @@ Fasteners:
 
 **No-toolchain option:** the [web flasher](https://mlsorensen.github.io/Apollo2/)
 flashes any supported board straight from Chrome, Edge, or Firefox over USB —
-pick your board, click Install. Prebuilt images also live on the
-[Releases](https://github.com/mlsorensen/Apollo2/releases) page.
+pick your board, click Install. Upgrading this way keeps your paired machine,
+Wi‑Fi and settings (unless you choose "Erase device"). Prebuilt images also live
+on the [Releases](https://github.com/mlsorensen/Apollo2/releases) page — those
+are full images, so flashing one with `esptool` *does* clear saved settings.
 
 Building from source requires [PlatformIO](https://platformio.org/) (`pio`) and
 a USB cable.

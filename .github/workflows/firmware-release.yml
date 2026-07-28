@@ -83,6 +83,12 @@ jobs:
              "out/apollo2-${{ matrix.board }}-${RELEASE_TAG}.bin"
           # chip family for the web-flasher manifest generation
           echo "${{ matrix.chip }}" > "out/apollo2-${{ matrix.board }}-${RELEASE_TAG}.bin.chip"
+          # The web flasher gets the SAME image split around the nvs partition,
+          # so flashing keeps the paired machine, Wi-Fi and settings instead of
+          # padding over them (see tools/stage_flash_parts.py). The single .bin
+          # above stays the clean-install / recovery download.
+          python3 tools/stage_flash_parts.py .pio/build/${{ matrix.env }} \
+                  "out/parts/${{ matrix.board }}"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -133,7 +139,11 @@ jobs:
           **Easiest install: the [web flasher](https://mlsorensen.github.io/Apollo2/)** —
           plug the board in and flash from Chrome, no tools needed.
 
-          Command-line alternative:
+          The flasher upgrades in place: your paired machine, Wi-Fi and
+          settings survive unless you explicitly choose to erase.
+
+          Command-line alternative — note the attached \`.bin\` is a **full
+          image**, so flashing it this way DOES clear saved settings:
           \`\`\`
           esptool.py write_flash 0 apollo2-<board>-${RELEASE_TAG}.bin
           \`\`\`
@@ -177,6 +187,7 @@ jobs:
           mkdir -p "public/${RELEASE_TAG}/firmware" "public/${RELEASE_TAG}/manifests"
           cp site/index.html public/
           cp fw/*.bin "public/${RELEASE_TAG}/firmware/"
+          cp -r fw/parts "public/${RELEASE_TAG}/firmware/parts"
           python3 - <<'EOF'
           import json, os, glob, re
           tag = os.environ["RELEASE_TAG"]
@@ -185,13 +196,18 @@ jobs:
               chip = open(path + ".chip").read().strip()
               # apollo2-<board>-vX.Y.Z.bin -> board
               board = name[len("apollo2-"):name.rindex("-v")]
+              # Flash the nvs-preserving parts, not the merged image: writing
+              # the latter at offset 0 pads over the settings partition, which
+              # made every web flash look like a factory reset.
+              parts = json.load(open(f"fw/parts/{board}/parts.json"))
               manifest = {
                   "name": f"Apollo 2 ({board})",
                   "version": tag.lstrip("v"),
                   "new_install_prompt_erase": True,
                   "builds": [{
                       "chipFamily": chip,
-                      "parts": [{"path": f"../firmware/{name}", "offset": 0}],
+                      "parts": [{"path": f"../firmware/parts/{board}/{p['path']}",
+                                 "offset": p["offset"]} for p in parts],
                   }],
               }
               with open(f"public/{tag}/manifests/{board}.json", "w") as f:
