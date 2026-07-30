@@ -19,6 +19,16 @@ for someone reading the diff.
   morning, the evidence is still there after breakfast — no serial cable at
   the moment of failure required. The log doesn't survive a reboot.
 
+### Fixes
+
+- **The standby/turn-on button reflects the machine's state faster.** The
+  Micra's Bluetooth interface answers state queries with a lag right after a
+  mode change, so the old "read back immediately after the command" approach
+  reliably saw the previous state and the screen then waited out a slow 3 s
+  poll — occasionally 4 s of nothing after a tap. The state poll now simply
+  runs every second, so the button settles within about a second of the
+  machine actually switching.
+
 ## v0.5.2
 
 ### Fixes
