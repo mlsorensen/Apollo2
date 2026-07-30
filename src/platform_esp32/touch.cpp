@@ -4,6 +4,7 @@
 #include <Wire.h>
 #include <lvgl.h>
 
+#include "core/system.h"
 #include "platform_esp32/board_config.h"
 #if defined(BOARD_HAS_IO_EXTENSION)
 #include "platform_esp32/io_extension.h"
@@ -115,7 +116,7 @@ void read_cb(lv_indev_t* /*indev*/, lv_indev_data_t* data) {
     data->state = LV_INDEV_STATE_PRESSED;
 
     if (!g_logged_press) {  // one line per press, for coordinate calibration
-      Serial.printf("touch: native(%d,%d) -> screen(%d,%d)\n", nx, ny, x, y);
+      core::logf("touch: native(%d,%d) -> screen(%d,%d)\n", nx, ny, x, y);
       g_logged_press = true;
     }
   } else {
@@ -163,7 +164,7 @@ bool Touch::begin(int screen_w, int screen_h) {
     else if (gt911_probe(0x14)) { g_addr = 0x14; acked = true; }
     else delay(20);
   }
-  Serial.printf("touch: GT911 %s (addr 0x%02X)\n", acked ? "found" : "NOT found", g_addr);
+  core::logf("touch: GT911 %s (addr 0x%02X)\n", acked ? "found" : "NOT found", g_addr);
 #else
   // CST816: it may need a moment after power-on; retry the ACK probe briefly.
   for (int i = 0; i < 10 && !acked; ++i) {

@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 
 #include "core/shot_csv.h"
+#include "core/system.h"
 #include "driver/sdmmc_host.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
@@ -137,23 +138,23 @@ bool ensure_bus() {
   sd_pwr_ctrl_ldo_config_t ldo_config = {};
   ldo_config.ldo_chan_id = board::kSdLdoChannel;
   if (sd_pwr_ctrl_new_on_chip_ldo(&ldo_config, &g_pwr) != ESP_OK) {
-    Serial.println("ShotStore: SD LDO power init failed");
+    core::logf("ShotStore: SD LDO power init failed\n");
     failed = true;
     return false;
   }
 #endif
   const esp_err_t host_err = sdmmc_host_init();
   if (host_err != ESP_OK && host_err != ESP_ERR_INVALID_STATE) {
-    Serial.printf("ShotStore: sdmmc host init failed (%s)\n",
-                  esp_err_to_name(host_err));
+    core::logf("ShotStore: sdmmc host init failed (%s)\n",
+               esp_err_to_name(host_err));
     failed = true;
     return false;
   }
   const sdmmc_slot_config_t slot = sd_slot_config();
   const esp_err_t slot_err = sdmmc_host_init_slot(kSdSlot, &slot);
   if (slot_err != ESP_OK && slot_err != ESP_ERR_INVALID_STATE) {
-    Serial.printf("ShotStore: sdmmc slot init failed (%s)\n",
-                  esp_err_to_name(slot_err));
+    core::logf("ShotStore: sdmmc slot init failed (%s)\n",
+               esp_err_to_name(slot_err));
     failed = true;
     return false;
   }
@@ -218,8 +219,8 @@ void ShotStore::begin() {
   // shots quietly never save.
   if (xTaskCreatePinnedToCore(task_entry, "shot_store", 8192, this, 1, nullptr,
                               0) != pdPASS) {
-    Serial.println("ShotStore: FAILED to create writer task (internal RAM?) — "
-                   "shots will not be saved");
+    core::logf("ShotStore: FAILED to create writer task (internal RAM?) — "
+               "shots will not be saved\n");
   }
 }
 
@@ -307,21 +308,21 @@ bool ShotStore::try_mount() {
     // loop is not running at kRetryMs and the quiet is hiding something.
     if (log_this) {
       if (info.state == core::MediumState::kBadFormat)
-        Serial.printf(
-            "ShotStore: SD card present but %s-formatted — reformat as FAT32 "
-            "(attempt %u)\n",
-            info.fs_type, static_cast<unsigned>(attempt));
+        core::logf(
+         "ShotStore: SD card present but %s-formatted — reformat as FAT32 "
+         "(attempt %u)\n",
+         info.fs_type, static_cast<unsigned>(attempt));
       else if (err == ESP_ERR_TIMEOUT)
         // The overwhelmingly common case: no card in the slot. Says so plainly
         // rather than as a failure, because it isn't one — the probe exists so
         // a card inserted later is picked up within kRetryMs.
-        Serial.printf("ShotStore: no SD card — normal if the slot is empty; "
-                      "probing every %us (attempt %u)\n",
-                      static_cast<unsigned>(kRetryMs / 1000),
-                      static_cast<unsigned>(attempt));
+        core::logf("ShotStore: no SD card — normal if the slot is empty; "
+                   "probing every %us (attempt %u)\n",
+                   static_cast<unsigned>(kRetryMs / 1000),
+                   static_cast<unsigned>(attempt));
       else
-        Serial.printf("ShotStore: SD mount failed (%s) (attempt %u)\n",
-                      esp_err_to_name(err), static_cast<unsigned>(attempt));
+        core::logf("ShotStore: SD mount failed (%s) (attempt %u)\n",
+                   esp_err_to_name(err), static_cast<unsigned>(attempt));
     }
     return false;
   }
@@ -344,9 +345,9 @@ bool ShotStore::try_mount() {
       std::fclose(f);
       esp_vfs_fat_sdcard_unmount(kMount, card);
       if (log_this)
-        Serial.println(
+        core::logf(
             "ShotStore: shots.csv has an unknown format (newer firmware "
-            "wrote it?) — not touching it");
+            "wrote it?) — not touching it\n");
       return false;
     }
     // Rows are ~60 bytes; hundreds of shots parse in a blink.
@@ -362,7 +363,7 @@ bool ShotStore::try_mount() {
     FILE* h = std::fopen(index_path(), "w");
     if (h == nullptr) {  // can't even create the index -> treat as unusable
       esp_vfs_fat_sdcard_unmount(kMount, card);
-      if (log_this) Serial.println("ShotStore: SD mounted but not writable");
+      if (log_this) core::logf("ShotStore: SD mounted but not writable\n");
       return false;
     }
     std::fputs(core::kShotIndexHeader, h);
@@ -385,9 +386,9 @@ bool ShotStore::try_mount() {
   xSemaphoreGive(mutex_);
   available_ = true;
   refresh_storage();
-  Serial.printf("ShotStore: SD mounted, %d shots, next id %lu\n",
-                static_cast<int>(index_.size()),
-                static_cast<unsigned long>(next_id_));
+  core::logf("ShotStore: SD mounted, %d shots, next id %lu\n",
+             static_cast<int>(index_.size()),
+             static_cast<unsigned long>(next_id_));
   return true;
 }
 
@@ -401,7 +402,7 @@ void ShotStore::unmount() {
     card_ = nullptr;
   }
   // The host, slot, and LDO stay up (shared with the radio; see ensure_bus).
-  Serial.println("ShotStore: SD unavailable (removed?), will retry");
+  core::logf("ShotStore: SD unavailable (removed?), will retry\n");
 }
 
 void ShotStore::write_job(SaveJob& job) {
@@ -418,7 +419,7 @@ void ShotStore::write_job(SaveJob& job) {
     }
     std::fprintf(m, "%lld\n", static_cast<long long>(stats_since()));
     std::fclose(m);
-    Serial.println("ShotStore: stats reset marker written");
+    core::logf("ShotStore: stats reset marker written\n");
     return;
   }
   // Card-full guard: FS writes fail SILENTLY when space runs out, which would
@@ -426,7 +427,7 @@ void ShotStore::write_job(SaveJob& job) {
   // readable) rather than corrupt the tree; the UI shows FULL off the cache.
   refresh_storage();
   if (storage().full) {
-    Serial.println("ShotStore: SD card full, shot not saved");
+    core::logf("ShotStore: SD card full, shot not saved\n");
     return;
   }
   core::ShotRecord& r = *job.rec;
@@ -460,10 +461,10 @@ void ShotStore::write_job(SaveJob& job) {
   }
   std::fclose(sf);
 
-  Serial.printf("ShotStore: saved shot %lu (%.1fg, %lums)\n",
-                static_cast<unsigned long>(r.summary.id),
-                static_cast<double>(r.summary.final_g),
-                static_cast<unsigned long>(r.summary.duration_ms));
+  core::logf("ShotStore: saved shot %lu (%.1fg, %lums)\n",
+             static_cast<unsigned long>(r.summary.id),
+             static_cast<double>(r.summary.final_g),
+             static_cast<unsigned long>(r.summary.duration_ms));
 }
 
 void ShotStore::save(const core::ShotRecord& record) {
@@ -477,7 +478,7 @@ void ShotStore::save(const core::ShotRecord& record) {
   if (xQueueSend(queue_, &job, 0) != pdTRUE) {
     // Queue full (two shots mid-write?) — drop rather than block the UI.
     heap_caps_free(rec);
-    Serial.println("ShotStore: save queue full, shot dropped");
+    core::logf("ShotStore: save queue full, shot dropped\n");
   }
 }
 
@@ -575,7 +576,7 @@ bool ShotStore::remove(uint32_t id) {
     if (pos > index_.size()) pos = index_.size();  // saves may have shifted it
     index_.insert(index_.begin() + static_cast<long>(pos), removed);
     xSemaphoreGive(mutex_);
-    Serial.println("ShotStore: delete queue full, shot kept");
+    core::logf("ShotStore: delete queue full, shot kept\n");
     return false;
   }
   return true;
@@ -618,7 +619,7 @@ void ShotStore::remove_files(uint32_t id) {
     unmount();
     return;
   }
-  Serial.printf("ShotStore: deleted shot %lu\n", static_cast<unsigned long>(id));
+  core::logf("ShotStore: deleted shot %lu\n", static_cast<unsigned long>(id));
 }
 
 core::ShotStats ShotStore::stats(int64_t now_unix) const {

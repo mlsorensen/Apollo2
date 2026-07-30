@@ -5,6 +5,7 @@
 #include <esp_heap_caps.h>
 #include <lvgl.h>
 
+#include "core/system.h"
 #include "platform_esp32/board_config.h"
 #if defined(BOARD_DISPLAY_DSI)
 #include <cstring>
@@ -89,7 +90,7 @@ void rgb_resync_task(void*) {
     // back porch only starts the next frame late — never mid-scanline.
     const esp_err_t err = esp_lcd_panel_init(g_rgb_panel);
     if (g_resync_verbose || err != ESP_OK) {
-      Serial.printf("RGB: panel re-init resync -> %s\n", esp_err_to_name(err));
+      core::logf("RGB: panel re-init resync -> %s\n", esp_err_to_name(err));
     }
     g_resync_verbose = false;
   }
@@ -391,13 +392,13 @@ void dsi_sync_back_buffer() {
     static uint32_t last_degraded_ms = 0;
     const uint32_t now_ms = millis();
     if (now_ms - last_degraded_ms >= 1000) {
-      Serial.printf("DSI: using small DMA chunks x%u (expected while WiFi/BLE "
-                    "are busy; frames still DMA'd) dma_free=%u dma_largest=%u\n",
-                    static_cast<unsigned>(g_dma_degraded),
-                    static_cast<unsigned>(heap_caps_get_free_size(
-                        MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)),
-                    static_cast<unsigned>(heap_caps_get_largest_free_block(
-                        MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)));
+      core::logf("DSI: using small DMA chunks x%u (expected while WiFi/BLE "
+                 "are busy; frames still DMA'd) dma_free=%u dma_largest=%u\n",
+                 static_cast<unsigned>(g_dma_degraded),
+                 static_cast<unsigned>(heap_caps_get_free_size(
+                     MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)),
+                 static_cast<unsigned>(heap_caps_get_largest_free_block(
+                     MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)));
       last_degraded_ms = now_ms;
     }
     g_dma_degraded = 0;
@@ -423,18 +424,18 @@ void dsi_sync_back_buffer() {
       // descriptor list must be DMA-capable, so `largest` alone has repeatedly
       // read a healthy ~31KB while a ~2KB list allocation failed — the wrong
       // pool for this question.
-      Serial.printf(
-          "DSI: DMA sync missed x%u — err=%s bytes=%u free=%u largest=%u "
-          "dma_free=%u dma_largest=%u\n",
-          static_cast<unsigned>(miss_count),
-          g_dma_ok ? "TIMEOUT" : esp_err_to_name(g_dma_err),
-          static_cast<unsigned>(g_dma_bytes),
-          static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)),
-          static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)),
-          static_cast<unsigned>(
-              heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)),
-          static_cast<unsigned>(
-              heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)));
+      core::logf(
+       "DSI: DMA sync missed x%u — err=%s bytes=%u free=%u largest=%u "
+       "dma_free=%u dma_largest=%u\n",
+       static_cast<unsigned>(miss_count),
+       g_dma_ok ? "TIMEOUT" : esp_err_to_name(g_dma_err),
+       static_cast<unsigned>(g_dma_bytes),
+       static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)),
+       static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)),
+       static_cast<unsigned>(
+           heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)),
+       static_cast<unsigned>(
+           heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)));
       last_report_ms = now;
       miss_count = 0;
     }
@@ -589,7 +590,7 @@ bool Display::begin() {
   ldo_cfg.chan_id = 3;  // LDO_VO3 feeds VDD_MIPI_DPHY on this board
   ldo_cfg.voltage_mv = 2500;
   if (esp_ldo_acquire_channel(&ldo_cfg, &ldo) != ESP_OK) {
-    Serial.println("DSI: MIPI PHY LDO acquire FAILED");
+    core::logf("DSI: MIPI PHY LDO acquire FAILED\n");
     return false;
   }
 
@@ -600,7 +601,7 @@ bool Display::begin() {
   bus_cfg.lane_bit_rate_mbps = board::kDsiLaneBitRateMbps;
   esp_lcd_dsi_bus_handle_t dsi_bus = nullptr;
   if (esp_lcd_new_dsi_bus(&bus_cfg, &dsi_bus) != ESP_OK) {
-    Serial.println("DSI: bus create FAILED");
+    core::logf("DSI: bus create FAILED\n");
     return false;
   }
 
@@ -622,7 +623,7 @@ bool Display::begin() {
   dbi_cfg.lcd_param_bits = 8;
   esp_lcd_panel_io_handle_t dbi_io = nullptr;
   if (esp_lcd_new_panel_io_dbi(dsi_bus, &dbi_cfg, &dbi_io) != ESP_OK) {
-    Serial.println("DSI: DBI io create FAILED");
+    core::logf("DSI: DBI io create FAILED\n");
     return false;
   }
   for (size_t i = 0; i < sizeof(kDsiPanelInit) / sizeof(kDsiPanelInit[0]); ++i) {
@@ -648,12 +649,12 @@ bool Display::begin() {
   dpi_cfg.flags.use_dma2d = true;
   if (esp_lcd_new_panel_dpi(dsi_bus, &dpi_cfg, &g_dpi_panel) != ESP_OK ||
       esp_lcd_panel_init(g_dpi_panel) != ESP_OK) {
-    Serial.println("DSI: DPI panel create/init FAILED (framebuffer alloc?)");
+    core::logf("DSI: DPI panel create/init FAILED (framebuffer alloc?)\n");
     return false;
   }
   if (esp_lcd_dpi_panel_get_frame_buffer(g_dpi_panel, 2, (void**)&g_dsi_fb[0],
                                          (void**)&g_dsi_fb[1]) != ESP_OK) {
-    Serial.println("DSI: get framebuffers FAILED");
+    core::logf("DSI: get framebuffers FAILED\n");
     return false;
   }
   const size_t fb_bytes = static_cast<size_t>(board::kLcdNativeW) *
@@ -679,7 +680,7 @@ bool Display::begin() {
   mcp_cfg.dma_burst_size = 64;
   if (esp_async_memcpy_install_gdma_axi(&mcp_cfg, &g_mcp) == ESP_OK &&
       xTaskCreate(dma_copy_task, "dsi_sync", 3072, nullptr, 4, &g_dma_task) == pdPASS) {
-    Serial.println("DSI: DMA-overlapped dirty sync enabled");
+    core::logf("DSI: DMA-overlapped dirty sync enabled\n");
     // Baseline level for the vendor tags. dma_copy_task drops them to NONE for
     // the duration of each copy, where a NO_MEM is expected and handled, and
     // restores them to this — so they stay loud for anything that fails outside
@@ -689,11 +690,11 @@ bool Display::begin() {
     esp_log_level_set("async_mcp.gdma", ESP_LOG_ERROR);
   } else {
     g_mcp = nullptr;
-    Serial.println("DSI: async-memcpy unavailable — CPU dirty sync");
+    core::logf("DSI: async-memcpy unavailable — CPU dirty sync\n");
   }
 
-  Serial.printf("DSI: panel up %dx%d, double-buffered\n", board::kLcdNativeH,
-                board::kLcdNativeW);
+  core::logf("DSI: panel up %dx%d, double-buffered\n", board::kLcdNativeH,
+             board::kLcdNativeW);
   // Backlight after the panel shows black: boost enable high (where a board
   // has one), then PWM full. Polarity is per-board (kBacklightActiveLow): the
   // 4.3's LEDC is inverted (duty 0 = full bright), the 5"'s is normal.
@@ -709,9 +710,9 @@ bool Display::begin() {
   Wire.begin(board::kI2cSda, board::kI2cScl);
   Wire.setClock(400000);
   const bool io_ok = io_extension().begin(board::kIoExtAddr);
-  Serial.printf("RGB: IO extension @0x%02X on I2C(SDA=%d,SCL=%d): %s\n",
-                board::kIoExtAddr, board::kI2cSda, board::kI2cScl,
-                io_ok ? "ACK" : "NO ACK (backlight/reset won't work!)");
+  core::logf("RGB: IO extension @0x%02X on I2C(SDA=%d,SCL=%d): %s\n",
+             board::kIoExtAddr, board::kI2cSda, board::kI2cScl,
+             io_ok ? "ACK" : "NO ACK (backlight/reset won't work!)");
   io_extension().set(board::kIoExtLcdReset, false);
   delay(20);
   io_extension().set(board::kIoExtLcdReset, true);  // release reset
@@ -732,10 +733,10 @@ bool Display::begin() {
   g_gfx = new Arduino_RGB_Display(board::kLcdNativeW, board::kLcdNativeH, rgbpanel,
                                   board::kLcdRotation, /*auto_flush=*/true);
   if (!g_gfx->begin()) {
-    Serial.println("RGB: RGB panel begin() FAILED (framebuffer alloc? PSRAM?)");
+    core::logf("RGB: RGB panel begin() FAILED (framebuffer alloc? PSRAM?)\n");
     return false;
   }
-  Serial.printf("RGB: RGB panel up %dx%d\n", g_gfx->width(), g_gfx->height());
+  core::logf("RGB: RGB panel up %dx%d\n", g_gfx->width(), g_gfx->height());
   // begin() created the esp_lcd panel (inside getFrameBuffer); grab the handle
   // and stand up the VSYNC-aligned resync machinery (see rgb_resync_task).
   // Priority 10 on core 1 (where the LCD interrupt lives): wakes within a few
@@ -813,8 +814,8 @@ bool Display::begin() {
   // in git history; if scroll perf ever needs it back, budget internal RAM
   // globally first.)
   g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM));
-  Serial.printf("RGB: LVGL draw buffer %s (%u bytes)\n",
-                g_draw_buf ? "ok" : "FAILED", static_cast<unsigned>(buf_bytes));
+  core::logf("RGB: LVGL draw buffer %s (%u bytes)\n",
+             g_draw_buf ? "ok" : "FAILED", static_cast<unsigned>(buf_bytes));
 #else
   // SPI (2-inch ST7789): PSRAM, like every other board. This used to ask for
   // INTERNAL + DMA memory, on two wrong premises:
@@ -853,11 +854,11 @@ bool Display::begin() {
   if (g_draw_buf == nullptr) {
     buf_bytes = static_cast<size_t>(w) * (kBufferLines / 2) * (LV_COLOR_DEPTH / 8);
     g_draw_buf = static_cast<lv_color_t*>(heap_caps_malloc(buf_bytes, MALLOC_CAP_INTERNAL));
-    Serial.println("SPI: no PSRAM for the draw buffer; falling back to internal RAM");
+    core::logf("SPI: no PSRAM for the draw buffer; falling back to internal RAM\n");
   }
-  Serial.printf("SPI: LVGL draw buffer %s (%u bytes, %d lines)\n",
-                g_draw_buf ? "ok" : "FAILED", static_cast<unsigned>(buf_bytes),
-                static_cast<int>(buf_bytes / (w * (LV_COLOR_DEPTH / 8))));
+  core::logf("SPI: LVGL draw buffer %s (%u bytes, %d lines)\n",
+             g_draw_buf ? "ok" : "FAILED", static_cast<unsigned>(buf_bytes),
+             static_cast<int>(buf_bytes / (w * (LV_COLOR_DEPTH / 8))));
 #endif
   if (g_draw_buf == nullptr) return false;
 

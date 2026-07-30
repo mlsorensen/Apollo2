@@ -18,6 +18,7 @@ namespace platform {
 //   /api/summary device name/version, ACTIVE THEME palette, storage, stats
 //   /api/shots   the shot index as JSON (chunked; newest first)
 //   /api/shot.csv?id=N   one shot's sample series (download)
+//   /log         the in-RAM diagnostic log ring as plain text (also /api/log)
 //
 // Serving model is PER-BOARD, learned on hardware:
 //   - P4 (DSI) boards: a dedicated FreeRTOS task, so a browser pulling the
@@ -63,6 +64,7 @@ class WebUi {
   void handle_summary();
   void handle_shots();
   void handle_shot_csv();
+  void handle_log();
 
   WebServer server_{80};
   TokenSetup* setup_ = nullptr;

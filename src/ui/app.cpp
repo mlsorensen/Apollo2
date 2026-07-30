@@ -7,6 +7,7 @@
 
 #include <lvgl.h>
 
+#include "core/log_ring.h"
 #include "ui/shot_card.h"
 #include "ui/stats_tab.h"
 #include "ui/theme.h"
@@ -191,6 +192,14 @@ void on_shot_modal_close(lv_event_t* e) {
 
 void on_hist_metric_card(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->open_reset_stats_modal();
+}
+
+void on_info_log_row(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->open_log_modal();
+}
+
+void on_log_modal_close(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->dismiss_modal();
 }
 
 void on_shot_delete(lv_event_t* e) {
@@ -944,6 +953,8 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     if (c != nullptr)
       lv_obj_add_event_cb(c, on_hist_metric_card, LV_EVENT_CLICKED, this);
   }
+  if (stats_.info_log_btn != nullptr)
+    lv_obj_add_event_cb(stats_.info_log_btn, on_info_log_row, LV_EVENT_CLICKED, this);
 
   if (brew_ != nullptr) {
     const core::BrewSnapshot b = brew_->snapshot();
@@ -1686,6 +1697,12 @@ lv_obj_t* App::open_modal(const char* title, const char* body) {
 }
 
 void App::close_modal() {
+  if (log_timer_ != nullptr) {  // log viewer: stop tailing before the widgets go
+    lv_timer_delete(log_timer_);
+    log_timer_ = nullptr;
+  }
+  log_box_ = nullptr;
+  log_label_ = nullptr;
   if (modal_ != nullptr) {
     lv_obj_delete(modal_);
     modal_ = nullptr;
@@ -2405,6 +2422,63 @@ void App::open_reset_stats_modal() {
   lv_obj_set_style_pad_column(row, ui::dp(10), 0);
   modal_button(row, "Reset", ui::theme::warn(), on_reset_stats_confirm, this);
   modal_button(row, "Cancel", ui::theme::rail(), on_reset_stats_cancel, this);
+}
+
+// Stats > Info > "Diagnostic log": the tail of the in-RAM log ring in a
+// scrollable box that LIVE-TAILS — a 1s timer re-snapshots the ring, and the
+// view stays pinned to the newest lines unless the user has scrolled up to
+// read. (The full ring is at http://<ip>/log.)
+void App::open_log_modal() {
+  lv_obj_t* card = open_modal("Diagnostic log", "");
+  lv_obj_set_width(card, lv_pct(94));  // log lines are wide; use the screen
+
+  lv_obj_t* box = lv_obj_create(card);
+  lv_obj_remove_style_all(box);
+  lv_obj_set_width(box, lv_pct(100));
+  lv_obj_set_height(box, screen_.height * 58 / 100);
+  lv_obj_set_style_bg_color(box, lv_color_hex(ui::theme::bg()), 0);
+  lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(box, ui::dp(6), 0);
+  lv_obj_set_style_pad_all(box, ui::dp(8), 0);
+  lv_obj_add_flag(box, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scroll_dir(box, LV_DIR_VER);
+  lv_obj_set_scrollbar_mode(box, LV_SCROLLBAR_MODE_AUTO);
+
+  lv_obj_t* text = lv_label_create(box);
+  lv_obj_set_width(text, lv_pct(100));
+  lv_label_set_long_mode(text, LV_LABEL_LONG_WRAP);
+  lv_obj_set_style_text_color(text, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(text, ui::font_dp(12), 0);
+
+  log_box_ = box;
+  log_label_ = text;
+  refresh_log_modal();  // paint now, not a timer period later
+  log_timer_ = lv_timer_create(
+      [](lv_timer_t* t) {
+        static_cast<App*>(lv_timer_get_user_data(t))->refresh_log_modal();
+      },
+      1000, this);
+
+  modal_button(card, "Close", ui::theme::rail(), on_log_modal_close, this);
+}
+
+void App::refresh_log_modal() {
+  if (log_box_ == nullptr || log_label_ == nullptr) return;
+  // A few KB is plenty for on-glass reading and keeps the label's layout
+  // cost down; the label copies the text, so the staging buffer is transient.
+  constexpr size_t kTailBytes = 4 * 1024;
+  char* tail = static_cast<char*>(lv_malloc(kTailBytes));
+  if (tail == nullptr) return;
+  const size_t n = core::log_ring().snapshot_tail(tail, kTailBytes);
+  // Follow the tail only while the user is already at (or near) the bottom —
+  // scrolling up to read pauses the auto-scroll until they return.
+  const bool follow = lv_obj_get_scroll_bottom(log_box_) <= ui::dp(12);
+  ui::set_text(log_label_, n > 0 ? tail : "(log is empty)");  // no-op if unchanged
+  lv_free(tail);
+  if (follow) {
+    lv_obj_update_layout(log_box_);
+    lv_obj_scroll_to_y(log_box_, LV_COORD_MAX, LV_ANIM_OFF);
+  }
 }
 
 void App::confirm_reset_stats() {

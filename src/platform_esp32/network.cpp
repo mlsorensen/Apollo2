@@ -7,6 +7,7 @@
 #include <cstdlib>  // setenv
 #include <ctime>
 
+#include "core/system.h"
 #include "platform_esp32/clock.h"
 #include "platform_esp32/config.h"
 #include "platform_esp32/token_setup.h"
@@ -49,16 +50,16 @@ void Network::start_station() {
   // 4.3C): log what internal RAM the stack actually has to work with at init
   // time — total free + largest contiguous block (fragmentation shows up as a
   // big gap between them).
-  Serial.printf("Network: internal heap free=%u largest=%u\n",
-                static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)),
-                static_cast<unsigned>(
-                    heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)));
+  core::logf("Network: internal heap free=%u largest=%u\n",
+             static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)),
+             static_cast<unsigned>(
+                 heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)));
   WiFi.mode(WIFI_STA);
   WiFi.setTxPower(kTxPower);
   WiFi.begin(ssid.c_str(), pass.c_str());
   status_ = core::NetState::Connecting;
   connect_deadline_ms_ = millis() + kConnectTimeoutMs;
-  Serial.printf("Network: connecting to '%s'\n", ssid.c_str());
+  core::logf("Network: connecting to '%s'\n", ssid.c_str());
 }
 
 void Network::stop_station() {
@@ -71,7 +72,7 @@ void Network::on_connected() {
   ip_ = WiFi.localIP().toString().c_str();
   status_ = core::NetState::Connected;
   from_portal_ = false;
-  Serial.printf("Network: connected, IP=%s\n", ip_.c_str());
+  core::logf("Network: connected, IP=%s\n", ip_.c_str());
   if (config_.ntp_enabled()) start_ntp();
 }
 
@@ -84,8 +85,8 @@ void Network::start_ntp() {
   configTzTime(tz.c_str(), ntp.c_str(), "pool.ntp.org");
   sntp_set_sync_interval(kNtpSyncIntervalMs);
   sntp_restart();
-  Serial.printf("Network: NTP started (server=%s, resync %us)\n", ntp.c_str(),
-                static_cast<unsigned>(kNtpSyncIntervalMs / 1000));
+  core::logf("Network: NTP started (server=%s, resync %us)\n", ntp.c_str(),
+             static_cast<unsigned>(kNtpSyncIntervalMs / 1000));
 }
 
 void Network::poll() {
@@ -110,7 +111,7 @@ void Network::poll() {
       } else if (millis() > connect_deadline_ms_) {
         status_ = core::NetState::Failed;
         retry_at_ms_ = millis() + kRetryMs;
-        Serial.println("Network: connect timed out");
+        core::logf("Network: connect timed out\n");
         // Credentials just entered via the portal are probably wrong — reopen the
         // AP immediately so the user can correct them without touching the device.
         if (from_portal_) {

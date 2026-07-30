@@ -113,6 +113,7 @@ class App {
   void confirm_delete_shot();             // modal "Delete": remove + refresh
   void open_reset_stats_modal();          // metric-card tap -> confirm dialog
   void confirm_reset_stats();             // modal "Reset": set the marker
+  void open_log_modal();                  // Info "Diagnostic log" row -> viewer
   void shot_button();  // shot-mode toggle, or Reset while a shot is in review
   // Settings "Restart display" handler: wired by device main to an RGB panel
   // DMA resync (falls back to esp_restart on other boards); no-op in the sim.
@@ -144,6 +145,7 @@ class App {
   void update_settings_view();
   void update_scale_view();   // refresh the Scale page (connection + target)
   void update_stats_view();   // refill the chart / info from history
+  void refresh_log_modal();   // re-snapshot the ring into the open log modal
   void update_history_view(); // History section: guidance / metrics / list
   // Assemble + save a ShotRecord at the kReview freeze (no-op without storage
   // or a real date). Call AFTER finish/review_shot_plot rebased the ring.
@@ -191,6 +193,11 @@ class App {
   lv_obj_t* tabview_ = nullptr;
   ScreenProfile screen_{};          // stored so we can rebuild on a theme change
   lv_obj_t* modal_ = nullptr;       // current overlay modal, if open
+  // Log-viewer modal (live tail): refreshed from core::log_ring() by a timer
+  // while open; all three are torn down together in close_modal().
+  lv_obj_t* log_box_ = nullptr;
+  lv_obj_t* log_label_ = nullptr;
+  lv_timer_t* log_timer_ = nullptr;
   bool pairing_active_ = false;     // waiting on a pairing-read outcome
   bool wifi_setup_shown_ = false;   // token-over-WiFi instructions modal is open
   bool wifi_portal_shown_ = false;  // WiFi-credential setup modal is open

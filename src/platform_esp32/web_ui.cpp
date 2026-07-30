@@ -10,7 +10,9 @@
 #include <ctime>
 #include <new>
 
+#include "core/log_ring.h"
 #include "core/shot_csv.h"
+#include "core/system.h"
 #include "platform_esp32/board_config.h"
 #include "platform_esp32/webapp_dist.h"
 #include "version.h"
@@ -109,6 +111,8 @@ void WebUi::begin(TokenSetup& setup, core::IShotStore& shots, core::IClock& cloc
   server_.on("/api/summary", HTTP_GET, [this]() { handle_summary(); });
   server_.on("/api/shots", HTTP_GET, [this]() { handle_shots(); });
   server_.on("/api/shot.csv", HTTP_GET, [this]() { handle_shot_csv(); });
+  server_.on("/log", HTTP_GET, [this]() { handle_log(); });
+  server_.on("/api/log", HTTP_GET, [this]() { handle_log(); });
   server_.onNotFound([this]() {
     // During a portal session, funnel everything to the setup page (phones
     // probe random URLs); otherwise a plain 404.
@@ -125,8 +129,8 @@ void WebUi::begin(TokenSetup& setup, core::IShotStore& shots, core::IClock& cloc
   // here means "web interface simply absent" (seen once on the 4.3C).
   if (xTaskCreatePinnedToCore(task_entry, "web_ui", 8192, this, 2, nullptr,
                               0) != pdPASS) {
-    Serial.println("WebUi: FAILED to create server task (internal RAM?) — "
-                   "web interface unavailable");
+    core::logf("WebUi: FAILED to create server task (internal RAM?) — "
+               "web interface unavailable\n");
   }
 #endif
 }
@@ -138,7 +142,7 @@ bool WebUi::ensure_bound() {
   if (WiFi.getMode() == WIFI_OFF) return false;
   server_.begin();
   bound_ = true;
-  Serial.println("WebUi: server up on :80");
+  core::logf("WebUi: server up on :80\n");
   return true;
 }
 
@@ -188,6 +192,29 @@ void WebUi::handle_root() {
     const size_t n = kWebAppGzLen - off < kSlice ? kWebAppGzLen - off : kSlice;
     server_.sendContent_P(reinterpret_cast<const char*>(kWebAppGz + off), n);
   }
+}
+
+void WebUi::handle_log() {
+  // Snapshot the whole ring (mutex inside), then send in slices — same
+  // peak-RAM reasoning as handle_root. The copy goes to PSRAM where the ring
+  // itself lives; boards without PSRAM fall back to the (small) internal ring.
+  const size_t cap = core::log_ring().capacity() + 1;
+  char* buf = static_cast<char*>(
+      heap_caps_malloc(cap, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  if (buf == nullptr) buf = static_cast<char*>(malloc(cap));
+  if (buf == nullptr) {
+    server_.send(503, "text/plain", "log unavailable (no memory)");
+    return;
+  }
+  const size_t n = core::log_ring().snapshot_tail(buf, cap);
+  constexpr size_t kSlice = 8 * 1024;
+  server_.setContentLength(n);
+  server_.send(200, "text/plain; charset=utf-8", "");
+  for (size_t off = 0; off < n; off += kSlice) {
+    const size_t chunk = n - off < kSlice ? n - off : kSlice;
+    server_.sendContent(buf + off, chunk);
+  }
+  free(buf);
 }
 
 void WebUi::handle_summary() {

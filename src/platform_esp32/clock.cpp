@@ -4,6 +4,7 @@
 #include <sys/time.h>
 #include <time.h>
 
+#include "core/system.h"
 #include "platform_esp32/board_config.h"
 #include <Arduino.h>
 #if defined(BOARD_HAS_PCF85063_RTC)
@@ -118,7 +119,7 @@ void Clock::begin() {
     if (saved > 0) {
       const struct timeval tv = {static_cast<time_t>(saved), 0};
       settimeofday(&tv, nullptr);
-      Serial.println("clock: seeded from last saved time (stale until NTP/manual set)");
+      core::logf("clock: seeded from last saved time (stale until NTP/manual set)\n");
     }
   }
 }
