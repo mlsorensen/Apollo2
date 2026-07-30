@@ -119,6 +119,15 @@ black** run to the physical paddle switch:
 
 ![Finished P4 cable with inline opto module](img/wiring/cable-p4-opto.jpg)
 
+**Keep the opto module away from heat when installing it.** An opto‑isolator
+loses transfer ratio as it warms, so one resting on a hot surface can stop
+registering "paddle on" until it cools — a failure that looks exactly like a
+broken cable and then fixes itself. Inside the machine is fine; directly on
+top of a boiler, pipe, or any other heat‑producing surface is not. There is
+open space below the hot‑water pipe and the steam wand that works well, or a
+piece of neoprene sheet between the module and whatever it rests on does the
+job.
+
 ## Bench‑test before installing
 
 The whole cable can be validated before it ever touches the machine. Connect
