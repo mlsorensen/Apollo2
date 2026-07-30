@@ -335,6 +335,16 @@ page fits on screen with little to no scrolling.
 - **Info** — device details: our firmware version + git revision, uptime,
   battery/USB state with a runtime estimate, and the machine's Device
   Information (manufacturer, model, serial, firmware) read over Bluetooth.
+  - **Diagnostic log** — tap **View** for the recent diagnostic log (the same
+    messages the USB serial console prints), each line stamped with the time
+    (or seconds‑since‑boot before the clock is set). The log lives in RAM:
+    it survives as long as the device stays powered and holds the last
+    64 KB — typically hours of normal operation — so "the paddle did nothing
+    this morning" can be diagnosed after the fact without a serial cable.
+    It does not survive a reboot. The on‑screen viewer shows the newest few
+    KB; with WiFi connected, `http://⟨device IP⟩/log` serves the whole
+    thing as plain text (there's also a **Log** link on the web page's
+    header) — easy to copy into a bug report.
 
 ---
 

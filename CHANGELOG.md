@@ -5,6 +5,20 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## Unreleased
+
+### Features
+
+- **A diagnostic log you can read after the fact.** The device now keeps its
+  recent diagnostics (the same messages the USB serial console prints, plus
+  the system's own) in memory — 64 KB, typically hours of normal use — with
+  each line stamped with the time, or seconds-since-boot until the clock is
+  set. Read it on the device (**Stats → Info → Diagnostic log**) or, with
+  Wi-Fi connected, as plain text at `http://<device IP>/log` (the web page's
+  header has a **Log** link too). So when the paddle "did nothing" this
+  morning, the evidence is still there after breakfast — no serial cable at
+  the moment of failure required. The log doesn't survive a reboot.
+
 ## v0.5.2
 
 ### Fixes

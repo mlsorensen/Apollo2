@@ -4,6 +4,7 @@
 
 #include <cmath>
 
+#include "core/system.h"
 #include "platform_esp32/board_config.h"
 #if defined(BOARD_BATTERY_VIA_IOEXT)
 #include "platform_esp32/io_extension.h"
@@ -51,8 +52,8 @@ core::BatteryState Battery::battery() const {
     static uint32_t last_log_ms = 0;
     if (millis() - last_log_ms > 10000) {
       last_log_ms = millis();
-      Serial.printf("battery: adc raw=%.0fmV x%.2f -> %.2fV\n", raw_mv,
-                    board::kBatteryDivider, volts);
+      core::logf("battery: adc raw=%.0fmV x%.2f -> %.2fV\n", raw_mv,
+                 board::kBatteryDivider, volts);
     }
   }
 #endif

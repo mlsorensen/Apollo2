@@ -16,6 +16,8 @@
 #include <esp_heap_caps.h>
 
 #include "core/brew_controller.h"
+#include "core/log_ring.h"
+#include "core/system.h"
 #include "platform_esp32/battery.h"
 #include "platform_esp32/board_config.h"
 #include "platform_esp32/clock.h"
@@ -24,6 +26,7 @@
 #include "platform_esp32/display_settings.h"
 #include "platform_esp32/history.h"
 #include "platform_esp32/io_extension.h"
+#include "platform_esp32/log_setup.h"
 #include "platform_esp32/micra_link.h"
 #include "platform_esp32/network.h"
 #include "platform_esp32/paddle.h"
@@ -142,9 +145,13 @@ void setup() {
     g_lowbatt_sleep = 0;  // charged enough -> fall through to a normal boot
   }
 
+  // Log ring before the first diagnostic, so the banner onward is replayable
+  // from Stats > Info or http://<ip>/log after the fact.
+  platform::log_init();
+
   delay(300);  // let USB-CDC enumerate
-  Serial.println();
-  Serial.printf("Micra remote — %s\n", board::kName);
+  core::logf("\n");
+  core::logf("Micra remote — %s\n", board::kName);
   {
     // Why did we boot? Distinguishes power-rail dips (BROWNOUT/POWERON — e.g.
     // the USB<->battery switchover glitch on the P4 4.3) from firmware faults.
@@ -162,7 +169,7 @@ void setup() {
       case ESP_RST_USB:       name = "usb"; break;
       default: break;
     }
-    Serial.printf("reset reason: %s (%d)\n", name, static_cast<int>(rr));
+    core::logf("reset reason: %s (%d)\n", name, static_cast<int>(rr));
   }
   g_config.begin();  // create NVS namespace on first boot (quiets read errors)
 
@@ -171,28 +178,29 @@ void setup() {
   // through Arduino's hosted HAL (esp_hosted_init + connect_to_slave + BT
   // controller RPC) before any NimBLE call. esp-nimble-cpp's init alone lands
   // in the vhci driver with the SDIO link down -> "card init failed" + abort.
-  Serial.println("hosted radio: bringing up SDIO link to co-processor...");
+  core::logf("hosted radio: bringing up SDIO link to co-processor...\n");
   if (!hostedInitBLE()) {
-    Serial.println("ERROR: hosted radio init failed; BLE unavailable");
+    core::logf("ERROR: hosted radio init failed; BLE unavailable\n");
   } else {
-    Serial.println("hosted radio: link up");
+    core::logf("hosted radio: link up\n");
   }
 #endif
 
   if (!g_display.begin()) {
-    Serial.println("ERROR: display init failed");
+    core::logf("ERROR: display init failed\n");
     return;
   }
-  Serial.printf("Display up: %d x %d\n", g_display.width(), g_display.height());
+  core::logf("Display up: %d x %d\n", g_display.width(), g_display.height());
 
   if (g_touch.begin(g_display.width(), g_display.height())) {
-    Serial.println("Touch up: CST816");
+    core::logf("Touch up: CST816\n");
   } else {
-    Serial.println("WARN: CST816 touch not detected on I2C");
+    core::logf("WARN: CST816 touch not detected on I2C\n");
   }
 
   g_battery.begin();
   g_clock.begin();  // seed wall-clock from the RTC (if any); I2C is up via Display
+  core::log_ring().set_clock(&g_clock);  // wall-clock stamps from here on
 
   // Paddle hardware (after the display so the IO extension is begun where the
   // paddle rides it). Seed the shot config from NVS and wire the persisters.
@@ -220,11 +228,11 @@ void setup() {
     if (static_cast<int>(s.link) != last_link || static_cast<int>(s.power) != last_power) {
       last_link = static_cast<int>(s.link);
       last_power = static_cast<int>(s.power);
-      Serial.printf("Paddle standby check: link=%d power=%s -> %s\n", last_link,
-                    s.power == core::Power::On        ? "On"
-                    : s.power == core::Power::Standby ? "Standby"
-                                                      : "Off",
-                    wake_only ? "wake only" : "shot path");
+      core::logf("Paddle standby check: link=%d power=%s -> %s\n", last_link,
+                 s.power == core::Power::On        ? "On"
+                 : s.power == core::Power::Standby ? "Standby"
+                                                   : "Off",
+                 wake_only ? "wake only" : "shot path");
     }
     return wake_only;
   });
@@ -236,8 +244,8 @@ void setup() {
   g_brew.set_wired_paddle_persister([](bool on) { g_config.set_wired_paddle(on); });
   g_brew.set_flush_persister([](int s) { g_config.set_flush_s(s); });
   g_brew.set_flush_delay_persister([](int s) { g_config.set_flush_delay_s(s); });
-  Serial.printf("Paddle: %s\n",
-                platform::paddle().available() ? "available" : "not wired on this board");
+  core::logf("Paddle: %s\n",
+             platform::paddle().available() ? "available" : "not wired on this board");
   // Restore saved brightness where dimmable; otherwise hold the backlight at max
   // (an on/off-only board has no brightness control in the UI).
   g_display.set_brightness(board::kSupportsBrightness ? g_config.brightness() : 100);
@@ -257,10 +265,10 @@ void setup() {
     if (g_config.click_sound() || g_config.ready_chime_volume() > 0) platform::sound_begin();
     const unsigned after = static_cast<unsigned>(
         heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
-    Serial.printf("heap: internal free=%u after sound (cost %d, largest=%u)\n", after,
-                  static_cast<int>(before) - static_cast<int>(after),
-                  static_cast<unsigned>(heap_caps_get_largest_free_block(
-                      MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)));
+    core::logf("heap: internal free=%u after sound (cost %d, largest=%u)\n", after,
+               static_cast<int>(before) - static_cast<int>(after),
+               static_cast<unsigned>(heap_caps_get_largest_free_block(
+                   MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)));
   }
 
   // Build the UI bound to the machine + provisioner + battery + display.
@@ -290,7 +298,7 @@ void setup() {
   // soft reboot.
   g_app.set_restart_handler([] {
     if (g_display.rgb_resync()) return;
-    Serial.println("User-requested restart");
+    core::logf("User-requested restart\n");
     Serial.flush();
     esp_restart();
   });
@@ -299,7 +307,7 @@ void setup() {
   // backlight first (dominant load, can latch on in sleep), then park (~uA) until a
   // touch. The dark check above gates the next boot on actually being charged.
   g_app.set_low_battery_handler(board::kBatteryCutoffVolts, [] {
-    Serial.println("Battery critical -> deep sleep; charge, then touch to wake");
+    core::logf("Battery critical -> deep sleep; charge, then touch to wake\n");
     Serial.flush();
     g_display.set_brightness(0);
     enter_lowbatt_sleep();
@@ -323,8 +331,8 @@ void setup() {
   g_micra.set_name(g_config.name());
   g_micra.set_token(g_config.token());
   g_micra.set_token_persister([](std::string t) { g_config.set_token(t); });  // pairing-read
-  Serial.printf("Saved machine: mac=%s token=%s\n", mac.empty() ? "(none)" : mac.c_str(),
-                g_config.token().empty() ? "(none)" : "set");
+  core::logf("Saved machine: mac=%s token=%s\n", mac.empty() ? "(none)" : mac.c_str(),
+             g_config.token().empty() ? "(none)" : "set");
   // Opt-in auto-connect (Micra > Settings): grab the saved machine at boot
   // instead of waiting for a Connect tap. Default off — a connected remote
   // occupies the Micra's single BLE slot.
@@ -334,7 +342,7 @@ void setup() {
   // Start the Bluetooth scale link from its saved MAC (empty -> idles).
   const std::string scale_mac = g_config.scale_mac();
   g_scale.set_name(g_config.scale_name());
-  Serial.printf("Saved scale: mac=%s\n", scale_mac.empty() ? "(none)" : scale_mac.c_str());
+  core::logf("Saved scale: mac=%s\n", scale_mac.empty() ? "(none)" : scale_mac.c_str());
   g_scale.begin(scale_mac);
 
   // Join home WiFi (if enabled) for NTP time; idles otherwise. WiFi coexists with
@@ -357,7 +365,7 @@ void poll_serial_id() {
     if (c == '\n' || c == '\r') {
       buf[n] = '\0';
       if (n == 3 && std::strcmp(buf, "id?") == 0) {
-        Serial.printf("APOLLO2 BOARD=\"%s\" FW=%s\n", board::kName, fw::kVersion);
+        core::logf("APOLLO2 BOARD=\"%s\" FW=%s\n", board::kName, fw::kVersion);
       }
       n = 0;
     } else if (n < sizeof(buf) - 1) {
@@ -403,11 +411,11 @@ void loop() {
   static uint32_t last_heap_log_ms = 0;
   if (millis() - last_heap_log_ms >= 60u * 1000u) {
     last_heap_log_ms = millis();
-    Serial.printf("heap: internal free=%u largest=%u\n",
-                  static_cast<unsigned>(heap_caps_get_free_size(
-                      MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
-                  static_cast<unsigned>(heap_caps_get_largest_free_block(
-                      MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)));
+    core::logf("heap: internal free=%u largest=%u\n",
+               static_cast<unsigned>(heap_caps_get_free_size(
+                   MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+               static_cast<unsigned>(heap_caps_get_largest_free_block(
+                   MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)));
   }
 
   // Hourly last-known-time snapshot -> NVS, so the next boot without a

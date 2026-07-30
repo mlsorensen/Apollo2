@@ -471,6 +471,15 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
       make_info_row(out.info_box, LV_SYMBOL_BATTERY_2 " Runtime", font, compact);
   out.info_val[2] = make_info_row(out.info_box, "Uptime", font, compact);
   out.info_val[3] = make_info_row(out.info_box, "IP address", font, compact);
+  // Clickable row: opens the log-viewer modal (recent diagnostics, kept in
+  // RAM). App attaches the callback; the value doubles as the affordance.
+  {
+    lv_obj_t* val = make_info_row(out.info_box, "Diagnostic log", font, compact);
+    lv_label_set_text(val, "View " LV_SYMBOL_RIGHT);
+    lv_obj_set_style_text_color(val, lv_color_hex(ui::theme::accent()), 0);
+    out.info_log_btn = lv_obj_get_parent(val);
+    lv_obj_add_flag(out.info_log_btn, LV_OBJ_FLAG_CLICKABLE);
+  }
 
   make_info_header(out.info_box, "Micra", font);
   static const char* kMicraKeys[5] = {"Manufacturer", "Model", "Serial", "Firmware",

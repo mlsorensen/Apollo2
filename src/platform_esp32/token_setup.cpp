@@ -5,6 +5,7 @@
 
 #include <string>
 
+#include "core/system.h"
 #include "platform_esp32/config.h"
 #include "platform_esp32/micra_link.h"
 
@@ -121,9 +122,9 @@ void TokenSetup::start(Mode mode) {
   active_ = true;
   stop_pending_ = true;                     // safety net: auto-close if unused, so the
   stop_at_ms_ = millis() + 5 * 60 * 1000;   // AP can't linger (the device closes it on connect)
-  Serial.printf("TokenSetup: AP '%s' %s, IP=%s, free heap=%u\n", ssid(),
-                ap_ok ? "up" : "FAILED", WiFi.softAPIP().toString().c_str(),
-                static_cast<unsigned>(ESP.getFreeHeap()));
+  core::logf("TokenSetup: AP '%s' %s, IP=%s, free heap=%u\n", ssid(),
+             ap_ok ? "up" : "FAILED", WiFi.softAPIP().toString().c_str(),
+             static_cast<unsigned>(ESP.getFreeHeap()));
 }
 
 void TokenSetup::stop() {
@@ -132,7 +133,7 @@ void TokenSetup::stop() {
   WiFi.mode(WIFI_OFF);
   active_ = false;
   stop_pending_ = false;
-  Serial.println("TokenSetup: AP down");
+  core::logf("TokenSetup: AP down\n");
 }
 
 void TokenSetup::handle() {
@@ -158,7 +159,7 @@ void TokenSetup::handle_save() {
   const std::string t(token.c_str());
   config_.set_token(t);   // persist
   link_.set_token(t);     // connect now (clears the bad-token latch)
-  Serial.println("TokenSetup: token saved");
+  core::logf("TokenSetup: token saved\n");
   // Plain-text result for the async form; the AP stays up so a rejected token
   // can be corrected and resubmitted. The device closes it once the link
   // connects (or the safety timeout fires).
@@ -179,7 +180,7 @@ void TokenSetup::handle_wifi() {
   config_.save_wifi(std::string(ssid.c_str()), std::string(pass.c_str()));
   config_.set_wifi_enabled(true);
   wifi_saved_ = true;  // Network tears down the AP + connects from loop() context
-  Serial.printf("TokenSetup: WiFi credentials saved for '%s'\n", ssid.c_str());
+  core::logf("TokenSetup: WiFi credentials saved for '%s'\n", ssid.c_str());
   // Reply before the AP is torn down (next loop) so the phone gets this message.
   server_->send(200, "text/plain",
                 "Saved. The device is leaving this setup network to connect to your "

@@ -2,7 +2,7 @@
 // gzipped file) and styled from the DEVICE'S ACTIVE THEME: /api/summary
 // carries the palette the screen is currently using, and the MUI theme is
 // built from it, so the page always matches the device.
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppBar, Box, Card, CardContent, Chip, CircularProgress, Container,
   CssBaseline, Dialog, DialogContent, DialogTitle, IconButton, Link, Stack,
@@ -204,6 +204,10 @@ export default function App() {
   const [filter, setFilter] = useState(0); // 0 = all, else year*100+month
   const [open, setOpen] = useState(null); // shot summary object
   const [samples, setSamples] = useState(null);
+  const [logOpen, setLogOpen] = useState(false);
+  const [logText, setLogText] = useState(null);
+  const logBoxRef = useRef(null);
+  const logStickRef = useRef(true); // follow the tail until the user scrolls up
 
   useEffect(() => {
     Promise.all([
@@ -227,6 +231,31 @@ export default function App() {
       })
       .catch(() => setSamples([]));
   }, [open]);
+
+  // Log viewer: poll the ring while the dialog is open so the view tails the
+  // device live. 3s is gentle on the S3 boards, where each request briefly
+  // pauses the UI loop.
+  useEffect(() => {
+    if (!logOpen) { setLogText(null); return undefined; }
+    logStickRef.current = true;
+    let live = true;
+    const load = () =>
+      fetch('/api/log')
+        .then((r) => r.text())
+        .then((t) => { if (live) setLogText(t); })
+        .catch(() => {
+          // Keep whatever is already shown; only report if nothing loaded yet.
+          if (live) setLogText((cur) => (cur == null ? '(could not fetch the log)' : cur));
+        });
+    load();
+    const timer = setInterval(load, 3000);
+    return () => { live = false; clearInterval(timer); };
+  }, [logOpen]);
+
+  useEffect(() => {
+    const el = logBoxRef.current;
+    if (el && logStickRef.current) el.scrollTop = el.scrollHeight;
+  }, [logText]);
 
   const devTheme = summary?.theme;
   const muiTheme = useMemo(() => {
@@ -293,6 +322,11 @@ export default function App() {
                 : `SD: ${fmtBytes(summary.storage.free)} free of ${fmtBytes(summary.storage.total)}`}
             </Typography>
           )}
+          <Link component="button" variant="body2" underline="hover"
+                color="text.secondary" sx={{ flexShrink: 0 }}
+                onClick={() => setLogOpen(true)}>
+            Log
+          </Link>
         </Toolbar>
       </AppBar>
       <Container maxWidth="md" sx={{ py: 3 }}>
@@ -408,6 +442,35 @@ export default function App() {
             </DialogContent>
           </>
         )}
+      </Dialog>
+      <Dialog open={logOpen} onClose={() => setLogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span>Diagnostic log</span>
+          <Link variant="body2" href="/log" download="apollo2-log.txt"
+                sx={{ alignSelf: 'center' }}>
+            Download
+          </Link>
+        </DialogTitle>
+        <DialogContent>
+          {logText == null && (
+            <Box sx={{ textAlign: 'center', py: 4 }}><CircularProgress size={28} /></Box>
+          )}
+          {logText != null && (
+            <Box component="pre" ref={logBoxRef}
+                 onScroll={(e) => {
+                   const el = e.currentTarget;
+                   logStickRef.current =
+                     el.scrollHeight - el.scrollTop - el.clientHeight < 20;
+                 }}
+                 sx={{ m: 0, p: 1.5, height: '60vh', overflow: 'auto',
+                       bgcolor: 'background.default', borderRadius: 1,
+                       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                       fontSize: '0.78rem', lineHeight: 1.45,
+                       whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+              {logText || '(log is empty)'}
+            </Box>
+          )}
+        </DialogContent>
       </Dialog>
     </ThemeProvider>
   );

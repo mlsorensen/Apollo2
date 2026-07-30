@@ -7,7 +7,9 @@
 #include <cstdio>
 #include <filesystem>
 
+#include "core/log_ring.h"
 #include "core/shot_csv.h"
+#include "core/system.h"
 
 #include "platform_host/dir_shot_store.h"
 #include "platform_host/fake_battery.h"
@@ -37,7 +39,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             const char* out_path, int tab = 0, int settings_section = -1,
             bool token_modal = false, int theme = 0, int stats_section = -1,
             bool clean_lock = false, int shot_modal_id = -1, int history_ym = 0,
-            bool backflush = false) {
+            bool backflush = false, bool log_modal = false) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
@@ -55,6 +57,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   if (clean_lock) app.start_clean_lock();
   if (backflush) app.open_backflush();
   if (shot_modal_id >= 0) app.open_shot_card(static_cast<uint32_t>(shot_modal_id));
+  if (log_modal) app.open_log_modal();
   display.render_frame();
   if (!display.save_png(out_path)) {
     std::fprintf(stderr, "error: failed to write %s\n", out_path);
@@ -82,10 +85,11 @@ int main() {
   // One PNG per supported layout. Add a line here when a new form factor lands.
   auto r = [&](ui::ScreenProfile s, const char* path, int tab = 0, int sec = -1,
                bool modal = false, int theme = 0, int stats = -1, bool clean_lock = false,
-               int shot_id = -1, int history_ym = 0, bool backflush = false) {
+               int shot_id = -1, int history_ym = 0, bool backflush = false,
+               bool log_modal = false) {
     return render(machine, provisioner, battery, disp, clock, history, scale,
                   scale_provisioner, brew, network, shots, s, path, tab, sec, modal, theme,
-                  stats, clean_lock, shot_id, history_ym, backflush);
+                  stats, clean_lock, shot_id, history_ym, backflush, log_modal);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
@@ -185,6 +189,22 @@ int main() {
   ok &= r({320, 240}, "renders/stats_brew_320x240.png", 2, -1, false, 0, ui::kStatsBrew);
   ok &= r({800, 480}, "renders/stats_brew_800x480.png", 2, -1, false, 0, ui::kStatsBrew);
   ok &= r({320, 240}, "renders/stats_info_320x240.png", 2, -1, false, 0, ui::kStatsInfo);
+  // Log-viewer modal (Info > Diagnostic log): seed the ring with a plausible
+  // boot-and-brew trace so the render shows real content with stamps.
+  core::log_ring().set_clock(&clock);
+  core::logf("log: ring 64 KB (PSRAM)\n");
+  core::logf("Micra remote: sim\n");
+  core::logf("reset reason: power-on (1)\n");
+  core::logf("Display up: 800 x 480\n");
+  core::logf("BLE: connecting to saved Micra F0:E1:D2:C3:B4:A5\n");
+  core::logf("Micra connected; machine ON\n");
+  core::logf("SCALE: Umbra connected, battery 78%%\n");
+  core::logf("Brew: paddle ON edge (phase 0)\n");
+  core::logf("Brew: target 36.0g reached in 27.4s -> paddle off\n");
+  core::logf("Brew: paddle OFF edge (phase 2)\n");
+  core::logf("ShotStore: saved shot 15 (548 samples)\n");
+  ok &= r({800, 480}, "renders/stats_log_800x480.png", 2, -1, false, 0, ui::kStatsInfo,
+          false, -1, 0, false, true);
   ok &= r({1024, 600}, "renders/stats_brew_1024x600.png", 2, -1, false, 0, ui::kStatsBrew);
   ok &= r({1024, 600}, "renders/stats_boiler_1024x600.png", 2, -1, false, 0, ui::kStatsBoiler);
   ok &= r({1024, 600}, "renders/stats_info_1024x600.png", 2, -1, false, 0, ui::kStatsInfo);
