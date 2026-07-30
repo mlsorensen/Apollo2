@@ -24,7 +24,6 @@ constexpr char kDisSerial[] = "2a25";
 constexpr char kDisFirmware[] = "2a26";
 constexpr char kDisSoftware[] = "2a28";
 
-constexpr uint32_t kPollIntervalMs = 3000;
 constexpr uint32_t kReconnectBackoffMs = 3000;
 // Per address-type attempt. A present, advertising Micra connects in ~1-2s;
 // the retry loop covers the rest, so failing fast beats camping on the radio —
@@ -212,26 +211,27 @@ void MicraLink::run() {
       continue;
     }
 
-    bool cmd_sent = false;
     const int p = pending_power_.exchange(-1);
-    if (p >= 0) { do_set_power(p == 1); cmd_sent = true; }
+    if (p >= 0) do_set_power(p == 1);
     const int b = pending_brew_tenths_.exchange(-1);
     if (b >= 0) {
       char v[8];
       std::snprintf(v, sizeof(v), "%.1f", b / 10.0f);
       do_set_boiler_target("CoffeeBoiler1", v);
-      cmd_sent = true;
     }
     const int st = pending_steam_whole_.exchange(-1);
     if (st >= 0) {
       char v[8];
       std::snprintf(v, sizeof(v), "%d", st);
       do_set_boiler_target("SteamBoiler", v);
-      cmd_sent = true;
     }
     const int se = pending_steam_enable_.exchange(-1);
-    if (se >= 0) { do_set_steam_enabled(se == 1); cmd_sent = true; }
-    if (cmd_sent || now_ms() - last_refresh > kPollIntervalMs) {
+    if (se >= 0) { do_set_steam_enabled(se == 1); }
+    // No instant read-back after a command: the machine's machineMode answer
+    // lags the command by a beat, so an immediate read reliably returns the
+    // OLD state (observed on HW). The regular cadence picks up the settled
+    // answer within ~one interval instead.
+    if (now_ms() - last_refresh > poll_interval_ms_.load()) {
       do_refresh();  // a failed read just means we re-detect the drop next loop
       last_refresh = now_ms();
     }

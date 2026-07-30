@@ -52,6 +52,12 @@ class MicraLink : public IMachine {
   bool connect_enabled() const { return connect_enabled_.load(); }
   void set_connect_enabled(bool enabled);
 
+  // State-poll cadence (machineMode + boilers). Thread-safe; takes effect on
+  // the next loop pass. A refresh itself occupies the loop for ~0.5s (two
+  // write->settle->read exchanges), so keep this comfortably above that.
+  void set_poll_interval_ms(uint32_t ms) { poll_interval_ms_.store(ms); }
+  uint32_t poll_interval_ms() const { return poll_interval_ms_.load(); }
+
   // core::IMachine — thread-safe cached read.
   MachineSnapshot snapshot() const override;
 
@@ -103,6 +109,7 @@ class MicraLink : public IMachine {
   bool steam_enabled_ = true;
   bool brewing_ = false;
 
+  std::atomic<uint32_t> poll_interval_ms_{1000};
   std::atomic<int> pending_power_{-1};         // -1 none, 0 standby, 1 on
   std::atomic<int> pending_brew_tenths_{-1};   // target*10, -1 none
   std::atomic<int> pending_steam_whole_{-1};   // target C, -1 none
