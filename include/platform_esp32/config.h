@@ -49,6 +49,14 @@ class Config {
   void set_wired_paddle(bool on);      // meaningful on boards with the hardware)
   int flush_s() const;                 // post-shot auto-flush seconds (0 = off; default 0)
   void set_flush_s(int seconds);
+  // Per-UNIT paddle GPIO overrides (serial "padsense=N" / "paddrive=N";
+  // -1 = use the board default). Repair knobs for a unit with a damaged
+  // pad — the board config stays canonical; the quirk travels with the
+  // hardware in NVS.
+  int paddle_sense_pin() const;
+  void set_paddle_sense_pin(int pin);  // < 0 clears the override
+  int paddle_drive_pin() const;
+  void set_paddle_drive_pin(int pin);  // < 0 clears the override
   int flush_delay_s() const;           // cup-off -> flush pause seconds (default 3)
   void set_flush_delay_s(int seconds);
   int flow_smooth() const;             // shot-graph smoothing level 0..3 (default 1)

@@ -49,7 +49,7 @@ webapp: $(WEBAPP_HDR)
         flash-p4-5 flash-2inch flash-7b flash-4-3b flash-4-3c flash-p4 \
         build build-s3-7b build-s3-4-3b build-s3-4-3c build-p4-4-3 build-p4-5 \
         build-7b build-4-3b build-4-3c build-p4 \
-        webapp monitor sim lmtoken lmtoken-release lmtoken-publish clean
+        webapp monitor padsense paddrive sim lmtoken lmtoken-release lmtoken-publish clean
 
 flash: $(WEBAPP_HDR)
 	@tools/flash.sh $(BOARD)
@@ -103,6 +103,18 @@ build-p4: build-p4-4-3
 
 monitor:
 	$(PIO) device monitor
+
+# Per-UNIT paddle GPIO overrides (persisted in the device's NVS; survive
+# reflashes/upgrades). For a unit with a damaged pad: move the wire, then
+#   make padsense PIN=50        (PIN=-1 reverts to the board default)
+#   make paddrive PIN=49
+padsense:
+	@test -n "$(PIN)" || { echo "usage: make padsense PIN=<gpio|-1> [PORT=/dev/...]"; exit 1; }
+	@PORT="$(PORT)" tools/padpin.sh sense "$(PIN)"
+
+paddrive:
+	@test -n "$(PIN)" || { echo "usage: make paddrive PIN=<gpio|-1> [PORT=/dev/...]"; exit 1; }
+	@PORT="$(PORT)" tools/padpin.sh drive "$(PIN)"
 
 sim:
 	$(PIO) run -e sim && ./.pio/build/sim/program

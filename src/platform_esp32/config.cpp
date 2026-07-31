@@ -35,6 +35,8 @@ constexpr char kReviewHoldKey[] = "revhold";
 constexpr char kAutoConnectKey[] = "autoconn";
 constexpr char kWiredPaddleKey[] = "wiredpad";
 constexpr char kFlushKey[] = "flushs";  // post-shot auto-flush seconds (0 = off)
+constexpr char kPadSenseKey[] = "padsense";  // per-UNIT paddle sense GPIO override
+constexpr char kPadDriveKey[] = "paddrive";  // per-UNIT paddle drive GPIO override
 constexpr char kFlushDelayKey[] = "flushd";  // cup-off -> flush pause seconds
 constexpr char kFlowSmoothKey[] = "flowsmth";
 constexpr char kWifiEnKey[] = "wifi_en";
@@ -231,6 +233,44 @@ void Config::set_flush_s(int seconds) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putInt(kFlushKey, seconds);
+  p.end();
+}
+
+int Config::paddle_sense_pin() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return -1;
+  const int v = p.isKey(kPadSenseKey) ? p.getInt(kPadSenseKey, -1) : -1;
+  p.end();
+  return v;
+}
+
+void Config::set_paddle_sense_pin(int pin) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  if (pin < 0) {
+    p.remove(kPadSenseKey);
+  } else {
+    p.putInt(kPadSenseKey, pin);
+  }
+  p.end();
+}
+
+int Config::paddle_drive_pin() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return -1;
+  const int v = p.isKey(kPadDriveKey) ? p.getInt(kPadDriveKey, -1) : -1;
+  p.end();
+  return v;
+}
+
+void Config::set_paddle_drive_pin(int pin) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  if (pin < 0) {
+    p.remove(kPadDriveKey);
+  } else {
+    p.putInt(kPadDriveKey, pin);
+  }
   p.end();
 }
 

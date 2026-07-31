@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 
+#include <cstdlib>
 #include <cstring>
 #include <Wire.h>
 #if defined(CONFIG_ESP_HOSTED_ENABLE_BT_NIMBLE)
@@ -203,8 +204,10 @@ void setup() {
   core::log_ring().set_clock(&g_clock);  // wall-clock stamps from here on
 
   // Paddle hardware (after the display so the IO extension is begun where the
-  // paddle rides it). Seed the shot config from NVS and wire the persisters.
-  platform::paddle().begin();
+  // paddle rides it; pins honor the per-unit NVS "padsense"/"paddrive" repair
+  // overrides — see poll_serial_id). Seed the shot config from NVS and wire
+  // the persisters.
+  platform::paddle().begin(g_config.paddle_sense_pin(), g_config.paddle_drive_pin());
   g_brew.seed(g_config.target_weight_g(), g_config.shot_mode(), g_config.overshoot_g(),
               g_config.review_hold_s(), g_config.wired_paddle(), g_config.flush_s(),
               g_config.flush_delay_s(), g_config.hint_overshoot_g());
@@ -366,6 +369,31 @@ void poll_serial_id() {
       buf[n] = '\0';
       if (n == 3 && std::strcmp(buf, "id?") == 0) {
         core::logf("APOLLO2 BOARD=\"%s\" FW=%s\n", board::kName, fw::kVersion);
+      } else if (std::strncmp(buf, "padsense=", 9) == 0 ||
+                 std::strncmp(buf, "paddrive=", 9) == 0) {
+        // Per-UNIT paddle GPIO overrides (NVS; survive reflashes). Repair
+        // knobs for a unit with a damaged pad: "padsense=50" / "paddrive=49"
+        // move that wire's pin, "=-1" reverts to the board default. Applied
+        // at next boot (paddle().begin() reads them once).
+        const bool sense = buf[3] == 's';
+        const int pin = std::atoi(buf + 9);
+        if (sense) {
+          g_config.set_paddle_sense_pin(pin);
+        } else {
+          g_config.set_paddle_drive_pin(pin);
+        }
+        const char* name = sense ? "padsense" : "paddrive";
+        const int fallback = sense ? board::kPaddleSensePin : board::kPaddleDrivePin;
+        if (pin >= 0) {
+          core::logf("%s: override saved (GPIO%d) — applying now\n", name, pin);
+        } else {
+          core::logf("%s: override cleared (board default GPIO%d) — "
+                     "applying now\n", name, fallback);
+        }
+        // Re-run begin() with the resolved pins so the change is live
+        // immediately (also releases the drive line; harmless outside a shot).
+        platform::paddle().begin(g_config.paddle_sense_pin(),
+                                 g_config.paddle_drive_pin());
       }
       n = 0;
     } else if (n < sizeof(buf) - 1) {
