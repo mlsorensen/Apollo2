@@ -362,3 +362,28 @@ page fits on screen with little to no scrolling.
 
 Wiring the paddle harness — parts, photos of the Micra's paddle loom, and
 per‑board terminals — is covered in the [wiring guide](docs/WIRING.md).
+
+### Paddle pin protection & per‑unit remapping
+
+- **Suggested: a 1 kΩ resistor in line with the paddle's sense wire** (at the
+  screw terminal, between the board pin and the switch). It protects the
+  input by limiting current from static or stray voltage on the wire —
+  one cheap part, no effect on normal operation.
+- **If a paddle pin ever does fail** (symptom: the paddle stops registering
+  or behaves erratically while everything meters fine — the diagnostic log's
+  `Paddle: raw sense ...` lines will show a line stuck or drifting on its
+  own), the pins are **remappable per unit** without a custom firmware
+  build: move the wire to a free GPIO on the header, connect the device over
+  USB, and run
+
+  ```
+  make padsense PIN=50      # sense wire moved to GPIO50 (example)
+  make paddrive PIN=49      # drive wire, same idea
+  make padsense PIN=-1      # revert to the board default
+  ```
+
+  (or type `padsense=50` into any serial monitor). The setting is stored in
+  the device's settings memory — it survives reflashes and web‑flasher
+  upgrades, so stock releases keep working on a remapped unit — and takes
+  effect on the next boot, which logs it: `Paddle: sense GPIO50 (NVS
+  override)`. The board's default pins stay unchanged for everyone else.

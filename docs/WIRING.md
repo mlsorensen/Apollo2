@@ -108,7 +108,13 @@ In detail:
   paddle.
 - **Sense (paddle → Apollo):** one paddle‑switch wire → Apollo **GPIO 51**,
   the other → Apollo **GND**. The physical paddle now touches only Apollo,
-  never the Micra.
+  never the Micra. Suggested: a 1 kΩ resistor in line with this wire at the
+  terminal block — it protects the input by limiting current from static or
+  stray voltage on the wire, and has no effect on normal operation.
+- **If a pin ever fails anyway**, both paddle pins can be remapped per unit
+  (no custom build): move the wire to a free header GPIO and run
+  `make padsense PIN=<n>` / `make paddrive PIN=<n>` with the board on USB —
+  see the manual's "Paddle pin protection & per‑unit remapping" section.
 
 A finished P4 cable with the opto module spliced in near the machine end
 (shown before wrapping the module in heat‑shrink — do wrap it, so nothing can
