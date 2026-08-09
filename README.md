@@ -129,17 +129,22 @@ RTC, e.g. the 4.3B/4.3C) keeps the clock through a power‑off — but it's only
 needed if you *don't* configure Wi‑Fi + NTP, which sets the time automatically
 on every boot.
 
-### 3D‑printed stand and shells
+### 3D‑printed stand, shells and mounts
 
 Ready‑to‑print 3MF files live in [`hardware/3d-prints/`](hardware/3d-prints/):
 
 | File | What it is |
 |------|------------|
 | [`apollo2-stand.3mf`](hardware/3d-prints/apollo2-stand.3mf) | Counter‑top **stand**. Mounts the S3‑4.3C‑BOX directly (it has the matching holes), and every shell below mounts to it the same way. |
+| [`apollo2-magnet-mount.3mf`](hardware/3d-prints/apollo2-magnet-mount.3mf) | Optional **magnet mount** — attaches the device to the Micra's top corner instead of the counter. |
+| [`apollo2-wiring-gasket.3mf`](hardware/3d-prints/apollo2-wiring-gasket.3mf) | Optional **wiring gasket** — spaces the Micra's cover so the wiring can run underneath it. |
 | [`esp32-s3-4.3c-shell.3mf`](hardware/3d-prints/esp32-s3-4.3c-shell.3mf) | Shell for the bare **ESP32‑S3‑Touch‑LCD‑4.3C** (no‑enclosure variant). |
 | [`esp32-p4-5-shell.3mf`](hardware/3d-prints/esp32-p4-5-shell.3mf) | Shell for the **ESP32‑P4‑WIFI6‑Touch‑LCD‑5**. |
 | [`esp32-p4-4.3-shell.3mf`](hardware/3d-prints/esp32-p4-4.3-shell.3mf) | Shell for the **ESP32‑P4‑WIFI6‑Touch‑LCD‑4.3**. |
 | [`esp32-s3-2-shell.3mf`](hardware/3d-prints/esp32-s3-2-shell.3mf) | Shell for the pocket **ESP32‑S3‑Touch‑LCD‑2**. |
+
+This [short video](https://youtube.com/shorts/Ea0IaJ7hjvQ) shows how the
+magnet mount and wiring gasket fit together on the machine.
 
 Fasteners:
 
@@ -147,6 +152,7 @@ Fasteners:
   the shell, 4 fasten the shell cover.
 - **Stand mount**: 2 × **M4‑0.7×8 mm** screws — same spec whether you're
   mounting the S3‑4.3C‑BOX or any of the printed shells.
+- **Magnet mount**: 8 × **10 mm × 3 mm** neodymium disc magnets.
 
 ---
 
@@ -335,7 +341,7 @@ include/platform_host/  Host fakes
 include/ui/             UI headers (widgets, screen profiles, timezones)
 include/vendor/         Vendored third-party headers (stb_image_write)
 src/                    Implementations (see Architecture above)
-hardware/3d-prints/     Printable stand + board shells (3MF)
+hardware/3d-prints/     Printable stand, board shells + mounts (3MF)
 tools/                  sim.sh, flash.sh, lmtoken (Go), PlatformIO helper scripts
 renders/                Simulator output (PNG)
 ```
