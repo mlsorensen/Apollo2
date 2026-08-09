@@ -9,7 +9,10 @@ watch the boiler come up to temperature, and (with a supported Bluetooth scale)
 run a live shot timer and flow graph — all from a dedicated little screen next
 to the machine instead of a phone app.
 
-![Micra Remote — Home with a paired scale](docs/img/home-scale.png)
+<p align="center">
+  <img src="docs/img/hero-micra-mounted.jpg" width="70%"
+       alt="Apollo 2 magnet-mounted on a red Micra, Ferrari theme, just after a shot">
+</p>
 
 > The focus is on local control via bluetooth. Currently internet is only used for optional NTP.
 
@@ -64,6 +67,7 @@ absent — the UI just shows the relevant part as offline.
   <img src="docs/img/settings-device.png" width="49%" alt="Device display settings — brightness, theme, units">
 </p>
 <p align="center">
+  <img src="docs/img/home-scale.png" width="49%" alt="Home with a paired scale — weight, timer, flow graph">
   <img src="docs/img/stats.png" width="49%" alt="Temperature history">
 </p>
 

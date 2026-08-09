@@ -61,7 +61,10 @@ The Home screen adapts to the screen size and to whether a scale is paired.
     stream alone (start when flow sustains, stop when flow ceases). There is
     no auto‑stop; instead the pill flashes **Stop** when the shot reaches the
     point where the auto‑stop would have fired, telling you to flip the
-    paddle now.
+    paddle now. Detection confirms a few seconds after the first drip; the
+    moment it does, the timer, weight and graph snap to the full shot —
+    back‑dated to the estimated start, including the **Detect lead‑in**
+    (see **Settings → Scale → Settings**).
   - **Manual**: nothing armed. A wired board still relays the paddle and times
     the shot; otherwise the scale's own timer is shown.
   - While a finished shot is frozen for review the pill reads **Reset** —
@@ -87,6 +90,13 @@ Plots the live flow rate (or weight) from the scale.
 - A run shorter than **8 seconds** never becomes a "shot" — it's treated as a
   flush/rinse and discarded silently. Shot detect additionally requires a few
   grams of net gain.
+- **Auto shot and Shot detect refuse to start without the scale.** Flipping
+  the paddle while the scale isn't connected leaves the machine off and pops a
+  message — connect the scale (or wake it) or switch to **Manual** mode. This
+  catches the "flipped the paddle, then noticed the scale was never set up"
+  shot. Waking a standby machine with a paddle flip still works (no water
+  moves), and deliberate untracked runs remain available via Manual mode or
+  the **Flush** button.
 - On wired boards, flipping the paddle ON **while a review is frozen** is
   swallowed (the machine does not start) and the **Reset** pill flashes —
   dismiss the review first, then start the next shot. This prevents an
@@ -185,6 +195,14 @@ needs the paddle harness, since that's what drives it.
   larger screens.
 - **Review hold** *(5–120 s, default 30 s)* — how long a finished shot's frozen
   graph and weight linger before auto‑dismissing. **Reset** dismisses early.
+- **Detect lead‑in** *(0–10 s, default 3 s)* — Shot detect mode only. The
+  detector notices a shot at the first weight rise, but the shot started
+  earlier: you flipped the paddle, then preinfusion water worked through the
+  puck before the first drop landed. This offset is added when back‑dating the
+  shot start, so the timer and graph line up with the moment you actually
+  started the shot. Adjust it to match your machine's preinfusion setting as
+  needed (roughly your typical paddle‑to‑first‑drip time); 0 starts the shot
+  at the first drip.
 - **Smoothing** *(Off / Light / Medium / Strong, default Light)* — smoothing on
   the shot graph's line. Purely visual; detection and auto‑stop use the raw
   stream.
@@ -232,7 +250,10 @@ page fits on screen with little to no scrolling.
   any touch restores it.
 - **Theme** — tap to cycle the color scheme: Midnight, Graphite, Espresso,
   Nord, Solarized, Plum, Forest, Rose, Mono (black & white), Contrast (high
-  contrast), Ferrari, Sunset, Citrus.
+  contrast), Ferrari, Sunset, Citrus, Modena, Gulf, Monaco, Ivory. The last
+  four (plus Ferrari) are companions to the Micra body colors — the machine's
+  paint as the accent: Ferrari red, Modena the yellow Micra, Gulf the light
+  blue, Monaco the navy, Ivory the creme.
 - **Fahrenheit** *(default off)* — display unit for temperatures. Set‑points
   are still stored in Celsius.
 - **Button sounds** *(boards with a speaker; default on)* — click on button
@@ -353,7 +374,7 @@ page fits on screen with little to no scrolling.
 | | Auto shot | Shot detect | Manual |
 |---|---|---|---|
 | Needs paddle wiring | **Yes** | No | No |
-| Shot start | Paddle flip | Detected from weight | Paddle flip (wired) / — |
+| Shot start | Paddle flip | Detected from weight (back‑dated by **Detect lead‑in**) | Paddle flip (wired) / — |
 | Shot stop | **Automatic** at target − learned overshoot | You flip the paddle (pill flashes **Stop** at the right moment) | You flip the paddle |
 | Auto‑tare at start | Yes | No (delta‑based) | No |
 | Overshoot learning | Yes | No | No |

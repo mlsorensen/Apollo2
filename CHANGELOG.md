@@ -5,6 +5,38 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## v0.6.0
+
+### Features
+
+- **Shot detect shows the real shot the moment it's detected.** Detection
+  confirms a few seconds after the first drip; until now the screen kept the
+  generic live graph and the raw scale weight (cup included) for the whole
+  shot, and only the end-of-shot review showed the aligned picture. Now, the
+  instant a shot is detected, the graph switches to the shot plot back-filled
+  from history — the ramp you already poured, from the estimated start — and
+  the weight readout drops to shot grams, matching what a wired shot shows.
+- **No more accidental untracked shots.** In Auto shot and Shot detect modes,
+  flipping the paddle while no scale is connected now leaves the machine off
+  and shows a message ("connect the scale or switch to Manual mode") instead
+  of silently running a shot with no timing, tracking, or auto-stop. Waking a
+  standby machine with a paddle flip is unaffected, and Manual mode plus the
+  Flush button still cover deliberate untracked runs.
+- **Four new themes matching the Micra body colors.** Like the existing
+  Ferrari theme for the red machine, each runs its machine's paint through
+  the whole scheme: **Modena** (yellow), **Gulf** (light blue, with the
+  livery's orange as the heating color), **Monaco** (navy), and **Ivory**
+  (creme). Settings → Device → Display → Theme.
+- **The ready chime carries better.** The warm-up chime is now the "Buddy
+  Holly" intro riff — all of it above 650 Hz, where the small speaker actually
+  has output; the old arpeggio's low notes faded a room away.
+- **New "Detect lead-in" setting** (**Settings → Scale → Settings**, 0–10 s,
+  default 3 s): how far before the first drip your shot actually starts —
+  the paddle flip, then preinfusion water working through the puck. It's
+  added when back-dating a detected shot, so the timer and graph line up
+  with the moment you flipped the paddle. Adjust it to match your machine's
+  preinfusion setting as needed; detected shot durations now include it.
+
 ## v0.5.3
 
 ### Features
