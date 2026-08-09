@@ -31,7 +31,9 @@ class FakeBrewController : public core::IBrewController {
         .target_weight_g = target_g_,
         .overshoot_g = 2.0f,
         .review_hold_s = review_hold_s_,
+        .detect_lead_in_s = detect_lead_in_s_,
         .review_reject_seq = 0,
+        .scale_refuse_seq = 0,
         .stop_hint = false,
         .flush_s = flush_s_,
         .flush_delay_s = flush_delay_s_,
@@ -48,6 +50,7 @@ class FakeBrewController : public core::IBrewController {
   void set_target_weight_g(float grams) override { target_g_ = grams; }
   void set_shot_mode(core::ShotMode mode) override { mode_ = mode; }
   void set_review_hold_s(int seconds) override { review_hold_s_ = seconds; }
+  void set_detect_lead_in_s(int seconds) override { detect_lead_in_s_ = seconds; }
   void set_wired_paddle(bool on) override { wired_ = on; }
   void set_flush_s(int seconds) override { flush_s_ = seconds; }
   void set_flush_delay_s(int seconds) override { flush_delay_s_ = seconds; }
@@ -99,6 +102,7 @@ class FakeBrewController : public core::IBrewController {
   uint32_t shot_ms_ = 27000;  // matches the fake scale's 27.0s render
   float target_g_ = 36.0f;
   int review_hold_s_ = 30;
+  int detect_lead_in_s_ = 3;
   int flush_s_ = 0;
   int flush_delay_s_ = 3;
   bool clean_ready_ = true;   // machine on, no shot in flight

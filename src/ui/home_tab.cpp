@@ -1057,7 +1057,13 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     if (!weight_frozen) {
       char wb[16];
       if (scale.connected) {
-        std::snprintf(wb, sizeof(wb), "%.1f g", static_cast<double>(scale.weight_g));
+        // Unwired shots never tare — show shot grams (net of the detector's
+        // baseline) while one runs/settles, matching the shot plot. Same
+        // predicate as pump_scale_chart's fast writer.
+        const float shown =
+            scale.weight_g -
+            (core::unwired_net_weight(brew) ? brew.start_weight_g : 0.0f);
+        std::snprintf(wb, sizeof(wb), "%.1f g", static_cast<double>(shown));
       } else {
         std::snprintf(wb, sizeof(wb), "-- g");
       }
@@ -1733,6 +1739,7 @@ void begin_shot_plot(HomeWidgets& w) {
   w.flow_shot_plot = true;
   w.shot_exact_fit = false;  // live plot: back to the snapped windows
   w.unwired_ring = false;    // wired shot takes the arrays (relative stamps)
+  w.shot_baseline_g = 0.0f;  // wired shots tare: raw IS shot grams
   w.shot_n = 0;
   w.shot_head = 0;
   w.shot_t0 = lv_tick_get();
@@ -1772,7 +1779,7 @@ void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
     return;
   if (!scale.connected) return;  // controller cancels the shot; App ends the plot
   const uint32_t now = lv_tick_get();
-  const float rw = scale.weight_g;
+  const float rw = scale.weight_g - w.shot_baseline_g;  // shot grams (see field)
   const float rf = update_flow_rate(w, scale, now);  // keep the rate window fed every call
   w.shot_elapsed_ms = now - w.shot_t0;
 
@@ -1872,46 +1879,111 @@ void unwired_ring_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
   if (w.shot_n < ui::HomeWidgets::kShotCap) ++w.shot_n;
 }
 
-void review_shot_plot(HomeWidgets& w, uint32_t t_start, uint32_t t_end,
-                      float baseline_g) {
-  if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_w <= 1) return;
-  // A little pre-shot context so the trace shows the quiet baseline before the
-  // first-drip ramp (the detector's t_start is the flow onset).
-  constexpr uint32_t kLeadInMs = 3000;
-  const uint32_t t0 = t_start - kLeadInMs;
-
-  // Trim the ring to [t0, t_end] and rebase in place: the kept samples are a
-  // chronological suffix, so dropping the old ones is just shrinking shot_n —
-  // the head stays put and the (head - n + i) indexing still works.
+// Shared by enter_shot_plot_live / review_shot_plot: trim the absolute-stamped
+// unwired ring to [t_start, t_end] and rebase the kept samples in place
+// (absolute -> shot-relative, raw -> shot grams). The kept samples are a
+// chronological suffix, so dropping the old ones is just shrinking shot_n —
+// the head stays put and the (head - n + i) indexing still works. Returns the
+// kept count.
+//
+// The pre-onset sanitize: t_start is lever-on, flow onset is t_start +
+// lead_in_ms, and during preinfusion nothing lands in the cup — every
+// pre-onset sample should read ~= baseline_g. A tare or cup placement inside
+// the lead-in window breaks that (the detector's own baseline is safe — its
+// flow window + step gates keep it tare-clean — but the ring is raw history),
+// and painting it would put a huge cliff on the plot and blow up the Y fit.
+// So the back-fill starts after the LAST pre-onset sample that deviates more
+// than kLeadInSaneG from the baseline; the trace just begins a little later.
+struct ShotRingRebase {
+  int first;  // first kept logical index (under the PRE-rebase shot_n/head)
+  int kept;   // samples rebased; the caller sets shot_n
+};
+static ShotRingRebase shot_ring_rebase(HomeWidgets& w, uint32_t t_start,
+                                       uint32_t t_end, uint32_t lead_in_ms,
+                                       float baseline_g) {
+  constexpr float kLeadInSaneG = 5.0f;  // kStepAbortG's spirit: not scale noise
   auto sample_idx = [&w](int i) { return shot_sample_idx(w, i); };
   int first = w.shot_n;  // first kept logical index
   for (int i = 0; i < w.shot_n; ++i) {
-    if (static_cast<int32_t>(w.shot_ts[sample_idx(i)] - t0) >= 0) {
+    if (static_cast<int32_t>(w.shot_ts[sample_idx(i)] - t_start) >= 0) {
       first = i;
       break;
     }
+  }
+  for (int i = first; i < w.shot_n; ++i) {
+    const int idx = sample_idx(i);
+    if (w.shot_ts[idx] - t_start >= lead_in_ms) break;  // flow onset reached
+    const float dev = w.shot_weights[idx] - baseline_g;
+    if (dev > kLeadInSaneG || dev < -kLeadInSaneG) first = i + 1;
   }
   int kept = 0;
   for (int i = first; i < w.shot_n; ++i) {
     const int idx = sample_idx(i);
     if (static_cast<int32_t>(w.shot_ts[idx] - t_end) > 0) break;
-    w.shot_ts[idx] -= t0;                // absolute -> shot-relative
+    w.shot_ts[idx] -= t_start;           // absolute -> shot-relative
     w.shot_weights[idx] -= baseline_g;   // untared baseline -> shot grams
     ++kept;
   }
+  return {first, kept};
+}
+
+void enter_shot_plot_live(HomeWidgets& w, uint32_t t_start, uint32_t lead_in_ms,
+                          float baseline_g) {
+  if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_w <= 1) return;
+  const uint32_t now = lv_tick_get();
+  // Rebase everything from t_start through now — nothing newer exists, so
+  // unlike the review path the head never moves: the kept samples stay the
+  // newest and shot_plot_tick keeps appending after them.
+  w.shot_n = shot_ring_rebase(w, t_start, now, lead_in_ms, baseline_g).kept;
+  w.unwired_ring = false;      // arrays are shot-relative now
+  w.shot_baseline_g = baseline_g;  // subsequent appends stay in shot grams
+
+  // Enter the LIVE shot-plot state: snapped windows (not the review fit), the
+  // frontier restarts from a full back-fill paint, and the feeder hands over
+  // to shot_plot_tick. shot_seq_seen and shot_last_sample_ms are deliberately
+  // KEPT — the ring feeder maintained both on this same clock, so the
+  // event-locking and the storage-cadence cap stay continuous.
+  w.flow_shot_plot = true;
+  w.shot_exact_fit = false;
+  w.shot_t0 = t_start;
+  w.shot_elapsed_ms = now - t_start;
+  w.shot_store_interval_ms = 150.0f;  // re-learn (the ring never tracked it)
+  w.shot_si = 0;
+  w.shot_x_painted = -1;
+  w.shot_map_window_ms = 0;
+  w.shot_map_tstart_ms = 0;
+  w.shot_stall_since = 0;
+  for (lv_obj_t* l : w.flow_xlabels)
+    if (l != nullptr) lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN);
+  if (w.flow_xspan_label != nullptr)
+    lv_obj_remove_flag(w.flow_xspan_label, LV_OBJ_FLAG_HIDDEN);
+  // Re-fit the axis from scratch: the live sweep may have left it elevated,
+  // and redraw_full's shrink hysteresis would otherwise keep that scale.
+  w.flow_ymax = flow_default_max(w.flow_mode);
+  set_flow_ylabels(w);
+  shot_plot_redraw_full(w, shot_display_time(w));  // back-fill, live edge lag
+}
+
+void review_shot_plot(HomeWidgets& w, uint32_t t_start, uint32_t t_end,
+                      uint32_t lead_in_ms, float baseline_g) {
+  if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_w <= 1) return;
+  const ShotRingRebase r =
+      shot_ring_rebase(w, t_start, t_end, lead_in_ms, baseline_g);
   // Head sits after the last KEPT sample now (anything newer than t_end is
-  // discarded by walking the head back over it). kept == 0 (scale dark the
-  // whole shot) still freezes — a bare grid — so the review UX stays coherent.
-  if (kept > 0)
-    w.shot_head = (sample_idx(first + kept - 1) + 1) % ui::HomeWidgets::kShotCap;
-  w.shot_n = kept;
+  // discarded by walking the head back over it — computed under the pre-rebase
+  // shot_n/head, so before shot_n shrinks). kept == 0 (scale dark the whole
+  // shot) still freezes — a bare grid — so the review UX stays coherent.
+  if (r.kept > 0)
+    w.shot_head =
+        (shot_sample_idx(w, r.first + r.kept - 1) + 1) % ui::HomeWidgets::kShotCap;
+  w.shot_n = r.kept;
   w.unwired_ring = false;  // arrays are shot-relative until the next ring start
 
   // Enter the frozen shot-plot state and paint once, complete (no display lag).
   w.flow_shot_plot = true;
   w.shot_exact_fit = true;  // window = the shot, not the live snaps
-  w.shot_t0 = t0;
-  w.shot_elapsed_ms = t_end - t0;
+  w.shot_t0 = t_start;
+  w.shot_elapsed_ms = t_end - t_start;
   w.shot_si = 0;
   w.shot_x_painted = -1;
   w.shot_map_window_ms = 0;

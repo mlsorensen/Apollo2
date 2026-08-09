@@ -109,8 +109,18 @@ struct BrewSnapshot {
   float target_weight_g;  // stop target (informational when !paddle_wired)
   float overshoot_g;      // current learned drip/lag compensation
   int   review_hold_s;    // how long kReview lingers before auto-dismissing
+  int   detect_lead_in_s; // detect-mode preinfusion lead-in (seconds): how far
+                          // before the detector's flow onset the shot actually
+                          // started (lever-on -> first drip). Backdates the
+                          // timer and the shot plot origin.
   uint32_t review_reject_seq;  // ticks per paddle ON edge swallowed in kReview
                                // (UI flashes the Reset button on a change)
+  uint32_t scale_refuse_seq;   // ticks per paddle ON edge refused because the
+                               // armed mode (Auto shot / Shot detect) needs the
+                               // scale and it isn't connected — the machine
+                               // stays off; the UI pops "connect the scale or
+                               // pick Manual mode". Standby wake flips are
+                               // never refused (no shot involved).
   bool  stop_hint;        // unwired shots only: the running shot has reached the
                           // point where the auto-stop WOULD fire (target -
                           // overshoot, led by ~250ms of current flow for human
@@ -147,6 +157,17 @@ inline bool esp_shot_timer(const BrewSnapshot& b) {
   return b.paddle_wired || b.mode == ShotMode::kDetect;
 }
 
+// True while the weight readout should show shot grams (raw minus the
+// detector's baseline): unwired shots never tare, so from detection through
+// the settle tail the raw reading includes the cup. Wired shots tare at start
+// — raw IS shot grams. kReview excluded: the frozen readout is written once
+// at the freeze (already net). One definition — the label writer (update_home)
+// and the fast writer (pump_scale_chart) must never disagree.
+inline bool unwired_net_weight(const BrewSnapshot& b) {
+  return !b.paddle_wired && b.baseline_set &&
+         (b.phase == ShotPhase::kBrewing || b.phase == ShotPhase::kSettling);
+}
+
 class IBrewController {
  public:
   virtual ~IBrewController() = default;
@@ -168,6 +189,11 @@ class IBrewController {
 
   // How long the frozen review lingers before auto-dismissing (seconds). Persisted.
   virtual void set_review_hold_s(int seconds) = 0;
+
+  // Detect-mode preinfusion lead-in (seconds; 0..10). The detector sees the
+  // first weight rise; the machine started earlier — this much earlier. Adjust
+  // to match the machine's preinfusion. Persisted.
+  virtual void set_detect_lead_in_s(int seconds) = 0;
 
   // The "Wired paddle" setting (only meaningful on boards with paddle hardware;
   // a no-op elsewhere — they are always unwired). Flipping it mid-shot cancels

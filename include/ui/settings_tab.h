@@ -86,6 +86,12 @@ struct SettingsWidgets {
   lv_obj_t* review_plus = nullptr;
   lv_obj_t* review_value = nullptr;
   int review_hold_s = 30;
+  // Detect lead-in stepper (seconds of preinfusion before the detector's flow
+  // onset; backdates detect-mode shots to lever-on)
+  lv_obj_t* lead_minus = nullptr;
+  lv_obj_t* lead_plus = nullptr;
+  lv_obj_t* lead_value = nullptr;
+  int detect_lead_in_s = 3;
   // Shot-graph smoothing cycle button (Off / Light / Medium / Strong)
   lv_obj_t* smooth_btn = nullptr;
   lv_obj_t* smooth_value = nullptr;

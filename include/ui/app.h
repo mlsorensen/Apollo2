@@ -131,6 +131,7 @@ class App {
   void backflush_tick();    // readout update (from an lv_timer, 4 Hz)
   void toggle_manual_flush();  // Home "Flush"/"Stop" button
   void review_hold_adjust(int dir);  // Scale settings: review-hold stepper (5s steps)
+  void detect_lead_in_adjust(int dir);  // Scale settings: detect lead-in stepper (1s steps)
   void cycle_flow_smooth();          // Scale settings: Off/Light/Medium/Strong
   void cycle_flush();                // Micra settings "Auto flush": Off / 3 s / 6 s
   void cycle_flush_delay();          // Micra settings "Flush delay": 3 / 6 / 9 / 15 s
@@ -138,6 +139,16 @@ class App {
     if (provisioner_ != nullptr) provisioner_->set_auto_connect(on);
   }
   void set_wired_paddle(bool on);    // Micra settings: paddle harness vs shot detector
+  // Transient auto-dismissing message over the current tab (the tabview stays
+  // visible — unlike open_modal). Used for the "shot refused, no scale"
+  // feedback; works on every layout incl. compact (which has no shot button
+  // to flash). Tap or timeout dismisses.
+  void show_toast(const char* msg);
+  void dismiss_toast();
+  // Sim-only pose: seed the unwired capture ring with a synthetic pre-shot
+  // baseline + pour ramp and run the mid-shot handoff as if the detector just
+  // confirmed — renders the back-filled live shot plot deterministically.
+  void pose_unwired_midshot();
   void zoom_step(int dir);                // Stats time-axis zoom: -1 in, +1 out
   void commit_temp_edits();              // write pending temp edits (on exit)
 
@@ -206,6 +217,9 @@ class App {
   bool last_scale_connected_ = false;
   core::ShotPhase shot_phase_ = core::ShotPhase::kIdle;  // last seen (graph reset/freeze edges)
   uint32_t brew_reject_seen_ = 0;  // last review_reject_seq (flash Reset on change)
+  uint32_t scale_refuse_seen_ = 0;  // last scale_refuse_seq (toast on change)
+  lv_obj_t* toast_ = nullptr;          // transient message card (lv_layer_top)
+  lv_timer_t* toast_timer_ = nullptr;  // its auto-dismiss timer
   uint32_t unwired_shot_t0_ = 0;   // lv_tick of the detected shot's retro start
                                    // (captured on the kBrewing edge; drives the
                                    // shot-aligned review repaint)

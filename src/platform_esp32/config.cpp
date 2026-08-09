@@ -38,6 +38,7 @@ constexpr char kFlushKey[] = "flushs";  // post-shot auto-flush seconds (0 = off
 constexpr char kPadSenseKey[] = "padsense";  // per-UNIT paddle sense GPIO override
 constexpr char kPadDriveKey[] = "paddrive";  // per-UNIT paddle drive GPIO override
 constexpr char kFlushDelayKey[] = "flushd";  // cup-off -> flush pause seconds
+constexpr char kLeadInKey[] = "leadin";      // detect-mode preinfusion lead-in seconds
 constexpr char kFlowSmoothKey[] = "flowsmth";
 constexpr char kWifiEnKey[] = "wifi_en";
 constexpr char kWifiSsidKey[] = "ssid";
@@ -301,6 +302,21 @@ void Config::set_review_hold_s(int seconds) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putInt(kReviewHoldKey, seconds);
+  p.end();
+}
+
+int Config::detect_lead_in_s() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 3;
+  const int v = p.isKey(kLeadInKey) ? p.getInt(kLeadInKey, 3) : 3;
+  p.end();
+  return v;
+}
+
+void Config::set_detect_lead_in_s(int seconds) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putInt(kLeadInKey, seconds);
   p.end();
 }
 

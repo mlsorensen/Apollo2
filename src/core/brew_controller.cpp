@@ -336,6 +336,16 @@ void BrewController::poll_wired(uint32_t now_ms) {
         // runs as a normal shot.
         paddle_.drive(true);
         driving_ = true;
+      } else if (on && phase_ == ShotPhase::kIdle &&
+                 eff_mode() == ShotMode::kAuto && !scale_.snapshot().connected) {
+        // Auto shot is armed but the scale isn't connected: the user expects a
+        // tracked, auto-stopped shot and would only notice the missing scale
+        // mid-pour. Refuse the start — the machine stays off — and tick the
+        // counter so the UI says why (connect the scale or pick Manual mode).
+        // Deliberate untracked runs still have escapes: the Flush button, or
+        // Manual mode. The matching OFF edge below is a harmless no-op.
+        ++scale_refuse_seq_;
+        logf("Brew: shot refused (Auto shot needs the scale connected)\n");
       } else if (on) {
         paddle_.drive(true);
         driving_ = true;
@@ -426,9 +436,23 @@ void BrewController::poll_unwired(uint32_t now_ms) {
   if (paddle_.available()) {
     const int edge = sense_paddle_edge(now_ms);
     if (edge == 1) {
-      if (phase_ == ShotPhase::kReview) phase_ = ShotPhase::kIdle;
-      paddle_.drive(true);
-      driving_ = true;
+      // A flip on a standby machine is its WAKE switch (no water moves) —
+      // never refused, same as the wired path.
+      const bool wake_only = standby_ && standby_();
+      if (!wake_only && eff_mode() == ShotMode::kDetect &&
+          !scale_.snapshot().connected) {
+        // Shot detect is armed but blind: the pass-through would run a shot
+        // the user thinks is being detected and reviewed. Refuse — the
+        // machine stays off — and tick the counter so the UI says why.
+        // Manual mode keeps the raw pass-through; OFF edges always relay,
+        // so stopping is never blocked.
+        ++scale_refuse_seq_;
+        logf("Brew: shot refused (Shot detect needs the scale connected)\n");
+      } else {
+        if (phase_ == ShotPhase::kReview) phase_ = ShotPhase::kIdle;
+        paddle_.drive(true);
+        driving_ = true;
+      }
     } else if (edge == 0) {
       paddle_.drive(false);
       driving_ = false;
@@ -457,12 +481,18 @@ void BrewController::poll_unwired(uint32_t now_ms) {
       hint_fired_ = false;  // per-shot: only THIS shot's hint may teach
       stop_hint_over_ = 0;
       stop_hint_seq_ = s.seq;
-      // Delta-based baseline — no tare, so it's confirmed instantly.
+      // Delta-based baseline — no tare, so it's confirmed instantly. (During
+      // preinfusion nothing lands in the cup, so the flow-onset baseline is
+      // also the lever-on baseline.)
       start_g_ = st.start_weight_g;
       baseline_set_ = true;
-      timer_.start(st.start_ms);  // retroactive: honest duration despite the confirm delay
+      // Retroactive on two counts: the detector's flow onset (the confirm
+      // delay), plus the user's preinfusion lead-in back to lever-on. Honest
+      // duration, and wired parity — a wired timer starts at paddle-on too.
+      const uint32_t lead = static_cast<uint32_t>(detect_lead_in_s_) * 1000u;
+      timer_.start(st.start_ms >= lead ? st.start_ms - lead : 0);
       logf("Brew: unwired shot detected (timer backdated %ums)\n",
-           static_cast<unsigned>(now_ms - st.start_ms));
+           static_cast<unsigned>(now_ms - st.start_ms + lead));
     }
     return;
   }
@@ -606,7 +636,9 @@ BrewSnapshot BrewController::snapshot() const {
       .target_weight_g = target_g_,
       .overshoot_g = overshoot_g_,
       .review_hold_s = review_hold_s_,
+      .detect_lead_in_s = detect_lead_in_s_,
       .review_reject_seq = review_reject_seq_,
+      .scale_refuse_seq = scale_refuse_seq_,
       .stop_hint = stop_hint_,
       .flush_s = flush_s_,
       .flush_delay_s = flush_delay_s_,
@@ -652,6 +684,15 @@ void BrewController::set_review_hold_s(int seconds) {
   if (seconds > 120) seconds = 120;
   review_hold_s_ = seconds;
   if (persist_review_) persist_review_(seconds);
+}
+
+void BrewController::set_detect_lead_in_s(int seconds) {
+  if (seconds < 0) seconds = 0;
+  if (seconds > 10) seconds = 10;
+  if (seconds == detect_lead_in_s_) return;
+  detect_lead_in_s_ = seconds;
+  if (persist_lead_in_) persist_lead_in_(seconds);
+  logf("Brew: detect lead-in %ds\n", seconds);
 }
 
 void BrewController::set_flush_s(int seconds) {

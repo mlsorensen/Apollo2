@@ -636,6 +636,11 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_t* rr = make_setting_row(out.scale_settings_page, "Review hold", font);
     make_inline_stepper(rr, font, symbol_font, btn_size, &out.review_minus,
                         &out.review_value, &out.review_plus, nullptr);
+    // Detect-mode preinfusion lead-in: how far before the first drip the shot
+    // actually started (lever-on -> water through the puck).
+    lv_obj_t* rl = make_setting_row(out.scale_settings_page, "Detect lead-in", font);
+    make_inline_stepper(rl, font, symbol_font, btn_size, &out.lead_minus,
+                        &out.lead_value, &out.lead_plus, nullptr);
     // Shot-graph line smoothing: tap cycles Off / Light / Medium / Strong.
     lv_obj_t* rs2 = make_setting_row(out.scale_settings_page, "Smoothing", font);
     out.smooth_btn = ui::make_button(rs2);

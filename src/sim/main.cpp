@@ -39,7 +39,8 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             const char* out_path, int tab = 0, int settings_section = -1,
             bool token_modal = false, int theme = 0, int stats_section = -1,
             bool clean_lock = false, int shot_modal_id = -1, int history_ym = 0,
-            bool backflush = false, bool log_modal = false) {
+            bool backflush = false, bool log_modal = false,
+            bool unwired_midshot = false, bool toast = false) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
@@ -58,6 +59,10 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   if (backflush) app.open_backflush();
   if (shot_modal_id >= 0) app.open_shot_card(static_cast<uint32_t>(shot_modal_id));
   if (log_modal) app.open_log_modal();
+  if (unwired_midshot) app.pose_unwired_midshot();
+  if (toast)
+    app.show_toast("Shot not started: Auto shot is enabled. "
+                   "Connect the scale or switch to Manual mode.");
   display.render_frame();
   if (!display.save_png(out_path)) {
     std::fprintf(stderr, "error: failed to write %s\n", out_path);
@@ -86,10 +91,12 @@ int main() {
   auto r = [&](ui::ScreenProfile s, const char* path, int tab = 0, int sec = -1,
                bool modal = false, int theme = 0, int stats = -1, bool clean_lock = false,
                int shot_id = -1, int history_ym = 0, bool backflush = false,
-               bool log_modal = false) {
+               bool log_modal = false, bool unwired_midshot = false,
+               bool toast = false) {
     return render(machine, provisioner, battery, disp, clock, history, scale,
                   scale_provisioner, brew, network, shots, s, path, tab, sec, modal, theme,
-                  stats, clean_lock, shot_id, history_ym, backflush, log_modal);
+                  stats, clean_lock, shot_id, history_ym, backflush, log_modal,
+                  unwired_midshot, toast);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
@@ -117,7 +124,21 @@ int main() {
   // stream detector ("Detect") instead of the auto-stop, pill shows Ready.
   brew.set_wired_paddle(false);
   ok &= r({800, 480}, "renders/home_unwired_800x480.png");
+  // Mid-shot handoff: the detector just confirmed — the graph back-fills the
+  // shot (3 s lead-in + ramp) from the capture ring (see pose_unwired_midshot).
+  brew.set_phase(core::ShotPhase::kBrewing);
+  brew.set_shot_ms(9000);
+  ok &= r({800, 480}, "renders/home_unwired_midshot_800x480.png", 0, -1, false, 0,
+          -1, false, -1, 0, false, false, true);
+  brew.set_phase(core::ShotPhase::kIdle);
+  brew.set_shot_ms(27000);
   brew.set_wired_paddle(true);
+  // Shot-refused toast (paddle flipped, Auto/Detect armed, no scale): the
+  // transient message card over the live Home.
+  ok &= r({800, 480}, "renders/toast_refuse_800x480.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, false, true);
+  ok &= r({320, 240}, "renders/toast_refuse_320x240.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, false, true);
   // No-scale Home (classic layout) — toggle the fake to "no scale saved".
   scale_provisioner.set_saved(false);
   ok &= r({320, 240}, "renders/home_noscale_320x240.png");

@@ -188,6 +188,12 @@ struct HomeWidgets {
   uint32_t shot_map_tstart_ms = 0;
   uint32_t shot_seq_seen = 0;           // event-locked sampling (snapshot.seq)
   uint32_t shot_stall_since = 0;        // frontier watchdog (0 = advancing)
+  // Baseline subtracted from every stored weight sample while the live shot
+  // plot runs: 0 for wired shots (tared at start — raw IS shot grams); the
+  // detector's start_weight_g for an unwired mid-shot entry, where the ring
+  // was rebased to shot grams and later appends must match. Set by
+  // begin_shot_plot (0) and enter_shot_plot_live.
+  float shot_baseline_g = 0.0f;
   // EMA of the interval between STORED shot samples (>= kShotSampleMs by the
   // storage cap; includes BLE burst effects). Sizes the edge-animation lag so
   // the wall clock — not the newest-sample cap — is always what limits the
@@ -215,8 +221,8 @@ struct HomeWidgets {
   // Unwired mode: the shot_* arrays double as an ALWAYS-ON sample ring
   // (absolute lv_tick stamps, ~60s at <=10Hz) fed by unwired_ring_tick while
   // the live sweep runs — a shot is detected retroactively, so the data must
-  // already exist. review_shot_plot() rebases it in place (absolute ->
-  // shot-relative) for the frozen review paint; this flag records which
+  // already exist. enter_shot_plot_live() (or the review_shot_plot() fallback)
+  // rebases it in place (absolute -> shot-relative); this flag records which
   // convention the arrays currently hold.
   bool unwired_ring = false;
 };
@@ -304,15 +310,25 @@ void finish_shot_plot(HomeWidgets& w);
 // it self-resets when resuming after a review consumed the ring.
 void unwired_ring_tick(HomeWidgets& w, const core::ScaleSnapshot& scale);
 
-// Unwired review: one-shot repaint of the ring as a shot-aligned frozen plot —
-// x spans t_start (minus a small lead-in) to t_end (absolute ticks), snapped to
-// the same 15/30/45/60s windows as the wired shot plot. baseline_g (the
+// Unwired mid-shot handoff: the moment the detector confirms a shot, hand the
+// always-on ring to the LIVE shot plot — trim to [t_start, now], rebase in
+// place (absolute -> shot-relative, raw -> shot grams via baseline_g), then
+// keep feeding through shot_plot_tick exactly like a wired shot. t_start is
+// the backdated shot start (lever-on) on the UI clock; lead_in_ms is how much
+// of that is preinfusion (flow onset = t_start + lead_in_ms), used to sanitize
+// pre-onset samples against tare/cup-placement steps in the ring.
+void enter_shot_plot_live(HomeWidgets& w, uint32_t t_start, uint32_t lead_in_ms,
+                          float baseline_g);
+
+// Unwired review fallback: one-shot repaint of the ring as a shot-aligned
+// frozen plot — x spans t_start to t_end (absolute ticks). baseline_g (the
 // detector's untared start weight) is subtracted so weight mode shows shot
-// grams. Enters the frozen shot-plot state; leave it via end_shot_plot() as
-// usual. The live view is intentionally untouched mid-shot — this repaint at
-// review entry is the only place the unwired shot takes over the canvas.
+// grams; lead_in_ms sanitizes pre-onset samples like enter_shot_plot_live.
+// Enters the frozen shot-plot state; leave it via end_shot_plot() as usual.
+// Only used when the mid-shot handoff never ran (no canvas at detection) —
+// the normal unwired path finishes via finish_shot_plot like wired.
 void review_shot_plot(HomeWidgets& w, uint32_t t_start, uint32_t t_end,
-                      float baseline_g);
+                      uint32_t lead_in_ms, float baseline_g);
 
 // Apply a smoothing-kernel weight (0/0.15/0.25/0.33); repaints the shot plot
 // if one is on screen (live or frozen in review) so the change shows at once.

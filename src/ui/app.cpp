@@ -153,6 +153,18 @@ void on_review_minus(lv_event_t* e) {
 void on_review_plus(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->review_hold_adjust(+1);
 }
+void on_lead_minus(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->detect_lead_in_adjust(-1);
+}
+void on_lead_plus(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->detect_lead_in_adjust(+1);
+}
+void on_toast_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->dismiss_toast();
+}
+void on_toast_timeout(lv_timer_t* t) {
+  static_cast<ui::App*>(lv_timer_get_user_data(t))->dismiss_toast();
+}
 void on_target_plus(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->target_adjust(+1);
 }
@@ -654,6 +666,7 @@ void set_temp_controls_enabled(ui::SettingsWidgets& s, bool connected) {
 namespace ui {
 
 App::~App() {
+  if (toast_timer_ != nullptr) lv_timer_delete(toast_timer_);
   if (screensaver_timer_ != nullptr) lv_timer_delete(screensaver_timer_);
   if (clean_lock_timer_ != nullptr) lv_timer_delete(clean_lock_timer_);
   if (bf_timer_ != nullptr) lv_timer_delete(bf_timer_);
@@ -712,6 +725,9 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   // A rebuild (theme change) recreates everything; drop the old flash timer and
   // flow-graph canvas buffer first so we don't leak them across rebuilds
   // (lv_obj_clean deletes the widgets, but these are heap allocations we own).
+  // The toast lives on lv_layer_top (never cleaned by build) and captured the
+  // old theme's colors — kill it rather than carry it across.
+  dismiss_toast();
   if (home_.shot_flash_timer != nullptr) {
     lv_timer_delete(home_.shot_flash_timer);
     home_.shot_flash_timer = nullptr;
@@ -860,6 +876,10 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     lv_obj_add_event_cb(settings_.review_minus, on_review_minus, LV_EVENT_CLICKED, this);
     lv_obj_add_event_cb(settings_.review_plus, on_review_plus, LV_EVENT_CLICKED, this);
   }
+  if (settings_.lead_minus != nullptr) {
+    lv_obj_add_event_cb(settings_.lead_minus, on_lead_minus, LV_EVENT_CLICKED, this);
+    lv_obj_add_event_cb(settings_.lead_plus, on_lead_plus, LV_EVENT_CLICKED, this);
+  }
   if (settings_.smooth_btn != nullptr) {
     const int level = display_ != nullptr ? display_->flow_smooth() : 1;
     if (settings_.smooth_value != nullptr)
@@ -960,6 +980,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     const core::BrewSnapshot b = brew_->snapshot();
     settings_.target_g = b.target_weight_g;
     settings_.review_hold_s = b.review_hold_s;
+    settings_.detect_lead_in_s = b.detect_lead_in_s;
   }
   update_settings_view();
   update_temp_panels(machine_->snapshot());
@@ -1498,6 +1519,76 @@ void App::set_wired_paddle(bool on) {
 
 void App::toggle_flow_units() { ui::toggle_flow_mode(home_); }
 
+void App::show_toast(const char* msg) {
+  dismiss_toast();
+  lv_obj_t* card = lv_obj_create(lv_layer_top());
+  lv_obj_remove_style_all(card);
+  lv_obj_set_width(card, lv_pct(88));
+  lv_obj_set_height(card, LV_SIZE_CONTENT);
+  const bool compact = is_compact(screen_);
+  // Above the compact bottom tab bar; over the graph's dead space elsewhere.
+  lv_obj_align(card, LV_ALIGN_BOTTOM_MID, 0, -ui::dp(compact ? 50 : 16));
+  lv_obj_set_style_bg_color(card, lv_color_hex(ui::theme::card()), 0);
+  lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(card, ui::dp(10), 0);
+  lv_obj_set_style_border_width(card, ui::dp(2), 0);
+  lv_obj_set_style_border_color(card, lv_color_hex(ui::theme::warn()), 0);
+  lv_obj_set_style_pad_all(card, ui::dp(compact ? 8 : 12), 0);
+  lv_obj_add_flag(card, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_event_cb(card, on_toast_clicked, LV_EVENT_CLICKED, this);
+  lv_obj_t* l = lv_label_create(card);
+  lv_label_set_text(l, msg);
+  lv_obj_set_width(l, lv_pct(100));
+  lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
+  lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(l, ui::font_dp(compact ? 14 : 16), 0);
+  toast_ = card;
+  // Long enough to READ, not just notice — the refusal message is two
+  // sentences and the reader just looked up from the paddle.
+  toast_timer_ = lv_timer_create(on_toast_timeout, 7000, this);
+}
+
+void App::dismiss_toast() {
+  // Callable from the timeout timer's own callback — LVGL supports a timer
+  // deleting itself mid-callback (same idiom as the flash countdowns).
+  if (toast_timer_ != nullptr) {
+    lv_timer_delete(toast_timer_);
+    toast_timer_ = nullptr;
+  }
+  if (toast_ != nullptr) {
+    lv_obj_delete(toast_);
+    toast_ = nullptr;
+  }
+}
+
+void App::pose_unwired_midshot() {
+  // Sim-only. Fill the ring exactly as unwired_ring_tick would have — absolute
+  // stamps, raw grams (cup on the untared scale) — covering a quiet baseline,
+  // then lever-on at now-9s, flow onset (first drip) at now-6s, a ~2 g/s pour
+  // since. Then run the handoff the entering-brew branch runs at detection.
+  // The sim's lv_tick is nearly 0 at render time, so these absolute stamps
+  // wrap negative — fine: every consumer diffs them modularly, exactly like a
+  // device tick rollover mid-ring.
+  const uint32_t now = lv_tick_get();
+  const float baseline = 315.2f;
+  const uint32_t t_lever = now - 9000, t_onset = now - 6000;
+  constexpr int kN = 200;  // 20 s at the ring's 100 ms cadence (< kShotCap)
+  for (int i = 0; i < kN; ++i) {
+    const uint32_t t = now - 20000 + static_cast<uint32_t>(i + 1) * 100;
+    const int32_t since_onset = static_cast<int32_t>(t - t_onset);
+    home_.shot_ts[i] = t;
+    home_.shot_weights[i] =
+        baseline +
+        (since_onset > 0 ? 2.0f * static_cast<float>(since_onset) / 1000.0f : 0.0f);
+    home_.shot_flows[i] = since_onset > 0 ? 2.0f : 0.0f;
+  }
+  home_.shot_n = kN;
+  home_.shot_head = kN % ui::HomeWidgets::kShotCap;
+  home_.unwired_ring = true;
+  ui::enter_shot_plot_live(home_, t_lever, 3000, baseline);
+}
+
 void App::pump_scale_chart() {
   if (scale_ == nullptr) return;
 
@@ -1520,6 +1611,20 @@ void App::pump_scale_chart() {
       brew_reject_seen_ = bsnap.review_reject_seq;
       ui::flash_shot_button(home_);
     }
+    // A paddle flip refused because the armed mode needs the scale (Auto shot
+    // / Shot detect with no scale connected): the machine stayed off — say
+    // why, on every layout (compact has no shot button to flash). The click
+    // gives the flip an audible acknowledgement too.
+    if (bsnap.scale_refuse_seq != scale_refuse_seen_) {
+      scale_refuse_seen_ = bsnap.scale_refuse_seq;
+      ui::play_button_press();
+      char tb[112];
+      std::snprintf(tb, sizeof(tb),
+                    "Shot not started: %s is enabled. "
+                    "Connect the scale or switch to Manual mode.",
+                    bsnap.mode == core::ShotMode::kAuto ? "Auto shot" : "Shot detect");
+      show_toast(tb);
+    }
     // Unwired stop-early signal: fire the pill flash once per shot, on the
     // controller's latch going high (see BrewSnapshot::stop_hint).
     if (bsnap.stop_hint && !stop_hint_seen_) ui::flash_stop_hint(home_);
@@ -1534,11 +1639,18 @@ void App::pump_scale_chart() {
         // must go. Pre-tared shots keep the history -> rate is live from t=0.
         if (!bsnap.baseline_set) ui::reset_flow_history(home_);
       } else {
-        // Unwired: the live view stays untouched mid-shot (the detector confirmed
-        // retroactively — the plot would open with a hole). Just pin the shot's
-        // retro start on the UI clock; the review repaint replays from the ring.
-        // shot_ms is running, so now - shot_ms IS the detector's t_start.
+        // Unwired: the detector confirmed retroactively — pin the shot's retro
+        // start on the UI clock (shot_ms is running, so now - shot_ms IS the
+        // backdated start incl. the preinfusion lead-in) and hand the always-on
+        // ring to the live shot plot: back-filled from pre-detection history,
+        // rebased to shot start and shot grams, then fed live exactly like a
+        // wired shot.
         unwired_shot_t0_ = lv_tick_get() - bsnap.shot_ms;
+        ui::enter_shot_plot_live(
+            home_, unwired_shot_t0_,
+            static_cast<uint32_t>(bsnap.detect_lead_in_s) * 1000u,
+            bsnap.start_weight_g);
+        last_weight_g_ = -10000.0f;  // force the readout onto the net convention
       }
     } else if (home_.flow_shot_plot && bsnap.phase == core::ShotPhase::kIdle) {
       ui::end_shot_plot(home_);  // review dismissed/timed out -> live sweep
@@ -1547,10 +1659,21 @@ void App::pump_scale_chart() {
       if (bsnap.paddle_wired) {
         ui::finish_shot_plot(home_);  // flush the display lag before the freeze
       } else {
-        // Unwired review entry: one-shot, shot-aligned repaint from the ring
-        // (through now, so the settle plateau shows), never a wrapped sweep.
-        ui::review_shot_plot(home_, unwired_shot_t0_, lv_tick_get(),
-                             bsnap.start_weight_g);
+        if (home_.flow_shot_plot) {
+          // The mid-shot handoff already rebased the ring (shot-relative
+          // stamps, shot grams) — finish exactly like wired. Re-running
+          // review_shot_plot would double-subtract the baseline and
+          // double-shift the timestamps.
+          ui::finish_shot_plot(home_);
+        } else {
+          // Handoff never happened (no canvas on this layout at detection):
+          // the ring still holds absolute stamps and raw grams — one-shot,
+          // shot-aligned repaint (through now, so the settle plateau shows).
+          ui::review_shot_plot(
+              home_, unwired_shot_t0_, lv_tick_get(),
+              static_cast<uint32_t>(bsnap.detect_lead_in_s) * 1000u,
+              bsnap.start_weight_g);
+        }
         // The frozen weight readout must agree with the repainted plot: unwired
         // shots never tare, so the raw reading includes the cup — show the shot
         // grams (net of the detector's baseline) instead. The sentinel forces
@@ -1572,6 +1695,12 @@ void App::pump_scale_chart() {
     if (shot_phase_ == core::ShotPhase::kBrewing &&
         bsnap.phase != core::ShotPhase::kBrewing) {
       ui::cancel_stop_flash(home_);
+      // An aborted unwired shot flips the readout back from net to raw; the
+      // sentinel forces that repaint even if the reading hasn't moved. (A
+      // normal end goes to kSettling, where the net convention holds until
+      // the review freeze writes its own sentinel. Harmless extra repaint
+      // for wired shots.)
+      last_weight_g_ = -10000.0f;
     }
     shot_phase_ = bsnap.phase;
     // Hold until the post-tare baseline is confirmed (the tare window's readings
@@ -1605,8 +1734,16 @@ void App::pump_scale_chart() {
       (snap.weight_g != last_weight_g_ || snap.connected != last_scale_connected_)) {
     last_weight_g_ = snap.weight_g;
     last_scale_connected_ = snap.connected;
+    // Unwired shots never tare — show shot grams (net of the detector's
+    // baseline) while one runs/settles, matching the shot plot. The change
+    // check stays keyed on the RAW reading (net differs by a constant);
+    // convention flips are forced by the sentinel writes at shot start/end.
+    const float shown =
+        snap.weight_g - (have_brew && core::unwired_net_weight(bsnap)
+                             ? bsnap.start_weight_g
+                             : 0.0f);
     char wb[16];
-    if (snap.connected) std::snprintf(wb, sizeof(wb), "%.1f g", static_cast<double>(snap.weight_g));
+    if (snap.connected) std::snprintf(wb, sizeof(wb), "%.1f g", static_cast<double>(shown));
     else std::snprintf(wb, sizeof(wb), "-- g");
     lv_label_set_text(home_.scale_weight, wb);
   }
@@ -2846,6 +2983,12 @@ void set_review_label(ui::SettingsWidgets& s) {
   std::snprintf(b, sizeof(b), "%d s", s.review_hold_s);
   lv_label_set_text(s.review_value, b);
 }
+void set_lead_in_label(ui::SettingsWidgets& s) {
+  if (s.lead_value == nullptr) return;
+  char b[16];
+  std::snprintf(b, sizeof(b), "%d s", s.detect_lead_in_s);
+  lv_label_set_text(s.lead_value, b);
+}
 }  // namespace
 
 void App::update_scale_view() {
@@ -2903,6 +3046,7 @@ void App::update_scale_view() {
   }
   set_target_label(settings_);
   set_review_label(settings_);
+  set_lead_in_label(settings_);
 }
 
 void App::start_scale_scan() {
@@ -2952,6 +3096,15 @@ void App::review_hold_adjust(int dir) {
   settings_.review_hold_s = v;
   set_review_label(settings_);
   if (brew_ != nullptr) brew_->set_review_hold_s(v);
+}
+
+void App::detect_lead_in_adjust(int dir) {
+  int v = settings_.detect_lead_in_s + dir;
+  if (v < 0) v = 0;
+  if (v > 10) v = 10;
+  settings_.detect_lead_in_s = v;
+  set_lead_in_label(settings_);
+  if (brew_ != nullptr) brew_->set_detect_lead_in_s(v);
 }
 
 }  // namespace ui

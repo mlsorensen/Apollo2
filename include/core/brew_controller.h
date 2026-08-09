@@ -35,6 +35,7 @@ class BrewController : public IBrewController {
   void set_overshoot_persister(std::function<void(float)> p) { persist_overshoot_ = std::move(p); }
   void set_hint_overshoot_persister(std::function<void(float)> p) { persist_hint_overshoot_ = std::move(p); }
   void set_review_hold_persister(std::function<void(int)> p) { persist_review_ = std::move(p); }
+  void set_detect_lead_in_persister(std::function<void(int)> p) { persist_lead_in_ = std::move(p); }
   void set_wired_paddle_persister(std::function<void(bool)> p) { persist_wired_ = std::move(p); }
   void set_flush_persister(std::function<void(int)> p) { persist_flush_ = std::move(p); }
   void set_flush_delay_persister(std::function<void(int)> p) { persist_flush_delay_ = std::move(p); }
@@ -43,7 +44,7 @@ class BrewController : public IBrewController {
   // persisted ShotMode as an int (clamped here so a stale NVS value is safe).
   void seed(float target_g, int mode, float overshoot_g, int review_hold_s,
             bool wired_paddle, int flush_s, int flush_delay_s,
-            float hint_overshoot_g) {
+            float hint_overshoot_g, int detect_lead_in_s) {
     target_g_ = target_g;
     mode_ = (mode < 0 || mode > 2) ? ShotMode::kDetect : static_cast<ShotMode>(mode);
     overshoot_g_ = overshoot_g;
@@ -54,6 +55,8 @@ class BrewController : public IBrewController {
     wired_paddle_ = wired_paddle;
     flush_s_ = flush_s;
     flush_delay_s_ = (flush_delay_s < 1) ? 3 : flush_delay_s;
+    detect_lead_in_s_ =
+        (detect_lead_in_s < 0 || detect_lead_in_s > 10) ? 3 : detect_lead_in_s;
   }
 
   void poll(uint32_t now_ms);
@@ -63,6 +66,7 @@ class BrewController : public IBrewController {
   void set_shot_mode(ShotMode mode) override;
   void dismiss_review() override;
   void set_review_hold_s(int seconds) override;
+  void set_detect_lead_in_s(int seconds) override;
   void set_wired_paddle(bool on) override;
   void set_flush_s(int seconds) override;
   void set_flush_delay_s(int seconds) override;
@@ -115,6 +119,7 @@ class BrewController : public IBrewController {
   std::function<void(int)> persist_mode_;
   std::function<void(float)> persist_overshoot_;
   std::function<void(int)> persist_review_;
+  std::function<void(int)> persist_lead_in_;
   std::function<void(bool)> persist_wired_;
   std::function<void(int)> persist_flush_;
   std::function<void(int)> persist_flush_delay_;
@@ -151,6 +156,7 @@ class BrewController : public IBrewController {
   float hint_overshoot_saved_ = 2.0f;
   bool hint_fired_ = false;  // stop hint shown during THIS shot (gates learning)
   int review_hold_s_ = 30;  // review linger before auto-dismiss (user setting)
+  int detect_lead_in_s_ = 3;  // detect-mode preinfusion lead-in (user setting)
   int flush_s_ = 0;         // auto-flush run seconds (0 = off; user setting)
   int flush_delay_s_ = 3;   // cup-off -> flush pause seconds (user setting)
 
@@ -193,6 +199,7 @@ class BrewController : public IBrewController {
   uint8_t settle_calm_ = 0;       // consecutive windows under the drip threshold
   uint32_t review_until_ms_ = 0;
   uint32_t review_reject_seq_ = 0;  // paddle ON edges swallowed during kReview
+  uint32_t scale_refuse_seq_ = 0;   // ON edges refused: armed mode needs a scale
   uint32_t blind_since_ms_ = 0;  // scale dark since (kBrewing); 0 = seeing it
   uint32_t last_sense_ms_ = 0;
   uint32_t last_now_ms_ = 0;  // for snapshot()'s elapsed time
