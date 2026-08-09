@@ -33,6 +33,21 @@ const Palette kPalettes[] = {
     {"Sunset",    0x1A0F14, 0x2A181E, 0x392129, 0xFFEDE3, 0xB58F92, 0xFF7043, 0x6E4A50, 0x66BB6A, 0xFFCA28, 0xEF5350},
     // Citrus: lime accent over deep olive (yellow-green, vs Forest's cool green).
     {"Citrus",    0x111704, 0x1E290D, 0x293714, 0xF4F8E8, 0xA3B183, 0x8FB824, 0x53613B, 0x6FD08D, 0xE3B642, 0xE05D4A},
+    // Micra body-color companions, like Ferrari: the machine's paint is the
+    // accent and its darkened shades run through the whole chrome.
+    //          name          bg        rail      card      text      muted     accent    scroll    ok        warn      alert
+    // Modena: the yellow Micra — giallo Modena over dark amber-olive. Warn is
+    // pushed to orange so heating can't be mistaken for the yellow accent.
+    {"Modena",    0x171204, 0x261E08, 0x33290C, 0xFDF7E6, 0xB3A578, 0xFFD62E, 0x6E5F35, 0x63C74D, 0xFF8A3C, 0xE5484D},
+    // Gulf: the baby-blue Micra — powder blue over dark slate, and the
+    // livery's other color, Gulf orange, as warn.
+    {"Gulf",      0x0E1519, 0x18232A, 0x203039, 0xF0F7FA, 0x8CA5B0, 0xA9D3E4, 0x53707C, 0x5BC98C, 0xF2842E, 0xE5484D},
+    // Monaco: the navy Micra — the paint lifted to a royal navy accent (the
+    // true panel color is too dark to pop) over deep blue depths.
+    {"Monaco",    0x0B101C, 0x131B2C, 0x1A2438, 0xEFF3FB, 0x8B97AF, 0x4F74C4, 0x4A5877, 0x5BC98C, 0xE7B84A, 0xE5484D},
+    // Ivory: the creme Micra — warm cream accent over dark coffee taupe,
+    // Espresso's warm status trio.
+    {"Ivory",     0x161310, 0x211D17, 0x2C261E, 0xF7F1E4, 0xAC9F8B, 0xE2D3B4, 0x6E6353, 0x9CCC65, 0xE0A845, 0xD9583B},
 };
 constexpr int kCount = static_cast<int>(sizeof(kPalettes) / sizeof(kPalettes[0]));
 
