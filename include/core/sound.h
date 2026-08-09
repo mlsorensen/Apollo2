@@ -22,6 +22,10 @@ namespace core {
 struct Tone {
   float hz;
   uint16_t ms;
+  // != 0: a guitar-style bend — ONE strike whose pitch glides linearly to
+  // bend_hz by the note's midpoint and back down by its end. (Not two notes:
+  // a re-struck envelope mid-bend would read as separate notes.)
+  float bend_hz = 0.0f;
 };
 
 // Which instrument plays a cue. Naming an instrument (rather than partials and

@@ -7,21 +7,27 @@ namespace core {
 namespace {
 
 // Equal temperament, A4 = 440 Hz.
-constexpr float kBb3 = 233.08f;
-constexpr float kD4 = 293.66f;
-constexpr float kF4 = 349.23f;
-constexpr float kBb4 = 466.16f;
-constexpr float kD5 = 587.33f;
+constexpr float kE5 = 659.26f;
+constexpr float kF5 = 698.46f;
+constexpr float kA5 = 880.00f;
+constexpr float kB5 = 987.77f;
+constexpr float kCs6 = 1108.73f;
 
 // Button tick: a single high, very short blip. Not a pitch you hear as a note
 // — at 14 ms it reads as a mechanical click, which is the point.
 constexpr Tone kButtonPress[] = {{1900.0f, 14}};
 
-// Ready: a B-flat arpeggio that drops to the root and then climbs past it,
-// ~1.5 s end to end. Long and distinct enough to carry from another room,
-// which is where you are while the machine heats.
+// Ready: the "Buddy Holly" (Weezer) intro riff, as played at the 17th-19th
+// fret on the high E and B strings. The guitar's whole-step bend-and-release
+// on the second B is rendered as discrete even eighths — C#6 then B5 —
+// because that kept the riff on the beat and read better on the bell than a
+// pitch glide (auditioned both; Tone::bend_hz remains available). Replaced
+// the old B-flat arpeggio because its lower notes didn't carry — everything
+// here sits at 660 Hz+, where the small speaker actually has output. A 250 ms
+// eighth grid, only the final note rings free; ~2.6 s end to end.
 constexpr Tone kReady[] = {
-    {kF4, 300}, {kD4, 300}, {kBb3, 300}, {kD5, 300}, {kBb4, 300},
+    {kA5, 250}, {kF5, 250}, {kA5, 250}, {kB5, 250}, {kCs6, 250}, {kB5, 250},
+    {kA5, 250}, {kF5, 250}, {kE5, 600},
 };
 
 }  // namespace

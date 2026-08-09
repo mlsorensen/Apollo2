@@ -386,6 +386,19 @@ class Es8311Sound : public core::ISound {
         dphi[k] = 2.0f * static_cast<float>(M_PI) * note.hz * partials[k].ratio / kRate;
         step[k] = expf(-1.0f / (kRate * decay_s * partials[k].decay_mul));
       }
+      // Guitar-style bend (Tone::bend_hz): ramp each voice's phase increment
+      // linearly to the bend pitch by the note's midpoint and back down by its
+      // end — one float add per voice per sample, negligible next to the
+      // sinf(). One strike, one envelope; only the pitch moves.
+      const int half_frames = frames / 2;
+      const bool bend = note.bend_hz > 0.0f && note.hz > 0.0f && half_frames > 0;
+      float ddphi[8] = {0.0f};
+      if (bend) {
+        for (int k = 0; k < voices; ++k) {
+          ddphi[k] = 2.0f * static_cast<float>(M_PI) * (note.bend_hz - note.hz) *
+                     partials[k].ratio / kRate / static_cast<float>(half_frames);
+        }
+      }
 
       for (int done = 0; done < frames && !cancel_.load();) {
         const int n = frames - done < kChunkFrames ? frames - done : kChunkFrames;
@@ -399,6 +412,7 @@ class Es8311Sound : public core::ISound {
               if (phase[k] > 2.0f * static_cast<float>(M_PI))
                 phase[k] -= 2.0f * static_cast<float>(M_PI);
               env[k] *= step[k];
+              if (bend) dphi[k] += (done + j < half_frames ? ddphi[k] : -ddphi[k]);
             }
             const int frame = done + j;
             if (frame < attack_frames)
