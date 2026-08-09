@@ -116,6 +116,17 @@ In detail:
   `make padsense PIN=<n>` / `make paddrive PIN=<n>` with the board on USB —
   see the manual's "Paddle pin protection & per‑unit remapping" section.
 
+**No‑solder way to add that resistor:** use a **4‑slot** screw‑terminal block
+instead of the 3‑slot. Positions 1–3 land on GND / 52 / 51 as usual; position
+4 hangs past the used pins — **bend or cut off its header pin** so it doesn't
+insert into the board. Screw the **1 kΩ resistor** in as a jumper between
+positions 3 and 4, then land the paddle‑sense wire in position **4** instead
+of 3: the signal reaches GPIO 51 only through the resistor, and nothing was
+soldered or spliced.
+
+![4-slot terminal block with the resistor jumpering positions 3-4 and the
+position-4 pin bent clear](img/wiring/paddle-resistor-terminal.jpg)
+
 A finished P4 cable with the opto module spliced in near the machine end
 (shown before wrapping the module in heat‑shrink — do wrap it, so nothing can
 short out inside the machine). Of the cable's conductors, **red + black feed

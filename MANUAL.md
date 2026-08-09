@@ -389,7 +389,9 @@ per‑board terminals — is covered in the [wiring guide](docs/WIRING.md).
 - **Suggested: a 1 kΩ resistor in line with the paddle's sense wire** (at the
   screw terminal, between the board pin and the switch). It protects the
   input by limiting current from static or stray voltage on the wire —
-  one cheap part, no effect on normal operation.
+  one cheap part, no effect on normal operation. The
+  [wiring guide](docs/WIRING.md) shows a no‑solder way to add it with a
+  4‑slot screw‑terminal block.
 - **If a paddle pin ever does fail** (symptom: the paddle stops registering
   or behaves erratically while everything meters fine — the diagnostic log's
   `Paddle: raw sense ...` lines will show a line stuck or drifting on its
