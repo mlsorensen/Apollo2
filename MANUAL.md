@@ -29,9 +29,11 @@ The Home screen adapts to the screen size and to whether a scale is paired.
 - **BREW / STEAM** — live boiler temperatures. On larger screens each has a
   **−/+** stepper that edits the set‑point directly; the small grey number is
   the current target. Edits are written to the machine as you tap.
-- **Power button** — `Standby` / `Turn on` when connected. When the machine is
-  configured but disconnected it becomes **Connect** and starts the Bluetooth
-  link.
+- **Power button** — `Standby` / `Turn on` when connected. After a tap it
+  briefly reads `Working...` (disabled) until the machine reports the change —
+  the Micra's answer trails the command by a couple of seconds, and the button
+  would otherwise look like it did nothing. When the machine is configured but
+  disconnected it becomes **Connect** and starts the Bluetooth link.
 - **Flush** *(paddle‑wired boards, screens 4.3" and larger)* — runs the group
   for a quick rinse, for the same time as **Auto flush** (3 s when Auto flush
   is Off). Tap again while it runs to stop early. Greyed out while a shot is

@@ -5,6 +5,17 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## v0.6.1
+
+### Fixes
+
+- **The power button acknowledges the tap instantly.** The Micra reports a
+  mode change a couple of seconds after the command, so tapping
+  `Standby`/`Turn on` looked like nothing happened — and invited a second,
+  state-undoing tap. The button now immediately disables and reads
+  `Working...` until the machine reports the change (or the link drops, or
+  8 seconds pass — it can never stay locked).
+
 ## v0.6.0
 
 ### Features

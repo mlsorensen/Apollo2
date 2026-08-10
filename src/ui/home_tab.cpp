@@ -1279,8 +1279,25 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   // when the button lives inside the MICRA card (card-on-card is invisible).
   const uint32_t pow_neutral =
       (w.scale_connect_btn != nullptr) ? ui::theme::rail() : ui::theme::card();
+  // Release a pending power toggle: answered (the reported power changed),
+  // link lost (nothing left to wait on), or timed out.
+  if (w.power_pending_until != 0 &&
+      (state.link != core::Link::Connected ||
+       state.power != w.power_pending_from ||
+       static_cast<int32_t>(lv_tick_get() - w.power_pending_until) >= 0)) {
+    w.power_pending_until = 0;
+  }
   switch (state.link) {
     case core::Link::Connected:
+      if (w.power_pending_until != 0) {
+        // Tap acknowledged, machine hasn't reported the change yet: hold the
+        // button disabled so the lag can't read as "didn't work" and invite
+        // a second (state-undoing) tap.
+        lv_obj_add_state(w.power_btn, LV_STATE_DISABLED);
+        ui::set_bg_color(w.power_btn, pow_neutral);
+        ui::set_text(w.power_label, LV_SYMBOL_REFRESH "  Working...");
+        break;
+      }
       lv_obj_remove_state(w.power_btn, LV_STATE_DISABLED);
       ui::set_bg_color(w.power_btn, on ? pow_neutral : ui::theme::accent());
       ui::set_text(w.power_label,

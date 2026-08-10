@@ -1417,8 +1417,14 @@ void App::toggle_power() {
   if (machine_ == nullptr) return;
   const core::Link link = machine_->snapshot().link;
   if (link == core::Link::Connected) {
-    const bool on = machine_->snapshot().power == core::Power::On;
-    machine_->set_power(!on);
+    const core::Power prev = machine_->snapshot().power;
+    machine_->set_power(prev != core::Power::On);
+    // Immediate feedback for the 1-3 s command->report lag: the button
+    // disables and reads "Working..." until the reported power changes (see
+    // HomeWidgets::power_pending_until). 8 s deadline = a couple of poll
+    // rounds past the normal confirm, so a swallowed command can't lock it.
+    home_.power_pending_from = prev;
+    home_.power_pending_until = lv_tick_get() + 8000;
     refresh();
     return;
   }

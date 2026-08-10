@@ -49,6 +49,15 @@ struct HomeWidgets {
   lv_obj_t* boiler_minus = nullptr;
   lv_obj_t* boiler_plus = nullptr;
   lv_obj_t* power_btn = nullptr;
+  // Power-toggle pending window: set by App::toggle_power. The Micra answers
+  // mode reads stale for a beat after a command and the poll is 1 s, so the
+  // visible state lags a tap by ~1-3 s — long enough to read as "nothing
+  // happened" and invite a second tap. While pending the button is disabled
+  // and reads "Working..."; update_home releases it when the REPORTED power
+  // changes, the link leaves Connected, or the deadline passes (a swallowed
+  // command must never lock the button out).
+  uint32_t power_pending_until = 0;               // lv_tick deadline; 0 = idle
+  core::Power power_pending_from = core::Power::Off;  // reported power at tap
   lv_obj_t* power_label = nullptr;
   // Manual group flush, beside Standby on the large layouts (the compact tier
   // has no room — its actions row is already Power + Tare). Null elsewhere;
