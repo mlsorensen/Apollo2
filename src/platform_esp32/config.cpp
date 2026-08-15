@@ -20,6 +20,7 @@ constexpr char kPerfOverlayKey[] = "perfovl";
 constexpr char kClickSoundKey[] = "clicksnd";
 constexpr char kReadyChimeKey[] = "rdychime";    // legacy on/off, migrated below
 constexpr char kReadyChimeVolKey[] = "rdychimev";
+constexpr char kReadyMelodyKey[] = "rdymel";     // warm-up tune: 0 off, 1.. melody
 // Half volume out of the box: loud enough to carry, quiet enough that the
 // first warm-up after a flash doesn't startle anyone.
 constexpr int kReadyChimeDefaultVol = 50;
@@ -506,6 +507,23 @@ void Config::set_ready_chime_volume(int percent) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putInt(kReadyChimeVolKey, percent < 0 ? 0 : percent > 100 ? 100 : percent);
+  p.end();
+}
+
+int Config::ready_chime_melody() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 1;
+  const int v = p.isKey(kReadyMelodyKey) ? p.getInt(kReadyMelodyKey, 1) : 1;
+  p.end();
+  // Clamped generously here (the UI clamps to the real melody count) so a
+  // stale value from a future firmware can't go negative.
+  return v < 0 ? 0 : v;
+}
+
+void Config::set_ready_chime_melody(int melody) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putInt(kReadyMelodyKey, melody < 0 ? 0 : melody);
   p.end();
 }
 

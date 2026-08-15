@@ -102,6 +102,7 @@ class App {
   void set_perf_overlay(bool on);        // Device "Performance overlay" switch
   void set_click_sound(bool on);         // Device "Button sounds" switch
   void cycle_ready_chime();              // Micra "Chime volume": Off/25/50/75/100%
+  void cycle_ready_melody();             // Micra "Chime melody": Off/Blue/Pink/...
   void theme_select(int index);          // Device theme roller selection
   void apply_pending_theme();            // deferred rebuild (from lv_async_call)
   void apply_layout_rebuild();           // deferred rebuild after scale pair/forget
@@ -201,6 +202,7 @@ class App {
   core::IShotStore* shots_ = nullptr;
   bool click_sound_on_ = true;  // cached from IDisplaySettings (checked per press)
   int ready_chime_vol_ = 50;    // cached likewise, 0..100 (0 = chime off)
+  int ready_chime_mel_ = 1;     // cached likewise: 0 = off, 1.. = ready melody
   lv_obj_t* tabview_ = nullptr;
   ScreenProfile screen_{};          // stored so we can rebuild on a theme change
   lv_obj_t* modal_ = nullptr;       // current overlay modal, if open

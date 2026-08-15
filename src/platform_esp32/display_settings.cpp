@@ -62,6 +62,12 @@ void DisplaySettings::set_click_sound(bool on) { config_.set_click_sound(on); }
 
 int DisplaySettings::ready_chime_volume() const { return config_.ready_chime_volume(); }
 
+int DisplaySettings::ready_chime_melody() const { return config_.ready_chime_melody(); }
+
+void DisplaySettings::set_ready_chime_melody(int melody) {
+  config_.set_ready_chime_melody(melody);
+}
+
 void DisplaySettings::set_ready_chime_volume(int percent) {
   config_.set_ready_chime_volume(percent);
 }

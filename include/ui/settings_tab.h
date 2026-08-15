@@ -105,6 +105,9 @@ struct SettingsWidgets {
   lv_obj_t* chime_vol_btn = nullptr;         // Micra > Controls: warm-up chime
   lv_obj_t* chime_vol_value = nullptr;       // level cycle (Off / 25 / 50 / 75
                                              // / 100%); audio boards only
+  lv_obj_t* chime_mel_btn = nullptr;         // Micra > Controls: warm-up chime
+  lv_obj_t* chime_mel_value = nullptr;       // melody cycle (Off / Blue / Pink
+                                             // / ...); audio boards only
   lv_obj_t* wired_paddle_switch = nullptr;   // Micra: paddle harness in use (off =
                                              // detector-driven "unwired" shots);
                                              // only built on paddle-capable boards

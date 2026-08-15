@@ -550,10 +550,20 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     } else {
       out.wired_paddle_switch = nullptr;
     }
-    // Chime when the machine reaches temperature (audio boards only): tap
-    // cycles Off / 25% / 50% / 75% / 100%, playing each level as you land on
-    // it so the choice is made by ear.
+    // Chime when the machine reaches temperature (audio boards only): the
+    // melody row picks WHICH tune (Off / Blue / Pink / ...), the volume row
+    // its level (Off / 25% / 50% / 75% / 100%); both audition as you tap so
+    // the choice is made by ear.
     if (with_sound) {
+      lv_obj_t* rm = make_setting_row(out.micra_controls_page, "Chime melody", font);
+      out.chime_mel_btn = ui::make_button(rm);
+      lv_obj_set_height(out.chime_mel_btn, btn_size);
+      lv_obj_set_style_pad_hor(out.chime_mel_btn, ui::dp(14), 0);
+      lv_obj_set_style_bg_color(out.chime_mel_btn, lv_color_hex(ui::theme::card()), 0);
+      out.chime_mel_value = lv_label_create(out.chime_mel_btn);
+      lv_obj_set_style_text_color(out.chime_mel_value, lv_color_hex(ui::theme::text()), 0);
+      lv_obj_set_style_text_font(out.chime_mel_value, font, 0);
+      lv_obj_center(out.chime_mel_value);
       lv_obj_t* rc = make_setting_row(out.micra_controls_page, "Chime volume", font);
       out.chime_vol_btn = ui::make_button(rc);
       lv_obj_set_height(out.chime_vol_btn, btn_size);
@@ -565,6 +575,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
       lv_obj_center(out.chime_vol_value);
     } else {
       out.chime_vol_btn = out.chime_vol_value = nullptr;
+      out.chime_mel_btn = out.chime_mel_value = nullptr;
     }
   }
   // Micra > Cleaning: everything that runs water through the group on purpose —

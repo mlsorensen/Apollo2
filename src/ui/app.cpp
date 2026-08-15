@@ -431,6 +431,9 @@ void on_click_sound_switch(lv_event_t* e) {
 void on_chime_vol_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_ready_chime();
 }
+void on_chime_mel_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_ready_melody();
+}
 void on_wifi_switch(lv_event_t* e) {
   auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
@@ -480,6 +483,23 @@ void set_chime_vol_label(ui::SettingsWidgets& s, int percent) {
     std::snprintf(b, sizeof(b), "%d%%", percent);
     lv_label_set_text(s.chime_vol_value, b);
   }
+}
+
+void set_chime_mel_label(ui::SettingsWidgets& s, int melody) {
+  if (s.chime_mel_value == nullptr) return;
+  lv_label_set_text(s.chime_mel_value,
+                    melody <= 0                            ? "Off"
+                    : melody == core::kReadyMelodyRandom   ? "Random"
+                    : core::ready_melody_name(melody - 1));
+}
+
+// The variant a melody setting plays RIGHT NOW: Random rolls fresh each call
+// (that's the point — a different tune per chime), everything else maps 1..N
+// to its table. Callers guarantee melody > 0.
+int melody_variant(int melody) {
+  if (melody == core::kReadyMelodyRandom)
+    return static_cast<int>(lv_rand(0, static_cast<uint32_t>(core::ready_melody_count()) - 1));
+  return melody - 1;
 }
 
 // The delay row only matters (and only shows) while the flush itself is on.
@@ -714,6 +734,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   // checks the cached setting, so the switch takes effect immediately.
   click_sound_on_ = display_->click_sound();
   ready_chime_vol_ = display_->ready_chime_volume();
+  ready_chime_mel_ = display_->ready_chime_melody();
   if (sound_->available()) {
     ui::set_button_press_hook([this] {
       if (click_sound_on_ && sound_ != nullptr) sound_->play(core::Cue::ButtonPress);
@@ -946,6 +967,11 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     lv_obj_add_event_cb(settings_.click_sound_switch, on_click_sound_switch,
                         LV_EVENT_VALUE_CHANGED, this);
   }
+  if (settings_.chime_mel_btn != nullptr) {  // audio boards only
+    set_chime_mel_label(settings_, ready_chime_mel_);
+    lv_obj_add_event_cb(settings_.chime_mel_btn, on_chime_mel_clicked,
+                        LV_EVENT_CLICKED, this);
+  }
   if (settings_.chime_vol_btn != nullptr) {  // audio boards only
     set_chime_vol_label(settings_, ready_chime_vol_);
     lv_obj_add_event_cb(settings_.chime_vol_btn, on_chime_vol_clicked,
@@ -1032,8 +1058,9 @@ void App::update_heating(const core::MachineSnapshot& state) {
   // already-warm machine stays silent instead of firing a warm-up that
   // finished an hour ago.
   const bool ready = ready_chime_.update(state, heating_);
-  if (ready && ready_chime_vol_ > 0 && sound_ != nullptr)
-    sound_->play(core::Cue::Ready, ready_chime_vol_);
+  if (ready && ready_chime_vol_ > 0 && ready_chime_mel_ > 0 && sound_ != nullptr)
+    sound_->play(core::ready_melody_playback(melody_variant(ready_chime_mel_),
+                                             ready_chime_vol_));
 }
 
 void App::refresh() {
@@ -1288,6 +1315,30 @@ void App::set_click_sound(bool on) {
   if (display_ != nullptr) display_->set_click_sound(on);  // persist
 }
 
+void App::cycle_ready_melody() {
+  const int count = core::ready_melody_count();
+  // Off -> each melody -> Random -> Off.
+  int next;
+  if (ready_chime_mel_ == core::kReadyMelodyRandom) next = 0;
+  else if (ready_chime_mel_ >= count) next = core::kReadyMelodyRandom;
+  else next = ready_chime_mel_ + 1;
+  ready_chime_mel_ = next;
+  if (display_ != nullptr) display_->set_ready_chime_melody(next);  // persist
+  set_chime_mel_label(settings_, next);
+  // Audition the WHOLE tune — one note says nothing about a melody. The
+  // priority rides one above the real chime's so each tap INTERRUPTS the
+  // previous audition (equal priority would be dropped, and a long melody
+  // would swallow every tap made while it rings). A muted volume setting
+  // still auditions at 50% so the choice is audible; the real chime stays
+  // governed by both settings.
+  if (next > 0 && sound_ != nullptr) {
+    core::Playback p = core::ready_melody_playback(
+        melody_variant(next), ready_chime_vol_ > 0 ? ready_chime_vol_ : 50);
+    ++p.priority;
+    sound_->play(p);
+  }
+}
+
 void App::cycle_ready_chime() {
   int i = 0;
   while (i < kChimeVolCount && kChimeVolChoices[i] != ready_chime_vol_) ++i;
@@ -1296,7 +1347,15 @@ void App::cycle_ready_chime() {
   if (display_ != nullptr) display_->set_ready_chime_volume(next);  // persist
   set_chime_vol_label(settings_, next);
   // Audition the level you just landed on — one note, so cycling stays quick.
-  if (next > 0 && sound_ != nullptr) sound_->sample(core::Cue::Ready, next);
+  // Play the SELECTED melody's note (Blue's when the melody is Off, so the
+  // level is still audible while choosing). Priority bumped like the melody
+  // audition so it cuts through a still-ringing melody preview.
+  if (next > 0 && sound_ != nullptr) {
+    core::Playback p = core::ready_melody_sample(
+        ready_chime_mel_ > 0 ? melody_variant(ready_chime_mel_) : 0, next);
+    ++p.priority;
+    sound_->play(p);
+  }
 }
 
 void App::set_perf_overlay(bool on) {

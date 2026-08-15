@@ -77,6 +77,21 @@ Playback cue_playback(Cue cue, int volume);
 // should let you hear the level, not sit through the whole cue on every tap.
 Playback cue_sample(Cue cue, int volume);
 
+// Selectable READY melodies — the user picks which tune announces warm-up
+// (the "Chime melody" setting); volume stays its own setting. Names follow
+// the records the riffs come from. Cue::Ready alone plays variant 0.
+//
+// The SETTING encodes 0 = off and 1..count() = melody index + 1; this
+// sentinel means "pick one at random per chime". It is deliberately far
+// above any realistic melody count so appending melodies never changes a
+// stored Random selection's meaning.
+inline constexpr int kReadyMelodyRandom = 255;
+
+int ready_melody_count();
+const char* ready_melody_name(int variant);               // clamped
+Playback ready_melody_playback(int variant, int volume);  // clamped
+Playback ready_melody_sample(int variant, int volume);    // its final note
+
 class ISound {
  public:
   virtual ~ISound() = default;

@@ -38,7 +38,8 @@ constexpr uint32_t kRate = 44100;
 // scratch buffer this sizes lives in PSRAM, so shrinking it costs nothing that
 // matters.
 constexpr int kChunkFrames = 128;
-constexpr int kMaxNotes = 12;      // longest cue we'll copy; longer is truncated
+constexpr int kMaxNotes = 20;      // longest cue we'll copy; longer is truncated
+                                   // (20: "Autumn" runs 17 notes)
 
 // Envelope, in fractions of the note's own length so one shape serves both a
 // 14 ms tick and a 300 ms chime note: a hair of attack so a note doesn't start

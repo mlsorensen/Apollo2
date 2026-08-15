@@ -35,6 +35,8 @@ class DisplaySettings : public core::IDisplaySettings {
   void set_click_sound(bool on) override;
   int ready_chime_volume() const override;
   void set_ready_chime_volume(int percent) override;
+  int ready_chime_melody() const override;
+  void set_ready_chime_melody(int melody) override;
 
  private:
   Display& display_;

@@ -131,10 +131,15 @@ Plots the live flow rate (or weight) from the scale.
   the paddle harness is physically wired. This enables the **Auto shot** mode
   and the auto‑flush. Off, the board behaves like an unwired one (Shot detect
   / Manual only). Flipping it mid‑shot cancels the shot.
+- **Chime melody** *(boards with a speaker; Off / Blue / Pink / Computer /
+  Gold / White / Autumn / Random, default Blue)* — which tune announces the end of a warm‑up. Each tap
+  cycles to the next melody and auditions it; **Random** picks a different
+  tune each time the machine warms up; `Off` silences the chime regardless of
+  the volume below.
 - **Chime volume** *(boards with a speaker; Off / 25 / 50 / 75 / 100 %, default
-  50 %)* — a short chime when the machine finishes warming up, so you can walk
-  away and be called back. Each tap cycles to the next level **and plays a note
-  at it**, so you can set it by ear; `Off` silences it.
+  50 %)* — the warm‑up chime's level, so you can walk away and be called back.
+  Each tap cycles to the next level **and plays a note at it**, so you can set
+  it by ear; `Off` silences it.
 
   The chime marks the *end of a warm‑up*, not every moment the boilers are at
   temperature, so it sounds **once** and then stays quiet through all the small

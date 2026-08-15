@@ -91,6 +91,8 @@ class Config {
   void set_click_sound(bool on);
   int ready_chime_volume() const;  // warm-up chime level 0..100, 0 = off
   void set_ready_chime_volume(int percent);  // (default 50; audio boards)
+  int ready_chime_melody() const;  // warm-up tune: 0 = off, 1.. = melody
+  void set_ready_chime_melody(int melody);  // (default 1 = Blue)
 
   // WiFi station (home network join + NTP time sync). Credentials are entered via
   // the setup portal; timezone/NTP server via Settings.

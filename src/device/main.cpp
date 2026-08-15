@@ -267,7 +267,9 @@ void setup() {
   {
     const unsigned before = static_cast<unsigned>(
         heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
-    if (g_config.click_sound() || g_config.ready_chime_volume() > 0) platform::sound_begin();
+    if (g_config.click_sound() || (g_config.ready_chime_volume() > 0 &&
+                                   g_config.ready_chime_melody() > 0))
+      platform::sound_begin();
     const unsigned after = static_cast<unsigned>(
         heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
     core::logf("heap: internal free=%u after sound (cost %d, largest=%u)\n", after,

@@ -30,6 +30,8 @@ class FakeDisplaySettings : public core::IDisplaySettings {
   void set_click_sound(bool on) override { click_sound_ = on; }
   int ready_chime_volume() const override { return ready_chime_volume_; }
   void set_ready_chime_volume(int percent) override { ready_chime_volume_ = percent; }
+  int ready_chime_melody() const override { return ready_chime_melody_; }
+  void set_ready_chime_melody(int melody) override { ready_chime_melody_ = melody; }
 
  private:
   int brightness_ = 80;
@@ -42,6 +44,7 @@ class FakeDisplaySettings : public core::IDisplaySettings {
   bool perf_overlay_ = false;
   bool click_sound_ = true;
   int ready_chime_volume_ = 50;  // matches the device default
+  int ready_chime_melody_ = 1;   // 1 = Blue (device default)
 };
 
 }  // namespace host

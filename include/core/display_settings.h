@@ -70,6 +70,12 @@ class IDisplaySettings {
   // a property of the device.
   virtual int ready_chime_volume() const = 0;
   virtual void set_ready_chime_volume(int percent) = 0;
+
+  // Which tune the warm-up chime plays: 0 = off, otherwise 1-based index
+  // into core::ready_melody_* ("Blue", "Pink", ...). Default 1 (Blue).
+  // Separate from the volume so switching tunes keeps the level.
+  virtual int ready_chime_melody() const = 0;
+  virtual void set_ready_chime_melody(int melody) = 0;
 };
 
 }  // namespace core

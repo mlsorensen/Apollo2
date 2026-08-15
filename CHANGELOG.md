@@ -5,6 +5,17 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## v0.6.2
+
+### Features
+
+- **A choice of ready chimes.** New **Chime melody** setting
+  (**Settings → Micra → Controls**) with a handful of tunes to choose from —
+  tap to cycle through them and hear each one — plus a **Random** option
+  that plays a different tune each time the machine finishes warming up.
+  The existing Chime volume setting keeps controlling the level, and `Off`
+  is right there in the cycle.
+
 ## v0.6.1
 
 ### Fixes
