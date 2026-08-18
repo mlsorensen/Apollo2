@@ -56,9 +56,9 @@ constexpr Tone kReadyPink[] = {
     {kGb5, 800},
 };
 
-// "Computer": E major, straight quarters at 150 bpm (400 ms) — with the
+// "Human": E major, straight quarters at 150 bpm (400 ms) — with the
 // key's sharps applied: G#5 B5 C#6 E6 C#6 B5 G#5 F#5 E5. ~3.6 s.
-constexpr Tone kReadyComputer[] = {
+constexpr Tone kReadyHuman[] = {
     {kGs5, 400}, {kB5, 400}, {kCs6, 400}, {kE6, 400}, {kCs6, 400},
     {kB5, 400},  {kGs5, 400}, {kFs5, 400}, {kE5, 400},
 };
@@ -102,8 +102,8 @@ struct ReadyMelody {
 constexpr ReadyMelody kReadyMelodies[] = {
     {"Blue", kReadyBlue, static_cast<int>(sizeof(kReadyBlue) / sizeof(Tone))},
     {"Pink", kReadyPink, static_cast<int>(sizeof(kReadyPink) / sizeof(Tone))},
-    {"Computer", kReadyComputer,
-     static_cast<int>(sizeof(kReadyComputer) / sizeof(Tone))},
+    {"Human", kReadyHuman,
+     static_cast<int>(sizeof(kReadyHuman) / sizeof(Tone))},
     {"Gold", kReadyGold, static_cast<int>(sizeof(kReadyGold) / sizeof(Tone))},
     {"White", kReadyWhite, static_cast<int>(sizeof(kReadyWhite) / sizeof(Tone))},
     {"Autumn", kReadyAutumn,

@@ -131,7 +131,7 @@ Plots the live flow rate (or weight) from the scale.
   the paddle harness is physically wired. This enables the **Auto shot** mode
   and the auto‑flush. Off, the board behaves like an unwired one (Shot detect
   / Manual only). Flipping it mid‑shot cancels the shot.
-- **Chime melody** *(boards with a speaker; Off / Blue / Pink / Computer /
+- **Chime melody** *(boards with a speaker; Off / Blue / Pink / Human /
   Gold / White / Autumn / Random, default Blue)* — which tune announces the end of a warm‑up. Each tap
   cycles to the next melody and auditions it; **Random** picks a different
   tune each time the machine warms up; `Off` silences the chime regardless of
