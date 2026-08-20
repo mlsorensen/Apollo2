@@ -48,9 +48,11 @@ class FakeScale : public core::IScale {
     static constexpr const char* kModes[] = {"1 Weighing",  "2 Dual display",
                                              "3 Pour over", "4 Espresso",
                                              "5 Espr + timer", "6 Auto-tare"};
+    static constexpr const char* kBeepVol[] = {"Off", "1", "2", "3"};
     if (i == 0)
-      return (umbra_ || lunar_) ? core::ScaleSettingDesc{"Beep", kOnOff, 2}
-                                : core::ScaleSettingDesc{"Beep", kGear, 5};
+      return lunar_ ? core::ScaleSettingDesc{"Beep", kBeepVol, 4}
+             : umbra_ ? core::ScaleSettingDesc{"Beep", kOnOff, 2}
+                      : core::ScaleSettingDesc{"Beep", kGear, 5};
     if (i == 1)
       return lunar_ ? core::ScaleSettingDesc{"Auto sleep", kLunarSleep, 6}
              : umbra_ ? core::ScaleSettingDesc{"Auto sleep", kUmbraSleep, 5}
@@ -77,7 +79,7 @@ class FakeScale : public core::IScale {
   // Lunar persona: Acaia with a Unit row + the read-only weighing-mode row.
   void set_lunar(bool l) {
     lunar_ = l;
-    setting_value_[0] = l ? 1 : 3;  // Beep: On (0/1 list) vs gear 3 (0-4 list)
+    setting_value_[0] = l ? 2 : 3;  // Beep: Lunar volume 2 (doc default) vs gear 3
   }
 
  private:

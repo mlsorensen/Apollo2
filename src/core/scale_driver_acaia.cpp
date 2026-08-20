@@ -88,6 +88,12 @@ constexpr uint8_t kPyxisUnitWire[] = {2, 5};
 constexpr float kOzToGrams = 28.3495f;
 
 constexpr const char* kBeepLabels[] = {"Off", "On"};
+// Lunar 2021 (and its GATT siblings): beep is a VOLUME, not a toggle — the
+// scale's own docs say Off/1/2/3 (default 2, 3 loudest), wire value = level
+// on the same sound setting id. The vendor app only ever writes 0/1, which
+// is why 1 sounded barely audible; a generation that doesn't know 2/3 will
+// refuse the write and the readback grace reverts the row.
+constexpr const char* kBeepVolLabels[] = {"Off", "1", "2", "3"};
 // Umbra auto-off, sleep variants only, re-sorted for display (wire order is
 // historical: 0=off, 1/2/3=sleep 5/10/30 m, 7=sleep 1 m). The wire also has
 // power-off variants 4/5/6 — deliberately NOT offered: a powered-off scale
@@ -112,7 +118,7 @@ constexpr ScaleSettingDesc kUmbraSettings[] = {
     {"Unit", kUnitLabels, 2},
 };
 constexpr ScaleSettingDesc kPyxisSettings[] = {
-    {"Beep", kBeepLabels, 2},
+    {"Beep", kBeepVolLabels, 4},
     {"Auto sleep", kPyxisSleepLabels, 6},
     {"Unit", kUnitLabels, 2},
     {"Mode", kModeLabels, 6, /*read_only=*/true},
@@ -350,7 +356,8 @@ class AcaiaDriver : public IScaleDriver {
     if (gen_ == Gen::kLegacy || gen_ == Gen::kUnknown) return;  // need the real gen
     const bool umbra = gen_ == Gen::kUmbra;
     uint8_t id, value;
-    if (index == kSettingBeep && option_idx >= 0 && option_idx <= 1) {
+    if (index == kSettingBeep && option_idx >= 0 &&
+        option_idx <= (umbra ? 1 : 3)) {
       id = umbra ? kUmbraSettingBeep : kPyxisSettingBeep;
       value = static_cast<uint8_t>(option_idx);
     } else if (index == kSettingSleep && option_idx >= 0 &&
@@ -530,7 +537,7 @@ class AcaiaDriver : public IScaleDriver {
         unit_oz_.store(unit_idx == 1);
         sink.on_device_setting(kSettingUnit, unit_idx);
       } else if (gen_ == Gen::kPyxis && n >= 7) {
-        sink.on_device_setting(kSettingBeep, payload[6] <= 1 ? payload[6] : -1);
+        sink.on_device_setting(kSettingBeep, payload[6] <= 3 ? payload[6] : -1);
         sink.on_device_setting(kSettingSleep, payload[4] <= 5 ? payload[4] : -1);
         const uint8_t u = payload[2] & 0x7F;
         const int unit_idx = u == kPyxisUnitWire[0] ? 0 : u == kPyxisUnitWire[1] ? 1 : -1;
