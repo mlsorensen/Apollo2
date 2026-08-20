@@ -88,11 +88,12 @@ constexpr uint8_t kPyxisUnitWire[] = {2, 5};
 constexpr float kOzToGrams = 28.3495f;
 
 constexpr const char* kBeepLabels[] = {"Off", "On"};
-// Lunar 2021 (and its GATT siblings): beep is a VOLUME, not a toggle — the
-// scale's own docs say Off/1/2/3 (default 2, 3 loudest), wire value = level
-// on the same sound setting id. The vendor app only ever writes 0/1, which
-// is why 1 sounded barely audible; a generation that doesn't know 2/3 will
-// refuse the write and the readback grace reverts the row.
+// Lunar 2021 (and its GATT siblings): beep is a VOLUME — the scale's docs
+// say Off/1/2/3 (default 2, 3 loudest) and the status reports the level, but
+// over BLE the firmware honors only 0/1 (the vendor app's vocabulary):
+// writes of 2/3 are silently ignored (HW-verified — they revert on
+// readback). So all four values DISPLAY, and only Off/1 are writable; 2-3
+// come from the scale's own buttons.
 constexpr const char* kBeepVolLabels[] = {"Off", "1", "2", "3"};
 // Umbra auto-off, sleep variants only, re-sorted for display (wire order is
 // historical: 0=off, 1/2/3=sleep 5/10/30 m, 7=sleep 1 m). The wire also has
@@ -118,7 +119,7 @@ constexpr ScaleSettingDesc kUmbraSettings[] = {
     {"Unit", kUnitLabels, 2},
 };
 constexpr ScaleSettingDesc kPyxisSettings[] = {
-    {"Beep", kBeepVolLabels, 4},
+    {"Beep", kBeepVolLabels, 4, /*read_only=*/false, /*writable_count=*/2},
     {"Auto sleep", kPyxisSleepLabels, 6},
     {"Unit", kUnitLabels, 2},
     {"Mode", kModeLabels, 6, /*read_only=*/true},

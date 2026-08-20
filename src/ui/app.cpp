@@ -1535,9 +1535,13 @@ void App::cycle_scale_device_setting(int index) {
   const core::ScaleSettingDesc d = scale_->device_setting(index);
   if (d.option_count <= 0 || d.read_only) return;
   const int cur = scale_->device_setting_value(index);
-  // -1 ("--": not read back yet, or a value we don't offer) starts the cycle
-  // at the first option rather than guessing.
-  const int next = (cur < 0 || cur + 1 >= d.option_count) ? 0 : cur + 1;
+  // Cycle only through the WRITABLE options (some values display but can't
+  // be set over BLE — writable_count). -1 ("--": not read back yet, or a
+  // value we don't offer) starts at the first option rather than guessing.
+  const int writable = (d.writable_count > 0 && d.writable_count < d.option_count)
+                           ? d.writable_count
+                           : d.option_count;
+  const int next = (cur < 0 || cur + 1 >= writable) ? 0 : cur + 1;
   scale_->set_device_setting(index, next);
   update_scale_view();  // show the optimistic value now, not next refresh
 }

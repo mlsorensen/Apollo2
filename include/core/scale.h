@@ -36,6 +36,10 @@ struct ScaleSettingDesc {
   int option_count;
   bool read_only;  // reported by the scale but not settable over BLE
                    // (e.g. the Lunar's weighing mode)
+  int writable_count;  // 0 = every option is writable; otherwise only the
+                       // first N are — the rest is readback vocabulary (e.g.
+                       // the Lunar reports beep volumes 0-3 but its firmware
+                       // only accepts 0/1 over BLE; its buttons set 2-3)
 };
 
 // Descriptor slots a model may expose (bounds UI rows and link-side caches).

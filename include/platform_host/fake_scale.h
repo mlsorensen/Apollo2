@@ -50,7 +50,9 @@ class FakeScale : public core::IScale {
                                              "5 Espr + timer", "6 Auto-tare"};
     static constexpr const char* kBeepVol[] = {"Off", "1", "2", "3"};
     if (i == 0)
-      return lunar_ ? core::ScaleSettingDesc{"Beep", kBeepVol, 4}
+      return lunar_ ? core::ScaleSettingDesc{"Beep", kBeepVol, 4,
+                                             /*read_only=*/false,
+                                             /*writable_count=*/2}
              : umbra_ ? core::ScaleSettingDesc{"Beep", kOnOff, 2}
                       : core::ScaleSettingDesc{"Beep", kGear, 5};
     if (i == 1)
