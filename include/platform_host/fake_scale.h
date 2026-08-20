@@ -45,14 +45,15 @@ class FakeScale : public core::IScale {
                                                   "10 min", "30 min"};
     static constexpr const char* kLunarSleep[] = {"Off",    "5 min",  "10 min",
                                                   "20 min", "30 min", "60 min"};
-    static constexpr const char* kModes[] = {"1 Weighing",  "2 Dual display",
-                                             "3 Pour over", "4 Espresso",
-                                             "5 Espr + timer", "6 Auto-tare"};
+    static constexpr const char* kModes[] = {"1 - Weighing",  "2 - Dual display",
+                                             "3 - Pour over", "4 - Espresso",
+                                             "5 - Espr + timer", "6 - Auto-tare"};
     static constexpr const char* kBeepVol[] = {"Off", "1", "2", "3"};
     if (i == 0)
       return lunar_ ? core::ScaleSettingDesc{"Beep", kBeepVol, 4,
                                              /*read_only=*/false,
-                                             /*writable_count=*/2}
+                                             /*writable_count=*/2,
+                                             /*nonzero_confirms=*/true}
              : umbra_ ? core::ScaleSettingDesc{"Beep", kOnOff, 2}
                       : core::ScaleSettingDesc{"Beep", kGear, 5};
     if (i == 1)

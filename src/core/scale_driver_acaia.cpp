@@ -88,12 +88,12 @@ constexpr uint8_t kPyxisUnitWire[] = {2, 5};
 constexpr float kOzToGrams = 28.3495f;
 
 constexpr const char* kBeepLabels[] = {"Off", "On"};
-// Lunar 2021 (and its GATT siblings): beep is a VOLUME — the scale's docs
-// say Off/1/2/3 (default 2, 3 loudest) and the status reports the level, but
-// over BLE the firmware honors only 0/1 (the vendor app's vocabulary):
-// writes of 2/3 are silently ignored (HW-verified — they revert on
-// readback). So all four values DISPLAY, and only Off/1 are writable; 2-3
-// come from the scale's own buttons.
+// Lunar 2021 (and its GATT siblings): the beep STORES a volume (docs:
+// Off/1/2/3, default 2) and the status reports it, but the BLE write is a
+// TOGGLE — HW-verified: writing any nonzero re-enables the beep at the
+// STORED volume (writes of 2/3 don't set levels; only the scale's buttons
+// do), and the status then reports that volume. So all four values display,
+// the tap cycle is Off/on, and a nonzero readback confirms a nonzero write.
 constexpr const char* kBeepVolLabels[] = {"Off", "1", "2", "3"};
 // Umbra auto-off, sleep variants only, re-sorted for display (wire order is
 // historical: 0=off, 1/2/3=sleep 5/10/30 m, 7=sleep 1 m). The wire also has
@@ -110,16 +110,17 @@ constexpr const char* kUnitLabels[] = {"g", "oz"};
 // Weighing mode, Lunar/Pyxis only (status payload[3] & 0x7F): reported but
 // NOT settable over BLE — there is no mode write in the protocol, so the row
 // is read-only. The Umbra status carries no mode byte at all.
-constexpr const char* kModeLabels[] = {"1 Weighing",  "2 Dual display",
-                                       "3 Pour over", "4 Espresso",
-                                       "5 Espr + timer", "6 Auto-tare"};
+constexpr const char* kModeLabels[] = {"1 - Weighing",  "2 - Dual display",
+                                       "3 - Pour over", "4 - Espresso",
+                                       "5 - Espr + timer", "6 - Auto-tare"};
 constexpr ScaleSettingDesc kUmbraSettings[] = {
     {"Beep", kBeepLabels, 2},
     {"Auto sleep", kUmbraSleepLabels, 5},
     {"Unit", kUnitLabels, 2},
 };
 constexpr ScaleSettingDesc kPyxisSettings[] = {
-    {"Beep", kBeepVolLabels, 4, /*read_only=*/false, /*writable_count=*/2},
+    {"Beep", kBeepVolLabels, 4, /*read_only=*/false, /*writable_count=*/2,
+     /*nonzero_confirms=*/true},
     {"Auto sleep", kPyxisSleepLabels, 6},
     {"Unit", kUnitLabels, 2},
     {"Mode", kModeLabels, 6, /*read_only=*/true},

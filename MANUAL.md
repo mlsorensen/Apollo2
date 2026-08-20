@@ -235,11 +235,11 @@ appear — and their value choices — depends on the scale model:
   additionally set *power‑off* timers; those aren't offered here (a
   powered‑off scale can't be woken over Bluetooth) and show as `--` if set
   elsewhere.
-- **Acaia Lunar / Pyxis** — **Beep** — the scale stores a volume (Off /
-  1–3) and the row shows it, but over Bluetooth the scale only accepts
-  **Off** and **1** (levels 2–3 are set from the scale's own buttons; even
-  the Acaia app can only toggle on/off). Tapping cycles Off / 1. Then
-  **Auto sleep**
+- **Acaia Lunar / Pyxis** — **Beep** — the row shows the beep volume the
+  scale stores (Off / 1–3), but over Bluetooth the beep can only be toggled:
+  tapping cycles **off** and **on**, and *on* restores whatever volume was
+  last set with the scale's own buttons (Bluetooth can't set a level — even
+  the Acaia app is on/off only). Then **Auto sleep**
   (Off / 5–60 min), **Unit** (g / oz), and **Mode** — the scale's current
   weighing mode, shown for reference only (the Acaia protocol has no way to
   change mode remotely; use the scale's buttons).

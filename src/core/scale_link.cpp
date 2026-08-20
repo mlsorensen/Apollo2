@@ -96,8 +96,19 @@ void ScaleLink::on_device_setting(int index, int option_idx) {
   // expiry accepts the scale's word — it owns the value.
   if (pending_setting_[index].load() >= 0) return;
   if (setting_grace_until_ms_[index] != 0) {
-    if (option_idx == setting_value_[index]) {
-      setting_grace_until_ms_[index] = 0;  // confirmed
+    // Toggle-semantics settings (desc.nonzero_confirms — e.g. the Lunar's
+    // beep) confirm on on/off AGREEMENT, not equality: writing "on" (1) makes
+    // the scale re-enable its STORED volume and report that, so readback 3
+    // after writing 1 is success — adopt the richer reported value.
+    const bool toggle =
+        driver_ && index < driver_->device_setting_count() &&
+        driver_->device_setting(index).nonzero_confirms;
+    const bool confirmed =
+        toggle ? (option_idx == 0) == (setting_value_[index] == 0)
+               : option_idx == setting_value_[index];
+    if (confirmed) {
+      setting_grace_until_ms_[index] = 0;
+      setting_value_[index] = option_idx;
       return;
     }
     if (static_cast<int32_t>(now_ms() - setting_grace_until_ms_[index]) < 0)

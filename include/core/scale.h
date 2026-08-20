@@ -40,6 +40,11 @@ struct ScaleSettingDesc {
                        // first N are — the rest is readback vocabulary (e.g.
                        // the Lunar reports beep volumes 0-3 but its firmware
                        // only accepts 0/1 over BLE; its buttons set 2-3)
+  bool nonzero_confirms;  // the write is an on/off TOGGLE whose readback is a
+                          // richer stored value (Lunar beep: writing 1 means
+                          // "on", the scale re-enables its stored volume and
+                          // reports THAT) — any nonzero readback confirms a
+                          // nonzero write, and the reported value is adopted
 };
 
 // Descriptor slots a model may expose (bounds UI rows and link-side caches).
