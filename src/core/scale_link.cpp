@@ -372,7 +372,13 @@ void ScaleLink::do_scan() {
   if (peer_pause_) { peer_pause_(true); sleep_ms(300); }
   std::vector<ScanResult> found;
   for (const ScanResult& r : ble_.scan(5000)) {
-    if (!scale_name_supported(r.name)) continue;  // Bookoo + Acaia families
+    if (!scale_name_supported(r.name)) {
+      // Logged so an unsupported scale's advertised name can be read off the
+      // Log page instead of guessed at — new models keep appearing with
+      // names the filter doesn't know yet.
+      logf("ScaleLink: scan skipped '%s' (%d dBm)\n", r.name, r.rssi);
+      continue;
+    }
     found.push_back(r);
   }
   if (peer_pause_) peer_pause_(false);
