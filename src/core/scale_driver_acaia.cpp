@@ -65,8 +65,41 @@ constexpr uint8_t kHeader2 = 0xDD;
 constexpr uint8_t kMsgSystem = 0;     // cmd-0 "alive" heartbeat (Pearl-era)
 constexpr uint8_t kMsgTare = 4;
 constexpr uint8_t kMsgGetStatus = 6;  // status request (battery lives there)
+constexpr uint8_t kMsgSetting = 10;   // settings write: 00, setting id, value
 constexpr uint8_t kMsgIdentify = 11;
 constexpr uint8_t kMsgEvent = 12;     // out: notification request; in: events
+
+// On-scale settings (see ScaleSettingDesc), readable from the status frame
+// and written with cmd 10. The two GATT generations use DIFFERENT setting-id
+// spaces and different status-payload offsets (goscale umbra/ vs lunar/):
+//   Umbra:       sleep id 6 (status payload[2]), beep id 7 (payload[3])
+//   Lunar/Pyxis: sleep id 1 (status payload[4]), beep id 5 (payload[6])
+constexpr uint8_t kUmbraSettingSleep = 6;
+constexpr uint8_t kUmbraSettingBeep = 7;
+constexpr uint8_t kPyxisSettingSleep = 1;
+constexpr uint8_t kPyxisSettingBeep = 5;
+
+constexpr const char* kBeepLabels[] = {"Off", "On"};
+// Umbra auto-off, sleep variants only, re-sorted for display (wire order is
+// historical: 0=off, 1/2/3=sleep 5/10/30 m, 7=sleep 1 m). The wire also has
+// power-off variants 4/5/6 — deliberately NOT offered: a powered-off scale
+// stops advertising, which would turn the Home card's "Sleeping / connect to
+// wake" promise into a lie. One set from elsewhere reads back as -1 ("--").
+constexpr const char* kUmbraSleepLabels[] = {"Off", "1 min", "5 min",
+                                             "10 min", "30 min"};
+constexpr uint8_t kUmbraSleepWire[] = {0, 7, 1, 2, 3};
+// Lunar/Pyxis auto-off: wire order is already the display order.
+constexpr const char* kPyxisSleepLabels[] = {"Off", "5 min", "10 min",
+                                             "20 min", "30 min", "60 min"};
+constexpr ScaleSettingDesc kUmbraSettings[] = {
+    {"Beep", kBeepLabels, 2},
+    {"Auto sleep", kUmbraSleepLabels, 5},
+};
+constexpr ScaleSettingDesc kPyxisSettings[] = {
+    {"Beep", kBeepLabels, 2},
+    {"Auto sleep", kPyxisSleepLabels, 6},
+};
+enum { kSettingBeep = 0, kSettingSleep = 1 };
 
 // Incoming command ids + event subtypes (event msgType = notif-request id + 5:
 // weight 0 -> 5, battery 1 -> 6, timer 2 -> 7).
@@ -143,14 +176,11 @@ class AcaiaDriver : public IScaleDriver {
   }
 
   ScaleFeatures features() const override {
-    // Beep IS settable on the Umbra (encode(10,[0,7,v])) — off until the UI
-    // grows a control for it.
     const bool umbra = gen_ == Gen::kUmbra || (gen_ == Gen::kUnknown && umbra_hint_);
     return ScaleFeatures{.tare = true,
                          .flow = true,
                          .timer = true,
                          .battery = true,
-                         .beep = false,
                          .sleep = umbra};
   }
 
@@ -285,8 +315,44 @@ class AcaiaDriver : public IScaleDriver {
     send(ble, buf, encode(kMsgTare, kZero, sizeof(kZero), buf));
   }
 
+  // Legacy gen: no known settings protocol -> nothing exposed. Before the
+  // first connect (Gen::kUnknown) the name hint picks the table, like
+  // features() — the two generations' rows happen to line up anyway.
+  int device_setting_count() const override {
+    return gen_ == Gen::kLegacy ? 0 : 2;
+  }
+
+  ScaleSettingDesc device_setting(int i) const override {
+    if (i < 0 || i >= device_setting_count()) return ScaleSettingDesc{};
+    return umbra_tables() ? kUmbraSettings[i] : kPyxisSettings[i];
+  }
+
+  void set_device_setting(ble::ICentral& ble, int index, int option_idx) override {
+    if (gen_ == Gen::kLegacy || gen_ == Gen::kUnknown) return;  // need the real gen
+    const bool umbra = gen_ == Gen::kUmbra;
+    uint8_t id, value;
+    if (index == kSettingBeep && option_idx >= 0 && option_idx <= 1) {
+      id = umbra ? kUmbraSettingBeep : kPyxisSettingBeep;
+      value = static_cast<uint8_t>(option_idx);
+    } else if (index == kSettingSleep && option_idx >= 0 &&
+               option_idx < device_setting(kSettingSleep).option_count) {
+      id = umbra ? kUmbraSettingSleep : kPyxisSettingSleep;
+      value = umbra ? kUmbraSleepWire[option_idx]
+                    : static_cast<uint8_t>(option_idx);
+    } else {
+      return;
+    }
+    const uint8_t payload[3] = {0x00, id, value};
+    uint8_t buf[8];
+    send(ble, buf, encode(kMsgSetting, payload, sizeof(payload), buf));
+  }
+
  private:
   enum class Gen { kUnknown, kUmbra, kPyxis, kLegacy };
+
+  bool umbra_tables() const {
+    return gen_ == Gen::kUmbra || (gen_ == Gen::kUnknown && umbra_hint_);
+  }
 
   const char* write_uuid() const {
     switch (gen_) {
@@ -428,6 +494,19 @@ class AcaiaDriver : public IScaleDriver {
       // the mask is harmless there). The Umbra pushes one of these ~every
       // 850 ms on its own — battery needs no polling or event registration.
       if (n >= 2) sink.on_battery(payload[1] & 0x7F);
+      // On-scale settings ride in the same blob, at generation-specific
+      // offsets (see the setting-id table up top).
+      if (gen_ == Gen::kUmbra && n >= 4) {
+        sink.on_device_setting(kSettingBeep, payload[3] <= 1 ? payload[3] : -1);
+        int sleep_idx = -1;
+        for (int i = 0; i < 5; ++i) {
+          if (payload[2] == kUmbraSleepWire[i]) sleep_idx = i;
+        }
+        sink.on_device_setting(kSettingSleep, sleep_idx);
+      } else if (gen_ == Gen::kPyxis && n >= 7) {
+        sink.on_device_setting(kSettingBeep, payload[6] <= 1 ? payload[6] : -1);
+        sink.on_device_setting(kSettingSleep, payload[4] <= 5 ? payload[4] : -1);
+      }
       // Re-arm the event registration off the back of the status reply. On
       // Lunar/Pyxis that is every ~2 s for the life of the link, because our
       // own poll sets the cadence. The Umbra pushes status every ~850 ms

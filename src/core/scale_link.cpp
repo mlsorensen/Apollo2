@@ -39,6 +39,13 @@ void ScaleLink::set_connected(bool c) {
   std::lock_guard<std::mutex> lk(mutex_);
   connected_ = c;
   if (!c) weight_g_ = 0.0f;
+  // Either edge invalidates the on-scale settings cache: a fresh link must
+  // re-read them (the scale may have been adjusted while away), and posted
+  // writes must not fire on some future reconnect the user didn't ask for.
+  for (int i = 0; i < kMaxScaleSettings; ++i) {
+    setting_value_[i] = -1;
+    pending_setting_[i].store(-1);
+  }
 }
 
 void ScaleLink::on_weight(float grams) {
@@ -56,6 +63,16 @@ void ScaleLink::on_battery(int pct) {
   std::lock_guard<std::mutex> lk(mutex_);
   battery_pct_ = pct;
   battery_valid_ = true;
+}
+
+void ScaleLink::on_device_setting(int index, int option_idx) {
+  if (index < 0 || index >= kMaxScaleSettings) return;
+  std::lock_guard<std::mutex> lk(mutex_);
+  // A posted write wins over readback until it's flushed: the scale's frames
+  // keep reporting the OLD value between tap and write, and letting them land
+  // would snap the label back for a beat.
+  if (pending_setting_[index].load() >= 0) return;
+  setting_value_[index] = option_idx;
 }
 
 void ScaleLink::run() {
@@ -127,6 +144,14 @@ void ScaleLink::run() {
     } else if (retare && drv) {
       retare = false;
       drv->tare(ble_);
+    }
+
+    // Posted on-scale setting writes (UI thread -> here, like tare).
+    if (drv) {
+      for (int i = 0; i < kMaxScaleSettings; ++i) {
+        const int v = pending_setting_[i].exchange(-1);
+        if (v >= 0) drv->set_device_setting(ble_, i, v);
+      }
     }
 
     // Driver housekeeping: heartbeats, stream watchdogs. false = link is dead.
@@ -207,11 +232,38 @@ ScaleFeatures ScaleLink::features() const {
                        .flow = true,
                        .timer = true,
                        .battery = true,
-                       .beep = false,
                        .sleep = false};
 }
 
 void ScaleLink::tare() { pending_tare_.store(true); }
+
+int ScaleLink::device_setting_count() const {
+  std::lock_guard<std::mutex> lk(mutex_);
+  // driver_ is classified eagerly from the saved name (set_name), so the
+  // descriptors answer while disconnected — only values need the link.
+  return driver_ ? driver_->device_setting_count() : 0;
+}
+
+ScaleSettingDesc ScaleLink::device_setting(int index) const {
+  std::lock_guard<std::mutex> lk(mutex_);
+  if (!driver_ || index < 0 || index >= driver_->device_setting_count())
+    return ScaleSettingDesc{};
+  return driver_->device_setting(index);
+}
+
+int ScaleLink::device_setting_value(int index) const {
+  if (index < 0 || index >= kMaxScaleSettings) return -1;
+  std::lock_guard<std::mutex> lk(mutex_);
+  const int pending = pending_setting_[index].load();
+  return pending >= 0 ? pending : setting_value_[index];
+}
+
+void ScaleLink::set_device_setting(int index, int option_idx) {
+  if (index < 0 || index >= kMaxScaleSettings || option_idx < 0) return;
+  std::lock_guard<std::mutex> lk(mutex_);
+  if (!connected_) return;  // the scale owns the value; nothing to queue for
+  pending_setting_[index].store(option_idx);
+}
 
 void ScaleLink::request_scan() {
   scanning_.store(true);        // reflect immediately in the UI

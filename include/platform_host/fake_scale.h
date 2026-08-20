@@ -27,10 +27,35 @@ class FakeScale : public core::IScale {
                                .flow = true,
                                .timer = true,
                                .battery = true,
-                               .beep = true,
                                .sleep = umbra_};
   }
   void tare() override {}
+
+  // On-scale settings, canned per persona: the Bookoo exposes its 0-5 buzzer
+  // gear, the Umbra a Beep on/off — both with an auto-off timer.
+  int device_setting_count() const override { return 2; }
+  core::ScaleSettingDesc device_setting(int i) const override {
+    static constexpr const char* kGear[] = {"Off", "1", "2", "3", "4", "5"};
+    static constexpr const char* kOnOff[] = {"Off", "On"};
+    static constexpr const char* kBookooOff[] = {"5 min", "10 min", "15 min",
+                                                 "20 min", "30 min"};
+    static constexpr const char* kUmbraSleep[] = {"Off", "1 min", "5 min",
+                                                  "10 min", "30 min"};
+    if (i == 0)
+      return umbra_ ? core::ScaleSettingDesc{"Beep", kOnOff, 2}
+                    : core::ScaleSettingDesc{"Beep", kGear, 6};
+    if (i == 1)
+      return umbra_ ? core::ScaleSettingDesc{"Auto sleep", kUmbraSleep, 5}
+                    : core::ScaleSettingDesc{"Auto-off", kBookooOff, 5};
+    return core::ScaleSettingDesc{};
+  }
+  int device_setting_value(int i) const override {
+    return (i >= 0 && i < 2) ? setting_value_[i] : -1;
+  }
+  void set_device_setting(int i, int v) override {
+    if (i >= 0 && i < 2 && v >= 0 && v < device_setting(i).option_count)
+      setting_value_[i] = v;
+  }
 
   void set_connected(bool c) { connected_ = c; }
   // Umbra persona: sleep-capable scale, for rendering the "Sleeping" Home state.
@@ -39,6 +64,7 @@ class FakeScale : public core::IScale {
  private:
   bool connected_ = true;
   bool umbra_ = false;
+  int setting_value_[2] = {3, 2};  // Beep gear 3 / Auto-off 15 min (Bookoo)
 };
 
 }  // namespace host

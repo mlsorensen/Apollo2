@@ -668,6 +668,51 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_t* rs = make_setting_row(out.scale_settings_page, "Oscilloscope graph", font);
     out.scope_graph_switch = lv_switch_create(rs);
     lv_obj_set_size(out.scope_graph_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
+
+    // "On the scale" group: the settings the scale itself stores. Built to
+    // the maximum slot count; update_scale_view() fills labels/values from
+    // the saved model's descriptors and shows/hides per state (pairing hint /
+    // connect prompt / live rows), so nothing here needs to know models.
+    out.scale_dev_caption = lv_label_create(out.scale_settings_page);
+    lv_label_set_text(out.scale_dev_caption, "ON THE SCALE");
+    lv_obj_set_style_text_color(out.scale_dev_caption, lv_color_hex(ui::theme::muted()), 0);
+    lv_obj_set_style_text_font(out.scale_dev_caption, ui::font_dp(14), 0);
+    lv_obj_set_style_pad_top(out.scale_dev_caption, ui::dp(10), 0);
+    lv_obj_set_width(out.scale_dev_caption, lv_pct(100));
+    out.scale_dev_hint = lv_label_create(out.scale_settings_page);
+    lv_label_set_text(out.scale_dev_hint, "Pair a scale to adjust its settings");
+    lv_obj_set_style_text_color(out.scale_dev_hint, lv_color_hex(ui::theme::muted()), 0);
+    lv_obj_set_style_text_font(out.scale_dev_hint, font, 0);
+    lv_obj_set_width(out.scale_dev_hint, lv_pct(100));
+    lv_label_set_long_mode(out.scale_dev_hint, LV_LABEL_LONG_WRAP);
+    out.scale_dev_connect_row =
+        make_setting_row(out.scale_settings_page, "Connect to adjust", font);
+    out.scale_dev_connect_btn = ui::make_button(out.scale_dev_connect_row);
+    lv_obj_set_height(out.scale_dev_connect_btn, btn_size);
+    lv_obj_set_style_pad_hor(out.scale_dev_connect_btn, ui::dp(14), 0);
+    lv_obj_set_style_bg_color(out.scale_dev_connect_btn, lv_color_hex(ui::theme::accent()), 0);
+    out.scale_dev_connect_label = lv_label_create(out.scale_dev_connect_btn);
+    lv_label_set_text(out.scale_dev_connect_label, "Connect");
+    lv_obj_set_style_text_color(out.scale_dev_connect_label, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(out.scale_dev_connect_label, font, 0);
+    lv_obj_center(out.scale_dev_connect_label);
+    for (int i = 0; i < core::kMaxScaleSettings; ++i) {
+      lv_obj_t* row = make_setting_row(out.scale_settings_page, "", font);
+      out.scale_dev_rows[i] = row;
+      out.scale_dev_labels[i] = lv_obj_get_child(row, 0);
+      out.scale_dev_btns[i] = ui::make_button(row);
+      lv_obj_set_height(out.scale_dev_btns[i], btn_size);
+      lv_obj_set_style_pad_hor(out.scale_dev_btns[i], ui::dp(14), 0);
+      lv_obj_set_style_bg_color(out.scale_dev_btns[i], lv_color_hex(ui::theme::card()), 0);
+      lv_obj_set_style_opa(out.scale_dev_btns[i], LV_OPA_40, LV_STATE_DISABLED);
+      out.scale_dev_values[i] = lv_label_create(out.scale_dev_btns[i]);
+      lv_obj_set_style_text_color(out.scale_dev_values[i], lv_color_hex(ui::theme::text()), 0);
+      lv_obj_set_style_text_font(out.scale_dev_values[i], font, 0);
+      lv_obj_center(out.scale_dev_values[i]);
+      lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN);
+    }
+    lv_obj_add_flag(out.scale_dev_hint, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(out.scale_dev_connect_row, LV_OBJ_FLAG_HIDDEN);
   }
 
   // Device leaves

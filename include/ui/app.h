@@ -60,6 +60,9 @@ class App {
   // Bound to UI events:
   void toggle_power();         // power button
   void tare_scale();           // Home "Tare" button
+  // Scale > Settings "On the scale" rows: advance descriptor slot `index` to
+  // its next option (writes to the scale; refused offline or mid-shot).
+  void cycle_scale_device_setting(int index);
   void toggle_flow_units();    // Home graph unit button (g/s <-> g)
   void start_scan();           // Settings "Scan" button
   void save_scanned(int index);  // a result row in the Settings list
@@ -83,6 +86,7 @@ class App {
   void set_ntp_enabled(bool on);    // Device "Auto time (NTP)" switch
   void dismiss_modal();        // token-modal "Cancel"
   void select_settings_section(int section);  // Settings segmented selector
+  void scroll_settings_to_bottom(int section);  // sim: frame a page's tail
   void on_settings_page_shown();  // lv_menu navigated; re-seed time on the Device page
   void brew_adjust(int dir, bool half);  // Brew +/- (half: 0.5 snap, long-press)
   void boiler_adjust(int dir);           // Boiler level +/-

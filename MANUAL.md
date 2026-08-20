@@ -194,7 +194,7 @@ needs the paddle harness, since that's what drives it.
 ### Bluetooth
 
 - **Scan** — searches for supported scales (Bookoo Themis, Acaia Umbra /
-  Lunar / Prochef / Pyxis — Pyxis untested). Wake the scale first — most
+  Lunar / Prochef / Pyxis, Varia Aku — Pyxis and Aku untested). Wake the scale first — most
   sleep their Bluetooth quickly.
 - **Saved scale row** — **Connect / Disconnect** and **Forget** (no token
   needed for scales).
@@ -220,6 +220,29 @@ needs the paddle harness, since that's what drives it.
   bumps, scale noise) to zero on the graph.
 - **Oscilloscope graph** *(default on)* — the shot graph sweeps left→right and
   wraps, oscilloscope style. Off, it scrolls continuously instead.
+
+#### On the scale
+
+Below the rows above sits an **On the scale** group: settings stored on the
+scale itself, adjusted over Bluetooth. Which rows appear — and their value
+choices — depends on the scale model:
+
+- **Bookoo Themis** — **Beep** (buzzer level Off / 1–5) and **Auto‑off**
+  (5–30 min).
+- **Acaia Umbra** — **Beep** (On / Off; also silences its tare/timer chirps)
+  and **Auto sleep** (Off / 1–30 min). The Acaia app can additionally set
+  *power‑off* timers; those aren't offered here (a powered‑off scale can't be
+  woken over Bluetooth) and show as `--` if set elsewhere.
+- **Acaia Lunar / Pyxis** — **Beep** (On / Off) and **Auto sleep**
+  (Off / 5–60 min).
+- **Varia Aku** — none (its protocol only streams weight).
+
+The scale owns these values: the rows show what it reports, so they read `--`
+until the scale is connected (a **Connect** prompt appears right in the group
+when it isn't — no scale paired yet, the group points you to Bluetooth
+instead). Tap a value to advance to the next choice; the write goes to the
+scale immediately and sticks like any change made from the scale's own
+buttons. Like Tare, these rows are disabled while a shot is running.
 
 ### Per‑scale nuances & recommended daily workflow
 
