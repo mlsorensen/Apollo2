@@ -35,7 +35,7 @@ class FakeScale : public core::IScale {
   // gear, the Umbra a Beep on/off — both with an auto-off timer.
   int device_setting_count() const override { return 2; }
   core::ScaleSettingDesc device_setting(int i) const override {
-    static constexpr const char* kGear[] = {"Off", "1", "2", "3", "4", "5"};
+    static constexpr const char* kGear[] = {"Off", "1", "2", "3", "4"};
     static constexpr const char* kOnOff[] = {"Off", "On"};
     static constexpr const char* kBookooOff[] = {"5 min", "10 min", "15 min",
                                                  "20 min", "30 min"};
@@ -43,7 +43,7 @@ class FakeScale : public core::IScale {
                                                   "10 min", "30 min"};
     if (i == 0)
       return umbra_ ? core::ScaleSettingDesc{"Beep", kOnOff, 2}
-                    : core::ScaleSettingDesc{"Beep", kGear, 6};
+                    : core::ScaleSettingDesc{"Beep", kGear, 5};
     if (i == 1)
       return umbra_ ? core::ScaleSettingDesc{"Auto sleep", kUmbraSleep, 5}
                     : core::ScaleSettingDesc{"Auto-off", kBookooOff, 5};

@@ -40,8 +40,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             bool token_modal = false, int theme = 0, int stats_section = -1,
             bool clean_lock = false, int shot_modal_id = -1, int history_ym = 0,
             bool backflush = false, bool log_modal = false,
-            bool unwired_midshot = false, bool toast = false,
-            bool scroll_bottom = false) {
+            bool unwired_midshot = false, bool toast = false) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
@@ -52,10 +51,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   app.build(machine, provisioner, battery, disp_settings, clock, history, scale,
             scale_provisioner, brew, network, fake_sound, shots, screen);
   app.show_tab(tab);
-  if (settings_section >= 0) {
-    app.select_settings_section(settings_section);
-    if (scroll_bottom) app.scroll_settings_to_bottom(settings_section);
-  }
+  if (settings_section >= 0) app.select_settings_section(settings_section);
   if (stats_section >= 0) app.select_stats_section(stats_section);
   if (history_ym != 0) app.set_history_filter(history_ym);
   if (token_modal) app.open_token_setup();
@@ -96,11 +92,11 @@ int main() {
                bool modal = false, int theme = 0, int stats = -1, bool clean_lock = false,
                int shot_id = -1, int history_ym = 0, bool backflush = false,
                bool log_modal = false, bool unwired_midshot = false,
-               bool toast = false, bool scroll_bottom = false) {
+               bool toast = false) {
     return render(machine, provisioner, battery, disp, clock, history, scale,
                   scale_provisioner, brew, network, shots, s, path, tab, sec, modal, theme,
                   stats, clean_lock, shot_id, history_ym, backflush, log_modal,
-                  unwired_midshot, toast, scroll_bottom);
+                  unwired_midshot, toast);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
@@ -176,17 +172,14 @@ int main() {
   ok &= r({800, 480}, "renders/micra_cleaning_800x480.png", 1, ui::kSectionMicraCleaning);
   ok &= r({320, 240}, "renders/scale_bt_320x240.png", 1, ui::kSectionScaleBt);
   ok &= r({320, 240}, "renders/scale_settings_320x240.png", 1, ui::kSectionScaleSettings);
-  // Scrolled to the tail so the "On the scale" group (beep / auto-off, stored
-  // on the scale) is in frame.
-  ok &= r({800, 480}, "renders/scale_settings_800x480.png", 1, ui::kSectionScaleSettings,
-          false, 0, -1, false, -1, 0, false, false, false, false, true);
-  // Saved scale with the link down: the "On the scale" rows disable ("--")
-  // behind the Connect prompt.
+  ok &= r({800, 480}, "renders/scale_settings_800x480.png", 1, ui::kSectionScaleSettings);
+  // Scale > Device settings (stored on the scale): live values, and the
+  // link-down state where the rows disable ("--") behind a Connect prompt.
+  ok &= r({800, 480}, "renders/scale_device_800x480.png", 1, ui::kSectionScaleDevice);
   scale.set_connected(false);
   scale_provisioner.set_connect_enabled(false);
-  ok &= r({800, 480}, "renders/scale_settings_disc_800x480.png", 1,
-          ui::kSectionScaleSettings, false, 0, -1, false, -1, 0, false, false,
-          false, false, true);
+  ok &= r({800, 480}, "renders/scale_device_disc_800x480.png", 1,
+          ui::kSectionScaleDevice);
   scale_provisioner.set_connect_enabled(true);
   scale.set_connected(true);
   ok &= r({800, 480}, "renders/micra_bt_800x480.png", 1, ui::kSectionMicraBt);

@@ -510,7 +510,8 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   out.micra_bt_page = lv_menu_page_create(menu, "Bluetooth");
   out.micra_controls_page = lv_menu_page_create(menu, "Controls");
   out.scale_bt_page = lv_menu_page_create(menu, "Bluetooth");
-  out.scale_settings_page = lv_menu_page_create(menu, "Settings");
+  out.scale_settings_page = lv_menu_page_create(menu, "Shot settings");
+  out.scale_device_page = lv_menu_page_create(menu, "Device settings");
   out.device_display_page = lv_menu_page_create(menu, "Display");
   out.device_time_page = lv_menu_page_create(menu, "Time & date");
   out.device_wifi_page = lv_menu_page_create(menu, "WiFi");
@@ -518,6 +519,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   page_column(out.micra_controls_page, compact);
   page_column(out.scale_bt_page, compact);
   page_column(out.scale_settings_page, compact);
+  page_column(out.scale_device_page, compact);
   page_column(out.device_display_page, compact);
   page_column(out.device_time_page, compact);
   page_column(out.device_wifi_page, compact);
@@ -669,24 +671,21 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     out.scope_graph_switch = lv_switch_create(rs);
     lv_obj_set_size(out.scope_graph_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 
-    // "On the scale" group: the settings the scale itself stores. Built to
-    // the maximum slot count; update_scale_view() fills labels/values from
-    // the saved model's descriptors and shows/hides per state (pairing hint /
-    // connect prompt / live rows), so nothing here needs to know models.
-    out.scale_dev_caption = lv_label_create(out.scale_settings_page);
-    lv_label_set_text(out.scale_dev_caption, "ON THE SCALE");
-    lv_obj_set_style_text_color(out.scale_dev_caption, lv_color_hex(ui::theme::muted()), 0);
-    lv_obj_set_style_text_font(out.scale_dev_caption, ui::font_dp(14), 0);
-    lv_obj_set_style_pad_top(out.scale_dev_caption, ui::dp(10), 0);
-    lv_obj_set_width(out.scale_dev_caption, lv_pct(100));
-    out.scale_dev_hint = lv_label_create(out.scale_settings_page);
+  }
+
+  // Scale > Device settings: the settings the scale itself stores. Built to
+  // the maximum slot count; update_scale_view() fills labels/values from the
+  // saved model's descriptors and shows/hides per state (pairing hint /
+  // connect prompt / live rows), so nothing here needs to know models.
+  {
+    out.scale_dev_hint = lv_label_create(out.scale_device_page);
     lv_label_set_text(out.scale_dev_hint, "Pair a scale to adjust its settings");
     lv_obj_set_style_text_color(out.scale_dev_hint, lv_color_hex(ui::theme::muted()), 0);
     lv_obj_set_style_text_font(out.scale_dev_hint, font, 0);
     lv_obj_set_width(out.scale_dev_hint, lv_pct(100));
     lv_label_set_long_mode(out.scale_dev_hint, LV_LABEL_LONG_WRAP);
     out.scale_dev_connect_row =
-        make_setting_row(out.scale_settings_page, "Connect to adjust", font);
+        make_setting_row(out.scale_device_page, "Connect to adjust", font);
     out.scale_dev_connect_btn = ui::make_button(out.scale_dev_connect_row);
     lv_obj_set_height(out.scale_dev_connect_btn, btn_size);
     lv_obj_set_style_pad_hor(out.scale_dev_connect_btn, ui::dp(14), 0);
@@ -697,7 +696,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_set_style_text_font(out.scale_dev_connect_label, font, 0);
     lv_obj_center(out.scale_dev_connect_label);
     for (int i = 0; i < core::kMaxScaleSettings; ++i) {
-      lv_obj_t* row = make_setting_row(out.scale_settings_page, "", font);
+      lv_obj_t* row = make_setting_row(out.scale_device_page, "", font);
       out.scale_dev_rows[i] = row;
       out.scale_dev_labels[i] = lv_obj_get_child(row, 0);
       out.scale_dev_btns[i] = ui::make_button(row);
@@ -733,7 +732,8 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   if (out.micra_cleaning_page != nullptr)
     root_entry(menu, out.micra_page, out.micra_cleaning_page, "Cleaning", font, btn_h);
   root_entry(menu, out.scale_page, out.scale_bt_page, "Bluetooth", font, btn_h);
-  root_entry(menu, out.scale_page, out.scale_settings_page, "Settings", font, btn_h);
+  root_entry(menu, out.scale_page, out.scale_settings_page, "Shot settings", font, btn_h);
+  root_entry(menu, out.scale_page, out.scale_device_page, "Device settings", font, btn_h);
   root_entry(menu, out.device_page, out.device_display_page, "Display", font, btn_h);
   root_entry(menu, out.device_page, out.device_time_page, "Time & date", font, btn_h);
   root_entry(menu, out.device_page, out.device_wifi_page, "WiFi", font, btn_h);
@@ -767,6 +767,7 @@ lv_obj_t* settings_section_page(const SettingsWidgets& w, int section) {
     case kSectionScale:         return w.scale_page;
     case kSectionScaleBt:       return w.scale_bt_page;
     case kSectionScaleSettings: return w.scale_settings_page;
+    case kSectionScaleDevice:   return w.scale_device_page;
     case kSectionDevice:        return w.device_page;
     case kSectionDeviceDisplay: return w.device_display_page;
     case kSectionDeviceTime:    return w.device_time_page;

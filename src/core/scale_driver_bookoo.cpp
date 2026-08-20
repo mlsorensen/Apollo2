@@ -17,12 +17,15 @@ constexpr uint8_t kTareCmd[] = {0x03, 0x0a, 0x01, 0x00, 0x00, 0x08};
 // free and continuous.
 constexpr uint8_t kOpBuzzer = 0x02;
 constexpr uint8_t kOpAutoOff = 0x03;
-constexpr const char* kBuzzerLabels[] = {"Off", "1", "2", "3", "4", "5"};
+// The wire accepts 0-5, but level 5 plays QUIETER than 4 (verified on HW;
+// the vendor doc just says "00~05") — so only 0-4 are offered. A 5 set from
+// the Bookoo app reads back as -1 ("--").
+constexpr const char* kBuzzerLabels[] = {"Off", "1", "2", "3", "4"};
 constexpr const char* kAutoOffLabels[] = {"5 min", "10 min", "15 min",
                                           "20 min", "30 min"};
 constexpr uint8_t kAutoOffMinutes[] = {5, 10, 15, 20, 30};
 constexpr ScaleSettingDesc kSettings[] = {
-    {"Beep", kBuzzerLabels, 6},
+    {"Beep", kBuzzerLabels, 5},
     {"Auto-off", kAutoOffLabels, 5},
 };
 constexpr int kSettingCount = static_cast<int>(sizeof(kSettings) / sizeof(kSettings[0]));
@@ -62,7 +65,7 @@ class BookooDriver : public IScaleDriver {
     // On-scale settings ride along in the same frame: standby minutes in
     // [14..15] (big-endian, tenths of a minute), buzzer gear 0-5 in [16].
     const int gear = d[16];
-    sink.on_device_setting(kSettingBeep, gear <= 5 ? gear : -1);
+    sink.on_device_setting(kSettingBeep, gear <= 4 ? gear : -1);
     const unsigned standby_min = ((static_cast<unsigned>(d[14]) << 8) | d[15]) / 10u;
     int off_idx = -1;
     for (int i = 0; i < 5; ++i) {
@@ -86,7 +89,7 @@ class BookooDriver : public IScaleDriver {
 
   void set_device_setting(ble::ICentral& ble, int index, int option_idx) override {
     uint8_t op, value;
-    if (index == kSettingBeep && option_idx >= 0 && option_idx <= 5) {
+    if (index == kSettingBeep && option_idx >= 0 && option_idx <= 4) {
       op = kOpBuzzer;
       value = static_cast<uint8_t>(option_idx);
     } else if (index == kSettingAutoOff && option_idx >= 0 && option_idx < 5) {

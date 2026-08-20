@@ -2372,11 +2372,6 @@ void App::select_settings_section(int section) {
   if (section == kSectionDeviceTime) seed_time_controls();  // show the current time
 }
 
-void App::scroll_settings_to_bottom(int section) {
-  lv_obj_t* page = ui::settings_section_page(settings_, section);
-  if (page != nullptr) lv_obj_scroll_to_y(page, LV_COORD_MAX, LV_ANIM_OFF);
-}
-
 void App::select_stats_section(int section) {
   stats_select_section(stats_, section);
   update_stats_view();
@@ -3120,12 +3115,12 @@ void App::update_scale_view() {
                      on ? ui::theme::rail() : ui::theme::accent());
   }
 
-  // "On the scale" group (Scale > Settings): discoverable in every state.
+  // Scale > Device settings page: discoverable in every state.
   // Nothing saved -> pairing hint; saved but offline -> the model's rows,
   // disabled with "--", plus a Connect prompt; connected -> live values.
   // Recomputed from live state on every refresh (like the Home shot lockout),
   // so no path can leave a row stuck disabled or a stale value shown.
-  if (settings_.scale_dev_caption != nullptr && scale_ != nullptr) {
+  if (settings_.scale_dev_hint != nullptr && scale_ != nullptr) {
     const auto show = [](lv_obj_t* obj, bool on) {
       if (on == lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN)) {
         if (on)

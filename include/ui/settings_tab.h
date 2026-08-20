@@ -26,7 +26,8 @@ enum SettingsSection {
   kSectionMicraCleaning,   // Micra > Cleaning (flush settings + backflush)
   kSectionScale,           // Scale chooser
   kSectionScaleBt,         // Scale > Bluetooth
-  kSectionScaleSettings,   // Scale > Settings (Target weight)
+  kSectionScaleSettings,   // Scale > Shot settings (target/review/graph)
+  kSectionScaleDevice,     // Scale > Device settings (stored on the scale)
   kSectionDevice,          // Device chooser (Display | Time & date | WiFi)
   kSectionDeviceDisplay,   // Device > Display (brightness/dim/theme/units/sound)
   kSectionDeviceTime,      // Device > Time & date (clock + calendar steppers)
@@ -44,12 +45,12 @@ struct SettingsWidgets {
                                             // (paddle-capable boards only)
   lv_obj_t* scale_page = nullptr;           // chooser: Bluetooth | Settings
   lv_obj_t* scale_bt_page = nullptr;        // connection
-  lv_obj_t* scale_settings_page = nullptr;  // target weight
+  lv_obj_t* scale_settings_page = nullptr;  // shot settings (target/review/graph)
+  lv_obj_t* scale_device_page = nullptr;    // device settings (stored on the scale)
 
-  // Scale > Settings, "On the scale" group: settings the SCALE stores (beep,
-  // auto-off — core::ScaleSettingDesc). One tap-to-cycle row per descriptor
-  // slot; update_scale_view() populates + shows/hides per model and state.
-  lv_obj_t* scale_dev_caption = nullptr;      // muted group caption
+  // Scale > Device settings: the settings the SCALE stores (beep, auto-off —
+  // core::ScaleSettingDesc). One tap-to-cycle row per descriptor slot;
+  // update_scale_view() populates + shows/hides per model and state.
   lv_obj_t* scale_dev_hint = nullptr;         // "Pair a scale..." (none saved)
   lv_obj_t* scale_dev_connect_row = nullptr;  // saved but offline: connect prompt
   lv_obj_t* scale_dev_connect_btn = nullptr;

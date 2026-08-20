@@ -86,7 +86,6 @@ class App {
   void set_ntp_enabled(bool on);    // Device "Auto time (NTP)" switch
   void dismiss_modal();        // token-modal "Cancel"
   void select_settings_section(int section);  // Settings segmented selector
-  void scroll_settings_to_bottom(int section);  // sim: frame a page's tail
   void on_settings_page_shown();  // lv_menu navigated; re-seed time on the Device page
   void brew_adjust(int dir, bool half);  // Brew +/- (half: 0.5 snap, long-press)
   void boiler_adjust(int dir);           // Boiler level +/-

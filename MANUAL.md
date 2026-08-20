@@ -47,7 +47,7 @@ The Home screen adapts to the screen size and to whether a scale is paired.
 - **WEIGHT** — live reading. During a finished shot's review it freezes at the
   net shot weight so lifting the cup doesn't wipe the number you care about.
 - **TARGET** — the brew‑by‑weight stop target in grams (**−/+** on larger
-  screens; also under **Settings → Scale → Settings → Target**).
+  screens; also under **Settings → Scale → Shot settings → Target**).
 - **TIMER** — the shot timer. Runs from the ESP's own clock whenever the
   firmware is the shot authority (Auto shot or Shot detect, and every wired
   shot); in Manual mode without a wire it falls back to the scale's built‑in
@@ -66,7 +66,7 @@ The Home screen adapts to the screen size and to whether a scale is paired.
     paddle now. Detection confirms a few seconds after the first drip; the
     moment it does, the timer, weight and graph snap to the full shot —
     back‑dated to the estimated start, including the **Detect lead‑in**
-    (see **Settings → Scale → Settings**).
+    (see **Settings → Scale → Shot settings**).
   - **Manual**: nothing armed. A wired board still relays the paddle and times
     the shot; otherwise the scale's own timer is shown.
   - While a finished shot is frozen for review the pill reads **Reset** —
@@ -88,7 +88,7 @@ Plots the live flow rate (or weight) from the scale.
 - During a shot the graph restarts and follows the shot; when the shot ends it
   freezes for review (see **Review hold**) and then resumes.
 - The graph style (oscilloscope sweep vs scrolling) and smoothing are set under
-  **Settings → Scale → Settings**.
+  **Settings → Scale → Shot settings**.
 
 ### Shot lifecycle notes (all modes)
 
@@ -199,7 +199,7 @@ needs the paddle harness, since that's what drives it.
 - **Saved scale row** — **Connect / Disconnect** and **Forget** (no token
   needed for scales).
 
-### Settings
+### Shot settings
 
 - **Target** — brew‑by‑weight stop target, 5–120 g. Also editable from Home on
   larger screens.
@@ -221,14 +221,15 @@ needs the paddle harness, since that's what drives it.
 - **Oscilloscope graph** *(default on)* — the shot graph sweeps left→right and
   wraps, oscilloscope style. Off, it scrolls continuously instead.
 
-#### On the scale
+### Device settings
 
-Below the rows above sits an **On the scale** group: settings stored on the
-scale itself, adjusted over Bluetooth. Which rows appear — and their value
-choices — depends on the scale model:
+Settings stored on the scale itself, adjusted over Bluetooth. Which rows
+appear — and their value choices — depends on the scale model:
 
-- **Bookoo Themis** — **Beep** (buzzer level Off / 1–5) and **Auto‑off**
-  (5–30 min).
+- **Bookoo Themis** — **Beep** (buzzer level Off / 1–4) and **Auto‑off**
+  (5–30 min). The scale also accepts a level 5, but its firmware plays it
+  *quieter* than 4, so it isn't offered; a 5 set from the Bookoo app shows
+  as `--`.
 - **Acaia Umbra** — **Beep** (On / Off; also silences its tare/timer chirps)
   and **Auto sleep** (Off / 1–30 min). The Acaia app can additionally set
   *power‑off* timers; those aren't offered here (a powered‑off scale can't be
