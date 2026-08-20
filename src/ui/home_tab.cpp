@@ -437,7 +437,7 @@ void build_tare_button(lv_obj_t* parent, const lv_font_t* font, ui::HomeWidgets&
   out.tare_btn = ui::make_button(parent);
   lv_obj_set_style_bg_color(out.tare_btn, lv_color_hex(ui::theme::card()), 0);
   lv_obj_set_style_radius(out.tare_btn, ui::dp(14), 0);
-  lv_obj_set_style_opa(out.tare_btn, LV_OPA_40, LV_STATE_DISABLED);  // scale gone
+  lv_obj_set_style_opa(out.tare_btn, LV_OPA_40, LV_STATE_DISABLED);  // scale gone / shot running
   out.tare_label = lv_label_create(out.tare_btn);
   lv_label_set_text(out.tare_label, LV_SYMBOL_LOOP "  Tare");
   lv_obj_set_style_text_color(out.tare_label, lv_color_hex(ui::theme::text()), 0);
@@ -736,6 +736,7 @@ void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_set_style_text_color(out.scale_connect_label, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(out.scale_connect_label, action_font, 0);
   lv_obj_center(out.scale_connect_label);
+  lv_obj_set_style_opa(out.scale_connect_btn, LV_OPA_40, LV_STATE_DISABLED);  // shot running
 
   build_tare_button(acts, action_font, out);
   // On the card surface the neutral buttons use the rail tone (card-on-card is
@@ -1199,16 +1200,28 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   }
 
   // In-card scale actions: the connect toggle mirrors the link switch (accent =
-  // "will connect/wake"), and Tare only works with a live link.
+  // "will connect/wake"); Tare needs a live link. Both lock out while a shot
+  // is in flight — a mid-shot tare would shift the baseline the stop math runs
+  // on, and a deliberate disconnect would blind it (an inadvertent drop is
+  // already survived by core's blind grace, and reconnecting is automatic, so
+  // neither button is needed mid-shot). Recomputed from the live snapshot on
+  // every refresh, never latched: however a shot ends — target, paddle cut, or
+  // a scale blackout aborting it in core — the buttons free up on the next tick.
+  const bool shot = core::shot_in_flight(brew);
+  if (w.tare_btn != nullptr) {
+    if (scale.connected && !shot)
+      lv_obj_remove_state(w.tare_btn, LV_STATE_DISABLED);
+    else
+      lv_obj_add_state(w.tare_btn, LV_STATE_DISABLED);
+  }
   if (w.scale_connect_btn != nullptr) {
     ui::set_text(w.scale_connect_label,
                       scale_connect_enabled ? "Disconnect" : "Connect");
     ui::set_bg_color(w.scale_connect_btn, scale_connect_enabled ? ui::theme::rail() : ui::theme::accent());
-    if (scale.connected) {
-      lv_obj_remove_state(w.tare_btn, LV_STATE_DISABLED);
-    } else {
-      lv_obj_add_state(w.tare_btn, LV_STATE_DISABLED);
-    }
+    if (shot)
+      lv_obj_add_state(w.scale_connect_btn, LV_STATE_DISABLED);
+    else
+      lv_obj_remove_state(w.scale_connect_btn, LV_STATE_DISABLED);
   }
 
   // Clock (top-right): "14:30" (24h) or "2:30 PM" (12h); dashes until set.

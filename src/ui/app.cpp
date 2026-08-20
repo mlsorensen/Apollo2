@@ -1497,6 +1497,9 @@ void App::toggle_power() {
 }
 
 void App::tare_scale() {
+  // Refused mid-shot: covers the tap that lands between a shot starting and
+  // the next refresh visibly disabling the button.
+  if (brew_ != nullptr && core::shot_in_flight(brew_->snapshot())) return;
   if (scale_ != nullptr) scale_->tare();
 }
 
@@ -3138,6 +3141,9 @@ void App::forget_scale() {
 
 void App::toggle_scale_connection() {
   if (scale_provisioner_ == nullptr) return;
+  // Same mid-shot refusal as tare_scale — also covers the Settings-tab
+  // Connect/Disconnect button, which shares this path.
+  if (brew_ != nullptr && core::shot_in_flight(brew_->snapshot())) return;
   scale_provisioner_->set_connect_enabled(!scale_provisioner_->connect_enabled());
   update_scale_view();
 }

@@ -76,6 +76,9 @@ The Home screen adapts to the screen size and to whether a scale is paired.
   scales drop single tare commands.)
 - **Disconnect / Connect** — drops or re‑establishes the scale link, e.g. to
   save the scale's battery.
+- Like the shot‑mode pill, **Tare** and **Disconnect** are disabled while a
+  shot is running or settling — either would disturb the weight the stop math
+  runs on. They re‑enable the moment the shot is over, however it ends.
 
 ### Flow graph
 

@@ -163,9 +163,16 @@ inline bool esp_shot_timer(const BrewSnapshot& b) {
 // — raw IS shot grams. kReview excluded: the frozen readout is written once
 // at the freeze (already net). One definition — the label writer (update_home)
 // and the fast writer (pump_scale_chart) must never disagree.
+// True while a shot is in flight: running, or stopped but still capturing the
+// drip tail (kSettling) — the window where the live weight stream must not be
+// disturbed. Taring would shift the baseline the stop/overshoot math runs on;
+// dropping the scale link would blind it.
+inline bool shot_in_flight(const BrewSnapshot& b) {
+  return b.phase == ShotPhase::kBrewing || b.phase == ShotPhase::kSettling;
+}
+
 inline bool unwired_net_weight(const BrewSnapshot& b) {
-  return !b.paddle_wired && b.baseline_set &&
-         (b.phase == ShotPhase::kBrewing || b.phase == ShotPhase::kSettling);
+  return !b.paddle_wired && b.baseline_set && shot_in_flight(b);
 }
 
 class IBrewController {
