@@ -371,7 +371,11 @@ void ScaleLink::do_scan() {
   // sleep lets the cancel land before the scan starts.
   if (peer_pause_) { peer_pause_(true); sleep_ms(300); }
   std::vector<ScanResult> found;
-  for (const ScanResult& r : ble_.scan(5000)) {
+  // 10 s window: the ESP32's radio splits airtime with the live Micra link
+  // (and WiFi) while scanning, and sparse advertisers (Varia Aku) slipped
+  // through 5 s scans that a phone caught instantly. Pairing is a one-time
+  // flow, so the longer wait costs nothing day to day.
+  for (const ScanResult& r : ble_.scan(10000)) {
     if (!scale_name_supported(r.name)) {
       // Logged so an unsupported scale's advertised name can be read off the
       // Log page instead of guessed at — new models keep appearing with
