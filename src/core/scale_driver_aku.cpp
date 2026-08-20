@@ -3,10 +3,13 @@
 #include "core/scale_driver.h"
 #include "core/system.h"
 
-// Varia Aku (per goscale aku/comms). The simplest protocol we support:
-// subscribe FFF1 and weight streams continuously; commands go to FFF2 as
-// write-without-response. No init sequence, no keepalive, and the frames
-// carry nothing but weight — no timer, battery, or settings.
+// Varia Aku ("Varia AKU-MICRO", module EC324-BT). Subscribe FFF1 and it
+// streams unprompted; commands go to FFF2 as write-without-response. No init
+// sequence, no keepalive. Framing (GATT-probed on HW, fw 1.6.05): every
+// frame is FA <op> <len> <payload...> <xor of op..payload>. Report ops seen:
+// 0x01 weight (3-byte payload, ~9 Hz), 0x85 battery percent (1 byte, ~4 s
+// cadence), 0x86 unknown (1 byte, once at connect). Command op: 0x82 tare.
+// No settings traffic observed — nothing to expose.
 
 namespace core {
 namespace {
@@ -26,7 +29,7 @@ class AkuDriver : public IScaleDriver {
     return ScaleFeatures{.tare = true,
                          .flow = true,  // derived from the weight stream
                          .timer = false,
-                         .battery = false,
+                         .battery = true,  // 0x85 report frames
                          .sleep = false};
   }
 
@@ -39,12 +42,22 @@ class AkuDriver : public IScaleDriver {
     return true;
   }
 
-  // Weight-only frame: [1] 0x01 marks a weight update; sign in bit 4 of [3],
-  // magnitude 20-bit big-endian across [3..5] in centigrams.
+  // FA <op> <len> <payload...> <xor>: weight op 0x01 (sign in bit 4 of the
+  // first payload byte, magnitude 20-bit big-endian centigrams), battery
+  // op 0x85 (percent).
   void on_notify(const uint8_t* d, size_t len, IScaleSink& sink) override {
-    if (d == nullptr || len < 6) return;
+    if (d == nullptr || len < 5 || d[0] != 0xFA) return;
     last_rx_ms_.store(now_ms());
-    if (d[1] != 0x01) return;
+    const size_t total = static_cast<size_t>(d[2]) + 4;  // hdr+op+len+..+ck
+    if (len < total) return;
+    uint8_t ck = 0;
+    for (size_t i = 1; i < total - 1; ++i) ck ^= d[i];
+    if (ck != d[total - 1]) return;
+    if (d[1] == 0x85 && d[2] >= 1) {
+      sink.on_battery(d[3] <= 100 ? d[3] : 100);
+      return;
+    }
+    if (d[1] != 0x01 || d[2] < 3) return;
     const int sign = (d[3] & 0x10) ? -1 : 1;
     const uint32_t raw = (static_cast<uint32_t>(d[3] & 0x0F) << 16) |
                          (static_cast<uint32_t>(d[4]) << 8) | d[5];

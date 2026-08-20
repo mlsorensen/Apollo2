@@ -249,7 +249,8 @@ works and displays in grams (an oz‑mode Acaia streams ounces over Bluetooth;
 the firmware converts them back, so brew‑by‑weight targets stay correct).
 Changed values may take a moment to be confirmed by the scale; if a change
 doesn't stick, the row snaps back to what the scale reports.
-- **Varia Aku** — none (its protocol only streams weight).
+- **Varia Aku** — none (no adjustable settings in its protocol; weight and
+  battery only).
 
 The scale owns these values: the rows show what it reports, so they read `--`
 until the scale is connected (a **Connect** prompt appears right in the group
