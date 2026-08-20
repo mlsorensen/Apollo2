@@ -15,6 +15,18 @@ constexpr uint32_t kConnectTimeoutMs = 5000;
 // new -> old -> new. A matching readback ends the grace early; expiry accepts
 // whatever the scale says (a refused write self-corrects, just late).
 constexpr uint32_t kSettingEchoGraceMs = 4000;
+// The Acaia family sometimes ACKS a write yet ignores it — the trait the
+// double tare covers. Settings have readback, so instead of blind doubling,
+// an unconfirmed write is resent at this gap until confirmed or exhausted.
+constexpr int kSettingResends = 2;
+constexpr uint32_t kSettingResendGapMs = 1200;
+// Tap debounce + write spacing, verified against the Lunar on HW: bursts of
+// setting writes get dropped. A tapped value goes out only after it stops
+// changing (so cycling a row writes just the final choice), and writes are
+// never spaced closer than the gap below (the vendor app locks its settings
+// UI for the same 1200 ms after each write).
+constexpr uint32_t kSettingDebounceMs = 400;
+constexpr uint32_t kSettingWriteGapMs = 1200;
 
 }  // namespace
 
@@ -51,6 +63,8 @@ void ScaleLink::set_connected(bool c) {
   for (int i = 0; i < kMaxScaleSettings; ++i) {
     setting_value_[i] = -1;
     setting_grace_until_ms_[i] = 0;
+    retry_value_[i] = -1;
+    retry_left_[i] = 0;
     pending_setting_[i].store(-1);
   }
 }
@@ -164,12 +178,50 @@ void ScaleLink::run() {
       drv->tare(ble_);
     }
 
-    // Posted on-scale setting writes (UI thread -> here, like tare).
+    // Posted on-scale setting writes (UI thread -> here, like tare), with
+    // the pacing the Lunar demands (see the constants above): debounced past
+    // the last tap, at most ONE write per pass, never two writes closer than
+    // kSettingWriteGapMs — and resent while readback still disagrees (the
+    // Acaia family drops acked writes; readback matching zeroes the grace,
+    // which ends the cycle).
     if (drv) {
-      for (int i = 0; i < kMaxScaleSettings; ++i) {
-        const int v = pending_setting_[i].exchange(-1);
-        if (v >= 0) drv->set_device_setting(ble_, i, v);
+      int send_idx = -1, send_val = -1;
+      const uint32_t now = now_ms();
+      {
+        std::lock_guard<std::mutex> lk(mutex_);
+        for (int i = 0; i < kMaxScaleSettings; ++i) {
+          // Confirmation sweep runs unconditionally so a confirmed value
+          // never keeps resending just because the write window was closed.
+          if (retry_value_[i] >= 0 && setting_grace_until_ms_[i] == 0)
+            retry_value_[i] = -1;
+        }
+        if (static_cast<int32_t>(now - next_setting_write_ms_) >= 0) {
+          for (int i = 0; i < kMaxScaleSettings && send_idx < 0; ++i) {
+            const int v = pending_setting_[i].load();
+            if (v >= 0) {
+              if (static_cast<int32_t>(now - (pending_since_ms_[i] +
+                                              kSettingDebounceMs)) < 0)
+                continue;  // still being tapped — only the final value goes out
+              pending_setting_[i].store(-1);
+              send_idx = i;
+              send_val = v;
+              retry_value_[i] = v;  // arm the resend cycle
+              retry_left_[i] = kSettingResends;
+              retry_at_ms_[i] = now + kSettingResendGapMs;
+              setting_grace_until_ms_[i] = now + kSettingEchoGraceMs;
+            } else if (retry_value_[i] >= 0 && retry_left_[i] > 0 &&
+                       static_cast<int32_t>(now - retry_at_ms_[i]) >= 0) {
+              send_idx = i;
+              send_val = retry_value_[i];
+              --retry_left_[i];
+              retry_at_ms_[i] = now + kSettingResendGapMs;
+              setting_grace_until_ms_[i] = now + kSettingEchoGraceMs;
+            }
+          }
+          if (send_idx >= 0) next_setting_write_ms_ = now + kSettingWriteGapMs;
+        }
       }
+      if (send_idx >= 0) drv->set_device_setting(ble_, send_idx, send_val);
     }
 
     // Driver housekeeping: heartbeats, stream watchdogs. false = link is dead.
@@ -280,8 +332,10 @@ void ScaleLink::set_device_setting(int index, int option_idx) {
   if (index < 0 || index >= kMaxScaleSettings || option_idx < 0) return;
   std::lock_guard<std::mutex> lk(mutex_);
   if (!connected_) return;  // the scale owns the value; nothing to queue for
+  const uint32_t now = now_ms();
   setting_value_[index] = option_idx;  // optimistic; see on_device_setting
-  setting_grace_until_ms_[index] = now_ms() + kSettingEchoGraceMs;
+  setting_grace_until_ms_[index] = now + kSettingEchoGraceMs;
+  pending_since_ms_[index] = now;  // restarts the debounce on every tap
   pending_setting_[index].store(option_idx);
 }
 

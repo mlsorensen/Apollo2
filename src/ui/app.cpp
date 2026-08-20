@@ -3147,12 +3147,15 @@ void App::update_scale_view() {
       const int v = connected ? scale_->device_setting_value(i) : -1;
       ui::set_text(settings_.scale_dev_values[i],
                    (v >= 0 && v < d.option_count) ? d.option_labels[v] : "--");
-      // Read-only rows (e.g. the Lunar's Mode) show at full strength — they
-      // are information, not a broken control — but don't take taps.
+      // Read-only rows (e.g. the Lunar's Mode) drop the button chrome
+      // entirely — bare right-aligned text reads as information, while the
+      // card-background chip is the affordance for "tap to change".
       if (d.read_only) {
+        lv_obj_set_style_bg_opa(settings_.scale_dev_btns[i], LV_OPA_TRANSP, 0);
         lv_obj_remove_state(settings_.scale_dev_btns[i], LV_STATE_DISABLED);
         lv_obj_remove_flag(settings_.scale_dev_btns[i], LV_OBJ_FLAG_CLICKABLE);
       } else {
+        lv_obj_set_style_bg_opa(settings_.scale_dev_btns[i], LV_OPA_COVER, 0);
         lv_obj_add_flag(settings_.scale_dev_btns[i], LV_OBJ_FLAG_CLICKABLE);
         if (connected && !shot)
           lv_obj_remove_state(settings_.scale_dev_btns[i], LV_STATE_DISABLED);

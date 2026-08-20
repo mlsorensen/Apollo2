@@ -100,6 +100,13 @@ class ScaleLink : public IScale, public IScaleSink {
   // While non-zero, readback disagreeing with setting_value_ is a stale echo
   // of the pre-write value and is ignored (see on_device_setting).
   uint32_t setting_grace_until_ms_[kMaxScaleSettings] = {0, 0, 0, 0};
+  // Resend cycle for unconfirmed setting writes (Acaia drops acked writes):
+  // the value in flight, sends remaining, and when the next resend is due.
+  int retry_value_[kMaxScaleSettings] = {-1, -1, -1, -1};
+  uint8_t retry_left_[kMaxScaleSettings] = {0, 0, 0, 0};
+  uint32_t retry_at_ms_[kMaxScaleSettings] = {0, 0, 0, 0};
+  uint32_t pending_since_ms_[kMaxScaleSettings] = {0, 0, 0, 0};  // last tap
+  uint32_t next_setting_write_ms_ = 0;  // write spacing (kSettingWriteGapMs)
   std::vector<ScanResult> scan_results_;
 
   std::atomic<bool> connect_enabled_{true};  // scales auto-connect when saved
