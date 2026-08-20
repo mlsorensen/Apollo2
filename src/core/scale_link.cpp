@@ -9,6 +9,12 @@ constexpr uint32_t kReconnectBackoffMs = 3000;
 // the address type, so the transport tries both — a wrong-type attempt at the
 // stack's 30 s default would stall the fallback, so cap it low.
 constexpr uint32_t kConnectTimeoutMs = 5000;
+// After a setting write, ignore readback that still echoes the OLD value for
+// this long: the scale keeps reporting it for a frame or two (Bookoo) up to a
+// full 2 s status-poll cycle (Lunar), and accepting the echo flickered the UI
+// new -> old -> new. A matching readback ends the grace early; expiry accepts
+// whatever the scale says (a refused write self-corrects, just late).
+constexpr uint32_t kSettingEchoGraceMs = 4000;
 
 }  // namespace
 
@@ -44,6 +50,7 @@ void ScaleLink::set_connected(bool c) {
   // writes must not fire on some future reconnect the user didn't ask for.
   for (int i = 0; i < kMaxScaleSettings; ++i) {
     setting_value_[i] = -1;
+    setting_grace_until_ms_[i] = 0;
     pending_setting_[i].store(-1);
   }
 }
@@ -68,10 +75,21 @@ void ScaleLink::on_battery(int pct) {
 void ScaleLink::on_device_setting(int index, int option_idx) {
   if (index < 0 || index >= kMaxScaleSettings) return;
   std::lock_guard<std::mutex> lk(mutex_);
-  // A posted write wins over readback until it's flushed: the scale's frames
-  // keep reporting the OLD value between tap and write, and letting them land
-  // would snap the label back for a beat.
+  // The optimistic value from set_device_setting holds until the scale
+  // CONFIRMS it: while the write is queued or inside the echo grace window,
+  // a readback still reporting the old value is discarded (it flickered the
+  // label new -> old -> new otherwise). Agreement ends the grace early;
+  // expiry accepts the scale's word — it owns the value.
   if (pending_setting_[index].load() >= 0) return;
+  if (setting_grace_until_ms_[index] != 0) {
+    if (option_idx == setting_value_[index]) {
+      setting_grace_until_ms_[index] = 0;  // confirmed
+      return;
+    }
+    if (static_cast<int32_t>(now_ms() - setting_grace_until_ms_[index]) < 0)
+      return;  // stale echo of the pre-write value
+    setting_grace_until_ms_[index] = 0;  // grace over: the write didn't take
+  }
   setting_value_[index] = option_idx;
 }
 
@@ -262,6 +280,8 @@ void ScaleLink::set_device_setting(int index, int option_idx) {
   if (index < 0 || index >= kMaxScaleSettings || option_idx < 0) return;
   std::lock_guard<std::mutex> lk(mutex_);
   if (!connected_) return;  // the scale owns the value; nothing to queue for
+  setting_value_[index] = option_idx;  // optimistic; see on_device_setting
+  setting_grace_until_ms_[index] = now_ms() + kSettingEchoGraceMs;
   pending_setting_[index].store(option_idx);
 }
 

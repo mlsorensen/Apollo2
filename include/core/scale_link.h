@@ -97,6 +97,9 @@ class ScaleLink : public IScale, public IScaleSink {
   // set_device_setting so the UI label moves at tap time; the next readback
   // (Bookoo: every weight frame, Acaia: every status frame) reconciles.
   int setting_value_[kMaxScaleSettings] = {-1, -1, -1, -1};
+  // While non-zero, readback disagreeing with setting_value_ is a stale echo
+  // of the pre-write value and is ignored (see on_device_setting).
+  uint32_t setting_grace_until_ms_[kMaxScaleSettings] = {0, 0, 0, 0};
   std::vector<ScanResult> scan_results_;
 
   std::atomic<bool> connect_enabled_{true};  // scales auto-connect when saved

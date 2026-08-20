@@ -34,6 +34,8 @@ struct ScaleSettingDesc {
   const char* label;                 // row label, e.g. "Beep"
   const char* const* option_labels;  // one label per selectable value
   int option_count;
+  bool read_only;  // reported by the scale but not settable over BLE
+                   // (e.g. the Lunar's weighing mode)
 };
 
 // Descriptor slots a model may expose (bounds UI rows and link-side caches).

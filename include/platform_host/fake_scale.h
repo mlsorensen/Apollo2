@@ -33,7 +33,7 @@ class FakeScale : public core::IScale {
 
   // On-scale settings, canned per persona: the Bookoo exposes its 0-5 buzzer
   // gear, the Umbra a Beep on/off — both with an auto-off timer.
-  int device_setting_count() const override { return 2; }
+  int device_setting_count() const override { return umbra_ ? 3 : 2; }
   core::ScaleSettingDesc device_setting(int i) const override {
     static constexpr const char* kGear[] = {"Off", "1", "2", "3", "4"};
     static constexpr const char* kOnOff[] = {"Off", "On"};
@@ -47,13 +47,17 @@ class FakeScale : public core::IScale {
     if (i == 1)
       return umbra_ ? core::ScaleSettingDesc{"Auto sleep", kUmbraSleep, 5}
                     : core::ScaleSettingDesc{"Auto-off", kBookooOff, 5};
+    if (i == 2 && umbra_) {
+      static constexpr const char* kUnits[] = {"g", "oz"};
+      return core::ScaleSettingDesc{"Unit", kUnits, 2};
+    }
     return core::ScaleSettingDesc{};
   }
   int device_setting_value(int i) const override {
-    return (i >= 0 && i < 2) ? setting_value_[i] : -1;
+    return (i >= 0 && i < 3) ? setting_value_[i] : -1;
   }
   void set_device_setting(int i, int v) override {
-    if (i >= 0 && i < 2 && v >= 0 && v < device_setting(i).option_count)
+    if (i >= 0 && i < 3 && v >= 0 && v < device_setting(i).option_count)
       setting_value_[i] = v;
   }
 
@@ -64,7 +68,7 @@ class FakeScale : public core::IScale {
  private:
   bool connected_ = true;
   bool umbra_ = false;
-  int setting_value_[2] = {3, 2};  // Beep gear 3 / Auto-off 15 min (Bookoo)
+  int setting_value_[3] = {3, 2, 0};  // Beep 3 / Auto-off 15 min / Unit g
 };
 
 }  // namespace host

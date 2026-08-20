@@ -230,12 +230,21 @@ appear — and their value choices — depends on the scale model:
   (5–30 min). The scale also accepts a level 5, but its firmware plays it
   *quieter* than 4, so it isn't offered; a 5 set from the Bookoo app shows
   as `--`.
-- **Acaia Umbra** — **Beep** (On / Off; also silences its tare/timer chirps)
-  and **Auto sleep** (Off / 1–30 min). The Acaia app can additionally set
-  *power‑off* timers; those aren't offered here (a powered‑off scale can't be
-  woken over Bluetooth) and show as `--` if set elsewhere.
-- **Acaia Lunar / Pyxis** — **Beep** (On / Off) and **Auto sleep**
-  (Off / 5–60 min).
+- **Acaia Umbra** — **Beep** (On / Off; also silences its tare/timer chirps),
+  **Auto sleep** (Off / 1–30 min), and **Unit** (g / oz). The Acaia app can
+  additionally set *power‑off* timers; those aren't offered here (a
+  powered‑off scale can't be woken over Bluetooth) and show as `--` if set
+  elsewhere.
+- **Acaia Lunar / Pyxis** — **Beep** (On / Off), **Auto sleep**
+  (Off / 5–60 min), **Unit** (g / oz), and **Mode** — the scale's current
+  weighing mode, shown for reference only (the Acaia protocol has no way to
+  change mode remotely; use the scale's buttons).
+
+**Unit** only changes what the *scale's own display* shows — Apollo always
+works and displays in grams (an oz‑mode Acaia streams ounces over Bluetooth;
+the firmware converts them back, so brew‑by‑weight targets stay correct).
+Changed values may take a moment to be confirmed by the scale; if a change
+doesn't stick, the row snaps back to what the scale reports.
 - **Varia Aku** — none (its protocol only streams weight).
 
 The scale owns these values: the rows show what it reports, so they read `--`

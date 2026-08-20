@@ -1533,7 +1533,7 @@ void App::cycle_scale_device_setting(int index) {
   if (brew_ != nullptr && core::shot_in_flight(brew_->snapshot())) return;
   if (index < 0 || index >= scale_->device_setting_count()) return;
   const core::ScaleSettingDesc d = scale_->device_setting(index);
-  if (d.option_count <= 0) return;
+  if (d.option_count <= 0 || d.read_only) return;
   const int cur = scale_->device_setting_value(index);
   // -1 ("--": not read back yet, or a value we don't offer) starts the cycle
   // at the first option rather than guessing.
@@ -3147,10 +3147,18 @@ void App::update_scale_view() {
       const int v = connected ? scale_->device_setting_value(i) : -1;
       ui::set_text(settings_.scale_dev_values[i],
                    (v >= 0 && v < d.option_count) ? d.option_labels[v] : "--");
-      if (connected && !shot)
+      // Read-only rows (e.g. the Lunar's Mode) show at full strength — they
+      // are information, not a broken control — but don't take taps.
+      if (d.read_only) {
         lv_obj_remove_state(settings_.scale_dev_btns[i], LV_STATE_DISABLED);
-      else
-        lv_obj_add_state(settings_.scale_dev_btns[i], LV_STATE_DISABLED);
+        lv_obj_remove_flag(settings_.scale_dev_btns[i], LV_OBJ_FLAG_CLICKABLE);
+      } else {
+        lv_obj_add_flag(settings_.scale_dev_btns[i], LV_OBJ_FLAG_CLICKABLE);
+        if (connected && !shot)
+          lv_obj_remove_state(settings_.scale_dev_btns[i], LV_STATE_DISABLED);
+        else
+          lv_obj_add_state(settings_.scale_dev_btns[i], LV_STATE_DISABLED);
+      }
     }
   }
 
