@@ -207,6 +207,7 @@ class AcaiaDriver : public IScaleDriver {
                          .flow = true,
                          .timer = true,
                          .battery = true,
+                         .battery_low_pct = 15,
                          .sleep = umbra};
   }
 

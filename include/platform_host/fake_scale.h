@@ -27,6 +27,7 @@ class FakeScale : public core::IScale {
                                .flow = true,
                                .timer = true,
                                .battery = true,
+                               .battery_low_pct = 15,
                                .sleep = umbra_};
   }
   void tare() override {}

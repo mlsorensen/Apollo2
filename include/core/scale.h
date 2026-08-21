@@ -19,6 +19,10 @@ struct ScaleFeatures {
   bool flow;     // reports a flow rate (g/s) natively
   bool timer;    // reports a built-in shot timer
   bool battery;  // reports a battery charge level
+  int battery_low_pct;  // battery at/below this reads as LOW (red icon).
+                        // Per-model because gauge granularity differs: a
+                        // percent-true scale warns at 15, but the Aku steps
+                        // by 20s, so its final level before dying IS 20.
   bool sleep;    // has a discoverable low-power sleep mode: dozes off some time
                  // after a disconnect but keeps advertising, and CONNECTING
                  // wakes it — the UI presents it as "sleeping", never as gone

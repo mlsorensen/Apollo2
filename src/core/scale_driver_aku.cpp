@@ -30,6 +30,7 @@ class AkuDriver : public IScaleDriver {
                          .flow = true,  // derived from the weight stream
                          .timer = false,
                          .battery = true,  // 0x85 report frames
+                         .battery_low_pct = 20,  // 20-point gauge steps
                          .sleep = false};
   }
 
