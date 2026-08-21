@@ -144,6 +144,18 @@ void on_scale_forget_clicked(lv_event_t* e) {
 void on_scale_connect_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->toggle_scale_connection();
 }
+void on_scale_dev_setting0(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_scale_device_setting(0);
+}
+void on_scale_dev_setting1(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_scale_device_setting(1);
+}
+void on_scale_dev_setting2(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_scale_device_setting(2);
+}
+void on_scale_dev_setting3(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_scale_device_setting(3);
+}
 void on_target_minus(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->target_adjust(-1);
 }
@@ -892,6 +904,19 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(settings_.scale_scan_btn, on_scale_scan_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.scale_connect_btn, on_scale_connect_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.scale_forget_btn, on_scale_forget_clicked, LV_EVENT_CLICKED, this);
+  // "On the scale" group: the connect prompt shares the link toggle; the value
+  // buttons cycle their descriptor slot (one handler per fixed slot).
+  if (settings_.scale_dev_connect_btn != nullptr)
+    lv_obj_add_event_cb(settings_.scale_dev_connect_btn, on_scale_connect_clicked,
+                        LV_EVENT_CLICKED, this);
+  static constexpr lv_event_cb_t kDevSettingCbs[core::kMaxScaleSettings] = {
+      on_scale_dev_setting0, on_scale_dev_setting1, on_scale_dev_setting2,
+      on_scale_dev_setting3};
+  for (int i = 0; i < core::kMaxScaleSettings; ++i) {
+    if (settings_.scale_dev_btns[i] != nullptr)
+      lv_obj_add_event_cb(settings_.scale_dev_btns[i], kDevSettingCbs[i],
+                          LV_EVENT_CLICKED, this);
+  }
   lv_obj_add_event_cb(settings_.target_minus, on_target_minus, LV_EVENT_CLICKED, this);
   if (settings_.review_minus != nullptr) {
     lv_obj_add_event_cb(settings_.review_minus, on_review_minus, LV_EVENT_CLICKED, this);
@@ -1501,6 +1526,24 @@ void App::tare_scale() {
   // the next refresh visibly disabling the button.
   if (brew_ != nullptr && core::shot_in_flight(brew_->snapshot())) return;
   if (scale_ != nullptr) scale_->tare();
+}
+
+void App::cycle_scale_device_setting(int index) {
+  if (scale_ == nullptr || !scale_->snapshot().connected) return;
+  if (brew_ != nullptr && core::shot_in_flight(brew_->snapshot())) return;
+  if (index < 0 || index >= scale_->device_setting_count()) return;
+  const core::ScaleSettingDesc d = scale_->device_setting(index);
+  if (d.option_count <= 0 || d.read_only) return;
+  const int cur = scale_->device_setting_value(index);
+  // Cycle only through the WRITABLE options (some values display but can't
+  // be set over BLE — writable_count). -1 ("--": not read back yet, or a
+  // value we don't offer) starts at the first option rather than guessing.
+  const int writable = (d.writable_count > 0 && d.writable_count < d.option_count)
+                           ? d.writable_count
+                           : d.option_count;
+  const int next = (cur < 0 || cur + 1 >= writable) ? 0 : cur + 1;
+  scale_->set_device_setting(index, next);
+  update_scale_view();  // show the optimistic value now, not next refresh
 }
 
 void App::cycle_flush() {
@@ -3074,6 +3117,56 @@ void App::update_scale_view() {
     ui::set_text(settings_.scale_connect_label, on ? "Disconnect" : "Connect");
     ui::set_bg_color(settings_.scale_connect_btn,
                      on ? ui::theme::rail() : ui::theme::accent());
+  }
+
+  // Scale > Device settings page: discoverable in every state.
+  // Nothing saved -> pairing hint; saved but offline -> the model's rows,
+  // disabled with "--", plus a Connect prompt; connected -> live values.
+  // Recomputed from live state on every refresh (like the Home shot lockout),
+  // so no path can leave a row stuck disabled or a stale value shown.
+  if (settings_.scale_dev_hint != nullptr && scale_ != nullptr) {
+    const auto show = [](lv_obj_t* obj, bool on) {
+      if (on == lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN)) {
+        if (on)
+          lv_obj_remove_flag(obj, LV_OBJ_FLAG_HIDDEN);
+        else
+          lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
+      }
+    };
+    const bool have_scale = !saved.empty();
+    const bool connected = scale_->snapshot().connected;
+    const int count = have_scale ? scale_->device_setting_count() : 0;
+    const bool shot = brew_ != nullptr && core::shot_in_flight(brew_->snapshot());
+    show(settings_.scale_dev_hint, !have_scale);
+    show(settings_.scale_dev_connect_row, have_scale && !connected);
+    if (have_scale && !connected)
+      ui::set_text(settings_.scale_dev_connect_label,
+                   scale_provisioner_->connect_enabled() ? "Connecting..." : "Connect");
+    for (int i = 0; i < core::kMaxScaleSettings; ++i) {
+      const bool vis = i < count;
+      show(settings_.scale_dev_rows[i], vis);
+      if (!vis) continue;
+      const core::ScaleSettingDesc d = scale_->device_setting(i);
+      ui::set_text(settings_.scale_dev_labels[i], d.label);
+      const int v = connected ? scale_->device_setting_value(i) : -1;
+      ui::set_text(settings_.scale_dev_values[i],
+                   (v >= 0 && v < d.option_count) ? d.option_labels[v] : "--");
+      // Read-only rows (e.g. the Lunar's Mode) drop the button chrome
+      // entirely — bare right-aligned text reads as information, while the
+      // card-background chip is the affordance for "tap to change".
+      if (d.read_only) {
+        lv_obj_set_style_bg_opa(settings_.scale_dev_btns[i], LV_OPA_TRANSP, 0);
+        lv_obj_remove_state(settings_.scale_dev_btns[i], LV_STATE_DISABLED);
+        lv_obj_remove_flag(settings_.scale_dev_btns[i], LV_OBJ_FLAG_CLICKABLE);
+      } else {
+        lv_obj_set_style_bg_opa(settings_.scale_dev_btns[i], LV_OPA_COVER, 0);
+        lv_obj_add_flag(settings_.scale_dev_btns[i], LV_OBJ_FLAG_CLICKABLE);
+        if (connected && !shot)
+          lv_obj_remove_state(settings_.scale_dev_btns[i], LV_STATE_DISABLED);
+        else
+          lv_obj_add_state(settings_.scale_dev_btns[i], LV_STATE_DISABLED);
+      }
+    }
   }
 
   const bool scanning = scale_provisioner_->scanning();

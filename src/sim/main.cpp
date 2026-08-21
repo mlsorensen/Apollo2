@@ -172,6 +172,21 @@ int main() {
   ok &= r({800, 480}, "renders/micra_cleaning_800x480.png", 1, ui::kSectionMicraCleaning);
   ok &= r({320, 240}, "renders/scale_bt_320x240.png", 1, ui::kSectionScaleBt);
   ok &= r({320, 240}, "renders/scale_settings_320x240.png", 1, ui::kSectionScaleSettings);
+  ok &= r({800, 480}, "renders/scale_settings_800x480.png", 1, ui::kSectionScaleSettings);
+  // Scale > Device settings (stored on the scale): live values, and the
+  // link-down state where the rows disable ("--") behind a Connect prompt.
+  ok &= r({800, 480}, "renders/scale_device_800x480.png", 1, ui::kSectionScaleDevice);
+  scale.set_connected(false);
+  scale_provisioner.set_connect_enabled(false);
+  ok &= r({800, 480}, "renders/scale_device_disc_800x480.png", 1,
+          ui::kSectionScaleDevice);
+  scale_provisioner.set_connect_enabled(true);
+  scale.set_connected(true);
+  // Lunar persona: Unit row + the read-only Mode row (bare text, no chip).
+  scale.set_lunar(true);
+  ok &= r({800, 480}, "renders/scale_device_lunar_800x480.png", 1,
+          ui::kSectionScaleDevice);
+  scale.set_lunar(false);
   ok &= r({800, 480}, "renders/micra_bt_800x480.png", 1, ui::kSectionMicraBt);
   ok &= r({320, 240}, "renders/device_320x240.png", 1, ui::kSectionDevice);  // chooser
   ok &= r({800, 480}, "renders/device_800x480.png", 1, ui::kSectionDevice);

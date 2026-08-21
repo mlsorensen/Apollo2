@@ -46,6 +46,10 @@ class ScaleLink : public IScale, public IScaleSink {
   ScaleSnapshot snapshot() const override;
   ScaleFeatures features() const override;
   void tare() override;
+  int device_setting_count() const override;
+  ScaleSettingDesc device_setting(int index) const override;
+  int device_setting_value(int index) const override;
+  void set_device_setting(int index, int option_idx) override;
 
   // Discovery, run on the loop thread (used by the device ScaleProvisioner).
   void request_scan();
@@ -63,6 +67,7 @@ class ScaleLink : public IScale, public IScaleSink {
   void on_weight(float grams) override;
   void on_timer(uint32_t timer_ms) override;
   void on_battery(int pct) override;
+  void on_device_setting(int index, int option_idx) override;
 
  private:
   bool do_connect(const std::string& address);
@@ -86,6 +91,22 @@ class ScaleLink : public IScale, public IScaleSink {
   int battery_pct_ = 0;
   bool battery_valid_ = false;
   uint32_t seq_ = 0;  // increments per weight update (snapshot.seq)
+  // On-scale setting values as last reported (-1 = unknown). Reset on every
+  // connect/disconnect: the scale is the owner, so a stale cache must never
+  // outlive the link that read it. Written optimistically by
+  // set_device_setting so the UI label moves at tap time; the next readback
+  // (Bookoo: every weight frame, Acaia: every status frame) reconciles.
+  int setting_value_[kMaxScaleSettings] = {-1, -1, -1, -1};
+  // While non-zero, readback disagreeing with setting_value_ is a stale echo
+  // of the pre-write value and is ignored (see on_device_setting).
+  uint32_t setting_grace_until_ms_[kMaxScaleSettings] = {0, 0, 0, 0};
+  // Resend cycle for unconfirmed setting writes (Acaia drops acked writes):
+  // the value in flight, sends remaining, and when the next resend is due.
+  int retry_value_[kMaxScaleSettings] = {-1, -1, -1, -1};
+  uint8_t retry_left_[kMaxScaleSettings] = {0, 0, 0, 0};
+  uint32_t retry_at_ms_[kMaxScaleSettings] = {0, 0, 0, 0};
+  uint32_t pending_since_ms_[kMaxScaleSettings] = {0, 0, 0, 0};  // last tap
+  uint32_t next_setting_write_ms_ = 0;  // write spacing (kSettingWriteGapMs)
   std::vector<ScanResult> scan_results_;
 
   std::atomic<bool> connect_enabled_{true};  // scales auto-connect when saved
@@ -93,6 +114,9 @@ class ScaleLink : public IScale, public IScaleSink {
   std::atomic<bool> scan_requested_{false};
   std::atomic<bool> scanning_{false};
   std::atomic<bool> pending_tare_{false};
+  // Posted on-scale setting writes (option index, -1 = none) — same
+  // post-and-flush pattern as pending_tare_, one slot per descriptor.
+  std::atomic<int> pending_setting_[kMaxScaleSettings] = {-1, -1, -1, -1};
   std::atomic<bool> connects_paused_{false};  // peer is scanning — hold off
   std::function<void(bool)> peer_pause_;      // set once before the loop
 };

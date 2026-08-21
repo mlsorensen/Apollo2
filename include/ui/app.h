@@ -60,6 +60,9 @@ class App {
   // Bound to UI events:
   void toggle_power();         // power button
   void tare_scale();           // Home "Tare" button
+  // Scale > Settings "On the scale" rows: advance descriptor slot `index` to
+  // its next option (writes to the scale; refused offline or mid-shot).
+  void cycle_scale_device_setting(int index);
   void toggle_flow_units();    // Home graph unit button (g/s <-> g)
   void start_scan();           // Settings "Scan" button
   void save_scanned(int index);  // a result row in the Settings list

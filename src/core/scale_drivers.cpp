@@ -10,6 +10,7 @@ namespace core {
 
 std::shared_ptr<IScaleDriver> make_bookoo_driver();                // scale_driver_bookoo.cpp
 std::shared_ptr<IScaleDriver> make_acaia_driver(bool umbra_hint);  // scale_driver_acaia.cpp
+std::shared_ptr<IScaleDriver> make_aku_driver();                   // scale_driver_aku.cpp
 
 namespace {
 
@@ -24,6 +25,14 @@ bool has_prefix_ci(const char* name, const char* prefix) {
 
 bool is_bookoo(const char* name) { return has_prefix_ci(name, "BOOKOO"); }
 
+// Naming varies across the family: "Varia AKU ...", "Varia-AKU-Micro", and
+// plain "AKU SCALE" / "AKU-MICRO" have all been seen — so match either the
+// brand or the model as a PREFIX (leading "AKU" on a non-scale is unlikely;
+// a mis-save is harmless anyway, the driver just finds no FFF1).
+bool is_aku(const char* name) {
+  return has_prefix_ci(name, "VARIA") || has_prefix_ci(name, "AKU");
+}
+
 bool is_acaia(const char* name) {
   static constexpr const char* kPrefixes[] = {"UMBRA", "LUNAR", "ACAIA", "PYXIS",
                                               "PROCH"};
@@ -36,13 +45,14 @@ bool is_acaia(const char* name) {
 }  // namespace
 
 bool scale_name_supported(const char* name) {
-  return name != nullptr && (is_bookoo(name) || is_acaia(name));
+  return name != nullptr && (is_bookoo(name) || is_acaia(name) || is_aku(name));
 }
 
 std::shared_ptr<IScaleDriver> make_scale_driver(const char* name) {
   if (name == nullptr) return nullptr;
   if (is_bookoo(name)) return make_bookoo_driver();
   if (is_acaia(name)) return make_acaia_driver(has_prefix_ci(name, "UMBRA"));
+  if (is_aku(name)) return make_aku_driver();
   return nullptr;
 }
 

@@ -26,6 +26,10 @@ class IScaleSink {
   virtual void on_weight(float grams) = 0;
   virtual void on_timer(uint32_t timer_ms) = 0;
   virtual void on_battery(int pct) = 0;
+  // Readback of an on-scale setting (see ScaleSettingDesc): the option index
+  // the scale reports for descriptor slot `index`, -1 for "present but not
+  // one of ours" (e.g. an Umbra auto-off variant we don't offer).
+  virtual void on_device_setting(int index, int option_idx) = 0;
 };
 
 class IScaleDriver {
@@ -52,6 +56,14 @@ class IScaleDriver {
   virtual bool tick(ble::ICentral& ble) = 0;
 
   virtual void tare(ble::ICentral& ble) = 0;
+
+  // On-scale settings (ScaleSettingDesc). Defaults: none — only models whose
+  // protocol covers them override. set_device_setting runs on the link
+  // thread like tare(); readback arrives via IScaleSink::on_device_setting.
+  virtual int device_setting_count() const { return 0; }
+  virtual ScaleSettingDesc device_setting(int) const { return {}; }
+  virtual void set_device_setting(ble::ICentral&, int /*index*/,
+                                  int /*option_idx*/) {}
 };
 
 // Model classification from an advertised (or saved) device name. Nullptr-safe;
