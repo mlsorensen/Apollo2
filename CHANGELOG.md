@@ -5,6 +5,48 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## v0.7.0
+
+### Features
+
+- **Scale device settings.** Settings stored on the scale itself — beep,
+  auto-off, and more — are now adjustable from the remote, on a new
+  **Settings → Scale → Device settings** page. The rows adapt to the
+  connected scale:
+  - **Bookoo Themis** — beep level (Off / 1–4) and auto-off (5–30 min).
+  - **Acaia Umbra** — beep on/off and auto-sleep timer, plus **Unit**
+    (g / oz).
+  - **Acaia Lunar / Pyxis** — beep toggle (the row shows the volume stored
+    on the scale), auto-sleep, **Unit** (g / oz), and the current weighing
+    mode (shown for reference — Acaia's protocol can't change modes
+    remotely).
+  - Rows show the scale's live values while connected, with a **Connect**
+    shortcut right on the page when it isn't. Switching an Acaia to ounces
+    only changes the scale's own display: Apollo keeps working in grams, so
+    brew-by-weight targets stay correct.
+  - The old Scale → Settings page split into **Shot settings** and
+    **Device settings**, so neither page needs scrolling.
+- **Varia Aku support.** The Aku (Micro/Mini/Pro) joins Bookoo and Acaia as
+  a supported scale: live weight, tare, and a battery readout — including
+  its battery frames, which aren't in any public protocol documentation.
+  Its gauge reports in 20% steps, so the battery icon turns red at its
+  final step before empty (each scale model now sets its own low-battery
+  threshold).
+
+### Fixes
+
+- **Tare and Disconnect lock during a shot.** Both scale-card buttons (and
+  the new device-settings rows) disable while a shot is running or
+  settling — a mid-shot tare would corrupt the auto-stop math — and
+  re-enable the moment the shot ends, however it ends.
+- **Scale settings changes stick.** Acaia scales silently drop Bluetooth
+  writes that arrive in quick bursts; setting changes are now paced the way
+  Acaia's own app paces them, confirmed against the scale's reported state,
+  and retried when the scale ignores one.
+- **Scale scanning is more reliable.** The scan window doubled to 10
+  seconds — scales that advertise infrequently (the Aku) could slip through
+  the old window while the radio was also servicing the Micra connection.
+
 ## v0.6.2
 
 ### Features
