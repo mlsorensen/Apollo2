@@ -97,10 +97,18 @@ sdmmc_slot_config_t sd_slot_config() {
 #endif
 }
 
+// The SD side must NEVER deinit the shared SDMMC host (see ensure_bus's
+// comment). This replaces sdmmc_host_deinit_slot in every host struct we
+// hand out, so esp_vfs_fat_sdmmc_mount's failure cleanup and
+// esp_vfs_fat_sdcard_unmount (which copies the hook into the card struct)
+// both no-op instead of decrementing the host's slot refcount.
+esp_err_t sd_host_deinit_noop(int /*slot*/) { return ESP_OK; }
+
 // Per-board host config: shared SDMMC peripheral settings for mount + probe.
 sdmmc_host_t sd_host_config() {
   sdmmc_host_t host = SDMMC_HOST_DEFAULT();
   host.slot = kSdSlot;
+  host.deinit_p = &sd_host_deinit_noop;  // keep the host alive: never deinit
 #if defined(BOARD_SD_MMC_1BIT)
   host.flags = SDMMC_HOST_FLAG_1BIT;  // default 20 MHz — matrix routing
 #else
@@ -119,13 +127,18 @@ const char* classify_fs_sector(const uint8_t* sec) {
 }
 
 // Bring the SDMMC bus up ONCE and keep it up forever. On the P4 the C6
-// radio shares the SDMMC peripheral (esp-hosted SDIO): letting
-// esp_vfs_fat_sdmmc_mount's failure path deinit the host killed the radio
-// mid-flight (sdio_rx assert, boot loop) on any board without a card
-// inserted. With the host + slot + power pre-initialized by us, the mount
-// helper sees "already initialized" and its cleanup leaves the host alone —
-// a cardless retry loop touches only our slot. (The S3 4.3C has no sharing
-// concern; the same policy is simply harmless there.)
+// radio shares the SDMMC peripheral (esp-hosted SDIO): any teardown of the
+// host kills the radio mid-flight. Pre-initializing host + slot + power here
+// is half of that policy; the other half is sd_host_deinit_noop below —
+// IDF 5.5's mount/unmount helpers call the host's deinit hook on every
+// failed mount AND on unmount (sdmmc_host_init now returns ESP_OK when
+// already initialized, so the helper always believes it owns the host), and
+// the stock refcounted sdmmc_host_deinit_slot over-decrements when its
+// matching init_slot skipped the increment (same slot re-initialized back
+// to back). Drained to zero, it fully deinitialized the host under the C6:
+// coredump 2026-08-23 shows sdio_write (slot 1) asserting on the deleted
+// transaction queue — the "spontaneous" P4-5 reboots. (The S3 4.3C has no
+// sharing concern; the same policy is simply harmless there.)
 #if !defined(BOARD_SD_MMC_1BIT)
 sd_pwr_ctrl_handle_t g_pwr = nullptr;  // persistent LDO handle (never freed)
 #endif
