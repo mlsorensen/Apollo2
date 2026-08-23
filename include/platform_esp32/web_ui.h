@@ -19,6 +19,8 @@ namespace platform {
 //   /api/shots   the shot index as JSON (chunked; newest first)
 //   /api/shot.csv?id=N   one shot's sample series (download)
 //   /log         the in-RAM diagnostic log ring as plain text (also /api/log)
+//   /coredump    the crash dump the panic handler saved to flash, as a file
+//                download (404 when none); ?erase=1 clears the stored dump
 //
 // Serving model is PER-BOARD, learned on hardware:
 //   - P4 (DSI) boards: a dedicated FreeRTOS task, so a browser pulling the
@@ -65,6 +67,7 @@ class WebUi {
   void handle_shots();
   void handle_shot_csv();
   void handle_log();
+  void handle_coredump();
 
   WebServer server_{80};
   TokenSetup* setup_ = nullptr;

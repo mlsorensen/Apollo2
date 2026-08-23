@@ -322,6 +322,14 @@ export default function App() {
                 : `SD: ${fmtBytes(summary.storage.free)} free of ${fmtBytes(summary.storage.total)}`}
             </Typography>
           )}
+          {summary?.coredump > 0 && (
+            // Only when the device holds a post-mortem from a crash: a plain
+            // download of /coredump (the firmware sets the filename).
+            <Link href="/coredump" variant="body2" underline="hover"
+                  color="text.secondary" sx={{ flexShrink: 0 }}>
+              Crash dump
+            </Link>
+          )}
           <Link component="button" variant="body2" underline="hover"
                 color="text.secondary" sx={{ flexShrink: 0 }}
                 onClick={() => setLogOpen(true)}>

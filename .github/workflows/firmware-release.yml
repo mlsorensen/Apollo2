@@ -89,6 +89,26 @@ jobs:
           # above stays the clean-install / recovery download.
           python3 tools/stage_flash_parts.py .pio/build/${{ matrix.env }} \
                   "out/parts/${{ matrix.board }}"
+          # Debug symbols: this build's .elf, bundled into one archive by the
+          # release job. A crash dump pulled off a device later
+          # (http://<ip>/coredump) can only be symbolicated against the .elf
+          # of the exact build that crashed — without archiving it here, a
+          # release-build coredump is undecodable.
+          mkdir -p out/elf
+          cp .pio/build/${{ matrix.env }}/firmware.elf \
+             "out/elf/apollo2-${{ matrix.board }}-${RELEASE_TAG}.elf"
+          # Sidecar: this build's ELF-SHA fingerprint, read from the app
+          # descriptor embedded in firmware.bin (magic 0xABCD5432 @0x20, sha
+          # @0xB0). A dump downloaded from a device is named
+          # coredump-<first 8 hex chars>.bin, so `grep <chars> *.appsha`
+          # picks the matching .elf without trial-and-error.
+          python3 - <<EOF
+          import struct
+          b = open(".pio/build/${{ matrix.env }}/firmware.bin", "rb").read()
+          assert struct.unpack("<I", b[0x20:0x24])[0] == 0xABCD5432, "no app descriptor"
+          with open("out/elf/apollo2-${{ matrix.board }}-${RELEASE_TAG}.elf.appsha", "w") as f:
+              f.write(b[0xB0:0xD0].hex() + "\n")
+          EOF
 
       - uses: actions/upload-artifact@v7
         with:
@@ -111,6 +131,14 @@ jobs:
 
       - name: Checksums
         run: (cd dist && rm -f *.chip && shasum -a 256 *.bin > SHA256SUMS.txt)
+
+      # One archive for all boards' .elf files (they're ~30 MB each raw, and
+      # only ever needed to decode a coredump — no reason to clutter the
+      # release's download list with six of them).
+      - name: Bundle debug symbols
+        run: |
+          tar -C dist/elf -czf \
+              "dist/apollo2-debug-symbols-${RELEASE_TAG}.tar.gz" .
 
       # Body = this version's CHANGELOG.md section + the constant install
       # instructions. The notes live in the repo (not in this file) so that
@@ -147,6 +175,10 @@ jobs:
           \`\`\`
           esptool.py write_flash 0 apollo2-<board>-${RELEASE_TAG}.bin
           \`\`\`
+
+          (\`apollo2-debug-symbols-${RELEASE_TAG}.tar.gz\` is for developers:
+          the .elf files inside decode crash dumps downloaded from a device's
+          \`/coredump\` page.)
           EOF
 
       - name: Publish release
@@ -157,6 +189,7 @@ jobs:
           files: |
             dist/*.bin
             dist/SHA256SUMS.txt
+            dist/apollo2-debug-symbols-*.tar.gz
           body_path: dist/NOTES.md
 
   # Each release deploys into its own version directory (vX.Y.Z/firmware +

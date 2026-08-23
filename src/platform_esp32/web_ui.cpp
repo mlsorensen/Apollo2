@@ -3,6 +3,10 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_heap_caps.h>
+#if __has_include(<esp_core_dump.h>)
+#include <esp_core_dump.h>
+#include <esp_partition.h>
+#endif
 
 #include <cstdio>
 #include <cstdlib>
@@ -113,6 +117,7 @@ void WebUi::begin(TokenSetup& setup, core::IShotStore& shots, core::IClock& cloc
   server_.on("/api/shot.csv", HTTP_GET, [this]() { handle_shot_csv(); });
   server_.on("/log", HTTP_GET, [this]() { handle_log(); });
   server_.on("/api/log", HTTP_GET, [this]() { handle_log(); });
+  server_.on("/coredump", HTTP_GET, [this]() { handle_coredump(); });
   server_.onNotFound([this]() {
     // During a portal session, funnel everything to the setup page (phones
     // probe random URLs); otherwise a plain 404.
@@ -217,19 +222,100 @@ void WebUi::handle_log() {
   free(buf);
 }
 
+void WebUi::handle_coredump() {
+  // Remote crash diagnosis: the panic handler writes an ELF coredump to the
+  // `coredump` flash partition (enabled in the stock sdkconfig on every
+  // board); this serves that image so a user anywhere can download it and
+  // send it in — decode with `espcoredump.py info_corefile --core-format raw`
+  // against the release's .elf (the debug-symbols archive on the GitHub
+  // release).
+#if defined(CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH)
+  if (server_.hasArg("erase")) {
+    const esp_err_t err = esp_core_dump_image_erase();
+    server_.send(err == ESP_OK ? 200 : 500, "text/plain",
+                 err == ESP_OK ? "coredump erased" : esp_err_to_name(err));
+    return;
+  }
+  size_t addr = 0, size = 0;
+  if (esp_core_dump_image_get(&addr, &size) != ESP_OK || size == 0) {
+    server_.send(404, "text/plain", "no crash dump stored");
+    return;
+  }
+  const esp_partition_t* part = esp_partition_find_first(
+      ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_COREDUMP, nullptr);
+  if (part == nullptr || addr < part->address ||
+      addr - part->address + size > part->size) {
+    server_.send(500, "text/plain", "coredump partition mismatch");
+    return;
+  }
+  const size_t base = addr - part->address;
+  constexpr size_t kSlice = 8 * 1024;  // same peak-RAM reasoning as handle_log
+  char* buf = static_cast<char*>(
+      heap_caps_malloc(kSlice, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  if (buf == nullptr) buf = static_cast<char*>(malloc(kSlice));
+  if (buf == nullptr) {
+    server_.send(503, "text/plain", "coredump unavailable (no memory)");
+    return;
+  }
+  // Name the download after the CRASHED build, not the running one: the dump
+  // outlives upgrades, so stamping fw::kVersion here could label a v0.7.0
+  // crash as v0.7.1. The dump itself records the crashing app's ELF-SHA
+  // fingerprint (first 8 hex chars, per CONFIG_APP_RETRIEVE_LEN_ELF_SHA) —
+  // correct by construction; each .elf in the release's debug-symbols
+  // archive ships a matching .appsha sidecar to pair them up.
+  char sha[APP_ELF_SHA256_SZ] = "unknown";
+  auto* sum = static_cast<esp_core_dump_summary_t*>(
+      heap_caps_malloc(sizeof(esp_core_dump_summary_t),
+                       MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  if (sum == nullptr)
+    sum = static_cast<esp_core_dump_summary_t*>(
+        malloc(sizeof(esp_core_dump_summary_t)));
+  if (sum != nullptr) {
+    if (esp_core_dump_get_summary(sum) == ESP_OK)
+      std::snprintf(sha, sizeof(sha), "%s",
+                    reinterpret_cast<const char*>(sum->app_elf_sha256));
+    free(sum);
+  }
+  char dispo[80];
+  std::snprintf(dispo, sizeof(dispo), "attachment; filename=coredump-%s.bin",
+                sha);
+  server_.sendHeader("Content-Disposition", dispo);
+  server_.setContentLength(size);
+  server_.send(200, "application/octet-stream", "");
+  for (size_t off = 0; off < size; off += kSlice) {
+    const size_t n = size - off < kSlice ? size - off : kSlice;
+    if (esp_partition_read(part, base + off, buf, n) != ESP_OK) break;
+    server_.sendContent(buf, n);
+  }
+  free(buf);
+#else
+  server_.send(404, "text/plain", "coredump not supported in this build");
+#endif
+}
+
 void WebUi::handle_summary() {
   const WebTheme t = theme_ ? theme_() : WebTheme{};
   const core::StorageInfo si = shots_->storage();
   const core::ShotStats st = shots_->stats(clock_->now_unix());
-  char buf[640];
+  // coredump: stored crash-dump size in bytes (0 = none). Drives the page
+  // header's "Crash dump" link, so it only appears when there's a dump.
+  size_t cd_size = 0;
+#if defined(CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH)
+  {
+    size_t cd_addr = 0;
+    if (esp_core_dump_image_get(&cd_addr, &cd_size) != ESP_OK) cd_size = 0;
+  }
+#endif
+  char buf[672];
   std::snprintf(
       buf, sizeof(buf),
-      "{\"name\":\"%s\",\"version\":\"%s\","
+      "{\"name\":\"%s\",\"version\":\"%s\",\"coredump\":%u,"
       "\"theme\":{\"bg\":%lu,\"rail\":%lu,\"card\":%lu,\"text\":%lu,"
       "\"muted\":%lu,\"accent\":%lu,\"ok\":%lu,\"warn\":%lu,\"alert\":%lu},"
       "\"storage\":{\"total\":%llu,\"free\":%llu,\"full\":%s},"
       "\"stats\":{\"total\":%d,\"life\":%.1f,\"d30\":%.1f,\"since\":%lld}}",
-      name_, fw::kVersion, static_cast<unsigned long>(t.bg),
+      name_, fw::kVersion, static_cast<unsigned>(cd_size),
+      static_cast<unsigned long>(t.bg),
       static_cast<unsigned long>(t.rail), static_cast<unsigned long>(t.card),
       static_cast<unsigned long>(t.text), static_cast<unsigned long>(t.muted),
       static_cast<unsigned long>(t.accent), static_cast<unsigned long>(t.ok),

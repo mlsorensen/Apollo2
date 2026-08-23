@@ -15,6 +15,9 @@
 #include <lvgl.h>
 
 #include <esp_heap_caps.h>
+#if __has_include(<esp_core_dump.h>)
+#include <esp_core_dump.h>
+#endif
 
 #include "core/brew_controller.h"
 #include "core/log_ring.h"
@@ -172,6 +175,19 @@ void setup() {
     }
     core::logf("reset reason: %s (%d)\n", name, static_cast<int>(rr));
   }
+#if defined(CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH)
+  {
+    // A panic/watchdog reset leaves an ELF coredump in the `coredump` flash
+    // partition. Announce it so /log readers know a downloadable post-mortem
+    // exists; it persists (across reboots AND reflashes) until erased or
+    // overwritten by the next crash.
+    size_t cd_addr = 0, cd_size = 0;
+    if (esp_core_dump_image_get(&cd_addr, &cd_size) == ESP_OK && cd_size > 0)
+      core::logf("crash dump stored (%u bytes) — download at /coredump, "
+                 "clear with /coredump?erase=1\n",
+                 static_cast<unsigned>(cd_size));
+  }
+#endif
   g_config.begin();  // create NVS namespace on first boot (quiets read errors)
 
 #if defined(CONFIG_ESP_HOSTED_ENABLE_BT_NIMBLE)
