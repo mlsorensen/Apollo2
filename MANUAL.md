@@ -145,12 +145,13 @@ Plots the live flow rate (or weight) from the scale.
   it by ear; `Off` silences it.
 
   The chime marks the *end of a warm‑up*, not every moment the boilers are at
-  temperature, so it sounds **once** and then stays quiet through all the small
-  dips and reheats that hold the temperature. It re‑arms when a new warm‑up is
-  genuinely coming: the machine goes to standby (or off, or disconnects), the
-  steam boiler is switched on or off, or a boiler falls 10 °C below its set
-  point. With the steam boiler **off** the chime follows the coffee boiler
-  alone; with it **on**, both boilers have to be there.
+  temperature, so it sounds **at most once per turn‑on** and then stays quiet
+  through everything the session brings — the small dips and reheats that hold
+  the temperature, heavy steaming, refills, steam boiler toggles. It re‑arms
+  only when the machine goes to standby (or off, or disconnects), so the next
+  turn‑on's warm‑up chimes again. With the steam boiler **off** the chime
+  follows the coffee boiler alone; with it **on**, both boilers have to be
+  there.
 - **Brew → Temperature** — coffee boiler set‑point stepper (0.1 °C steps;
   long‑press for 0.5 °C).
 - **Steam Boiler → Enable** — steam boiler on/off.
@@ -414,6 +415,19 @@ page fits on screen with little to no scrolling.
     KB; with WiFi connected, `http://⟨device IP⟩/log` serves the whole
     thing as plain text (there's also a **Log** link on the web page's
     header) — easy to copy into a bug report.
+  - **Crash dumps** — if the firmware ever crashes and reboots, it saves a
+    post‑mortem snapshot (a *coredump*) to internal flash first. On the next
+    boot the log notes `crash dump stored`, and with WiFi connected a
+    **Crash dump** link appears in the web page's header (next to **Log**;
+    `http://⟨device IP⟩/coredump` directly also works) that downloads it as a
+    file — attach it to a bug report and the exact cause can be pinpointed.
+    The filename is a fingerprint of the build that *crashed* (dumps survive
+    firmware upgrades, so that isn't always the version currently
+    installed); it matches the `.appsha` files in the release's
+    debug‑symbols archive, which is how the right decoding symbols are
+    found. The dump survives reboots and even firmware
+    upgrades until the next crash overwrites it;
+    `http://⟨device IP⟩/coredump?erase=1` clears it manually.
 
 ---
 

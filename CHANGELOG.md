@@ -5,6 +5,32 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## v0.7.1
+
+### Fixes
+
+- **Spontaneous reboot on SD‑card hiccups (P4 boards).** A mount retry or an
+  unmounted/removed SD card could — after enough cycles — tear down the SDMMC
+  peripheral the WiFi/BLE co‑processor shares (an IDF slot‑refcount
+  over‑decrement), crashing the radio and rebooting the device. Diagnosed
+  from a captured coredump; the SD driver can no longer deinitialize the
+  shared host under any circumstances.
+- **Nuisance ready chimes.** The warm‑up chime now sounds at most **once per
+  turn‑on**. Heavy steaming, refills, or steam‑boiler toggles no longer
+  re‑arm it mid‑session; standby/off/disconnect still does, so the next
+  warm‑up chimes as before.
+
+### Features
+
+- **Crash dumps are downloadable.** If the firmware crashes, the automatic
+  post‑mortem snapshot it saves to flash is now surfaced: the boot log says
+  `crash dump stored`, and a **Crash dump** link appears on the web page
+  (`http://⟨device IP⟩/coredump`; `?erase=1` clears it) to download it as a
+  file to attach to a bug report. The filename is a fingerprint of the build
+  that crashed — correct even if the device was upgraded since — and each
+  release now ships a debug‑symbols archive whose `.appsha` files match
+  fingerprints to the right decoding `.elf`.
+
 ## v0.7.0
 
 ### Features
