@@ -101,17 +101,11 @@ void on_setup_clicked(lv_event_t* e) {
 void on_connect_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->toggle_connection();
 }
-void on_token_retry(lv_event_t* e) {
-  static_cast<ui::App*>(lv_event_get_user_data(e))->retry_pairing();
-}
 void on_token_wifi(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->start_token_setup();
 }
 void on_token_cancel(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->dismiss_modal();
-}
-void on_pairing_cancel(lv_event_t* e) {
-  static_cast<ui::App*>(lv_event_get_user_data(e))->cancel_pairing();
 }
 void on_wifi_cancel(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cancel_token_setup();
@@ -1111,7 +1105,14 @@ void App::refresh() {
       }
     }
     update_temp_panels(snap);
-    handle_pairing(snap.link);
+
+    // Machine seen in configuration/pairing mode (e.g. left there after setting up
+    // a token): it can't be used until restarted. Nudge the user once per event
+    // instead of silently looping on "Disconnected".
+    if (snap.config_mode_seq != config_mode_seen_) {
+      config_mode_seen_ = snap.config_mode_seq;
+      show_toast("Machine is in pairing mode. Restart it (power off/on) to connect.");
+    }
 
     // WiFi token portal: close it once the token verifies (Connected). A bad
     // token leaves the link in NeedsToken with the portal still up, so the user
@@ -1729,10 +1730,10 @@ void App::pump_scale_chart() {
     if (bsnap.scale_refuse_seq != scale_refuse_seen_) {
       scale_refuse_seen_ = bsnap.scale_refuse_seq;
       ui::play_button_press();
-      char tb[112];
+      char tb[128];
       std::snprintf(tb, sizeof(tb),
-                    "Shot not started: %s is enabled. "
-                    "Connect the scale or switch to Manual mode.",
+                    "Shot not started: %s needs the scale. Switch to Manual mode "
+                    "to pull without one, or connect a scale.",
                     bsnap.mode == core::ShotMode::kAuto ? "Auto shot" : "Shot detect");
       show_toast(tb);
     }
@@ -1885,9 +1886,8 @@ void App::save_scanned(int index) {
   const std::vector<core::ScanResult> results = provisioner_->scan_results();
   if (index < 0 || index >= static_cast<int>(results.size())) return;
 
-  provisioner_->save_device(results[index]);  // saves + starts pairing-mode read
-  pairing_active_ = true;                      // wait for the outcome (Connected / NeedsToken)
-  show_pairing_modal();
+  provisioner_->save_device(results[index]);  // saved; no token yet -> NeedsToken
+  show_token_modal(/*fetch_failed=*/false);    // prompt the user to enter a token
 }
 
 void App::forget() {
@@ -2244,29 +2244,14 @@ void App::toggle_manual_flush() {
 
 // Spinner shown while the pairing-mode token read runs (gives "it's working"
 // feedback). Replaced by success (Home) or the token-choice modal on failure.
-void App::show_pairing_modal() {
-  lv_obj_t* card = open_modal("Pairing", "Reading the token from the machine...");
-  lv_obj_t* spinner = lv_spinner_create(card);
-  lv_obj_set_size(spinner, ui::dp(44), ui::dp(44));
-  lv_obj_set_style_arc_color(spinner, lv_color_hex(ui::theme::rail()), LV_PART_MAIN);
-  lv_obj_set_style_arc_color(spinner, lv_color_hex(ui::theme::accent()), LV_PART_INDICATOR);
-  lv_spinner_set_anim_params(spinner, 1000, 60);
-  modal_button(card, "Cancel", ui::theme::rail(), on_pairing_cancel, this);
-}
-
-// Token-setup choice: try pairing mode again, or fall back to WiFi entry.
-// fetch_failed prepends a note when we got here after a failed pairing-mode read.
-void App::show_token_modal(bool fetch_failed) {
-  char body[200];
-  const char* base =
-      "Put the machine in pairing mode and Retry, or enter the token over WiFi.";
-  if (fetch_failed) {
-    std::snprintf(body, sizeof(body), "Unable to fetch token from the machine.\n\n%s",
-                  base);
-  } else {
-    std::snprintf(body, sizeof(body), "%s", base);
-  }
-  lv_obj_t* card = open_modal("Set up token", body);
+// Token-setup prompt: the machine's BLE token is issued by the La Marzocco cloud
+// (get it with the lmtoken app) — it can't be read off the machine — so the only
+// path is to enter it over WiFi. fetch_failed is kept for call-site symmetry.
+void App::show_token_modal(bool /*fetch_failed*/) {
+  lv_obj_t* card = open_modal(
+      "Set up token",
+      "This machine needs its Bluetooth token. Get it with the lmtoken app, "
+      "then enter it over WiFi.");
   lv_obj_t* row = lv_obj_create(card);
   lv_obj_remove_style_all(row);
   lv_obj_set_width(row, lv_pct(100));
@@ -2274,8 +2259,7 @@ void App::show_token_modal(bool fetch_failed) {
   lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  modal_button(row, "Retry", ui::theme::accent(), on_token_retry, this);
-  modal_button(row, "WiFi", ui::theme::rail(), on_token_wifi, this);
+  modal_button(row, "Enter token", ui::theme::accent(), on_token_wifi, this);
   modal_button(row, "Cancel", ui::theme::rail(), on_token_cancel, this);
 }
 
@@ -2289,17 +2273,6 @@ void App::show_wifi_modal() {
 }
 
 void App::open_token_setup() { show_token_modal(/*fetch_failed=*/false); }
-
-void App::retry_pairing() {
-  if (provisioner_ != nullptr) provisioner_->retry_pairing();
-  pairing_active_ = true;
-  show_pairing_modal();  // (open_modal closes the previous one)
-}
-
-void App::cancel_pairing() {
-  pairing_active_ = false;  // ignore the in-flight outcome
-  close_modal();
-}
 
 void App::start_token_setup() {
   if (provisioner_ == nullptr) return;
@@ -2357,18 +2330,6 @@ void App::set_ntp_enabled(bool on) {
 }
 
 void App::dismiss_modal() { close_modal(); }
-
-void App::handle_pairing(core::Link link) {
-  if (!pairing_active_) return;
-  if (link == core::Link::Connected) {
-    pairing_active_ = false;
-    close_modal();
-    if (tabview_ != nullptr) lv_tabview_set_active(tabview_, 0, LV_ANIM_ON);  // Home
-  } else if (link == core::Link::NeedsToken) {
-    pairing_active_ = false;
-    show_token_modal(/*fetch_failed=*/true);  // pairing read failed; let the user choose
-  }
-}
 
 void App::select_settings_section(int section) {
   commit_temp_edits();  // write pending edits from the section we're leaving

@@ -38,16 +38,6 @@ class MicraLink : public IMachine {
   void set_token(std::string token);
   void set_name(std::string name);  // display name for the snapshot
 
-  // Try to read the auth token from the machine's pairing-mode characteristic
-  // (works only while the machine is in pairing mode). On success the token is
-  // adopted (and persisted via the persister) and the link connects; on failure
-  // the link settles in NeedsToken. Non-blocking; runs on the loop thread.
-  void request_pairing_read();
-
-  // Persist callback for a token obtained via pairing read (the device wires
-  // this to NVS). Set once before the loop starts.
-  void set_token_persister(std::function<void(std::string)> persister);
-
   // Manual connect gate. Disabling drops the link and stops auto-reconnect.
   bool connect_enabled() const { return connect_enabled_.load(); }
   void set_connect_enabled(bool enabled);
@@ -87,7 +77,6 @@ class MicraLink : public IMachine {
   void do_set_boiler_target(const char* identifier, const char* value);
   void do_set_steam_enabled(bool enabled);
   void do_scan();              // loop thread: scan + publish results
-  std::string do_read_pairing_token(const std::string& address);
   void set_link(Link link);
   bool read_setting(const char* name, std::string& out);
 
@@ -118,12 +107,11 @@ class MicraLink : public IMachine {
   // Boot DISCONNECTED: don't auto-grab the Micra's single BLE link on startup (the
   // user picks a device + taps Connect). Setting up a device (save/pair) enables it.
   std::atomic<bool> connect_enabled_{false};  // user gate; false => drop + don't reconnect
-  std::atomic<bool> try_pairing_{false};
   std::atomic<bool> token_bad_{false};  // authed but reads rejected -> needs re-entry
+  std::atomic<uint32_t> config_mode_seq_{0};  // bumped when seen in config mode (see snapshot)
   std::atomic<bool> scan_requested_{false};
   std::atomic<bool> connects_paused_{false};  // peer is scanning — hold off
   std::function<void(bool)> peer_pause_;      // set once before the loop
-  std::function<void(std::string)> token_persister_;  // set once before the loop
   std::atomic<bool> scanning_{false};
   std::vector<ScanResult> scan_results_;  // guarded by mutex_
 };

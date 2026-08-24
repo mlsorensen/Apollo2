@@ -5,6 +5,35 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## v0.8.0
+
+### Changes
+
+- **Token setup is now always manual entry.** The old "read the token from the
+  machine in pairing mode" path never actually worked on current machine
+  firmware — that Bluetooth characteristic holds a pairing *seed*, not a readable
+  token — so it has been removed. After you pick your machine, enter its token
+  (get it with the **LM Token** app) over the `Micra-Setup` Wi‑Fi page. Existing
+  tokens and settings are untouched.
+
+### Fixes
+
+- **`Micra-Setup` Wi‑Fi wouldn't accept connections while on your home Wi‑Fi.**
+  Opening the token / Wi‑Fi setup page while the device was connected (and serving
+  the History web app) left the `Micra-Setup` network visible but impossible to
+  join. The device now cleanly drops the home connection before starting the
+  access point, and reconnects when the setup page closes.
+- **Switching shot mode now cancels an in-progress shot.** Changing the shot mode
+  (Manual / Auto shot / Shot detect) while a shot timer is running resets it to
+  idle and drops the drive line, so a timer can't be left ticking under the wrong
+  mode.
+
+### Features
+
+- **"Machine is in pairing mode" prompt.** If the machine is left in
+  configuration/pairing mode, the device now tells you to restart it instead of
+  silently looping on a failed connection.
+
 ## v0.7.1
 
 ### Fixes

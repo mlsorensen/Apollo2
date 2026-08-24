@@ -108,6 +108,13 @@ TokenSetup::TokenSetup(Config& config, MicraLink& link)
 void TokenSetup::start(Mode mode) {
   mode_ = mode;      // an already-open portal switches pages on the next load
   if (active_) return;
+  // Cleanly drop any live station BEFORE switching to AP. Going STA->AP directly
+  // (e.g. opening this portal while joined to home WiFi + serving the web app)
+  // leaves the softAP's DHCP unable to hand out leases, so clients see the SSID
+  // but can't join. This mirrors what the WiFi-credentials portal already does via
+  // Network::stop_station(); Network keeps status_==Connected, so it reconnects on
+  // its own once the portal closes.
+  WiFi.disconnect(/*wifioff=*/true);
   WiFi.mode(WIFI_AP);
   // Pin the AP IP + subnet (192.168.4.1/24) before bringing it up. Without this
   // the built-in DHCP server sometimes doesn't hand out a lease (seen on the 7B,

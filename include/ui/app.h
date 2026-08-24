@@ -73,10 +73,8 @@ class App {
   void forget_scale();            // Scale page "Forget" button
   void toggle_scale_connection(); // Scale page "Connect"/"Disconnect"
   void target_adjust(int dir);    // Scale target weight +/- (grams)
-  void open_token_setup();     // Settings "Setup" -> token-choice modal
-  void retry_pairing();        // modal "Retry pairing"
-  void cancel_pairing();       // pairing-spinner "Cancel"
-  void start_token_setup();    // modal "WiFi" -> WiFi portal + instructions
+  void open_token_setup();     // Settings "Setup" -> token-entry modal
+  void start_token_setup();    // modal "Enter token" -> WiFi portal + instructions
   void cancel_token_setup();   // WiFi-modal "Cancel"
   void set_wifi_enabled(bool on);  // Device "WiFi" enable switch
   void start_wifi_setup();     // Device "Set up WiFi" -> AP portal + instructions
@@ -177,11 +175,9 @@ class App {
   void update_heating(const core::MachineSnapshot& state);
   void rebuild();             // tear down + rebuild the UI (e.g. after a theme change)
   void request_layout_rebuild(int section);  // defer a rebuild, returning to `section`
-  void handle_pairing(core::Link link);
   lv_obj_t* open_modal(const char* title, const char* body);  // returns the card
   void close_modal();
-  void show_pairing_modal();  // spinner while the pairing read runs
-  void show_token_modal(bool fetch_failed);  // Retry pairing / WiFi / Cancel
+  void show_token_modal(bool fetch_failed);  // token-entry prompt (Enter token / Cancel)
   void show_wifi_modal();   // WiFi instructions + Cancel
   void show_wifi_setup_modal();  // WiFi-credential portal instructions + Cancel
   core::NetState net_status() const {
@@ -214,7 +210,7 @@ class App {
   lv_obj_t* log_box_ = nullptr;
   lv_obj_t* log_label_ = nullptr;
   lv_timer_t* log_timer_ = nullptr;
-  bool pairing_active_ = false;     // waiting on a pairing-read outcome
+  uint32_t config_mode_seen_ = 0;   // last machine config-mode event toasted (edge-detect)
   bool wifi_setup_shown_ = false;   // token-over-WiFi instructions modal is open
   bool wifi_portal_shown_ = false;  // WiFi-credential setup modal is open
   uint32_t scale_readout_tick_ = 0;     // paces the shot-timer redraw (~10 Hz)

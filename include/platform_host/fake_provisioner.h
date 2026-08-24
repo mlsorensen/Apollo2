@@ -14,7 +14,6 @@ class FakeProvisioner : public core::IProvisioner {
   bool scanning() const override { return false; }
   std::vector<core::ScanResult> scan_results() const override;
   void save_device(const core::ScanResult& /*device*/) override {}
-  void retry_pairing() override {}
   std::string saved_name() const override { return "MICRA_MR000000"; }  // preview saved row
   void forget() override {}
   bool connect_enabled() const override { return connect_enabled_; }

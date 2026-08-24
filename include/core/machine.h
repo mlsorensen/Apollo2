@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 // Core domain layer: the machine model and the interface the UI talks to.
 //
 // IMPORTANT: this header must stay free of LVGL, Arduino, BLE, and SDL. It is
@@ -53,6 +55,11 @@ struct MachineSnapshot {
   float       boiler_target_c; // steam boiler — set point
   bool        steam_enabled;   // steam boiler on/off
   bool        brewing;         // a shot is currently being pulled
+  // Bumps each time a connect finds the machine in configuration/pairing mode
+  // (the operative auth characteristic is absent) — the machine must be restarted
+  // to leave that mode before it can be used. The UI edge-detects this to nudge
+  // the user, rather than looping on an opaque "Disconnected".
+  uint32_t    config_mode_seq;
 };
 
 // Heating inference. The Micra reports only BrewingMode/StandBy — there is no

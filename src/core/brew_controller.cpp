@@ -664,14 +664,13 @@ void BrewController::set_target_weight_g(float grams) {
 
 void BrewController::set_shot_mode(ShotMode mode) {
   if (mode == mode_) return;
-  // Switching between the paddle-edge path and the detector path mid-anything
-  // cancels to idle, same as flipping the wired-paddle setting — the two
-  // paths' in-flight state doesn't translate. Mode flips within one path
-  // (kAuto <-> kManual) leave a manual relay shot running untouched.
-  const bool was_wired = wired();
   mode_ = mode;
   if (persist_mode_) persist_mode_(static_cast<int>(mode));
-  if (was_wired != wired() && (phase_ != ShotPhase::kIdle || driving_)) cancel_shot();
+  // Any mode switch during an in-flight shot cancels to idle: the old mode's
+  // half-shot state and held drive line don't translate, and a running timer must
+  // never linger past the switch (e.g. an armed shot left ticking forever). This
+  // covers both path changes (edge<->detector) and within-path flips.
+  if (timer_.running() || phase_ != ShotPhase::kIdle || driving_) cancel_shot();
   logf("Brew: shot mode %d\n", static_cast<int>(mode));
 }
 

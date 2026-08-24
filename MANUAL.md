@@ -119,7 +119,7 @@ Plots the live flow rate (or weight) from the scale.
   the machine is powered on and in range, then scan again.
 - **Saved machine row** — shows the paired machine with:
   - **Setup** (only until a token is stored) — starts the token entry flow
-    (see the [README](README.md#3-enter-a-token-manually-only-if-step-2-didnt-auto-connect)).
+    (see the [README](README.md#3-enter-your-token)).
   - **Connect / Disconnect** — manual link control. The Micra accepts only one
     Bluetooth client, so Disconnect frees it for another remote or the phone
     app.

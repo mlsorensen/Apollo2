@@ -163,6 +163,14 @@ Fasteners:
 
 ## Getting started
 
+> [!IMPORTANT]
+> **Before buying any hardware, confirm you can get your machine's Bluetooth
+> token.** Apollo authenticates to the Micra with a token issued by the La
+> Marzocco cloud. Grab it first with the **[LM Token](tools/lmtoken/)** app — sign
+> in with your La Marzocco account and copy the token. If it comes back blank, the
+> same tool can provision one over Bluetooth. Checking now avoids a nasty surprise
+> after a board is already on your bench.
+
 ### 1. Flash the firmware
 
 **No-toolchain option:** the [web flasher](https://mlsorensen.github.io/Apollo2/)
@@ -183,32 +191,25 @@ make monitor          # open the serial console (115200 baud)
 
 ### 2. Pair the machine
 
-**Settings → Micra → Bluetooth → Scan**, then pick your machine.
+**Settings → Micra → Bluetooth → Scan**, then pick your machine. The device saves
+it, then asks for the machine's **Bluetooth token** (step 3) — the token is issued
+by the La Marzocco cloud and can't be read off the machine, so there's a short
+one‑time step to fetch it.
 
-- **If it has never been paired to the La Marzocco app**, the machine still has
-  its factory default token and the device reads it over Bluetooth automatically
-  — you're connected, nothing to type.
-- **If it's already paired to the LM app**, that default token has been rotated,
-  so the auto‑read can't get it and you'll be prompted to enter the current one —
-  see step 3.
+### 3. Enter your token
 
-### 3. Enter a token manually (only if step 2 didn't auto‑connect)
-
-Tap **WiFi** on the prompt (or **Settings → Micra → Set up**) to start the
+Tap **Enter token** on the prompt (or **Settings → Micra → Set up**) to start the
 device's own Wi‑Fi access point, **`Micra-Setup`**. Join it from your phone, open
 **http://192.168.4.1**, paste your token, and Save — the device connects and the
 access point closes on its own.
 
 Where to get the token:
 
-- **Machine already paired to the LM app** → download the **LM Token** app for
-  your OS from the [Releases](../../releases) page, unzip, and double-click it.
-  Sign in with your La Marzocco account, pick your machine, and hit **Copy
-  token**. This is the only step that uses the internet, and it runs on your
-  computer. (Prefer a terminal? The `lmtoken` CLI is on the same page.)
-- **Machine never paired to the LM app** → its default token is also printed as a
-  **QR code inside the machine**, if you'd rather scan and paste it than let
-  step 2 read it automatically.
+- Download the **LM Token** app for your OS from the [Releases](../../releases)
+  page, unzip, and double-click it. Sign in with your La Marzocco account, pick
+  your machine, and hit **Copy token**. This is the only step that uses the
+  internet, and it runs on your computer. (Prefer a terminal? The `lmtoken` CLI
+  is on the same page.)
 
 > Prefer to build **LM Token** / `lmtoken` from source (Go), or script it? See
 > [`tools/lmtoken/README.md`](tools/lmtoken/README.md).

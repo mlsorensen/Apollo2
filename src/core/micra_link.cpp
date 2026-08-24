@@ -14,8 +14,11 @@ namespace {
 // published, so we discover characteristics by UUID across all services.
 constexpr char kReadUuid[] = "0a0b7847-e12b-09a8-b04b-8e0922a9abab";   // state
 constexpr char kWriteUuid[] = "0b0b7847-e12b-09a8-b04b-8e0922a9abab";  // command
-constexpr char kTokenUuid[] = "0c0b7847-e12b-09a8-b04b-8e0922a9abab";  // pairing-mode token
 constexpr char kAuthUuid[] = "0d0b7847-e12b-09a8-b04b-8e0922a9abab";   // auth
+// Present ONLY while the machine is in configuration/pairing mode (where the auth
+// char above is absent). Used to tell "machine in config mode, needs a restart"
+// apart from an ordinary unreachable/failed connect.
+constexpr char kConfigSeedUuid[] = "0c0b7847-e12b-09a8-b04b-8e0922a9abab";
 
 // Standard Device Information Service (0x180A) string characteristics.
 constexpr char kDisManufacturer[] = "2a29";
@@ -77,15 +80,6 @@ void MicraLink::set_name(std::string name) {
   name_ = name.empty() ? "Micra" : std::move(name);
 }
 
-void MicraLink::request_pairing_read() {
-  set_link(Link::Connecting);  // reflect "working" at once (avoids a brief
-  try_pairing_.store(true);    // NeedsToken flash before the loop acts)
-}
-
-void MicraLink::set_token_persister(std::function<void(std::string)> persister) {
-  token_persister_ = std::move(persister);
-}
-
 void MicraLink::set_link(Link link) {
   std::lock_guard<std::mutex> lk(mutex_);
   if (link != link_) {
@@ -123,16 +117,9 @@ void MicraLink::run() {
     }
     if (token.empty()) {
       if (connected) { ble_.disconnect(); connected = false; }
-      // On request (learn / retry), try to read the token from pairing mode.
-      if (try_pairing_.exchange(false)) {
-        set_link(Link::Connecting);
-        const std::string t = do_read_pairing_token(addr);
-        if (!t.empty()) {
-          { std::lock_guard<std::mutex> lk(mutex_); token_ = t; }
-          if (token_persister_) token_persister_(t);
-          continue;  // token adopted -> next iteration connects + authenticates
-        }
-      }
+      // No token: the machine can't be read for one (the cloud-issued token is
+      // obtained out-of-band, e.g. via lmtoken). Idle in NeedsToken until one is
+      // entered (set_token clears this).
       set_link(Link::NeedsToken);
       sleep_ms(500);
       continue;
@@ -250,7 +237,15 @@ bool MicraLink::do_connect(const std::string& address, const std::string& token)
 
   if (!ble_.has_characteristic(kReadUuid) || !ble_.has_characteristic(kWriteUuid) ||
       !ble_.has_characteristic(kAuthUuid)) {
-    logf("MicraLink: missing characteristics\n");
+    // Configuration/pairing mode presents the seed char (0c) but NOT the operative
+    // auth char (0d): flag it so the UI can tell the user to restart the machine,
+    // instead of looping on an opaque "Disconnected".
+    if (ble_.has_characteristic(kConfigSeedUuid)) {
+      logf("MicraLink: machine in configuration mode (needs restart)\n");
+      config_mode_seq_.fetch_add(1, std::memory_order_relaxed);
+    } else {
+      logf("MicraLink: missing characteristics\n");
+    }
     ble_.disconnect();
     return false;
   }
@@ -350,6 +345,7 @@ MachineSnapshot MicraLink::snapshot() const {
       .boiler_target_c = boiler_target_c_,
       .steam_enabled = steam_enabled_,
       .brewing = brewing_,
+      .config_mode_seq = config_mode_seq_.load(std::memory_order_relaxed),
   };
 }
 
@@ -421,28 +417,6 @@ void MicraLink::pause_connects(bool on) {
   // ones (incl. the second address-type try inside a cancelled connect()) —
   // a plain cancel left those to grab the radio back before the peer's scan.
   ble_.hold_connects(on);
-}
-
-std::string MicraLink::do_read_pairing_token(const std::string& address) {
-  if (!ble_.connect(address, /*prefer_random=*/false, kConnectTimeoutMs)) {
-    logf("MicraLink: pairing-read connect failed\n");
-    return "";
-  }
-
-  std::string out;
-  ble_.read(kTokenUuid, out);
-  ble_.disconnect();
-
-  // A valid token is exactly 64 hex chars (32 bytes). Outside pairing mode this
-  // characteristic is absent or returns empty/garbage, which fails the check.
-  if (out.size() != 64) return "";
-  for (char ch : out) {
-    const bool hex = (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') ||
-                     (ch >= 'A' && ch <= 'F');
-    if (!hex) return "";
-  }
-  logf("MicraLink: read token from pairing mode\n");
-  return out;
 }
 
 }  // namespace core

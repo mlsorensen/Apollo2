@@ -26,13 +26,9 @@ class IProvisioner {
   virtual bool scanning() const = 0;
   virtual std::vector<ScanResult> scan_results() const = 0;
 
-  // Persist the chosen device (mac + name) and start pairing: it first tries to
-  // read the token from the machine (pairing mode); if that fails the link
-  // settles in NeedsToken and the UI offers WiFi entry.
+  // Persist the chosen device (mac + name). With no token yet, the link settles
+  // in NeedsToken and the UI offers token entry over WiFi.
   virtual void save_device(const ScanResult& device) = 0;
-
-  // Re-attempt the pairing-mode token read (e.g. after the user enabled pairing).
-  virtual void retry_pairing() = 0;
 
   // The saved machine's display name, or "" if none is saved.
   virtual std::string saved_name() const = 0;
