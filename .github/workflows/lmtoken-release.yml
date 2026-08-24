@@ -68,10 +68,17 @@ jobs:
           make package-gui
           GOARCH=amd64 CGO_ENABLED=1 make package-gui
 
+      # The CLI now links CoreBluetooth (CGO) for provisioning, so its darwin
+      # binaries are built here (native) rather than cross-compiled in the cli job.
+      - name: Package darwin CLI (arm64 + amd64, native CGO)
+        run: make package-cli-darwin
+
       - uses: actions/upload-artifact@v7
         with:
-          name: gui-darwin
-          path: tools/lmtoken/dist/lmtoken-gui-darwin-*.zip
+          name: darwin
+          path: |
+            tools/lmtoken/dist/lmtoken-gui-darwin-*.zip
+            tools/lmtoken/dist/lmtoken-darwin-*.zip
 
   gui-linux:
     runs-on: ubuntu-latest
@@ -151,12 +158,15 @@ jobs:
             dist/*
           body: |
             **LM Token** fetches your La Marzocco machine's Bluetooth token: sign in with
-            your La Marzocco account, pick your machine, and copy the token. See the
+            your La Marzocco account, pick your machine, and copy the token. If the cloud
+            has no token for your machine, it can provision one over Bluetooth. See the
             repository README for what to do with it.
 
             - **LM Token app** (no terminal needed): `lmtoken-gui-<os>-<arch>` — unzip and
-              double-click. The macOS apps are signed and notarized (re-uploaded via
-              `make release-mac` after this workflow publishes; if macOS warns "could not
-              verify", you caught the brief pre-notarization window — re-download).
+              double-click.
             - **lmtoken CLI** (for terminals and scripting): `lmtoken-<os>-<arch>` — unzip
               and run; prints the token to stdout.
+
+            The macOS builds (app **and** CLI) are signed and notarized (re-uploaded via
+            `make release-mac` after this workflow publishes; if macOS warns "could not
+            verify", you caught the brief pre-notarization window — re-download).

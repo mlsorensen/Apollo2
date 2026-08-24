@@ -132,8 +132,9 @@ type Thing struct {
 var ErrBadCredentials = fmt.Errorf("invalid username or password")
 
 type client struct {
-	http *http.Client
-	key  *installationKey
+	http  *http.Client
+	key   *installationKey
+	debug io.Writer // when set, raw request/response bodies are logged here
 }
 
 func (c *client) doJSON(method, url string, headers map[string]string, body any) ([]byte, int, error) {
@@ -161,6 +162,10 @@ func (c *client) doJSON(method, url string, headers map[string]string, body any)
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(resp.Body)
+	if c.debug != nil {
+		fmt.Fprintf(c.debug, "\n[debug] %s %s -> HTTP %d\n%s\n", method, url, resp.StatusCode,
+			strings.TrimSpace(string(data)))
+	}
 	return data, resp.StatusCode, err
 }
 
