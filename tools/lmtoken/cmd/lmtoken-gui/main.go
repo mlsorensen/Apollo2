@@ -117,7 +117,7 @@ func showLogin(a fyne.App, w fyne.Window) {
 					return
 				}
 				if len(things) == 1 {
-					showToken(a, w, sess, dl, things[0], false)
+					showToken(a, w, sess, dl, things[0], "")
 				} else {
 					showPicker(a, w, sess, dl, things)
 				}
@@ -152,7 +152,7 @@ func showPicker(a fyne.App, w fyne.Window, sess *lmtoken.Session, dl *debugLog, 
 	for _, t := range things {
 		t := t
 		b := widget.NewButton(fmt.Sprintf("%s — %s (%s)", t.Name, t.ModelName, t.SerialNumber),
-			func() { showToken(a, w, sess, dl, t, false) })
+			func() { showToken(a, w, sess, dl, t, "") })
 		rows = append(rows, b)
 	}
 	back := widget.NewButton("Back", func() { showLogin(a, w) })
@@ -160,27 +160,31 @@ func showPicker(a fyne.App, w fyne.Window, sess *lmtoken.Session, dl *debugLog, 
 		container.NewVScroll(container.NewVBox(rows...))))
 }
 
+// doneNote is the reminder shown after a fresh provision.
+const doneNote = "Done! Restart your machine (power off, then on) to bring it out of pairing mode, " +
+	"then paste this token into your remote's setup page."
+
 // showToken shows the device's token (with a copy button) or, when there's no
-// token, an offer to provision one. justProvisioned adds a restart reminder.
-func showToken(a fyne.App, w fyne.Window, sess *lmtoken.Session, dl *debugLog, t lmtoken.Thing, justProvisioned bool) {
+// token, an offer to provision one. A non-empty note (e.g. doneNote) is shown
+// above the token — used right after provisioning for the restart reminder.
+func showToken(a fyne.App, w fyne.Window, sess *lmtoken.Session, dl *debugLog, t lmtoken.Thing, note string) {
 	heading := widget.NewLabelWithStyle(fmt.Sprintf("%s — %s", t.Name, t.ModelName),
 		fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
 	serial := widget.NewLabelWithStyle("serial "+t.SerialNumber, fyne.TextAlignCenter, fyne.TextStyle{})
 	content := []fyne.CanvasObject{heading, serial}
 
 	if t.BleAuthToken == "" {
-		note := widget.NewLabel("No Bluetooth token is saved for this machine. Set one up over " +
+		msg := widget.NewLabel("No Bluetooth token is saved for this machine. Set one up over " +
 			"Bluetooth (you'll put the machine in pairing mode).")
-		note.Wrapping = fyne.TextWrapWord
+		msg.Wrapping = fyne.TextWrapWord
 		setup := widget.NewButton("Set up token over Bluetooth", func() {
 			showProvision(a, w, sess, dl, t)
 		})
 		setup.Importance = widget.HighImportance
-		content = append(content, note, setup)
+		content = append(content, msg, setup)
 	} else {
-		if justProvisioned {
-			done := widget.NewLabel("Done! Restart your machine (power off, then on) to bring it out " +
-				"of pairing mode, then paste this token into your remote's setup page.")
+		if note != "" {
+			done := widget.NewLabel(note)
 			done.Wrapping = fyne.TextWrapWord
 			content = append(content, done)
 		}
@@ -222,7 +226,7 @@ func showProvision(a fyne.App, w fyne.Window, sess *lmtoken.Session, dl *debugLo
 	if !lmtoken.BLESupported {
 		msg := widget.NewLabel("This build can't set up a token over Bluetooth on this operating system.")
 		msg.Wrapping = fyne.TextWrapWord
-		back := widget.NewButton("Back", func() { showToken(a, w, sess, dl, t, false) })
+		back := widget.NewButton("Back", func() { showToken(a, w, sess, dl, t, "") })
 		w.SetContent(container.NewVBox(heading, msg, back))
 		return
 	}
@@ -294,20 +298,29 @@ func showProvision(a fyne.App, w fyne.Window, sess *lmtoken.Session, dl *debugLo
 					startBtn.Enable()
 					return
 				}
-				if err != nil {
+				if err != nil && token == "" {
 					status.Importance = widget.DangerImportance
 					status.SetText("Failed: " + err.Error())
 					startBtn.Enable()
 					return
 				}
 				t.BleAuthToken = token
-				showToken(a, w, sess, dl, t, true)
+				note := doneNote
+				if err != nil {
+					// The machine derived and is using the token; only the cloud save
+					// failed. Show the token anyway, with the warning — the remote works
+					// with it; the La Marzocco app may need re-syncing later.
+					note = "Saved to your machine, but NOT to your La Marzocco account: " + err.Error() +
+						"\n\nThe token below is live on your machine — copy it. Your app may need re-syncing, " +
+						"but your remote will connect with this token. " + doneNote
+				}
+				showToken(a, w, sess, dl, t, note)
 			})
 		}()
 	}
 	startBtn = widget.NewButton("Start", start)
 	startBtn.Importance = widget.HighImportance
-	cancel := widget.NewButton("Cancel", func() { showToken(a, w, sess, dl, t, false) })
+	cancel := widget.NewButton("Cancel", func() { showToken(a, w, sess, dl, t, "") })
 
 	items = append(items, startBtn, status, cancel)
 	w.SetContent(container.NewVScroll(container.NewVBox(items...)))

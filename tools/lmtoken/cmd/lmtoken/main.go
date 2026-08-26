@@ -279,15 +279,22 @@ Put your machine in pairing mode:
 			waitEnter("Do the paddle steps to enter pairing mode, then press Enter to try again")
 			continue
 		}
-		if err != nil {
+		if err != nil && token == "" {
 			return "", err
 		}
-
-		// Read back so the user sees it really landed in the cloud.
-		if things, e := sess.Things(); e == nil {
-			for _, x := range things {
-				if strings.EqualFold(x.SerialNumber, t.SerialNumber) && x.BleAuthToken == token {
-					fmt.Fprintln(os.Stderr, "Saved to your account.")
+		if err != nil {
+			// The machine derived and is using the token below; only the cloud
+			// save failed. Give it to the user anyway — their remote works with it.
+			fmt.Fprintf(os.Stderr, "\nWarning: %v\n", err)
+			fmt.Fprintln(os.Stderr, "The token below is live on your machine — save it now. Your La Marzocco\n"+
+				"app may need re-syncing, but your remote will connect with this token.")
+		} else {
+			// Read back so the user sees it really landed in the cloud.
+			if things, e := sess.Things(); e == nil {
+				for _, x := range things {
+					if strings.EqualFold(x.SerialNumber, t.SerialNumber) && x.BleAuthToken == token {
+						fmt.Fprintln(os.Stderr, "Saved to your account.")
+					}
 				}
 			}
 		}

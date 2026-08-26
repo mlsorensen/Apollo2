@@ -121,8 +121,14 @@ func looksLikeToken(b []byte) bool {
 // as addr so the BLE step dials directly): mint a seed, derive the token over BLE,
 // and store it in the cloud. If the machine is already bound to the account
 // (confirm returns THING_ALREADY_PAIRED), it unpairs and re-pairs, which re-mints
-// once more. Returns the token now held by both the machine and cloud. progress
-// (may be nil) reports each step for the UI.
+// once more. progress (may be nil) reports each step for the UI.
+//
+// Once the machine derives a token from the seed we write, THAT token is live on
+// the machine whether or not the cloud save that follows succeeds. So a non-empty
+// token is always returned alongside any post-derivation error: on success the
+// token is held by both the machine and the cloud; on failure it's on the machine
+// only (the caller must still surface it, or the user is stuck with a machine on a
+// token they never saw). An empty token means the derivation itself failed.
 func Provision(sess *Session, t Thing, addr string, progress func(string)) (string, error) {
 	report := func(s string) {
 		if progress != nil {
@@ -153,7 +159,9 @@ func Provision(sess *Session, t Thing, addr string, progress func(string)) (stri
 		// the app keeps working (it re-reads the new token from the cloud).
 		report("re-pairing the machine…")
 		if e := sess.Unpair(serial); e != nil {
-			return "", e
+			// The machine already derived `token` and is using it; we just can't
+			// clear the old cloud pairing to save it. Hand it back anyway.
+			return token, fmt.Errorf("the machine is paired to your account and unpairing it to save the new token failed: %w", e)
 		}
 		token, err = derive()
 		if err != nil {
@@ -163,7 +171,10 @@ func Provision(sess *Session, t Thing, addr string, progress func(string)) (stri
 		_, err = sess.ConfirmPairing(confirmFor(t, token))
 	}
 	if err != nil {
-		return "", err
+		// The token is live on the machine; only the cloud save failed. Return it
+		// so the caller can still give it to the user (their remote works with it;
+		// the La Marzocco app can be re-synced later).
+		return token, fmt.Errorf("the token was set on the machine but saving it to your account failed: %w", err)
 	}
 	return token, nil
 }
