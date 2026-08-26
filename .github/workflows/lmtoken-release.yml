@@ -140,7 +140,12 @@ jobs:
   publish:
     needs: [cli, gui-darwin, gui-linux, gui-windows]
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
+      # Checked out for tools/lmtoken/CHANGELOG.md (the per-version notes below).
+      - uses: actions/checkout@v7
+
       - uses: actions/download-artifact@v8
         with:
           path: dist
@@ -149,24 +154,46 @@ jobs:
       - name: Checksums
         run: (cd dist && shasum -a 256 * > SHA256SUMS.txt)
 
+      # Body = this version's CHANGELOG.md section + the constant download
+      # boilerplate. The notes live in the repo (reviewed with the code, and a
+      # re-run for an existing tag can't clobber them). The tag is
+      # `lmtoken-vX.Y.Z`; the CHANGELOG heading drops the prefix (`## vX.Y.Z`). A
+      # missing section is a loud warning, not a failure — binaries win over prose.
+      - name: Compose release notes
+        run: |
+          ver="${RELEASE_TAG#lmtoken-}"
+          awk -v ver="$ver" '
+            $0 == "## " ver { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' tools/lmtoken/CHANGELOG.md > NOTES.md
+          if [ ! -s NOTES.md ]; then
+            echo "::warning::tools/lmtoken/CHANGELOG.md has no '## ${ver}' section - publishing with download notes only"
+          fi
+          cat >> NOTES.md <<'EOF'
+
+          ---
+
+          **LM Token** fetches your La Marzocco machine's Bluetooth token: sign in with
+          your La Marzocco account, pick your machine, and copy the token. If the cloud
+          has no token for your machine, it can provision one over Bluetooth. See the
+          repository README for what to do with it.
+
+          - **LM Token app** (no terminal needed): `lmtoken-gui-<os>-<arch>` — unzip and
+            double-click.
+          - **lmtoken CLI** (for terminals and scripting): `lmtoken-<os>-<arch>` — unzip
+            and run; prints the token to stdout.
+
+          The macOS builds (app **and** CLI) are signed and notarized (re-uploaded via
+          `make release-mac` after this workflow publishes; if macOS warns "could not
+          verify", you caught the brief pre-notarization window — re-download).
+          EOF
+
       - name: Publish release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TAG }}
           files: |
             dist/*
-          body: |
-            **LM Token** fetches your La Marzocco machine's Bluetooth token: sign in with
-            your La Marzocco account, pick your machine, and copy the token. If the cloud
-            has no token for your machine, it can provision one over Bluetooth. See the
-            repository README for what to do with it.
-
-            - **LM Token app** (no terminal needed): `lmtoken-gui-<os>-<arch>` — unzip and
-              double-click.
-            - **lmtoken CLI** (for terminals and scripting): `lmtoken-<os>-<arch>` — unzip
-              and run; prints the token to stdout.
-
-            The macOS builds (app **and** CLI) are signed and notarized (re-uploaded via
-            `make release-mac` after this workflow publishes; if macOS warns "could not
-            verify", you caught the brief pre-notarization window — re-download).
+          body_path: NOTES.md
