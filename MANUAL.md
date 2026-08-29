@@ -227,10 +227,11 @@ needs the paddle harness, since that's what drives it.
 Settings stored on the scale itself, adjusted over Bluetooth. Which rows
 appear — and their value choices — depends on the scale model:
 
-- **Bookoo Themis** — **Beep** (buzzer level Off / 1–4) and **Auto‑off**
-  (5–30 min). The scale also accepts a level 5, but its firmware plays it
-  *quieter* than 4, so it isn't offered; a 5 set from the Bookoo app shows
-  as `--`.
+- **Bookoo Themis / Themis Ultra** — **Beep** (buzzer level Off / 1–3, the
+  same range the Bookoo app offers) and **Auto‑off** (5–30 min). The scale
+  also accepts levels 4–5 over Bluetooth, but the firmware plays those
+  *quieter* than the real ones, so they aren't offered; one set elsewhere
+  shows as `--`.
 - **Acaia Umbra** — **Beep** (On / Off; also silences its tare/timer chirps),
   **Auto sleep** (Off / 1–30 min), and **Unit** (g / oz). The Acaia app can
   additionally set *power‑off* timers; those aren't offered here (a

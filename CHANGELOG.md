@@ -9,6 +9,12 @@ for someone reading the diff.
 
 ### Changes
 
+- **Bookoo Themis Ultra works** — it speaks the same protocol as the Themis
+  Mini and is recognized automatically (weight, tare, battery, beep and
+  auto‑off). The **Beep** row on both scales now offers Off / 1–3, matching
+  the Bookoo app: the out‑of‑range levels the wire accepts actually play
+  *quieter* than level 3 (previously we offered 1–4).
+
 - **Scan-to-set-up.** The token and Wi‑Fi setup screens now show a QR code:
   scan it with your phone's camera to join the `Micra-Setup` network, and the
   setup page opens by itself (the device now answers as a captive portal, like

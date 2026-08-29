@@ -32,13 +32,13 @@ class FakeScale : public core::IScale {
   }
   void tare() override {}
 
-  // On-scale settings, canned per persona: the Bookoo exposes its 0-5 buzzer
-  // gear, the Umbra a Beep on/off — both with an auto-off timer.
+  // On-scale settings, canned per persona: the Bookoo exposes its buzzer
+  // volume (Off/1-3, the vendor app's range), the Umbra a Beep on/off — both
+  // with an auto-off timer.
   int device_setting_count() const override {
     return lunar_ ? 4 : umbra_ ? 3 : 2;
   }
   core::ScaleSettingDesc device_setting(int i) const override {
-    static constexpr const char* kGear[] = {"Off", "1", "2", "3", "4"};
     static constexpr const char* kOnOff[] = {"Off", "On"};
     static constexpr const char* kBookooOff[] = {"5 min", "10 min", "15 min",
                                                  "20 min", "30 min"};
@@ -56,7 +56,7 @@ class FakeScale : public core::IScale {
                                              /*writable_count=*/2,
                                              /*nonzero_confirms=*/true}
              : umbra_ ? core::ScaleSettingDesc{"Beep", kOnOff, 2}
-                      : core::ScaleSettingDesc{"Beep", kGear, 5};
+                      : core::ScaleSettingDesc{"Beep", kBeepVol, 4};
     if (i == 1)
       return lunar_ ? core::ScaleSettingDesc{"Auto sleep", kLunarSleep, 6}
              : umbra_ ? core::ScaleSettingDesc{"Auto sleep", kUmbraSleep, 5}
