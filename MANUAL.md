@@ -331,7 +331,9 @@ page fits on screen with little to no scrolling.
   sync; all machine/scale control is local Bluetooth.
 - **Status** — `Off`, `Connecting`, or `Connected` with the IP address.
 - **Set up WiFi** — starts the device's own access point (`Micra-Setup`) and
-  setup page for entering credentials (same page as token entry).
+  setup page for entering credentials (same flow as token entry: scan the
+  QR code on the screen with your phone's camera and the page pops up on its
+  own, or join the network and open the shown address).
 - **Forget** — clears the saved network.
 - **Auto time (NTP)** *(default on)* — sync the clock over WiFi while
   connected. (The timezone it applies is set under **Time & date**.)

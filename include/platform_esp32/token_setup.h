@@ -1,5 +1,6 @@
 #pragma once
 
+#include <DNSServer.h>
 #include <WebServer.h>
 
 #include <atomic>
@@ -56,6 +57,11 @@ class TokenSetup {
   Config& config_;
   MicraLink& link_;
   WebServer* server_ = nullptr;  // the shared server (owned by WebUi)
+  // Captive-portal DNS while the AP is up: every lookup answers with our IP,
+  // so the phone's connectivity probe lands on the web server (whose 404
+  // handler funnels to '/') and the OS pops the setup page automatically.
+  // The core's DNSServer is AsyncUDP-based — no pumping from handle().
+  DNSServer dns_;
   Mode mode_ = Mode::Token;
   // active_ is read by the web-server task (route dispatch) and written on
   // the main thread (portal lifecycle); wifi_saved_ the reverse. Atomics.

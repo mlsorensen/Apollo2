@@ -40,7 +40,8 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             bool token_modal = false, int theme = 0, int stats_section = -1,
             bool clean_lock = false, int shot_modal_id = -1, int history_ym = 0,
             bool backflush = false, bool log_modal = false,
-            bool unwired_midshot = false, bool toast = false) {
+            bool unwired_midshot = false, bool toast = false,
+            bool join_modal = false) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
@@ -55,6 +56,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   if (stats_section >= 0) app.select_stats_section(stats_section);
   if (history_ym != 0) app.set_history_filter(history_ym);
   if (token_modal) app.open_token_setup();
+  if (join_modal) app.start_token_setup();  // the QR + join-instructions modal
   if (clean_lock) app.start_clean_lock();
   if (backflush) app.open_backflush();
   if (shot_modal_id >= 0) app.open_shot_card(static_cast<uint32_t>(shot_modal_id));
@@ -92,11 +94,11 @@ int main() {
                bool modal = false, int theme = 0, int stats = -1, bool clean_lock = false,
                int shot_id = -1, int history_ym = 0, bool backflush = false,
                bool log_modal = false, bool unwired_midshot = false,
-               bool toast = false) {
+               bool toast = false, bool join_modal = false) {
     return render(machine, provisioner, battery, disp, clock, history, scale,
                   scale_provisioner, brew, network, shots, s, path, tab, sec, modal, theme,
                   stats, clean_lock, shot_id, history_ym, backflush, log_modal,
-                  unwired_midshot, toast);
+                  unwired_midshot, toast, join_modal);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
@@ -217,6 +219,14 @@ int main() {
   ok &= r(p5, "renders/stats_brew_1280x720.png", 2, -1, false, 0, ui::kStatsBrew);
   // Token modal over Home (modal over Settings hits a known LVGL draw loop).
   ok &= r(p5, "renders/token_modal_1280x720.png", 0, -1, true);
+  // Portal-join modal: WIFI: QR + manual instructions (token flow; the WiFi
+  // flow shows the same layout with different copy).
+  ok &= r({800, 480}, "renders/join_modal_800x480.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, false, false, true);
+  ok &= r({320, 240}, "renders/join_modal_320x240.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, false, false, true);
+  ok &= r(p5, "renders/join_modal_1280x720.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, false, false, true);
   scale_provisioner.set_saved(false);
   ok &= r(p5, "renders/home_noscale_1280x720.png");
   scale_provisioner.set_saved(true);

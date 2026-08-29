@@ -122,6 +122,11 @@ void TokenSetup::start(Mode mode) {
   const IPAddress ip(192, 168, 4, 1);
   WiFi.softAPConfig(ip, ip, IPAddress(255, 255, 255, 0));
   const bool ap_ok = WiFi.softAP(ssid());
+  // Captive portal: answer EVERY DNS query with our IP. The phone's
+  // connectivity probe (captive.apple.com / generate_204) then hits the web
+  // server, whose not-found handler 302s to '/', and the OS pops the setup
+  // page on its own — no typing 192.168.4.1. Async (AsyncUDP); no pump.
+  const bool dns_ok = dns_.start(53, "*", ip);
   // The phone is inches away, so run low TX power — smaller current spikes, which
   // matters on a USB-powered 7" board where a WiFi burst can brown out the rail.
   WiFi.setTxPower(WIFI_POWER_8_5dBm);
@@ -129,13 +134,15 @@ void TokenSetup::start(Mode mode) {
   active_ = true;
   stop_pending_ = true;                     // safety net: auto-close if unused, so the
   stop_at_ms_ = millis() + 5 * 60 * 1000;   // AP can't linger (the device closes it on connect)
-  core::logf("TokenSetup: AP '%s' %s, IP=%s, free heap=%u\n", ssid(),
+  core::logf("TokenSetup: AP '%s' %s, IP=%s, DNS %s, free heap=%u\n", ssid(),
              ap_ok ? "up" : "FAILED", WiFi.softAPIP().toString().c_str(),
+             dns_ok ? "up" : "FAILED",
              static_cast<unsigned>(ESP.getFreeHeap()));
 }
 
 void TokenSetup::stop() {
   if (!active_) return;
+  dns_.stop();
   WiFi.softAPdisconnect(true);
   WiFi.mode(WIFI_OFF);
   active_ = false;

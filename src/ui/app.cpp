@@ -1903,6 +1903,20 @@ void App::toggle_connection() {
 }
 
 lv_obj_t* App::open_modal(const char* title, const char* body) {
+  lv_obj_t* card = open_modal_card(title);
+
+  const bool modal_compact = is_compact(screen_);
+  lv_obj_t* b = lv_label_create(card);
+  lv_label_set_text(b, body);
+  lv_obj_set_width(b, lv_pct(100));
+  lv_label_set_long_mode(b, LV_LABEL_LONG_WRAP);
+  lv_obj_set_style_text_align(b, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_color(b, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(b, ui::font_dp(modal_compact ? 14 : 16), 0);
+  return card;
+}
+
+lv_obj_t* App::open_modal_card(const char* title) {
   close_modal();
   lv_obj_t* bg = lv_obj_create(lv_layer_top());  // full-screen dimmed overlay
   lv_obj_remove_style_all(bg);
@@ -1933,14 +1947,60 @@ lv_obj_t* App::open_modal(const char* title, const char* body) {
   lv_label_set_text(t, title);
   lv_obj_set_style_text_color(t, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(t, ui::font_dp(modal_compact ? 20 : 24), 0);
+  return card;
+}
 
-  lv_obj_t* b = lv_label_create(card);
+// Setup-portal instructions: a scannable WIFI: join QR next to the manual
+// steps (kept for anyone who prefers to type — the ssid/url text is the same
+// as before the QR existed). Scanning joins the phone to the AP; the captive
+// portal DNS then pops the setup page on its own.
+lv_obj_t* App::open_join_modal(const char* title, const char* ssid,
+                               const char* url, const char* then_line) {
+  lv_obj_t* card = open_modal_card(title);
+  const bool compact = is_compact(screen_);
+
+  lv_obj_t* row = lv_obj_create(card);
+  lv_obj_remove_style_all(row);
+  lv_obj_set_width(row, lv_pct(100));
+  lv_obj_set_height(row, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(row, ui::dp(compact ? 10 : 16), 0);
+
+  // Standard WiFi-join QR payload (open network). The fixed SSID has no
+  // chars that need the format's escaping.
+  char wifi[64];
+  std::snprintf(wifi, sizeof(wifi), "WIFI:T:nopass;S:%s;;", ssid);
+  lv_obj_t* qr = lv_qrcode_create(row);
+  lv_qrcode_set_size(qr, ui::dp(compact ? 92 : 128));
+  lv_qrcode_set_dark_color(qr, lv_color_black());
+  lv_qrcode_set_light_color(qr, lv_color_white());
+  lv_qrcode_update(qr, wifi, std::strlen(wifi));
+  // Light border = the quiet zone scanners need to find the code on the
+  // dark card (the documented lv_qrcode approach).
+  lv_obj_set_style_border_color(qr, lv_color_white(), 0);
+  lv_obj_set_style_border_width(qr, ui::dp(6), 0);
+
+  // No em-dash: the Montserrat builds only cover ASCII. Compact gets terse
+  // copy — the full text wraps to ~8 lines beside the QR and overflows 240px.
+  char body[224];
+  if (compact) {
+    std::snprintf(body, sizeof(body), "Scan to join, or connect to:\n%s\n%s\n%s",
+                  ssid, url, then_line);
+  } else {
+    std::snprintf(body, sizeof(body),
+                  "Scan with your phone's camera to join; the setup page "
+                  "opens by itself.\n\nOr join WiFi: %s\nand open: %s\n%s",
+                  ssid, url, then_line);
+  }
+  lv_obj_t* b = lv_label_create(row);
   lv_label_set_text(b, body);
-  lv_obj_set_width(b, lv_pct(100));
+  lv_obj_set_flex_grow(b, 1);
   lv_label_set_long_mode(b, LV_LABEL_LONG_WRAP);
-  lv_obj_set_style_text_align(b, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_align(b, LV_TEXT_ALIGN_LEFT, 0);
   lv_obj_set_style_text_color(b, lv_color_hex(ui::theme::muted()), 0);
-  lv_obj_set_style_text_font(b, ui::font_dp(modal_compact ? 14 : 16), 0);
+  lv_obj_set_style_text_font(b, ui::font_dp(compact ? 14 : 16), 0);
   return card;
 }
 
@@ -2264,10 +2324,9 @@ void App::show_token_modal(bool /*fetch_failed*/) {
 }
 
 void App::show_wifi_modal() {
-  char body[160];
-  std::snprintf(body, sizeof(body), "Join WiFi: %s\nOpen: %s\nthen paste your token",
-                provisioner_->setup_ssid(), provisioner_->setup_url());
-  lv_obj_t* card = open_modal("Enter token over WiFi", body);
+  lv_obj_t* card =
+      open_join_modal("Enter token over WiFi", provisioner_->setup_ssid(),
+                      provisioner_->setup_url(), "then paste your token");
   modal_button(card, "Cancel", ui::theme::rail(), on_wifi_cancel, this);
   wifi_setup_shown_ = true;
 }
@@ -2293,11 +2352,9 @@ void App::set_wifi_enabled(bool on) {
 
 void App::show_wifi_setup_modal() {
   if (network_ == nullptr) return;
-  char body[192];
-  std::snprintf(body, sizeof(body),
-                "Join WiFi: %s\nOpen: %s\nenter your home network name + password",
-                network_->setup_ssid(), network_->setup_url());
-  lv_obj_t* card = open_modal("Set up WiFi", body);
+  lv_obj_t* card =
+      open_join_modal("Set up WiFi", network_->setup_ssid(), network_->setup_url(),
+                      "then enter your home network name + password");
   modal_button(card, "Cancel", ui::theme::rail(), on_wifi_setup_cancel, this);
   wifi_portal_shown_ = true;
 }

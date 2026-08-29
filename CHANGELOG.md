@@ -5,6 +5,16 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## Unreleased
+
+### Changes
+
+- **Scan-to-set-up.** The token and Wi‑Fi setup screens now show a QR code:
+  scan it with your phone's camera to join the `Micra-Setup` network, and the
+  setup page opens by itself (the device now answers as a captive portal, like
+  a hotel Wi‑Fi sign-in page). Joining manually and opening
+  `http://192.168.4.1` still works exactly as before.
+
 ## v0.8.0
 
 ### Changes

@@ -52,8 +52,10 @@ to the machine instead of a phone app.
   correct over NTP, with a timezone picker that handles daylight saving. Time is
   saved to the on‑board RTC (where present) so it survives a power‑off.
 - **Phone‑based setup, no app** — pairing and Wi‑Fi credentials are entered
-  through a tiny web page the device serves from its own Wi‑Fi access point; you
-  just join `Micra-Setup` and open it in a browser.
+  through a tiny web page the device serves from its own Wi‑Fi access point.
+  Scan the QR code on the device's screen with your phone's camera and the
+  setup page pops up on its own (or join `Micra-Setup` and open it in a
+  browser).
 - **Made to live on the counter** — themes, °C/°F, 12/24‑hour clock, adjustable
   brightness, and a temperature‑history view. Layouts scale from a 2" pocket
   remote to a 7" panel.
@@ -199,8 +201,10 @@ one‑time step to fetch it.
 ### 3. Enter your token
 
 Tap **Enter token** on the prompt (or **Settings → Micra → Set up**) to start the
-device's own Wi‑Fi access point, **`Micra-Setup`**. Join it from your phone, open
-**http://192.168.4.1**, paste your token, and Save — the device connects and the
+device's own Wi‑Fi access point, **`Micra-Setup`**. Scan the QR code on the
+device's screen with your phone's camera — it joins the access point and the
+setup page pops up on its own. (Or join `Micra-Setup` manually and open
+**http://192.168.4.1**.) Paste your token and Save — the device connects and the
 access point closes on its own.
 
 Where to get the token:

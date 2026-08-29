@@ -176,6 +176,10 @@ class App {
   void rebuild();             // tear down + rebuild the UI (e.g. after a theme change)
   void request_layout_rebuild(int section);  // defer a rebuild, returning to `section`
   lv_obj_t* open_modal(const char* title, const char* body);  // returns the card
+  lv_obj_t* open_modal_card(const char* title);  // card + title only (no body)
+  // Portal instructions: WIFI: join QR + the manual ssid/url steps.
+  lv_obj_t* open_join_modal(const char* title, const char* ssid, const char* url,
+                            const char* then_line);
   void close_modal();
   void show_token_modal(bool fetch_failed);  // token-entry prompt (Enter token / Cancel)
   void show_wifi_modal();   // WiFi instructions + Cancel

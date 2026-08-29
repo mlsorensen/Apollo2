@@ -51,6 +51,10 @@
 // On by default in LVGL, but we set it explicitly since Settings depends on it.
 #define LV_USE_MENU 1
 
+// QR widget (bundled qrcodegen): the setup-portal modals show a WIFI: join
+// code phones can scan to hop onto the AP without typing the SSID.
+#define LV_USE_QRCODE 1
+
 // Live FPS + CPU% overlay (bottom-right) for measuring on-device render perf.
 // Flip both to 0 for production once the RGB pipeline is dialed in.
 #define LV_USE_SYSMON 1
