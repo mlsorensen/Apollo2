@@ -231,6 +231,16 @@ int main() {
   ok &= r(p5, "renders/home_noscale_1280x720.png");
   scale_provisioner.set_saved(true);
 
+  // 8" 1280x800 (ESP32-P4-WIFI6-Touch-LCD-X 8"): 1.6x for a logical 800x500 —
+  // the 4.3-class width exactly; the extra 20dp of height goes to the
+  // flex-grow regions (home hero card, graphs, history list). The X 7" is
+  // pixel-identical to the p5 profile above (same 1280x720 @ 1.5x).
+  const ui::ScreenProfile x8{1280, 800, 1.6f};
+  ok &= r(x8, "renders/home_1280x800.png");
+  ok &= r(x8, "renders/settings_1280x800.png", 1);
+  ok &= r(x8, "renders/stats_brew_1280x800.png", 2, -1, false, 0, ui::kStatsBrew);
+  ok &= r(x8, "renders/stats_history_1280x800.png", 2, -1, false, 0, ui::kStatsHistory);
+
   // Stats tab (tab 2): graph sections + info.
   ok &= r({320, 240}, "renders/stats_brew_320x240.png", 2, -1, false, 0, ui::kStatsBrew);
   ok &= r({800, 480}, "renders/stats_brew_800x480.png", 2, -1, false, 0, ui::kStatsBrew);

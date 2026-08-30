@@ -87,7 +87,10 @@ On the P4‑WIFI6‑Touch‑LCD‑5 (and the 4.3), the paddle uses three native 
 that sit **side by side** on the corner of the GPIO header — **GND, GPIO 52,
 GPIO 51**, in that order on the silkscreen — so a
 [2.54 mm 3‑pin screw‑terminal block](https://a.co/d/0eVdsD4h) clips straight
-onto them, no soldering:
+onto them, no soldering. The X‑series boxes (7"/8") use the **same three
+pins**: on their 40‑pin header one pin column runs GND, IO52, IO51 in a row
+near the header's end (per the schematic — the photos below show the 5";
+double‑check the silkscreen before clipping on):
 
 ![The P4 header corner — GND, 52, 51 in a row](img/wiring/p4-header-pins.jpg)
 

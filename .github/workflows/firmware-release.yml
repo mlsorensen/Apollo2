@@ -42,6 +42,12 @@ jobs:
           - { env: esp32-s3-micra-4-3c,  board: s3-touch-lcd-4.3c,       chip: ESP32-S3 }
           - { env: esp32-p4-micra-43,    board: p4-wifi6-touch-lcd-4.3,  chip: ESP32-P4 }
           - { env: esp32-p4-micra-5,     board: p4-wifi6-touch-lcd-5,    chip: ESP32-P4 }
+          - { env: esp32-p4-micra-x-7,   board: p4-wifi6-touch-lcd-x-7,  chip: ESP32-P4 }
+          - { env: esp32-p4-micra-x-8,   board: p4-wifi6-touch-lcd-x-8,  chip: ESP32-P4 }
+          # The X 10.1" env (esp32-p4-micra-x-10-1) builds but is deliberately
+          # NOT released: different glass/init than the 8", and no hardware to
+          # verify it on. Add a row here (+ a site/index.html card) if that
+          # changes.
     steps:
       - uses: actions/checkout@v7
 

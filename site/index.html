@@ -164,6 +164,22 @@
     <esp-web-install-button data-board="p4-wifi6-touch-lcd-5"><button slot="activate">Install</button></esp-web-install-button>
   </div>
 
+  <div class="board">
+    <div class="info">
+      <div class="name">ESP32-P4-WIFI6-Touch-LCD-X (7&quot;)</div>
+      <div class="desc">7&quot; 1280&times;720 finished box, ESP32-P4 + WiFi 6. Two USB-C ports &mdash; use the one labeled <b>UART</b>.</div>
+    </div>
+    <esp-web-install-button data-board="p4-wifi6-touch-lcd-x-7"><button slot="activate">Install</button></esp-web-install-button>
+  </div>
+
+  <div class="board">
+    <div class="info">
+      <div class="name">ESP32-P4-WIFI6-Touch-LCD-X (8&quot;)</div>
+      <div class="desc">8&quot; 1280&times;800 finished box, ESP32-P4 + WiFi 6. Two USB-C ports &mdash; use the one labeled <b>UART</b>.</div>
+    </div>
+    <esp-web-install-button data-board="p4-wifi6-touch-lcd-x-8"><button slot="activate">Install</button></esp-web-install-button>
+  </div>
+
   <h2>After flashing</h2>
   <ol>
     <li>On the device: <b>Settings &rarr; Micra &rarr; Bluetooth &rarr; Scan</b>, then tap your machine.</li>
@@ -257,6 +273,8 @@
   // most-specific-first ("...LCD-5" before "...LCD-4.3" etc.). No DTR/RTS
   // toggling — a scripted reset dance can strand S3 boards in download mode.
   const BOARD_PATTERNS = [
+    ['P4-WIFI6-Touch-LCD-X-7', 'p4-wifi6-touch-lcd-x-7'],
+    ['P4-WIFI6-Touch-LCD-X-8', 'p4-wifi6-touch-lcd-x-8'],
     ['P4-WIFI6-Touch-LCD-5',   'p4-wifi6-touch-lcd-5'],
     ['P4-WIFI6-Touch-LCD-4.3', 'p4-wifi6-touch-lcd-4.3'],
     ['S3-Touch-LCD-4.3C',      's3-touch-lcd-4.3c'],

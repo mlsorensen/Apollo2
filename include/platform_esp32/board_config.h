@@ -575,8 +575,140 @@ constexpr int kSdD3 = 42;
 // mount fails as if no card were present.
 constexpr int kSdLdoChannel = 4;
 
+#elif defined(BOARD_WAVESHARE_P4_WIFI6_X_7) || \
+    defined(BOARD_WAVESHARE_P4_WIFI6_X_8) || \
+    defined(BOARD_WAVESHARE_P4_WIFI6_X_10_1)
+
+// Waveshare ESP32-P4-WIFI6-Touch-LCD-X — the finished-box (all-in-one HMI)
+// family: 7" 720x1280 ILI9881C, 8" and 10.1" 800x1280 JD9365. The 8" and
+// 10.1" share resolution and pins but Waveshare ships DIFFERENT JD9365 vendor
+// init tables for the two glasses (an #if/#else in their BSP), so each size
+// is its own env/image. Everything but the panel is the P4-5's electronics
+// (same P4NRW32, C6-over-SDIO radio, ES8311 audio, battery path, GT911 with
+// rst/int unwired, SD slot, GPIO 51/52 free on the 40-pin header). Pins
+// verified against the X schematic + Waveshare's BSP
+// (esp32_p4_wifi6_touch_lcd_x.h). One block, panel deltas in the #if below.
+//
+// SILICON: these ship rev v3.0+ chips (400 MHz) — boards jsons use
+// chip_variant "esp32p4", the OPPOSITE of the other P4 boards' "esp32p4_es".
+// The two revision groups are binary-incompatible; `esptool chip_id` tells
+// them apart. UNVERIFIED on hardware yet.
+#define BOARD_DISPLAY_DSI
+#define BOARD_TOUCH_GT911
+constexpr bool kSupportsBrightness = true;  // LEDC PWM backlight (dimmable)
+
+#if defined(BOARD_WAVESHARE_P4_WIFI6_X_7)
+constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-X-7";
+#define BOARD_DSI_PANEL_ILI9881C  // panel controller (selects the DCS init table)
+// UI: same panel geometry as the P4-5 (720x1280 rotated) on larger glass —
+// same 1.5x zoom, logical 853x480 (the extra width feeds the flex layout).
+#define BOARD_UI_SCALE 1.5f
+// Timing from the BSP's inline ILI9881C dpi_config: 80 MHz pixel clock;
+// HPW 50, HBP 239, HFP 33; VPW 30, VBP 20, VFP 2; 1000 Mbps per lane.
+constexpr int  kLcdNativeW = 720;
+constexpr long kDsiDpiClockHz = 80000000;
+constexpr int  kDsiLaneBitRateMbps = 1000;
+constexpr int  kDsiHsyncPulse = 50, kDsiHsyncBack = 239, kDsiHsyncFront = 33;
+constexpr int  kDsiVsyncPulse = 30, kDsiVsyncBack = 20,  kDsiVsyncFront = 2;
 #else
-#error "No board selected. Add -DBOARD_WAVESHARE_S3_LCD_2 (or _7B / _43B / _43C / P4_WIFI6_43 / P4_WIFI6_5) to build_flags in platformio.ini."
+#if defined(BOARD_WAVESHARE_P4_WIFI6_X_8)
+constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-X-8";
+#define BOARD_DSI_PANEL_JD9365     // 8" DCS init table
+#else
+constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-X-10.1";
+#define BOARD_DSI_PANEL_JD9365_10  // the 10.1" glass's own DCS init table
+#endif
+// UI: 800x1280 rotated => 1280x800. Zoom 1.6x for a logical 800x500 — the
+// exact 800 width of the 4.3-class layout; the extra 20dp of height flows
+// into the flex-grow regions (home hero card, graphs, history list).
+#define BOARD_UI_SCALE 1.6f
+// Timing from esp_lcd_jd9365's JD9365_800_1280_PANEL_60HZ_DPI_CONFIG (the
+// BSP uses it verbatim): 80 MHz; HPW 20, HBP 20, HFP 40; VPW 4, VBP 12,
+// VFP 30; 1500 Mbps per lane.
+constexpr int  kLcdNativeW = 800;
+constexpr long kDsiDpiClockHz = 80000000;
+constexpr int  kDsiLaneBitRateMbps = 1500;
+constexpr int  kDsiHsyncPulse = 20, kDsiHsyncBack = 20, kDsiHsyncFront = 40;
+constexpr int  kDsiVsyncPulse = 4,  kDsiVsyncBack = 12, kDsiVsyncFront = 30;
+#endif
+
+// --- Shared I2C bus (GT911 touch; also the audio codecs / camera header) ---
+constexpr int kI2cSda = 7;
+constexpr int kI2cScl = 8;
+
+// --- Display: native PORTRAIT panel, 2-lane MIPI-DSI, rotated to landscape
+//     like the other P4 boards. Reset is default active-LOW here (the BSP
+//     passes no reset_active_high flag — unlike the 5's HX8394). Backlight is
+//     LEDC PWM on 26 plus an AP3032 boost-enable on 23 (BL_EN). ---
+constexpr int  kLcdNativeH = 1280;
+constexpr int  kLcdRotation = 1;      // 1 => landscape
+constexpr int  kLcdRst = 27;
+constexpr bool kLcdRstActiveHigh = false;
+constexpr int  kLcdBacklight = 26;         // LEDC PWM, normal polarity
+constexpr bool kBacklightActiveLow = false;
+constexpr int  kLcdBacklightEn = 23;       // backlight boost enable (BL_EN)
+
+// --- Touch: GT911 on I2C, rst/int not wired (probe-only) — same deal as the
+//     P4-5 block. Orientation: the 7" box mounts its panel 180° from the
+//     P4-5's convention (camera on top; MADCTL GS|SS flip in display.cpp),
+//     so its touch mapping toggles BOTH mirrors vs the P4-5 values. The
+//     8"/10.1" keep the P4-5 best-guess until hardware says otherwise. ---
+constexpr int  kTouchSda = 7;   // == kI2cSda (Touch reads these names)
+constexpr int  kTouchScl = 8;
+constexpr int  kTouchAddr = 0x5D;    // 0x5D (INT low at boot) or 0x14
+constexpr int  kTouchRst = -1;
+constexpr int  kTouchInt = -1;
+constexpr bool kTouchSwapXY = true;
+#if defined(BOARD_WAVESHARE_P4_WIFI6_X_7)
+constexpr bool kTouchMirrorX = true;   // P4-5 mapping + the 180° panel flip
+constexpr bool kTouchMirrorY = false;
+#else
+constexpr bool kTouchMirrorX = false;
+constexpr bool kTouchMirrorY = true;
+#endif
+
+// --- Battery: same path as the 4.3/5 — BAT_ADC GPIO20 through a 200K/100K
+//     divider (X schematic R92/R93) => ÷3. ---
+constexpr int   kBatteryAdc = 20;
+constexpr float kBatteryDivider = 3.0f;
+constexpr float kBatteryFullVolts = 4.10f;
+constexpr float kBatteryEmptyVolts = 3.40f;
+constexpr float kBatteryCutoffVolts = 3.40f;
+constexpr float kBatteryResumeVolts = 3.70f;
+constexpr float kUsbPowerVolts = 4.15f;
+
+// --- Audio: ES8311 codec, identical wiring to the 4.3/5 (BSP pins match). ---
+#define BOARD_HAS_AUDIO
+constexpr int kAudioI2sPort = 1;
+constexpr int kAudioMclk = 13;
+constexpr int kAudioBclk = 12;
+constexpr int kAudioLrclk = 10;
+constexpr int kAudioDout = 9;     // ESP -> ES8311 SDIN (speaker)
+constexpr int kEs8311Addr = 0x18;
+constexpr int kAudioPaPin = 53;   // speaker power-amp enable, active-high
+
+// --- Paddle control (brew-by-weight): GPIO 52/51 are free on the X's 40-pin
+//     header (J8 pairs IO47/IO52 and IO46/IO51, GND at the corner) — same
+//     pins and same opto-module harness as the 4.3/5. ---
+constexpr int  kPaddleDrivePin = 52;
+constexpr int  kPaddleSensePin = 51;
+constexpr bool kPaddleActiveHigh = true;
+
+// --- RTC: no discrete RTC chip (same as the other P4 boards). ---
+
+// --- MicroSD: native 4-bit SDMMC, pins identical to the 4.3/5. ---
+#define BOARD_HAS_SD_MMC
+constexpr int kSdClk = 43;
+constexpr int kSdCmd = 44;
+constexpr int kSdD0 = 39;
+constexpr int kSdD1 = 40;
+constexpr int kSdD2 = 41;
+constexpr int kSdD3 = 42;
+// SD pads powered from the P4's on-chip LDO channel 4 (schematic ESP_LDO_VO4).
+constexpr int kSdLdoChannel = 4;
+
+#else
+#error "No board selected. Add -DBOARD_WAVESHARE_S3_LCD_2 (or _7B / _43B / _43C / P4_WIFI6_43 / P4_WIFI6_5 / P4_WIFI6_X_7 / P4_WIFI6_X_8 / P4_WIFI6_X_10_1) to build_flags in platformio.ini."
 #endif
 
 // Proportional UI zoom for high-DPI panels (see ui::ScreenProfile::scale).

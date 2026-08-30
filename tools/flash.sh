@@ -19,6 +19,9 @@ board_to_env() {
     s3-4-3c|4-3c|4.3c|43c|esp32-s3-micra-4-3c)            echo "esp32-s3-micra-4-3c" ;;
     p4-4-3|p4|p4-43|p4-wifi6|esp32-p4-micra-43)           echo "esp32-p4-micra-43" ;;
     p4-5|p45|esp32-p4-micra-5)                            echo "esp32-p4-micra-5" ;;
+    p4-x-7|p4x7|esp32-p4-micra-x-7)                       echo "esp32-p4-micra-x-7" ;;
+    p4-x-8|p4x8|esp32-p4-micra-x-8)                       echo "esp32-p4-micra-x-8" ;;
+    p4-x-10-1|p4-x-10|p4x101|esp32-p4-micra-x-10-1)       echo "esp32-p4-micra-x-10-1" ;;
     *) echo "" ;;
   esac
 }
@@ -50,6 +53,9 @@ deadline = time.time() + 3.0
 buf = b""
 while time.time() < deadline:
     buf += s.read(256)
+    if b"P4-WIFI6-Touch-LCD-X-10.1" in buf: print("esp32-p4-micra-x-10-1"); break  # X boards before the generic P4 match
+    if b"P4-WIFI6-Touch-LCD-X-7" in buf: print("esp32-p4-micra-x-7"); break
+    if b"P4-WIFI6-Touch-LCD-X-8" in buf: print("esp32-p4-micra-x-8"); break
     if b"P4-WIFI6-Touch-LCD-5" in buf: print("esp32-p4-micra-5"); break  # before the generic P4 match
     if b"P4-WIFI6" in buf: print("esp32-p4-micra-43");  break  # before LCD-4: its banner has "LCD-4.3" too
     if b"LCD-7" in buf:   print("esp32-s3-micra-7b");   break
@@ -67,7 +73,7 @@ ENV=""
 if [ -n "$BOARD" ]; then
   ENV="$(board_to_env "$BOARD")"
   if [ -z "$ENV" ]; then
-    echo "flash: unknown board '$BOARD' (use s3-2 | s3-7b | s3-4-3b | s3-4-3c | p4-4-3 | p4-5)" >&2
+    echo "flash: unknown board '$BOARD' (use s3-2 | s3-7b | s3-4-3b | s3-4-3c | p4-4-3 | p4-5 | p4-x-7 | p4-x-8 | p4-x-10-1)" >&2
     exit 2
   fi
 elif [ -n "$PORT" ]; then
@@ -84,6 +90,9 @@ if [ -z "$ENV" ]; then
   echo "         make flash-s3-2      (S3 2\" 320x240)" >&2
   echo "         make flash-p4-4-3    (P4-WIFI6 4.3\" 800x480)" >&2
   echo "         make flash-p4-5      (P4-WIFI6 5\" 1280x720)" >&2
+  echo "         make flash-p4-x-7    (P4-WIFI6 X 7\" box 1280x720)" >&2
+  echo "         make flash-p4-x-8    (P4-WIFI6 X 8\" box 1280x800)" >&2
+  echo "         make flash-p4-x-10-1 (P4-WIFI6 X 10.1\" box 1280x800)" >&2
   exit 2
 fi
 

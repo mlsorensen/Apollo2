@@ -86,24 +86,29 @@ absent — the UI just shows the relevant part as offline.
 The firmware targets Waveshare ESP32 touch boards. One board is selected at
 build time.
 
-### Recommended boards
+### Which board?
 
-Two platforms are the focus going forward — pick by how hands‑on you want the
-build to be:
+Three boards come as **finished boxes** — no enclosure to print, nothing to
+assemble. Flash one and set it on the counter: every board delivers the full
+brew‑by‑weight experience with **zero wiring** (via Shot detect). The wiring
+column below only matters if you *also* want **Auto shot** — the wired‑paddle
+mode where the machine's own paddle starts the shot and the firmware cuts it
+at target weight.
 
-- **[Waveshare ESP32‑S3‑Touch‑LCD‑4.3C](https://www.waveshare.com/esp32-s3-touch-lcd-4.3c.htm?sku=33630)
-  in the **BOX** variant (SKU 33630) — the easy path.** A finished enclosure, ready to sit on the
-  counter, and **direct‑wire capable**: its isolated DI/DO terminal block has
-  the opto‑isolators built in, so wiring the Micra's paddle circuit for Auto
-  shot is just three wires into screw terminals (see the
-  [wiring guide](docs/WIRING.md)). The trade‑off is a lower‑end
-  panel (4.3" 800×480 RGB) and less headroom than the P4.
-- **[Waveshare ESP32‑P4‑WIFI6‑Touch‑LCD‑5](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-5.htm)
-  (SKU 33762) — the performance path.** A much faster ESP32‑P4 with a crisp 5"
-  1280×720 DSI panel. More of a project: there is no enclosure (print the
-  [shell provided in this repo](hardware/3d-prints/)) and the wired paddle
-  needs a small cable you assemble with an external opto‑isolator module
-  (see the [wiring guide](docs/WIRING.md)).
+| Pick | Screen | Enclosure | Auto‑shot wiring *(optional)* | Performance |
+|------|--------|-----------|-------------------------------|-------------|
+| [ESP32‑S3‑Touch‑LCD‑4.3C **BOX**](https://www.waveshare.com/esp32-s3-touch-lcd-4.3c.htm?sku=33630) (SKU 33630) | 4.3" 800×480 | Finished box | **Built‑in opto** — three wires into screw terminals, nothing to build | Good |
+| [ESP32‑P4‑WIFI6‑Touch‑LCD‑X **7" box**](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-7-8-10.1.htm) | 7" 1280×720 | Finished box | DIY cable with an external opto module | **Best** |
+| [ESP32‑P4‑WIFI6‑Touch‑LCD‑X **8" box**](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-7-8-10.1.htm) | 8" 1280×800 | Finished box | DIY cable with an external opto module | **Best** |
+| [ESP32‑P4‑WIFI6‑Touch‑LCD‑5](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-5.htm) (SKU 33762) | 5" 1280×720 | [3D‑printed shell](hardware/3d-prints/) | DIY cable with an external opto module | **Best** |
+
+The ESP32‑P4 boards are the performance pick — much faster, with 32 MB flash +
+32 MB PSRAM against the S3's 16/8 — so prefer them where the screen size fits.
+The S3‑4.3C BOX remains the least‑hacking pick for Auto shot: it's the only
+board with opto‑isolators built in, so even the paddle wiring needs no cable
+assembly (the [wiring guide](docs/WIRING.md) covers both styles). The X‑series
+boxes are new — the 7" is verified on hardware, the 8" not yet — and each
+size takes its own firmware image.
 
 ### All supported boards
 
@@ -115,6 +120,8 @@ build to be:
 | **ESP32‑S3‑Touch‑LCD‑7B** | 7" 1024×600, RGB parallel | — (Shot detect only) | Largest panel. |
 | **ESP32‑P4‑WIFI6‑Touch‑LCD‑4.3** | 4.3" 800×480, MIPI‑DSI (ST7701) | **Yes — external opto.** Native GPIOs + a PC817‑style opto module you wire | ESP32‑P4 (32 MB flash / 32 MB PSRAM); WiFi 6 + BLE via on‑board ESP32‑C6. |
 | **ESP32‑P4‑WIFI6‑Touch‑LCD‑5** | 5" 1280×720, MIPI‑DSI (HX8394) | **Yes — external opto.** Same wiring as the P4 4.3 | **Recommended (performance path).** Same electronics as the P4 4.3 with a higher‑density panel (UI scaled 1.5×). No enclosure — a printable shell is [in the repo](hardware/3d-prints/). |
+| **ESP32‑P4‑WIFI6‑Touch‑LCD‑X 7"** | 7" 1280×720, MIPI‑DSI (ILI9881C) | **Yes — external opto.** Same wiring as the P4 4.3/5 (GPIO 51/52 on the 40‑pin header) | **Recommended (easy + performance).** Finished box; same electronics as the other P4 boards. |
+| **ESP32‑P4‑WIFI6‑Touch‑LCD‑X 8"** | 8" 1280×800, MIPI‑DSI (JD9365) | **Yes — external opto.** Same wiring as the P4 4.3/5 | **Recommended (easy + performance).** Finished box; same electronics as the other P4 boards. UI scaled 1.6×. Not yet verified on hardware. |
 
 Boards without paddle wiring still get the full brew‑by‑weight experience via
 **Shot detect** — only the automatic stop at target weight needs the wire.
@@ -187,7 +194,7 @@ a USB cable.
 
 ```sh
 make flash            # print selection of flash options
-make flash-s3-4-3b    # or target a board: s3-2 | s3-7b | s3-4-3b | s3-4-3c | p4-4-3 | p4-5
+make flash-s3-4-3b    # or target a board: s3-2 | s3-7b | s3-4-3b | s3-4-3c | p4-4-3 | p4-5 | p4-x-7 | p4-x-8
 make monitor          # open the serial console (115200 baud)
 ```
 
@@ -325,6 +332,7 @@ pio run -e esp32-s3-micra-4-3b   # 4.3" 800x480 (S3, RGB panel)
 pio run -e esp32-s3-micra-4-3c   # 4.3" 800x480 (S3, RGB panel, dimmable + battery)
 pio run -e esp32-s3-micra-7b     # 7"  1024x600
 pio run -e esp32-p4-micra-43     # 4.3" 800x480 (P4, MIPI-DSI, WiFi6/BLE via C6)
+pio run -e esp32-p4-micra-x-7    # X-series 7" box (P4 rev3+, 1280x720; also -x-8)
 pio run -e sim                   # native simulator
 ```
 

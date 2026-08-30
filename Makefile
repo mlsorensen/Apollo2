@@ -4,14 +4,17 @@
 # (ESP32-S3-Touch-LCD-4.3B -> s3-4-3b, ESP32-P4-WIFI6-Touch-LCD-4.3 -> p4-4-3):
 #
 #   make flash              build + flash the connected board (auto-detect; see below)
-#   make flash BOARD=s3-7b  flash a specific board (s3-2 | s3-7b | s3-4-3b | s3-4-3c | p4-4-3 | p4-5)
-#   make flash-s3-2 / flash-s3-7b / flash-s3-4-3b / flash-s3-4-3c / flash-p4-4-3 / flash-p4-5
+#   make flash BOARD=s3-7b  flash a specific board (s3-2 | s3-7b | s3-4-3b | s3-4-3c | p4-4-3 | p4-5 | p4-x-7 | p4-x-8 | p4-x-10-1)
+#   make flash-s3-2 / flash-s3-7b / flash-s3-4-3b / flash-s3-4-3c / flash-p4-4-3 / flash-p4-5 / flash-p4-x-7 / flash-p4-x-8 / flash-p4-x-10-1
 #   make build              compile the default (s3-2, 2" 320x240) firmware
 #   make build-s3-7b        compile the S3 7" (1024x600) firmware
 #   make build-s3-4-3b      compile the S3 4.3B (800x480) firmware
 #   make build-s3-4-3c      compile the S3 4.3C (800x480, dimmable + battery) firmware
 #   make build-p4-4-3       compile the P4-WIFI6 4.3" (DSI 800x480) firmware
 #   make build-p4-5         compile the P4-WIFI6 5" (DSI 1280x720) firmware
+#   make build-p4-x-7       compile the P4-WIFI6 X 7" box (DSI 1280x720) firmware
+#   make build-p4-x-8       compile the P4-WIFI6 X 8" box (DSI 1280x800) firmware
+#   make build-p4-x-10-1    compile the P4-WIFI6 X 10.1" box (DSI 1280x800) firmware
 #   make monitor            open the serial monitor
 #   make sim                build + run the host simulator (writes renders/*.png)
 #   make webapp             rebuild the embedded web app (needs node; every
@@ -46,8 +49,10 @@ webapp: $(WEBAPP_HDR)
 
 .DEFAULT_GOAL := build
 .PHONY: flash flash-s3-2 flash-s3-7b flash-s3-4-3b flash-s3-4-3c flash-p4-4-3 \
-        flash-p4-5 flash-2inch flash-7b flash-4-3b flash-4-3c flash-p4 \
+        flash-p4-5 flash-p4-x-7 flash-p4-x-8 flash-p4-x-10-1 \
+        flash-2inch flash-7b flash-4-3b flash-4-3c flash-p4 \
         build build-s3-7b build-s3-4-3b build-s3-4-3c build-p4-4-3 build-p4-5 \
+        build-p4-x-7 build-p4-x-8 build-p4-x-10-1 \
         build-7b build-4-3b build-4-3c build-p4 \
         webapp monitor padsense paddrive sim lmtoken lmtoken-release lmtoken-publish clean
 
@@ -72,6 +77,15 @@ flash-p4-4-3: $(WEBAPP_HDR)
 flash-p4-5: $(WEBAPP_HDR)
 	@tools/flash.sh p4-5
 
+flash-p4-x-7: $(WEBAPP_HDR)
+	@tools/flash.sh p4-x-7
+
+flash-p4-x-8: $(WEBAPP_HDR)
+	@tools/flash.sh p4-x-8
+
+flash-p4-x-10-1: $(WEBAPP_HDR)
+	@tools/flash.sh p4-x-10-1
+
 build: $(WEBAPP_HDR)
 	$(PIO) run -e esp32-s3-micra
 
@@ -89,6 +103,15 @@ build-p4-4-3: $(WEBAPP_HDR)
 
 build-p4-5: $(WEBAPP_HDR)
 	$(PIO) run -e esp32-p4-micra-5
+
+build-p4-x-7: $(WEBAPP_HDR)
+	$(PIO) run -e esp32-p4-micra-x-7
+
+build-p4-x-8: $(WEBAPP_HDR)
+	$(PIO) run -e esp32-p4-micra-x-8
+
+build-p4-x-10-1: $(WEBAPP_HDR)
+	$(PIO) run -e esp32-p4-micra-x-10-1
 
 # --- Pre-rename aliases (muscle memory + older docs) -------------------------
 flash-2inch: flash-s3-2

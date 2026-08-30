@@ -9,6 +9,13 @@ for someone reading the diff.
 
 ### Changes
 
+- **Two new boards: the Waveshare ESP32‑P4‑WIFI6‑Touch‑LCD‑X finished boxes
+  (7" and 8").** All‑in‑one enclosed displays — no shell to print — with the
+  same fast ESP32‑P4 internals as the 4.3/5, bigger screens (7" 1280×720,
+  8" 1280×800), and the same optional Auto‑shot paddle wiring on GPIO 51/52.
+  Each size takes its own image from the web flasher. The 7" is verified on
+  hardware; the 8" is untested until one is on the bench.
+
 - **Bookoo Themis Ultra works** — it speaks the same protocol as the Themis
   Mini and is recognized automatically (weight, tare, battery, beep and
   auto‑off). The **Beep** row on both scales now offers Off / 1–3, matching

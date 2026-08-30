@@ -49,6 +49,48 @@ only), 58 MHz DPI / 700 Mbps lanes. UI: `BOARD_UI_SCALE 1.5f` renders the wide
 800x480 layout at 1.5x via ui::dp()/ui::font_dp() (see include/ui/screen.h) —
 scale 1.0 boards are bit-identical, verified against baseline renders.
 
+### ESP32-P4-WIFI6-Touch-LCD-X 7"/8"/10.1" (envs `esp32-p4-micra-x-7` / `-x-8` / `-x-10-1`) — 7" verified on HW (2026-08-29: boot, display, touch, hosted link, paddle sense); 8"/10.1" NOT yet
+
+The finished-box (all-in-one HMI) family. Electronics = the P4 4.3/5 (same
+I2C 7/8, GT911 probe-only, battery GPIO20 ÷3, ES8311 + PA GPIO53, SD 39-44 on
+LDO4, paddle 51/52 on the 40-pin header — GND/52/51 run consecutively in one
+pin column like the 5). Deltas, all verified against the X schematic +
+Waveshare BSP (waveshareteam/Waveshare-ESP32-components,
+bsp/esp32_p4_wifi6_touch_lcd_x):
+
+- **Silicon: X boards exist in BOTH revision generations.** Waveshare's X
+  repo says current boards ship rev v3.0+ (400 MHz) and defaults its CI to a
+  rev3 profile — but our first real unit (7", bought 2026-08) is **rev v1.3**
+  (esptool-verified after a rev3-built image reproduced the exact bootloader
+  illegal-instruction loop from the silicon-revision section below). The
+  boards jsons therefore use `chip_variant` `"esp32p4_es"` like the other P4
+  boards. A genuine rev3 unit fails the same way in mirror image and needs
+  `"esp32p4"` — always run `esptool chip-id` on a new board first.
+- Panels (native portrait, rotated like the other P4 DSI boards): 7" =
+  720x1280 ILI9881C (80 MHz DPI, 1000 Mbps), 8" and 10.1" = 800x1280 JD9365
+  (80 MHz, 1500 Mbps) — but the 8" and 10.1" glasses take DIFFERENT vendor
+  init tables (the BSP's #if/#else), so each size is its own env/image.
+  Tables live in display.cpp (BOARD_DSI_PANEL_ILI9881C / _JD9365 /
+  _JD9365_10). Reset active-LOW (unlike the 5's HX8394).
+- The 7" BOX MOUNTS ITS PANEL 180° from the P4-5 convention (camera on top =
+  correct orientation; HW-verified). Fixed at the panel: both MADCTL writes
+  in the ILI9881C table are 0x03 (GS|SS scan flip — both bits = true 180°,
+  one alone would mirror), and the 7"'s touch flags toggle BOTH mirrors vs
+  the P4-5 values (per-size #if in the X block). Careful editing that table:
+  0x36 also appears as a page-1 GIP register mid-table — only the page-0
+  writes are MADCTL. Expect the same 180° question on the 8"/10.1" at
+  bring-up (check camera position; JD9365 has the same GS/SS bits).
+- Backlight: LEDC GPIO26 normal polarity + AP3032 boost-enable GPIO23
+  (kLcdBacklightEn — the 4.3 has one too, the 5 doesn't).
+- UI scale: 7" = 1.5 (same logical 853x480 as the 5); 8"/10.1" = 1.6 →
+  logical 800x500 — exact 800 width, the extra height feeds the flex-grow
+  regions (sim renders at 1280x800 cover it).
+- Extras we don't drive: ES7210 mic ADC, second USB OTG (GPIO24/25), camera.
+- The 10.1" env exists and builds (`esp32-p4-micra-x-10-1`, its own JD9365_10
+  table) but is deliberately UNRELEASED and unmarketed — no hardware to test
+  it on, so it's kept out of the README, web flasher, and release matrix
+  (owner's call 2026-08-29). Don't re-add it to those without asking.
+
 ### ESP32-S3-Touch-LCD-4.3C (env `esp32-s3-micra-4-3c`) — verified on HW
 
 The 4.3B's RGB/GT911/RTC wiring plus the 7B-style register-based IO extension
