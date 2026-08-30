@@ -989,8 +989,17 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   lv_obj_remove_flag(panels, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_width(panels, lv_pct(100));
   // 7:5 with the graph card below — a shade over half for the cards so their
-  // content breathes (~35 px moved out of the graph at 800x480).
-  lv_obj_set_flex_grow(panels, 7);
+  // content breathes (~35 px moved out of the graph at 800x480). On a wide
+  // screen with MORE logical height than the 800x480 design (the X 8" is
+  // 800x500), the cards keep exactly their design height and the graph takes
+  // every extra pixel — so panels gets a fixed height there and the graph
+  // card stays the only grower.
+  const int design_flex_h = ui::dp(480) - 2 * pad - gap;  // panels+graph at design
+  if (!xl && screen.height > ui::dp(480)) {
+    lv_obj_set_height(panels, design_flex_h * 7 / 12);
+  } else {
+    lv_obj_set_flex_grow(panels, 7);
+  }
   lv_obj_set_flex_flow(panels, LV_FLEX_FLOW_ROW);
   lv_obj_set_style_pad_column(panels, gap, 0);
   build_micra_panel(panels, panel_cap, panel_status, panel_val, panel_set, panel_btn,
