@@ -5,7 +5,7 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
-## Unreleased
+## v0.9.0
 
 ### Changes
 
