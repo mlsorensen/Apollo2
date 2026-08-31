@@ -27,39 +27,9 @@ your board.
 ## Where everything lives
 
 <!-- Keep this map in sync with the UI: when a setting/page is added, moved,
-     or renamed, update BOTH renderings below (and the prose sections). -->
+     or renamed, update the tree below (and the prose sections). -->
 
-Every screen and setting, and how to reach it. Two renderings of the same
-map — a diagram and a text tree.
-
-```mermaid
-flowchart LR
-  A((Apollo 2)) --> H[Home]
-  A --> S[Settings]
-  A --> T[Stats]
-
-  H --> H1[MICRA card<br>temps · power · flush]
-  H --> H2[SCALE card<br>weight · timer · shot mode]
-  H --> H3[Flow graph]
-
-  S --> SM[Micra]
-  SM --> SM1[Bluetooth<br>scan · pair · token]
-  SM --> SM2[Controls<br>paddle · chime · temps]
-  SM --> SM3[Cleaning<br>auto flush · backflush]
-  S --> SS[Scale]
-  SS --> SS1[Bluetooth<br>scan · pair]
-  SS --> SS2[Shot settings<br>target · detect · graph]
-  SS --> SS3[Device settings<br>beep · sleep · unit]
-  S --> SD[Device]
-  SD --> SD1[Display<br>brightness · theme · units]
-  SD --> SD2[Time & date]
-  SD --> SD3[WiFi + NTP]
-  S --> SR[Restart display /<br>Lock for cleaning]
-
-  T --> T1[Brew / Boiler<br>temperature history]
-  T --> T2[History<br>shot log + web page]
-  T --> T3[Info<br>versions · IP · log]
-```
+Every screen and setting, and how to reach it:
 
 ```
 Home

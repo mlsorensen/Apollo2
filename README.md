@@ -22,7 +22,6 @@ to the machine instead of a phone app.
 [Screenshots](#screenshots) ·
 [Supported hardware](#supported-hardware) ·
 [3D prints](#3d-prints) ·
-[Using it](#using-it) ·
 [Developer documentation](#developer-documentation) ·
 [Credits](#credits) ·
 [License](#license)
@@ -153,6 +152,22 @@ off there too (**Auto time (NTP)**).
 Because the setup page is always reachable from **Set up WiFi**, you can never be
 locked out if your network changes.
 
+### 6. Find your way around
+
+- **Home** shows the machine (and scale, if paired). The large action button is
+  Standby / Turn On when connected, and becomes a **Connect** button when the
+  machine is disconnected. With a scale, the pill under the shot timer cycles
+  the shot mode — **Auto shot** (wired paddle boards) / **Shot detect** /
+  **Manual** — and becomes **Reset** while a finished shot is up for review.
+- **Settings** groups everything under Micra, Scale, and Device (brightness,
+  clock, units, theme, Wi‑Fi).
+- **Stats** shows brew/boiler temperature history, the shot **History** log
+  (SD‑card boards), and device info.
+
+Every screen and setting is described in the **[user manual](MANUAL.md)** —
+it opens with a **map of every screen and setting** if you're looking for
+where something lives.
+
 ---
 
 ## Screenshots
@@ -232,24 +247,6 @@ Fasteners:
 - **Stand mount**: 2 × **M4‑0.7×8 mm** screws — same spec whether you're
   mounting the S3‑4.3C‑BOX or any of the printed shells.
 - **Magnet mount**: 8 × **10 mm × 3 mm** neodymium disc magnets.
-
----
-
-## Using it
-
-- **Home** shows the machine (and scale, if paired). The large action button is
-  Standby / Turn On when connected, and becomes a **Connect** button when the
-  machine is disconnected. With a scale, the pill under the shot timer cycles
-  the shot mode — **Auto shot** (wired paddle boards) / **Shot detect** /
-  **Manual** — and becomes **Reset** while a finished shot is up for review.
-- **Settings** groups everything under Micra, Scale, and Device (brightness,
-  clock, units, theme, Wi‑Fi).
-- **Stats** shows brew/boiler temperature history, the shot **History** log
-  (SD‑card boards), and device info.
-
-Every screen and setting is described in the **[user manual](MANUAL.md)** —
-it opens with a **map of every screen and setting** if you're looking for
-where something lives.
 
 ---
 

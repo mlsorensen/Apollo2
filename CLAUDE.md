@@ -13,8 +13,8 @@ accurate and the layering rules there are hard rules:
   and in the host simulator (`make sim` → renders/*.png — the fastest way to
   check UI work).
 - DOCS SYNC RULE: when features, settings, screens, or boards change, update
-  in the same change: MANUAL.md prose + its "Where everything lives" map
-  (both the mermaid and ASCII renderings) + TOCs, docs/HARDWARE.md,
+  in the same change: MANUAL.md prose + its "Where everything lives" tree +
+  TOCs, docs/HARDWARE.md,
   README.md, and the screenshots — refresh the affected docs/img/*.png from
   renders/ and re-run `make docs-img` (tools/annotate_docs.py +
   docs/img/manual/manifest.json; re-measure callout boxes if the layout

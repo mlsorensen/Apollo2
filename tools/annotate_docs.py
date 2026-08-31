@@ -25,7 +25,10 @@ REPO = Path(__file__).resolve().parent.parent
 MANIFEST = REPO / "docs/img/manual/manifest.json"
 OUT_DIR = REPO / "docs/img/manual"
 
-ACCENT = (47, 155, 244, 255)   # callout box + badge fill (theme accent blue)
+# Callout box + badge fill. Deliberately a color the UI itself never uses
+# (accent blue, alert red, and warn amber all mean something on screen), so
+# annotations read as annotations.
+ACCENT = (255, 62, 181, 255)   # vivid magenta
 BADGE_TEXT = (255, 255, 255, 255)
 BOX_W = 3                       # box outline width
 BADGE_D = 30                    # badge diameter
