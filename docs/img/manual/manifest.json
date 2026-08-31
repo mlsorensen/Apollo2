@@ -1,0 +1,183 @@
+[
+  {
+    "src": "renders/settings_800x480.png",
+    "out": "settings-root.png",
+    "size": [800, 480],
+    "callouts": [
+      {"n": 1, "x": 105, "y": 95, "w": 688, "h": 58},
+      {"n": 2, "x": 105, "y": 171, "w": 688, "h": 58},
+      {"n": 3, "x": 105, "y": 247, "w": 688, "h": 58},
+      {"n": 4, "x": 105, "y": 323, "w": 688, "h": 58},
+      {"n": 5, "x": 105, "y": 399, "w": 688, "h": 58}
+    ]
+  },
+  {
+    "src": "renders/home_800x480.png",
+    "out": "home-micra.png",
+    "size": [800, 480],
+    "callouts": [
+      {"n": 1, "x": 310, "y": 26, "w": 124, "h": 34},
+      {"n": 2, "x": 130, "y": 70, "w": 150, "h": 112},
+      {"n": 3, "x": 282, "y": 70, "w": 150, "h": 112},
+      {"n": 4, "x": 125, "y": 202, "w": 150, "h": 56},
+      {"n": 5, "x": 280, "y": 202, "w": 150, "h": 56}
+    ]
+  },
+  {
+    "src": "renders/home_800x480.png",
+    "out": "home-scale-card.png",
+    "size": [800, 480],
+    "callouts": [
+      {"n": 1, "x": 583, "y": 26, "w": 194, "h": 34},
+      {"n": 2, "x": 462, "y": 70, "w": 158, "h": 62},
+      {"n": 3, "x": 466, "y": 134, "w": 142, "h": 50},
+      {"n": 4, "x": 630, "y": 70, "w": 130, "h": 62},
+      {"n": 5, "x": 634, "y": 132, "w": 118, "h": 52},
+      {"n": 6, "x": 462, "y": 202, "w": 156, "h": 56},
+      {"n": 7, "x": 620, "y": 202, "w": 156, "h": 56}
+    ]
+  },
+  {
+    "src": "renders/home_800x480.png",
+    "out": "home-flow-graph.png",
+    "size": [800, 480],
+    "callouts": [
+      {"n": 1, "x": 146, "y": 300, "w": 66, "h": 48},
+      {"n": 2, "x": 368, "y": 436, "w": 184, "h": 24}
+    ]
+  },
+  {
+    "src": "renders/micra_bt_800x480.png",
+    "out": "micra-bluetooth.png",
+    "size": [800, 480],
+    "callouts": [
+      {"n": 1, "x": 105, "y": 92, "w": 690, "h": 64},
+      {"n": 2, "x": 105, "y": 160, "w": 690, "h": 46},
+      {"n": 3, "x": 105, "y": 210, "w": 688, "h": 64},
+      {"n": 4, "x": 105, "y": 283, "w": 688, "h": 192}
+    ]
+  },
+  {
+    "src": "renders/micra_controls_800x480.png",
+    "out": "micra-controls.png",
+    "size": [800, 480],
+    "callouts": [
+      {"n": 1, "x": 100, "y": 84, "w": 695, "h": 48},
+      {"n": 2, "x": 100, "y": 136, "w": 695, "h": 50},
+      {"n": 3, "x": 100, "y": 196, "w": 695, "h": 52},
+      {"n": 4, "x": 100, "y": 288, "w": 695, "h": 58},
+      {"n": 5, "x": 100, "y": 380, "w": 695, "h": 48},
+      {"n": 6, "x": 100, "y": 430, "w": 695, "h": 48}
+    ]
+  },
+  {
+    "src": "renders/micra_cleaning_on_800x480.png",
+    "out": "micra-cleaning.png",
+    "size": [800, 480],
+    "callouts": [
+      {"n": 1, "x": 100, "y": 92, "w": 695, "h": 50},
+      {"n": 2, "x": 100, "y": 153, "w": 695, "h": 52},
+      {"n": 3, "x": 105, "y": 215, "w": 690, "h": 64}
+    ]
+  },
+  {
+    "src": "renders/scale_bt_800x480.png",
+    "out": "scale-bluetooth.png",
+    "size": [800, 480],
+    "callouts": [
+      {"n": 1, "x": 105, "y": 92, "w": 690, "h": 64},
+      {"n": 2, "x": 105, "y": 162, "w": 688, "h": 64}
+    ]
+  },
+  {
+    "src": "renders/scale_settings_800x480.png",
+    "out": "scale-shot-settings.png",
+    "size": [800, 480],
+    "callouts": [
+      {"n": 1, "x": 100, "y": 90, "w": 695, "h": 56},
+      {"n": 2, "x": 100, "y": 152, "w": 695, "h": 56},
+      {"n": 3, "x": 100, "y": 214, "w": 695, "h": 56},
+      {"n": 4, "x": 100, "y": 278, "w": 695, "h": 52},
+      {"n": 5, "x": 100, "y": 334, "w": 695, "h": 44},
+      {"n": 6, "x": 100, "y": 378, "w": 695, "h": 44}
+    ]
+  },
+  {
+    "src": "renders/scale_device_800x480.png",
+    "out": "scale-device-settings.png",
+    "size": [800, 480],
+    "callouts": [
+      {"n": 1, "x": 100, "y": 92, "w": 695, "h": 50},
+      {"n": 2, "x": 100, "y": 153, "w": 695, "h": 54}
+    ]
+  },
+  {
+    "src": "renders/device_display_800x480.png",
+    "out": "device-display.png",
+    "size": [800, 480],
+    "callouts": [
+      {"n": 1, "x": 100, "y": 90, "w": 695, "h": 56},
+      {"n": 2, "x": 100, "y": 155, "w": 695, "h": 50},
+      {"n": 3, "x": 100, "y": 213, "w": 695, "h": 52},
+      {"n": 4, "x": 100, "y": 268, "w": 695, "h": 42},
+      {"n": 5, "x": 100, "y": 310, "w": 695, "h": 44},
+      {"n": 6, "x": 100, "y": 354, "w": 695, "h": 44}
+    ]
+  },
+  {
+    "src": "renders/device_time_800x480.png",
+    "out": "device-time.png",
+    "size": [800, 480],
+    "callouts": [
+      {"n": 1, "x": 100, "y": 90, "w": 695, "h": 54},
+      {"n": 2, "x": 100, "y": 150, "w": 695, "h": 54},
+      {"n": 3, "x": 100, "y": 208, "w": 695, "h": 42},
+      {"n": 4, "x": 100, "y": 254, "w": 695, "h": 52}
+    ]
+  },
+  {
+    "src": "renders/device_wifi_800x480.png",
+    "out": "device-wifi.png",
+    "size": [800, 480],
+    "callouts": [
+      {"n": 1, "x": 100, "y": 88, "w": 695, "h": 42},
+      {"n": 2, "x": 100, "y": 130, "w": 695, "h": 36},
+      {"n": 3, "x": 105, "y": 168, "w": 690, "h": 54},
+      {"n": 4, "x": 100, "y": 228, "w": 695, "h": 42}
+    ]
+  },
+  {
+    "src": "renders/stats_brew_800x480.png",
+    "out": "stats-graphs.png",
+    "size": [800, 480],
+    "callouts": [
+      {"n": 1, "x": 112, "y": 14, "w": 672, "h": 48},
+      {"n": 2, "x": 682, "y": 390, "w": 92, "h": 50}
+    ]
+  },
+  {
+    "src": "renders/stats_history_800x480.png",
+    "out": "stats-history.png",
+    "size": [800, 480],
+    "callouts": [
+      {"n": 1, "x": 112, "y": 66, "w": 672, "h": 76},
+      {"n": 2, "x": 112, "y": 148, "w": 220, "h": 290},
+      {"n": 3, "x": 342, "y": 150, "w": 442, "h": 282},
+      {"n": 4, "x": 342, "y": 440, "w": 442, "h": 26}
+    ]
+  },
+  {
+    "src": "renders/stats_info_800x480.png",
+    "out": "stats-info.png",
+    "size": [800, 480],
+    "callouts": [
+      {"n": 1, "x": 108, "y": 276, "w": 674, "h": 40}
+    ]
+  },
+  {"src": "renders/home_noscale_800x480.png", "out": "home-noscale.png", "size": [800, 480], "callouts": []},
+  {"src": "renders/shot_card_800x480.png", "out": "shot-card.png", "size": [800, 480], "callouts": []},
+  {"src": "renders/backflush_prompt_800x480.png", "out": "backflush.png", "size": [800, 480], "callouts": []},
+  {"src": "renders/join_modal_800x480.png", "out": "join-modal.png", "size": [800, 480], "callouts": []},
+  {"src": "renders/clean_lock_800x480.png", "out": "clean-lock.png", "size": [800, 480], "callouts": []},
+  {"src": "renders/token_modal_800x480.png", "out": "token-modal.png", "size": [800, 480], "callouts": []}
+]

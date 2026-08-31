@@ -11,7 +11,14 @@ accurate and the layering rules there are hard rules:
   never touch protocol code.
 - The UI depends only on `core::` interfaces. It compiles unchanged on-device
   and in the host simulator (`make sim` → renders/*.png — the fastest way to
-  check UI work; refresh docs/img/ when the UI changes).
+  check UI work).
+- DOCS SYNC RULE: when features, settings, screens, or boards change, update
+  in the same change: MANUAL.md prose + its "Where everything lives" map
+  (both the mermaid and ASCII renderings) + TOCs, docs/HARDWARE.md,
+  README.md, and the screenshots — refresh the affected docs/img/*.png from
+  renders/ and re-run `make docs-img` (tools/annotate_docs.py +
+  docs/img/manual/manifest.json; re-measure callout boxes if the layout
+  moved — the script warns when a render's size changes).
 - Board differences live in `include/platform_esp32/board_config.h` blocks +
   feature macros; driver code never hardcodes pins.
 

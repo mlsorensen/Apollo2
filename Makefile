@@ -17,6 +17,8 @@
 #   make build-p4-x-10-1    compile the P4-WIFI6 X 10.1" box (DSI 1280x800) firmware
 #   make monitor            open the serial monitor
 #   make sim                build + run the host simulator (writes renders/*.png)
+#   make docs-img           regenerate the manual's annotated screenshots
+#                           (docs/img/manual/) from the sim renders
 #   make webapp             rebuild the embedded web app (needs node; every
 #                           device build/flash target does this for you)
 #   make lmtoken            build the cloud token tool (tools/lmtoken)
@@ -54,7 +56,7 @@ webapp: $(WEBAPP_HDR)
         build build-s3-7b build-s3-4-3b build-s3-4-3c build-p4-4-3 build-p4-5 \
         build-p4-x-7 build-p4-x-8 build-p4-x-10-1 \
         build-7b build-4-3b build-4-3c build-p4 \
-        webapp monitor padsense paddrive sim lmtoken lmtoken-release lmtoken-publish clean
+        webapp monitor padsense paddrive sim docs-img lmtoken lmtoken-release lmtoken-publish clean
 
 flash: $(WEBAPP_HDR)
 	@tools/flash.sh $(BOARD)
@@ -141,6 +143,12 @@ paddrive:
 
 sim:
 	$(PIO) run -e sim && ./.pio/build/sim/program
+
+# Regenerate the manual's annotated screenshots from the sim renders. The
+# manifest (docs/img/manual/manifest.json) holds the callout coordinates; see
+# tools/annotate_docs.py for the update rules when the UI changes.
+docs-img: sim
+	python3 tools/annotate_docs.py
 
 lmtoken:
 	$(MAKE) -C tools/lmtoken build

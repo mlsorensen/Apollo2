@@ -174,6 +174,11 @@ int main() {
   ok &= r({800, 480}, "renders/micra_cleaning_800x480.png", 1, ui::kSectionMicraCleaning);
   ok &= r({320, 240}, "renders/scale_bt_320x240.png", 1, ui::kSectionScaleBt);
   ok &= r({800, 480}, "renders/scale_bt_800x480.png", 1, ui::kSectionScaleBt);
+  // Cleaning page with Auto flush on, so the Flush delay row is visible (the
+  // user manual's screenshot needs all three rows).
+  brew.set_flush_s(3);
+  ok &= r({800, 480}, "renders/micra_cleaning_on_800x480.png", 1, ui::kSectionMicraCleaning);
+  brew.set_flush_s(0);
   ok &= r({320, 240}, "renders/scale_settings_320x240.png", 1, ui::kSectionScaleSettings);
   ok &= r({800, 480}, "renders/scale_settings_800x480.png", 1, ui::kSectionScaleSettings);
   // Scale > Device settings (stored on the scale): live values, and the

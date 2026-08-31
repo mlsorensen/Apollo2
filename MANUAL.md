@@ -8,15 +8,112 @@ Some rows only appear where the hardware supports them — a switch you don't se
 **Brightness** on a board whose backlight can't dim) simply doesn't apply to
 your board.
 
+**Contents:**
+
+- [Where everything lives](#nav-map) — a map of every screen and setting
+- [Home](#home) — MICRA card · SCALE card · Flow graph · Shot lifecycle
+- [Settings → Micra](#settings-micra) — Bluetooth · Controls · Cleaning
+- [Settings → Scale](#settings-scale) — Bluetooth · Shot settings · Device
+  settings · Per‑scale nuances
+- [Settings → Device](#settings-device) — Display · Time & date · WiFi ·
+  Root page
+- [Stats](#stats-section) — Brew/Boiler graphs · History · Info
+- [Brew‑by‑weight quick reference](#bbw-reference)
+
+---
+
+<a id="nav-map"></a>
+
+## Where everything lives
+
+<!-- Keep this map in sync with the UI: when a setting/page is added, moved,
+     or renamed, update BOTH renderings below (and the prose sections). -->
+
+Every screen and setting, and how to reach it. Two renderings of the same
+map — a diagram and a text tree.
+
+```mermaid
+flowchart LR
+  A((Apollo 2)) --> H[Home]
+  A --> S[Settings]
+  A --> T[Stats]
+
+  H --> H1[MICRA card<br>temps · power · flush]
+  H --> H2[SCALE card<br>weight · timer · shot mode]
+  H --> H3[Flow graph]
+
+  S --> SM[Micra]
+  SM --> SM1[Bluetooth<br>scan · pair · token]
+  SM --> SM2[Controls<br>paddle · chime · temps]
+  SM --> SM3[Cleaning<br>auto flush · backflush]
+  S --> SS[Scale]
+  SS --> SS1[Bluetooth<br>scan · pair]
+  SS --> SS2[Shot settings<br>target · detect · graph]
+  SS --> SS3[Device settings<br>beep · sleep · unit]
+  S --> SD[Device]
+  SD --> SD1[Display<br>brightness · theme · units]
+  SD --> SD2[Time & date]
+  SD --> SD3[WiFi + NTP]
+  S --> SR[Restart display /<br>Lock for cleaning]
+
+  T --> T1[Brew / Boiler<br>temperature history]
+  T --> T2[History<br>shot log + web page]
+  T --> T3[Info<br>versions · IP · log]
+```
+
+```
+Home
+├─ MICRA card — status · BREW/STEAM temps + set-point steppers
+│  ├─ [Power]  Standby / Turn On / Connect
+│  └─ [Flush]  quick group rinse                *(wired-paddle boards)*
+├─ SCALE card — status · WEIGHT (+ target) · TIMER   *(scale paired)*
+│  ├─ [shot-mode pill]  Auto shot → Shot detect → Manual  (Reset in review)
+│  └─ [Connect/Disconnect] · [Tare]
+└─ Flow graph — g/s ↔ g toggle · freezes for review after a shot
+
+Settings
+├─ Micra
+│  ├─ Bluetooth — Scan · saved machine (Setup / Connect / Forget) · Auto connect
+│  ├─ Controls  — Wired paddle* · Chime melody* · Chime volume*
+│  │             · Brew Temperature · Steam Enable + Temperature
+│  └─ Cleaning* — Auto flush · Flush delay · Backflush cleaning  → cleaning mode
+├─ Scale
+│  ├─ Bluetooth       — Scan · saved scale (Connect / Forget)
+│  ├─ Shot settings   — Target · Review hold · Detect lead-in · Smoothing
+│  │                    · Drop negative g/s · Oscilloscope graph
+│  └─ Device settings — the scale's own settings (Beep · Auto-off/sleep · Unit …)
+├─ Device
+│  ├─ Display     — Brightness* · Screen dim · Theme · Fahrenheit
+│  │               · Button sounds* · Performance overlay
+│  ├─ Time & date — Time · Date · 24-hour · Timezone
+│  └─ WiFi        — Enable · Status · Set up WiFi → QR portal · Forget
+│                  · Auto time (NTP)
+├─ Restart display
+└─ Lock display for cleaning  → 30 s touch lock
+
+Stats
+├─ Brew | Boiler — temperature history graphs (+/− zoom)
+├─ History — headline stats (tap → reset) · month filter · shot list
+│            └─ tap a shot → full-screen shot card (with delete)
+└─ Info — firmware · uptime · IP · Diagnostic log (tap → viewer) · Micra details
+
+  * = only on boards whose hardware supports it (see the note above)
+```
+
 ---
 
 ## Home
 
 The Home screen adapts to the screen size and to whether a scale is paired.
+Without a scale, the MICRA card fills the screen as a single hero:
+
+![Home without a scale](docs/img/manual/home-noscale.png)
 
 ### MICRA card
 
-- **Status** — `Set up in Settings` (nothing paired yet), `Token needed`,
+![MICRA card](docs/img/manual/home-micra.png)
+
+- ① **Status** — `Set up in Settings` (nothing paired yet), `Token needed`,
   `Disconnected`, `Connecting...`, `Heating` (powered on, boilers still coming
   up to temperature — the dot pulses amber), `Ready` (at temperature), or
   `Standby`. The Micra itself doesn't report a warm‑up state; `Heating` is
@@ -26,33 +123,35 @@ The Home screen adapts to the screen size and to whether a scale is paired.
   routinely settles at 127 °C and stops heating there. Boards with a speaker
   can also chime when it turns `Ready` — see
   [Settings → Micra → Controls](#controls).
-- **BREW / STEAM** — live boiler temperatures. On larger screens each has a
+- ② ③ **BREW / STEAM** — live boiler temperatures. On larger screens each has a
   **−/+** stepper that edits the set‑point directly; the small grey number is
   the current target. Edits are written to the machine as you tap.
-- **Power button** — `Standby` / `Turn on` when connected. After a tap it
+- ④ **Power button** — `Standby` / `Turn on` when connected. After a tap it
   briefly reads `Working...` (disabled) until the machine reports the change —
   the Micra's answer trails the command by a couple of seconds, and the button
   would otherwise look like it did nothing. When the machine is configured but
   disconnected it becomes **Connect** and starts the Bluetooth link.
-- **Flush** *(paddle‑wired boards, screens 4.3" and larger)* — runs the group
+- ⑤ **Flush** *(paddle‑wired boards, screens 4.3" and larger)* — runs the group
   for a quick rinse, for the same time as **Auto flush** (3 s when Auto flush
   is Off). Tap again while it runs to stop early. Greyed out while a shot is
   in flight or the machine is in standby.
 
 ### SCALE card (when a scale is paired)
 
-- **Status** — `Connected`, `Connecting...`, or `Sleeping` (sleep‑capable
+![SCALE card](docs/img/manual/home-scale-card.png)
+
+- ① **Status** — `Connected`, `Connecting...`, or `Sleeping` (sleep‑capable
   scales such as the Acaia Umbra with the link switched off). A small battery
   icon shows the scale's own battery where the scale reports it.
-- **WEIGHT** — live reading. During a finished shot's review it freezes at the
+- ② **WEIGHT** — live reading. During a finished shot's review it freezes at the
   net shot weight so lifting the cup doesn't wipe the number you care about.
-- **TARGET** — the brew‑by‑weight stop target in grams (**−/+** on larger
+- ③ **TARGET** — the brew‑by‑weight stop target in grams (**−/+** on larger
   screens; also under **Settings → Scale → Shot settings → Target**).
-- **TIMER** — the shot timer. Runs from the ESP's own clock whenever the
+- ④ **TIMER** — the shot timer. Runs from the ESP's own clock whenever the
   firmware is the shot authority (Auto shot or Shot detect, and every wired
   shot); in Manual mode without a wire it falls back to the scale's built‑in
   timer.
-- **Shot mode pill** (under the timer) — tap to cycle the shot mode:
+- ⑤ **Shot mode pill** (under the timer) — tap to cycle the shot mode:
   - **Auto shot** *(only with a wired paddle — see below)*: flipping the
     Micra's paddle starts the shot (auto‑tare, timer, graph), and the firmware
     opens the paddle circuit by itself when the weight reaches
@@ -72,9 +171,9 @@ The Home screen adapts to the screen size and to whether a scale is paired.
   - While a finished shot is frozen for review the pill reads **Reset** —
     tap it to dismiss the review and return to live monitoring.
   - The pill is disabled while a shot is running or settling.
-- **Tare** — zeroes the scale. (Tares are sent twice under the hood; some
+- ⑦ **Tare** — zeroes the scale. (Tares are sent twice under the hood; some
   scales drop single tare commands.)
-- **Disconnect / Connect** — drops or re‑establishes the scale link, e.g. to
+- ⑥ **Disconnect / Connect** — drops or re‑establishes the scale link, e.g. to
   save the scale's battery.
 - Like the shot‑mode pill, **Tare** and **Disconnect** are disabled while a
   shot is running or settling — either would disturb the weight the stop math
@@ -82,9 +181,12 @@ The Home screen adapts to the screen size and to whether a scale is paired.
 
 ### Flow graph
 
+![Flow graph](docs/img/manual/home-flow-graph.png)
+
 Plots the live flow rate (or weight) from the scale.
 
-- Tap the **g/s** chip to switch between flow rate (g/s) and weight (g).
+- Tap the **g/s** chip ① to switch between flow rate (g/s) and weight (g);
+  the caption ② names the time window in view.
 - During a shot the graph restarts and follows the shot; when the shot ends it
   freezes for review (see **Review hold**) and then resumes.
 - The graph style (oscilloscope sweep vs scrolling) and smoothing are set under
@@ -109,37 +211,47 @@ Plots the live flow rate (or weight) from the scale.
 
 ---
 
+<a id="settings-micra"></a>
+
 ## Settings → Micra
 
-### Bluetooth
+### Bluetooth (machine)
 
-- **Scan** — searches for La Marzocco machines. Scanning takes priority over
+![Micra Bluetooth](docs/img/manual/micra-bluetooth.png)
+
+- ③ **Scan** — searches for La Marzocco machines; found machines list below ④,
+  tap one to save it. Scanning takes priority over
   in‑progress background connections (a scale stuck in `Connecting...` no
   longer blocks it). If nothing is found the status line says so — make sure
   the machine is powered on and in range, then scan again.
-- **Saved machine row** — shows the paired machine with:
+- ① **Saved machine row** — shows the paired machine with:
   - **Setup** (only until a token is stored) — starts the token entry flow
-    (see the [README](README.md#3-enter-your-token)).
+    (see the [README](README.md#4-enter-your-token)):
+
+    <img src="docs/img/manual/token-modal.png" width="70%" alt="Token setup prompt">
+
   - **Connect / Disconnect** — manual link control. The Micra accepts only one
     Bluetooth client, so Disconnect frees it for another remote or the phone
     app.
   - **Forget** — clears the machine, its name, and its token.
-- **Auto connect** *(default on)* — connect to the saved machine automatically
+- ② **Auto connect** *(default on)* — connect to the saved machine automatically
   at power‑up. Turn off if another controller needs the Micra's single
   Bluetooth slot.
 
 ### Controls
 
-- **Wired paddle** *(paddle‑capable boards; default off)* — tell the firmware
+![Micra Controls](docs/img/manual/micra-controls.png)
+
+- ① **Wired paddle** *(paddle‑capable boards; default off)* — tell the firmware
   the paddle harness is physically wired. This enables the **Auto shot** mode
   and the auto‑flush. Off, the board behaves like an unwired one (Shot detect
   / Manual only). Flipping it mid‑shot cancels the shot.
-- **Chime melody** *(boards with a speaker; Off / Blue / Pink / Human /
+- ② **Chime melody** *(boards with a speaker; Off / Blue / Pink / Human /
   Gold / White / Autumn / Random, default Blue)* — which tune announces the end of a warm‑up. Each tap
   cycles to the next melody and auditions it; **Random** picks a different
   tune each time the machine warms up; `Off` silences the chime regardless of
   the volume below.
-- **Chime volume** *(boards with a speaker; Off / 25 / 50 / 75 / 100 %, default
+- ③ **Chime volume** *(boards with a speaker; Off / 25 / 50 / 75 / 100 %, default
   50 %)* — the warm‑up chime's level, so you can walk away and be called back.
   Each tap cycles to the next level **and plays a note at it**, so you can set
   it by ear; `Off` silences it.
@@ -152,27 +264,29 @@ Plots the live flow rate (or weight) from the scale.
   turn‑on's warm‑up chimes again. With the steam boiler **off** the chime
   follows the coffee boiler alone; with it **on**, both boilers have to be
   there.
-- **Brew → Temperature** — coffee boiler set‑point stepper (0.1 °C steps;
+- ④ **Brew → Temperature** — coffee boiler set‑point stepper (0.1 °C steps;
   long‑press for 0.5 °C).
-- **Steam Boiler → Enable** — steam boiler on/off.
-- **Steam Boiler → Temperature** — one of the Micra's three steam levels
+- ⑤ **Steam Boiler → Enable** — steam boiler on/off.
+- ⑥ **Steam Boiler → Temperature** — one of the Micra's three steam levels
   (shown as Level 1–3 with the temperature underneath).
 
 ### Cleaning *(paddle‑capable boards)*
 
+![Micra Cleaning](docs/img/manual/micra-cleaning.png)
+
 Everything that deliberately runs water through the group. The whole page
 needs the paddle harness, since that's what drives it.
 
-- **Auto flush** *(Off / 3 / 6 / 9 / 15 s; default Off)* — after a finished
+- ① **Auto flush** *(Off / 3 / 6 / 9 / 15 s; default Off)* — after a finished
   shot, when the scale sees the cup lift off, the firmware waits (see **Flush
   delay**) and then runs the group for this long to rinse the puck's surface.
   Any paddle activity, a new shot, or the machine being in standby cancels it.
   **This one duration drives every timed group run**: the auto‑flush, the Home
   **Flush** button, and each backflush pulse. With Auto flush Off the other two
   fall back to 3 s.
-- **Flush delay** *(shown while Auto flush is on; 3 / 6 / 9 / 15 s; default
+- ② **Flush delay** *(shown while Auto flush is on; 3 / 6 / 9 / 15 s; default
   3 s)* — the pause between the cup coming off and the flush running.
-- **Backflush cleaning** — opens a full‑screen cleaning mode. Fit the blind
+- ③ **Backflush cleaning** — opens a full‑screen cleaning mode. Fit the blind
   filter with detergent, tap **Go**, and the device pulses the group **10
   times: ⟨Auto flush⟩ seconds on, 3 seconds off**, showing the cycle count, a
   countdown, and the total up front. **Cancel** stops the sequence and stays on
@@ -188,25 +302,33 @@ needs the paddle harness, since that's what drives it.
     the pulse comfortably outlasts preinfusion, or turn preinfusion off while
     you backflush.
 
+  <img src="docs/img/manual/backflush.png" width="70%" alt="Backflush cleaning mode">
+
 ---
+
+<a id="settings-scale"></a>
 
 ## Settings → Scale
 
-### Bluetooth
+### Bluetooth (scale)
 
-- **Scan** — searches for supported scales (Bookoo Themis, Acaia Umbra /
+![Scale Bluetooth](docs/img/manual/scale-bluetooth.png)
+
+- ② **Scan** — searches for supported scales (Bookoo Themis, Acaia Umbra /
   Lunar / Prochef / Pyxis, Varia Aku — Pyxis and Aku untested). Wake the scale first — most
   sleep their Bluetooth quickly.
-- **Saved scale row** — **Connect / Disconnect** and **Forget** (no token
+- ① **Saved scale row** — **Connect / Disconnect** and **Forget** (no token
   needed for scales).
 
 ### Shot settings
 
-- **Target** — brew‑by‑weight stop target, 5–120 g. Also editable from Home on
+![Shot settings](docs/img/manual/scale-shot-settings.png)
+
+- ① **Target** — brew‑by‑weight stop target, 5–120 g. Also editable from Home on
   larger screens.
-- **Review hold** *(5–120 s, default 30 s)* — how long a finished shot's frozen
+- ② **Review hold** *(5–120 s, default 30 s)* — how long a finished shot's frozen
   graph and weight linger before auto‑dismissing. **Reset** dismisses early.
-- **Detect lead‑in** *(0–10 s, default 3 s)* — Shot detect mode only. The
+- ③ **Detect lead‑in** *(0–10 s, default 3 s)* — Shot detect mode only. The
   detector notices a shot at the first weight rise, but the shot started
   earlier: you flipped the paddle, then preinfusion water worked through the
   puck before the first drop landed. This offset is added when back‑dating the
@@ -214,18 +336,21 @@ needs the paddle harness, since that's what drives it.
   started the shot. Adjust it to match your machine's preinfusion setting as
   needed (roughly your typical paddle‑to‑first‑drip time); 0 starts the shot
   at the first drip.
-- **Smoothing** *(Off / Light / Medium / Strong, default Light)* — smoothing on
+- ④ **Smoothing** *(Off / Light / Medium / Strong, default Light)* — smoothing on
   the shot graph's line. Purely visual; detection and auto‑stop use the raw
   stream.
-- **Drop negative g/s** *(default on)* — clamps negative flow readings (cup
+- ⑤ **Drop negative g/s** *(default on)* — clamps negative flow readings (cup
   bumps, scale noise) to zero on the graph.
-- **Oscilloscope graph** *(default on)* — the shot graph sweeps left→right and
+- ⑥ **Oscilloscope graph** *(default on)* — the shot graph sweeps left→right and
   wraps, oscilloscope style. Off, it scrolls continuously instead.
 
 ### Device settings
 
+![Scale device settings — a Bookoo Themis's rows](docs/img/manual/scale-device-settings.png)
+
 Settings stored on the scale itself, adjusted over Bluetooth. Which rows
-appear — and their value choices — depends on the scale model:
+appear — and their value choices — depends on the scale model (a Bookoo
+Themis's ① **Beep** and ② **Auto‑off** shown above):
 
 - **Bookoo Themis / Themis Ultra** — **Beep** (buzzer level Off / 1–3, the
   same range the Bookoo app offers) and **Auto‑off** (5–30 min). The scale
@@ -287,6 +412,8 @@ machine is already warming up when you arrive.
 
 ---
 
+<a id="settings-device"></a>
+
 ## Settings → Device
 
 Three short sub‑pages — **Display**, **Time & date**, and **WiFi** — so each
@@ -294,80 +421,109 @@ page fits on screen with little to no scrolling.
 
 ### Display
 
-- **Brightness** *(dimmable boards)* — backlight level.
-- **Screen dim** *(Off / 15 min / 30 min, default 30 min)* — after this idle
+![Display settings](docs/img/manual/device-display.png)
+
+- ① **Brightness** *(dimmable boards)* — backlight level.
+- ② **Screen dim** *(Off / 15 min / 30 min, default 30 min)* — after this idle
   time the screen dims to 5 % (or switches off where the backlight can't dim);
   any touch restores it.
-- **Theme** — tap to cycle the color scheme: Midnight, Graphite, Espresso,
+- ③ **Theme** — tap to cycle the color scheme: Midnight, Graphite, Espresso,
   Nord, Solarized, Plum, Forest, Rose, Mono (black & white), Contrast (high
   contrast), Ferrari, Sunset, Citrus, Modena, Gulf, Monaco, Ivory. The last
   four (plus Ferrari) are companions to the Micra body colors — the machine's
   paint as the accent: Ferrari red, Modena the yellow Micra, Gulf the light
   blue, Monaco the navy, Ivory the creme.
-- **Fahrenheit** *(default off)* — display unit for temperatures. Set‑points
+- ④ **Fahrenheit** *(default off)* — display unit for temperatures. Set‑points
   are still stored in Celsius.
-- **Button sounds** *(boards with a speaker; default on)* — click on button
+- ⑤ **Button sounds** *(boards with a speaker; default on)* — click on button
   presses. (The other sound, the warm‑up chime, is under
   [Settings → Micra → Controls](#controls) since it's about the machine.) With
   button sounds off *and* the chime volume `Off`, the audio hardware stays
   powered down until the next restart.
-- **Performance overlay** *(default off)* — LVGL FPS/CPU overlay, for
+- ⑥ **Performance overlay** *(default off)* — LVGL FPS/CPU overlay, for
   debugging.
 
 ### Time & date
 
-- **Time** — hour and minute pickers, to set the clock by hand. (With Wi‑Fi +
+![Time & date settings](docs/img/manual/device-time.png)
+
+- ① **Time** — hour and minute pickers, to set the clock by hand. (With Wi‑Fi +
   NTP the clock sets itself on every boot; alternatively, boards with an RTC
   and an optional coin cell installed keep time through a power‑off.)
-- **Date** — month / day / year pickers. NTP fills the date in automatically;
+- ② **Date** — month / day / year pickers. NTP fills the date in automatically;
   without NTP a real date is needed for features that stamp records (shot
   history). Setting only the time leaves the date unset.
-- **24‑hour** *(default on)* — clock format.
-- **Timezone** — city picker (handles daylight saving). Governs how all
+- ③ **24‑hour** *(default on)* — clock format.
+- ④ **Timezone** — city picker (handles daylight saving). Governs how all
   times display and how NTP time is converted.
 
 ### WiFi
 
-- **Enable** *(default off)* — join your home network. Used only for NTP time
+![WiFi settings](docs/img/manual/device-wifi.png)
+
+- ① **Enable** *(default off)* — join your home network. Used only for NTP time
   sync; all machine/scale control is local Bluetooth.
-- **Status** — `Off`, `Connecting`, or `Connected` with the IP address.
-- **Set up WiFi** — starts the device's own access point (`Micra-Setup`) and
+- ② **Status** — `Off`, `Connecting`, or `Connected` with the IP address.
+- ③ **Set up WiFi** — starts the device's own access point (`Micra-Setup`) and
   setup page for entering credentials (same flow as token entry: scan the
   QR code on the screen with your phone's camera and the page pops up on its
-  own, or join the network and open the shown address).
-- **Forget** — clears the saved network.
-- **Auto time (NTP)** *(default on)* — sync the clock over WiFi while
+  own, or join the network and open the shown address):
+
+  <img src="docs/img/manual/join-modal.png" width="70%" alt="The QR join modal">
+
+- ③ **Forget** — clears the saved network.
+- ④ **Auto time (NTP)** *(default on)* — sync the clock over WiFi while
   connected. (The timezone it applies is set under **Time & date**.)
 
 ### Root page
 
-- **Restart display** — escape hatch for the rare RGB‑panel glitch where the
+![Settings root page](docs/img/manual/settings-root.png)
+
+The rows ①–③ open the **Micra**, **Scale**, and **Device** pages above; two
+actions live directly on the root:
+
+- ④ **Restart display** — escape hatch for the rare RGB‑panel glitch where the
   image comes up (or drifts) shifted by a few pixels. On RGB boards this
   re‑aligns the panel in place — you'll see a single one‑frame hop, then a
   clean image; nothing is lost and nothing reboots. Other boards do a soft
   reboot. The firmware also re‑aligns itself once shortly after every boot.
-- **Lock display for cleaning** — disables touch for 30 seconds so you can
+- ⑤ **Lock display for cleaning** — disables touch for 30 seconds so you can
   wipe the screen. A full‑screen countdown shows the time remaining; the lock
   ends on its own (touching the screen does nothing until then).
 
+  <img src="docs/img/manual/clean-lock.png" width="50%" alt="The cleaning touch lock">
+
+
 ---
+
+<a id="stats-section"></a>
 
 ## Stats
 
-- **Brew / Boiler** — temperature history graphs. Tap **+/−** to zoom the time
+![Temperature history](docs/img/manual/stats-graphs.png)
+
+- **Brew / Boiler** — temperature history graphs, chosen with the selector ①.
+  Tap **+/−** ② to zoom the time
   window; the set‑point is drawn as a reference line; gaps mean the machine was
   disconnected.
-- **History** — the shot log (boards with an SD‑card slot). Headline cards show
+
+![Shot history](docs/img/manual/stats-history.png)
+
+- **History** — the shot log (boards with an SD‑card slot). Headline cards ① show
   lifetime totals: shots recorded, lifetime accuracy and 30‑day accuracy
-  (actual vs target weight). Below, the shot list with a calendar filter —
+  (actual vs target weight). Below, the shot list ③ with a calendar filter ② —
   **All** plus a button for each month that has shots, so an old month is one
-  tap away instead of a long scroll. Each row shows the signed miss against
+  tap away instead of a long scroll. The footer ④ shows the web address and
+  SD‑card space. Each row shows the signed miss against
   target — `36.2/36g (+0.2)` — green within 2 g, amber beyond, and how the
   shot was run: a bolt for an **Auto** shot (the paddle harness stopped it at
   weight) or an eye for a **Detect**ed one (inferred from the scale). Only
   those two modes record — a fully manual shot has no armed start/stop, so
   nothing is saved. Tap a shot for a full‑screen card with its
-  result/target/diff, time, average flow, and the weight + flow graph.
+  result/target/diff, time, average flow, and the weight + flow graph:
+
+  <img src="docs/img/manual/shot-card.png" width="70%" alt="A shot's full-screen card">
+
   - **SD card**: any size — a **small card is more than enough**. A shot is
     a few tens of KB, so even a 1 GB card holds decades of daily espresso;
     an old card from a drawer is perfect. Use a card formatted **FAT32**
@@ -405,10 +561,12 @@ page fits on screen with little to no scrolling.
     downloads — all styled to match whatever theme the device is currently
     using. The same built‑in web server also carries the setup pages during
     pairing/WiFi setup, so nothing conflicts.
+![Device info](docs/img/manual/stats-info.png)
+
 - **Info** — device details: our firmware version + git revision, uptime,
   battery/USB state with a runtime estimate, and the machine's Device
   Information (manufacturer, model, serial, firmware) read over Bluetooth.
-  - **Diagnostic log** — tap **View** for the recent diagnostic log (the same
+  - ① **Diagnostic log** — tap **View** for the recent diagnostic log (the same
     messages the USB serial console prints), each line stamped with the time
     (or seconds‑since‑boot before the clock is set). The log lives in RAM:
     it survives as long as the device stays powered and holds the last
@@ -433,6 +591,8 @@ page fits on screen with little to no scrolling.
     `http://⟨device IP⟩/coredump?erase=1` clears it manually.
 
 ---
+
+<a id="bbw-reference"></a>
 
 ## Brew‑by‑weight quick reference
 
