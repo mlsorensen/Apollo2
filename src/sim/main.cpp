@@ -173,6 +173,7 @@ int main() {
   ok &= r({320, 240}, "renders/micra_cleaning_320x240.png", 1, ui::kSectionMicraCleaning);
   ok &= r({800, 480}, "renders/micra_cleaning_800x480.png", 1, ui::kSectionMicraCleaning);
   ok &= r({320, 240}, "renders/scale_bt_320x240.png", 1, ui::kSectionScaleBt);
+  ok &= r({800, 480}, "renders/scale_bt_800x480.png", 1, ui::kSectionScaleBt);
   ok &= r({320, 240}, "renders/scale_settings_320x240.png", 1, ui::kSectionScaleSettings);
   ok &= r({800, 480}, "renders/scale_settings_800x480.png", 1, ui::kSectionScaleSettings);
   // Scale > Device settings (stored on the scale): live values, and the
@@ -219,6 +220,7 @@ int main() {
   ok &= r(p5, "renders/stats_brew_1280x720.png", 2, -1, false, 0, ui::kStatsBrew);
   // Token modal over Home (modal over Settings hits a known LVGL draw loop).
   ok &= r(p5, "renders/token_modal_1280x720.png", 0, -1, true);
+  ok &= r({800, 480}, "renders/token_modal_800x480.png", 0, -1, true);
   // Portal-join modal: WIFI: QR + manual instructions (token flow; the WiFi
   // flow shows the same layout with different copy).
   ok &= r({800, 480}, "renders/join_modal_800x480.png", 0, -1, false, 0, -1,
@@ -245,6 +247,7 @@ int main() {
   ok &= r({320, 240}, "renders/stats_brew_320x240.png", 2, -1, false, 0, ui::kStatsBrew);
   ok &= r({800, 480}, "renders/stats_brew_800x480.png", 2, -1, false, 0, ui::kStatsBrew);
   ok &= r({320, 240}, "renders/stats_info_320x240.png", 2, -1, false, 0, ui::kStatsInfo);
+  ok &= r({800, 480}, "renders/stats_info_800x480.png", 2, -1, false, 0, ui::kStatsInfo);
   // Log-viewer modal (Info > Diagnostic log): seed the ring with a plausible
   // boot-and-brew trace so the render shows real content with stamps.
   core::log_ring().set_clock(&clock);

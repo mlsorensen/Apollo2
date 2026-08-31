@@ -16,6 +16,17 @@ to the machine instead of a phone app.
 
 > The focus is on local control via bluetooth. Currently internet is only used for optional NTP.
 
+**Contents:**
+[Features](#features) ·
+[Getting started](#getting-started) ·
+[Screenshots](#screenshots) ·
+[Supported hardware](#supported-hardware) ·
+[3D prints](#3d-prints) ·
+[Using it](#using-it) ·
+[Developer documentation](#developer-documentation) ·
+[Credits](#credits) ·
+[License](#license)
+
 ---
 
 ## Features
@@ -58,12 +69,93 @@ to the machine instead of a phone app.
   browser).
 - **Made to live on the counter** — themes, °C/°F, 12/24‑hour clock, adjustable
   brightness, and a temperature‑history view. Layouts scale from a 2" pocket
-  remote to a 7" panel.
+  remote to an 8" panel.
 
 Everything is designed to keep working if the machine, the scale, or Wi‑Fi is
 absent — the UI just shows the relevant part as offline.
 
-### Screenshots
+---
+
+## Getting started
+
+> [!IMPORTANT]
+> **Before buying any hardware, confirm you can get your machine's Bluetooth
+> token.** Apollo authenticates to the Micra with a token issued by the La
+> Marzocco cloud. Grab it first with the **[LM Token](tools/lmtoken/)** app — sign
+> in with your La Marzocco account and copy the token. If it comes back blank, the
+> same tool can provision one over Bluetooth. Checking now avoids a nasty surprise
+> after a board is already on your bench.
+
+### 1. Get the hardware
+
+Pick a board from the **[Which board?](#which-board)** table below — three of
+them come as finished boxes that need no assembly at all. A Bluetooth scale is
+optional but unlocks the shot timer, flow graph, and brew‑by‑weight. Wiring
+the machine's paddle (for Auto shot) is optional too, and can always be added
+later — see the [wiring guide](docs/WIRING.md).
+
+### 2. Flash the firmware
+
+**No-toolchain option:** the [web flasher](https://mlsorensen.github.io/Apollo2/)
+flashes any supported board straight from Chrome, Edge, or Firefox over USB —
+pick your board, click Install. Upgrading this way keeps your paired machine,
+Wi‑Fi and settings (unless you choose "Erase device"). Prebuilt images also live
+on the [Releases](https://github.com/mlsorensen/Apollo2/releases) page — those
+are full images, so flashing one with `esptool` *does* clear saved settings.
+
+Building from source requires [PlatformIO](https://platformio.org/) (`pio`) and
+a USB cable.
+
+```sh
+make flash            # print selection of flash options
+make flash-s3-4-3b    # or target a board: s3-2 | s3-7b | s3-4-3b | s3-4-3c | p4-4-3 | p4-5 | p4-x-7 | p4-x-8
+make monitor          # open the serial console (115200 baud)
+```
+
+<a id="2-pair-the-machine"></a>
+
+### 3. Pair the machine
+
+**Settings → Micra → Bluetooth → Scan**, then pick your machine. The device saves
+it, then asks for the machine's **Bluetooth token** (step 4) — the token is issued
+by the La Marzocco cloud and can't be read off the machine, so there's a short
+one‑time step to fetch it.
+
+<a id="3-enter-your-token"></a>
+
+### 4. Enter your token
+
+Tap **Enter token** on the prompt (or **Settings → Micra → Set up**) to start the
+device's own Wi‑Fi access point, **`Micra-Setup`**. Scan the QR code on the
+device's screen with your phone's camera — it joins the access point and the
+setup page pops up on its own. (Or join `Micra-Setup` manually and open
+**http://192.168.4.1**.) Paste your token and Save — the device connects and the
+access point closes on its own.
+
+Where to get the token:
+
+- Download the **LM Token** app for your OS from the [Releases](../../releases)
+  page, unzip, and double-click it. Sign in with your La Marzocco account, pick
+  your machine, and hit **Copy token**. This is the only step that uses the
+  internet, and it runs on your computer. (Prefer a terminal? The `lmtoken` CLI
+  is on the same page.)
+
+> Prefer to build **LM Token** / `lmtoken` from source (Go), or script it? See
+> [`tools/lmtoken/README.md`](tools/lmtoken/README.md).
+
+### 5. (Optional) Wi‑Fi + automatic time
+
+On the same setup page you can enter your home Wi‑Fi name and password. The
+device then joins your network, gets an IP, and syncs the clock over NTP. Pick
+your city under **Settings → Device → WiFi → Timezone**. Auto‑sync can be turned
+off there too (**Auto time (NTP)**).
+
+Because the setup page is always reachable from **Set up WiFi**, you can never be
+locked out if your network changes.
+
+---
+
+## Screenshots
 
 <p align="center">
   <img src="docs/img/home-noscale.png" width="49%" alt="Home without a scale — brew/steam hero card">
@@ -74,10 +166,8 @@ absent — the UI just shows the relevant part as offline.
   <img src="docs/img/stats.png" width="49%" alt="Temperature history">
 </p>
 
-<!-- Screenshots live in docs/img/ (tracked). They are curated copies of the
-     simulator's output (renders/, git-ignored). When the UI changes, regenerate
-     with `make sim` and refresh the relevant docs/img/*.png before/with any
-     README update. -->
+<!-- These are curated copies of the simulator's output — see "The simulator"
+     under Developer documentation for the refresh convention. -->
 
 ---
 
@@ -110,38 +200,11 @@ assembly (the [wiring guide](docs/WIRING.md) covers both styles). The X‑series
 boxes are new — the 7" is verified on hardware, the 8" not yet — and each
 size takes its own firmware image.
 
-### All supported boards
+Several older boards are also supported (S3 LCD‑2, 4.3B, 7B, and the bare
+P4‑4.3). The full board matrix, plus power/battery/RTC notes, lives in
+**[docs/HARDWARE.md](docs/HARDWARE.md)**.
 
-| Board | Display | Wired paddle (Auto shot) | Notes |
-|-------|---------|--------------------------|-------|
-| **ESP32‑S3‑Touch‑LCD‑2** | 2.0" 240×320, ST7789 (SPI) | — (Shot detect only) | A portable, battery‑friendly remote. |
-| **ESP32‑S3‑Touch‑LCD‑4.3B** | 4.3" 800×480, RGB parallel | — (Shot detect only) | Counter‑top panel. Has a PCF85063 RTC. |
-| **ESP32‑S3‑Touch‑LCD‑4.3C / 4.3C‑BOX** | 4.3" 800×480, RGB parallel | **Yes — built‑in.** Isolated DI/DO screw terminals (opto‑isolators on board) | **Recommended (easy path).** Dimmable backlight, battery monitoring, PCF85063 RTC, speaker. |
-| **ESP32‑S3‑Touch‑LCD‑7B** | 7" 1024×600, RGB parallel | — (Shot detect only) | Largest panel. |
-| **ESP32‑P4‑WIFI6‑Touch‑LCD‑4.3** | 4.3" 800×480, MIPI‑DSI (ST7701) | **Yes — external opto.** Native GPIOs + a PC817‑style opto module you wire | ESP32‑P4 (32 MB flash / 32 MB PSRAM); WiFi 6 + BLE via on‑board ESP32‑C6. |
-| **ESP32‑P4‑WIFI6‑Touch‑LCD‑5** | 5" 1280×720, MIPI‑DSI (HX8394) | **Yes — external opto.** Same wiring as the P4 4.3 | **Recommended (performance path).** Same electronics as the P4 4.3 with a higher‑density panel (UI scaled 1.5×). No enclosure — a printable shell is [in the repo](hardware/3d-prints/). |
-| **ESP32‑P4‑WIFI6‑Touch‑LCD‑X 7"** | 7" 1280×720, MIPI‑DSI (ILI9881C) | **Yes — external opto.** Same wiring as the P4 4.3/5 (GPIO 51/52 on the 40‑pin header) | **Recommended (easy + performance).** Finished box; same electronics as the other P4 boards. |
-| **ESP32‑P4‑WIFI6‑Touch‑LCD‑X 8"** | 8" 1280×800, MIPI‑DSI (JD9365) | **Yes — external opto.** Same wiring as the P4 4.3/5 | **Recommended (easy + performance).** Finished box; same electronics as the other P4 boards. UI scaled 1.6×. Not yet verified on hardware. |
-
-Boards without paddle wiring still get the full brew‑by‑weight experience via
-**Shot detect** — only the automatic stop at target weight needs the wire.
-Step‑by‑step wiring instructions (with photos of the Micra's paddle loom) are
-in the **[wiring guide](docs/WIRING.md)**.
-
-The S3 boards use the ESP32‑S3R8 (16 MB flash, 8 MB octal PSRAM). A supported
-Bluetooth scale (Bookoo Themis, Acaia Umbra / Lunar / Prochef / Pyxis, or
-Varia Aku — Pyxis and Aku untested) is optional but unlocks the shot timer,
-flow graph, and brew‑by‑weight features.
-
-### Power, battery, and RTC
-
-The boards run from **USB‑C power** — that's the normal way to use them. An
-optional battery can be installed (the boards have a battery connector), but
-it only lasts a few hours, so treat it as a nice‑to‑have for moving the device
-around, not a way to run it. An optional **RTC coin cell** (boards with an
-RTC, e.g. the 4.3B/4.3C) keeps the clock through a power‑off — but it's only
-needed if you *don't* configure Wi‑Fi + NTP, which sets the time automatically
-on every boot.
+<a id="3d-prints"></a>
 
 ### 3D‑printed stand, shells and mounts
 
@@ -172,73 +235,6 @@ Fasteners:
 
 ---
 
-## Getting started
-
-> [!IMPORTANT]
-> **Before buying any hardware, confirm you can get your machine's Bluetooth
-> token.** Apollo authenticates to the Micra with a token issued by the La
-> Marzocco cloud. Grab it first with the **[LM Token](tools/lmtoken/)** app — sign
-> in with your La Marzocco account and copy the token. If it comes back blank, the
-> same tool can provision one over Bluetooth. Checking now avoids a nasty surprise
-> after a board is already on your bench.
-
-### 1. Flash the firmware
-
-**No-toolchain option:** the [web flasher](https://mlsorensen.github.io/Apollo2/)
-flashes any supported board straight from Chrome, Edge, or Firefox over USB —
-pick your board, click Install. Upgrading this way keeps your paired machine,
-Wi‑Fi and settings (unless you choose "Erase device"). Prebuilt images also live
-on the [Releases](https://github.com/mlsorensen/Apollo2/releases) page — those
-are full images, so flashing one with `esptool` *does* clear saved settings.
-
-Building from source requires [PlatformIO](https://platformio.org/) (`pio`) and
-a USB cable.
-
-```sh
-make flash            # print selection of flash options
-make flash-s3-4-3b    # or target a board: s3-2 | s3-7b | s3-4-3b | s3-4-3c | p4-4-3 | p4-5 | p4-x-7 | p4-x-8
-make monitor          # open the serial console (115200 baud)
-```
-
-### 2. Pair the machine
-
-**Settings → Micra → Bluetooth → Scan**, then pick your machine. The device saves
-it, then asks for the machine's **Bluetooth token** (step 3) — the token is issued
-by the La Marzocco cloud and can't be read off the machine, so there's a short
-one‑time step to fetch it.
-
-### 3. Enter your token
-
-Tap **Enter token** on the prompt (or **Settings → Micra → Set up**) to start the
-device's own Wi‑Fi access point, **`Micra-Setup`**. Scan the QR code on the
-device's screen with your phone's camera — it joins the access point and the
-setup page pops up on its own. (Or join `Micra-Setup` manually and open
-**http://192.168.4.1**.) Paste your token and Save — the device connects and the
-access point closes on its own.
-
-Where to get the token:
-
-- Download the **LM Token** app for your OS from the [Releases](../../releases)
-  page, unzip, and double-click it. Sign in with your La Marzocco account, pick
-  your machine, and hit **Copy token**. This is the only step that uses the
-  internet, and it runs on your computer. (Prefer a terminal? The `lmtoken` CLI
-  is on the same page.)
-
-> Prefer to build **LM Token** / `lmtoken` from source (Go), or script it? See
-> [`tools/lmtoken/README.md`](tools/lmtoken/README.md).
-
-### 4. (Optional) Wi‑Fi + automatic time
-
-On the same setup page you can enter your home Wi‑Fi name and password. The
-device then joins your network, gets an IP, and syncs the clock over NTP. Pick
-your city under **Settings → Device → WiFi → Timezone**. Auto‑sync can be turned
-off there too (**Auto time (NTP)**).
-
-Because the setup page is always reachable from **Set up WiFi**, you can never be
-locked out if your network changes.
-
----
-
 ## Using it
 
 - **Home** shows the machine (and scale, if paired). The large action button is
@@ -251,7 +247,9 @@ locked out if your network changes.
 - **Stats** shows brew/boiler temperature history, the shot **History** log
   (SD‑card boards), and device info.
 
-Every screen and setting is described in the **[user manual](MANUAL.md)**.
+Every screen and setting is described in the **[user manual](MANUAL.md)** —
+it opens with a **map of every screen and setting** if you're looking for
+where something lives.
 
 ---
 
@@ -306,10 +304,12 @@ make sim              # build + run, writes renders/*.png
 This is the fastest way to iterate on UI: change code, `make sim`, look at the
 PNGs. Every supported screen size and several states are rendered.
 
-The `renders/` folder is git‑ignored build output; the README screenshots in
-`docs/img/` are curated copies. **When the UI changes, run `make sim` and refresh
-the affected `docs/img/*.png` as part of the same change** so the README stays
-accurate.
+The `renders/` folder is git‑ignored build output; the screenshots in
+`docs/img/` are curated copies, and the annotated manual images in
+`docs/img/manual/` are generated from renders by `make docs-img`
+(`tools/annotate_docs.py` + its manifest). **When the UI changes, run
+`make sim`, refresh the affected `docs/img/*.png`, and re-run `make docs-img`
+as part of the same change** so the README and manual stay accurate.
 
 ### Prerequisites
 
@@ -367,6 +367,8 @@ renders/                Simulator output (PNG)
 ```
 
 ---
+
+<a id="credits"></a>
 
 ## Credits & third‑party
 
