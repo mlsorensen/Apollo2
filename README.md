@@ -154,6 +154,8 @@ Ready‑to‑print 3MF files live in [`hardware/3d-prints/`](hardware/3d-prints/
 | [`apollo2-wiring-gasket.3mf`](hardware/3d-prints/apollo2-wiring-gasket.3mf) | Optional **wiring gasket** — spaces the Micra's cover so the wiring can run underneath it. |
 | [`esp32-s3-4.3c-shell.3mf`](hardware/3d-prints/esp32-s3-4.3c-shell.3mf) | Shell for the bare **ESP32‑S3‑Touch‑LCD‑4.3C** (no‑enclosure variant). |
 | [`esp32-p4-5-shell.3mf`](hardware/3d-prints/esp32-p4-5-shell.3mf) | Shell for the **ESP32‑P4‑WIFI6‑Touch‑LCD‑5**. |
+| [`esp32-p4-5-shell-slim.3mf`](hardware/3d-prints/esp32-p4-5-shell-slim.3mf) | Slimmer shell for the **ESP32‑P4‑WIFI6‑Touch‑LCD‑5** — no battery compartment (USB‑power only). |
+| [`esp32-p4-x-7-backplate.3mf`](hardware/3d-prints/esp32-p4-x-7-backplate.3mf) | Backplate that adapts the **ESP32‑P4‑WIFI6‑Touch‑LCD‑X 7" box** to the counter‑top stand above. |
 | [`esp32-p4-4.3-shell.3mf`](hardware/3d-prints/esp32-p4-4.3-shell.3mf) | Shell for the **ESP32‑P4‑WIFI6‑Touch‑LCD‑4.3**. |
 | [`esp32-s3-2-shell.3mf`](hardware/3d-prints/esp32-s3-2-shell.3mf) | Shell for the pocket **ESP32‑S3‑Touch‑LCD‑2**. |
 
