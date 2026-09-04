@@ -649,17 +649,18 @@ constexpr bool kBacklightActiveLow = false;
 constexpr int  kLcdBacklightEn = 23;       // backlight boost enable (BL_EN)
 
 // --- Touch: GT911 on I2C, rst/int not wired (probe-only) — same deal as the
-//     P4-5 block. Orientation: the 7" box mounts its panel 180° from the
-//     P4-5's convention (camera on top; MADCTL GS|SS flip in display.cpp),
-//     so its touch mapping toggles BOTH mirrors vs the P4-5 values. The
-//     8"/10.1" keep the P4-5 best-guess until hardware says otherwise. ---
+//     P4-5 block. Orientation: the 7" AND 8" boxes mount their glass 180°
+//     from the P4-5's convention (7" HW-verified; 8" found in the sister
+//     project — MADCTL GS|SS flips in display.cpp), so their touch mapping
+//     toggles BOTH mirrors vs the P4-5 values (8" taps unverified). The
+//     10.1" keeps the P4-5 best-guess until hardware says otherwise. ---
 constexpr int  kTouchSda = 7;   // == kI2cSda (Touch reads these names)
 constexpr int  kTouchScl = 8;
 constexpr int  kTouchAddr = 0x5D;    // 0x5D (INT low at boot) or 0x14
 constexpr int  kTouchRst = -1;
 constexpr int  kTouchInt = -1;
 constexpr bool kTouchSwapXY = true;
-#if defined(BOARD_WAVESHARE_P4_WIFI6_X_7)
+#if defined(BOARD_WAVESHARE_P4_WIFI6_X_7) || defined(BOARD_WAVESHARE_P4_WIFI6_X_8)
 constexpr bool kTouchMirrorX = true;   // P4-5 mapping + the 180° panel flip
 constexpr bool kTouchMirrorY = false;
 #else

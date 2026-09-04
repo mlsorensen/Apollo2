@@ -456,7 +456,9 @@ const lcd_init_cmd_t kDsiPanelInit[] = {
 // (120 ms) + display-on (20 ms) + TE on.
 const lcd_init_cmd_t kDsiPanelInit[] = {
     {0xE0, (uint8_t[]){0x00}, 1, 0},  // page: user
-    {0x36, (uint8_t[]){0x00}, 1, 0},  // MADCTL: RGB order
+    // MADCTL GS|SS = 180°: the 8" box mounts its glass the opposite way up
+    // from the 7" (same finding, mirrored fix — both bits, so no mirroring).
+    {0x36, (uint8_t[]){0x03}, 1, 0},
     {0x3A, (uint8_t[]){0x55}, 1, 0},  // COLMOD: RGB565
     {0x80, (uint8_t[]){0x01}, 1, 0},  // DSI: 2 data lanes
     // --- vendor table ---
@@ -1265,7 +1267,15 @@ bool Display::begin() {
   esp_lcd_dsi_bus_config_t bus_cfg = {};
   bus_cfg.bus_id = 0;
   bus_cfg.num_data_lanes = 2;
-  bus_cfg.phy_clk_src = MIPI_DSI_PHY_CLK_SRC_DEFAULT;
+#if defined(BOARD_WAVESHARE_P4_WIFI6_X_8) || defined(BOARD_WAVESHARE_P4_WIFI6_X_10_1)
+  // These envs build for rev v3.0+ silicon (chip_variant "esp32p4"), where
+  // the DSI PHY's PLL reference mux changed: the legacy PLL_F20M source
+  // aborts inside the HAL's clock setter. XTAL is the rev3 default —
+  // verified on a real 8" box (sister-project bring-up, 2026-09).
+  bus_cfg.phy_clk_src = MIPI_DSI_PHY_PLLREF_CLK_SRC_DEFAULT;
+#else
+  bus_cfg.phy_clk_src = MIPI_DSI_PHY_CLK_SRC_DEFAULT;  // rev v1.x: PLL_F20M
+#endif
   bus_cfg.lane_bit_rate_mbps = board::kDsiLaneBitRateMbps;
   esp_lcd_dsi_bus_handle_t dsi_bus = nullptr;
   if (esp_lcd_new_dsi_bus(&bus_cfg, &dsi_bus) != ESP_OK) {

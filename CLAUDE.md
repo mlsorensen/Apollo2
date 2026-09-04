@@ -65,14 +65,30 @@ pin column like the 5). Deltas, all verified against the X schematic +
 Waveshare BSP (waveshareteam/Waveshare-ESP32-components,
 bsp/esp32_p4_wifi6_touch_lcd_x):
 
-- **Silicon: X boards exist in BOTH revision generations.** Waveshare's X
-  repo says current boards ship rev v3.0+ (400 MHz) and defaults its CI to a
-  rev3 profile — but our first real unit (7", bought 2026-08) is **rev v1.3**
-  (esptool-verified after a rev3-built image reproduced the exact bootloader
-  illegal-instruction loop from the silicon-revision section below). The
-  boards jsons therefore use `chip_variant` `"esp32p4_es"` like the other P4
-  boards. A genuine rev3 unit fails the same way in mirror image and needs
-  `"esp32p4"` — always run `esptool chip-id` on a new board first.
+- **Silicon: X boards exist in BOTH revision generations — PER UNIT, not per
+  size.** The user's 7" (bought 2026-08) is **rev v1.3**; the user's 8" is
+  **rev v3.2** (verified in the countertop-display sister project, 2026-09).
+  The boards jsons currently all use `esp32p4_es`, which boots the 7" but
+  made the v0.9.0 x-8 image WRONG for the real 8": on rev3 the wrong variant
+  boot-loops with `CHIP_LP_WDT_RESET` before printing anything — looks like a
+  dead board. FIXED post-0.9.0: the x-8 and x-10-1 jsons now use `"esp32p4"`
+  (400 MHz real; display.cpp selects the XTAL DSI-PHY PLL ref for those envs
+  and the 8" JD9365 table carries the MADCTL 180° glass flip). The 7" json
+  stays `esp32p4_es`. Always `esptool chip-id` a new unit first.
+- **X-8 bring-up learnings (from the sister project, HW-verified there):**
+  (1) rev3 DSI PHY: the legacy `MIPI_DSI_PHY_CLK_SRC_DEFAULT` (PLL_F20M)
+  aborts inside the HAL on rev3 — it needs `MIPI_DSI_PHY_PLLREF_CLK_SRC_
+  DEFAULT` (XTAL); select at runtime via `efuse_hal_chip_revision() >= 300`
+  so one binary-per-rev source file serves both families. (2) Our JD9365 8"
+  table + 80 MHz/1500 Mbps timings worked first time (panel up in ~340 ms).
+  (3) The 8" box mounts its glass the OPPOSITE way up from the 7": same
+  table renders upside down — fix is rotating 270° instead of 90° in the
+  flush (a direction constant; touch mapping follows it). Our per-size touch
+  #if was the right structure. (4) GT911 at 0x5D like the others; TP_INT
+  unverified on the 8" (the 7" schematic routes it via R32 to GPIO33 —
+  relevant if wake-on-touch is ever wanted). (5) Rev3 pads hold state
+  through deep sleep (documented; untested) — the v1.x boards' pull-down
+  mods shouldn't be needed there.
 - Panels (native portrait, rotated like the other P4 DSI boards): 7" =
   720x1280 ILI9881C (80 MHz DPI, 1000 Mbps), 8" and 10.1" = 800x1280 JD9365
   (80 MHz, 1500 Mbps) — but the 8" and 10.1" glasses take DIFFERENT vendor
