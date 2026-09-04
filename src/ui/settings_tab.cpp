@@ -210,6 +210,18 @@ void build_device_display_rows(lv_obj_t* page, const lv_font_t* text_font,
   lv_obj_set_style_text_font(out.dim_value, text_font, 0);
   lv_obj_center(out.dim_value);
 
+  // Screensaver style: what the dim timeout shows — bouncing logo or a blank
+  // screen. Hidden while Screen dim is Off (see App's sync of saver_row).
+  out.saver_row = make_setting_row(page, "Screensaver", text_font);
+  out.saver_btn = ui::make_button(out.saver_row);
+  lv_obj_set_height(out.saver_btn, btn_size);
+  lv_obj_set_style_pad_hor(out.saver_btn, ui::dp(14), 0);
+  lv_obj_set_style_bg_color(out.saver_btn, lv_color_hex(ui::theme::card()), 0);
+  out.saver_value = lv_label_create(out.saver_btn);
+  lv_obj_set_style_text_color(out.saver_value, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(out.saver_value, text_font, 0);
+  lv_obj_center(out.saver_value);
+
   lv_obj_t* rt = make_setting_row(page, "Theme", text_font);
   out.theme_btn = ui::make_button(rt);
   lv_obj_set_style_bg_color(out.theme_btn, lv_color_hex(ui::theme::card()), 0);

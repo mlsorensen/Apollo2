@@ -8,6 +8,7 @@
 #include <lvgl.h>
 
 #include "core/log_ring.h"
+#include "ui/img_lion.h"
 #include "ui/shot_card.h"
 #include "ui/stats_tab.h"
 #include "ui/theme.h"
@@ -539,7 +540,7 @@ void set_flush_delay_label(ui::SettingsWidgets& s, int delay_s) {
 constexpr const char* kSmoothName[] = {"Off", "Light", "Medium", "Strong"};
 
 // Screen-dim timeout choices (IDisplaySettings::screen_timeout_min).
-constexpr int kDimMinutes[] = {0, 15, 30};
+constexpr int kDimMinutes[] = {0, 5, 15, 30};
 constexpr int kDimCount = static_cast<int>(sizeof(kDimMinutes) / sizeof(kDimMinutes[0]));
 void on_dim_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_screen_timeout();
@@ -556,8 +557,42 @@ void set_dim_label(ui::SettingsWidgets& s) {
   }
 }
 
+// Screensaver style (IDisplaySettings::screensaver_style): what the dim
+// timeout shows. Order matches the persisted index.
+constexpr const char* kSaverName[] = {"Logo", "Blank"};
+constexpr int kSaverCount = static_cast<int>(sizeof(kSaverName) / sizeof(kSaverName[0]));
+void on_saver_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_screensaver_style();
+}
+
+// Label + row visibility together: with Screen dim Off there is no timeout,
+// so the style row hides (same pattern as Cleaning's Flush delay).
+void sync_saver_row(ui::SettingsWidgets& s) {
+  if (s.saver_value == nullptr) return;
+  const int i = (s.screensaver_style >= 0 && s.screensaver_style < kSaverCount)
+                    ? s.screensaver_style
+                    : 0;
+  lv_label_set_text(s.saver_value, kSaverName[i]);
+  if (s.saver_row != nullptr) {
+    if (s.screen_timeout_min <= 0)
+      lv_obj_add_flag(s.saver_row, LV_OBJ_FLAG_HIDDEN);
+    else
+      lv_obj_remove_flag(s.saver_row, LV_OBJ_FLAG_HIDDEN);
+  }
+}
+
+// Bouncing-logo palette: light tones that read on the dimmed panel; the color
+// advances on each edge bounce, DVD style.
+constexpr uint32_t kSaverColors[] = {0xE8E8E6, 0x2F9BF4, 0xE9B44C,
+                                     0xE05A4E, 0x64C7A8, 0xB58CD9};
+constexpr int kSaverColorCount =
+    static_cast<int>(sizeof(kSaverColors) / sizeof(kSaverColors[0]));
+
 void on_screensaver_timer(lv_timer_t* t) {
   static_cast<ui::App*>(lv_timer_get_user_data(t))->screensaver_tick();
+}
+void on_saver_anim_timer(lv_timer_t* t) {
+  static_cast<ui::App*>(lv_timer_get_user_data(t))->saver_anim_tick();
 }
 void on_wifi_setup_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->start_wifi_setup();
@@ -693,6 +728,7 @@ namespace ui {
 
 App::~App() {
   if (toast_timer_ != nullptr) lv_timer_delete(toast_timer_);
+  if (saver_anim_ != nullptr) lv_timer_delete(saver_anim_);
   if (screensaver_timer_ != nullptr) lv_timer_delete(screensaver_timer_);
   if (clean_lock_timer_ != nullptr) lv_timer_delete(clean_lock_timer_);
   if (bf_timer_ != nullptr) lv_timer_delete(bf_timer_);
@@ -939,6 +975,8 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   }
   if (settings_.dim_btn != nullptr)
     lv_obj_add_event_cb(settings_.dim_btn, on_dim_clicked, LV_EVENT_CLICKED, this);
+  if (settings_.saver_btn != nullptr)
+    lv_obj_add_event_cb(settings_.saver_btn, on_saver_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.hour_dd, on_hour_dd, LV_EVENT_VALUE_CHANGED, this);
   lv_obj_add_event_cb(settings_.minute_dd, on_minute_dd, LV_EVENT_VALUE_CHANGED, this);
   lv_obj_add_event_cb(settings_.month_dd, on_month_dd, LV_EVENT_VALUE_CHANGED, this);
@@ -1034,6 +1072,8 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   set_brightness_label(settings_);
   settings_.screen_timeout_min = display_->screen_timeout_min();
   set_dim_label(settings_);
+  settings_.screensaver_style = display_->screensaver_style();
+  sync_saver_row(settings_);
   // Idle-dim poll. Created once (build() reruns on theme rebuilds; the timer
   // isn't part of the widget tree, so it survives them).
   if (screensaver_timer_ == nullptr)
@@ -1585,6 +1625,14 @@ void App::cycle_screen_timeout() {
   settings_.screen_timeout_min = mins;
   display_->set_screen_timeout_min(mins);
   set_dim_label(settings_);
+  sync_saver_row(settings_);  // the style row hides while the timeout is Off
+}
+
+void App::cycle_screensaver_style() {
+  if (display_ == nullptr) return;
+  settings_.screensaver_style = (settings_.screensaver_style + 1) % kSaverCount;
+  display_->set_screensaver_style(settings_.screensaver_style);
+  sync_saver_row(settings_);
 }
 
 void App::screensaver_tick() {
@@ -1594,7 +1642,88 @@ void App::screensaver_tick() {
                                     static_cast<uint32_t>(mins) * 60000u;
   if (idle == screensaver_on_) return;  // touch resets LVGL's inactivity clock
   screensaver_on_ = idle;
-  display_->set_screensaver(idle);
+  if (idle) {
+    const bool blank = settings_.screensaver_style == 1;
+    display_->set_screensaver(blank ? core::IDisplaySettings::SaverMode::kBlank
+                                    : core::IDisplaySettings::SaverMode::kDim);
+    start_screensaver(blank);
+  } else {
+    display_->set_screensaver(core::IDisplaySettings::SaverMode::kOff);
+    stop_screensaver();
+  }
+}
+
+void App::start_screensaver(bool blank) {
+  stop_screensaver();
+  // Opaque black cover over everything (also swallows the waking tap so it
+  // can't press whatever control happens to sit under the finger).
+  saver_layer_ = lv_obj_create(lv_layer_top());
+  lv_obj_remove_style_all(saver_layer_);
+  lv_obj_set_size(saver_layer_, lv_pct(100), lv_pct(100));
+  lv_obj_set_style_bg_color(saver_layer_, lv_color_black(), 0);
+  lv_obj_set_style_bg_opa(saver_layer_, LV_OPA_COVER, 0);
+  lv_obj_add_flag(saver_layer_, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_remove_flag(saver_layer_, LV_OBJ_FLAG_SCROLLABLE);
+  if (blank) return;  // backlight is off; nothing to draw
+
+  saver_img_ = lv_image_create(saver_layer_);
+  lv_image_set_src(saver_img_, ui::lion_logo());
+  // Size the lion to ~40% of the screen's short side per axis budget: fit its
+  // height to 40% of the screen height, never upscaling past native.
+  const int target_h = screen_.height * 2 / 5;
+  const int zoom = target_h * 256 / ui::kLionH;
+  lv_image_set_scale(saver_img_, zoom < 256 ? zoom : 256);
+  // A scaled lv_image keeps its full-size layout box; pivot the transform at
+  // the origin so position == top-left of the drawn pixels.
+  lv_image_set_pivot(saver_img_, 0, 0);
+  saver_color_i_ = 0;
+  lv_obj_set_style_image_recolor(saver_img_, lv_color_hex(kSaverColors[0]), 0);
+  lv_obj_set_style_image_recolor_opa(saver_img_, LV_OPA_COVER, 0);
+  lv_obj_set_pos(saver_img_, screen_.width / 7, screen_.height / 5);
+  const int step = ui::dp(2) > 2 ? ui::dp(2) : 2;
+  saver_vx_ = step;
+  saver_vy_ = step;
+  saver_anim_ = lv_timer_create(on_saver_anim_timer, 33, this);
+}
+
+void App::stop_screensaver() {
+  if (saver_anim_ != nullptr) {
+    lv_timer_delete(saver_anim_);
+    saver_anim_ = nullptr;
+  }
+  if (saver_layer_ != nullptr) {
+    lv_obj_delete(saver_layer_);
+    saver_layer_ = nullptr;
+    saver_img_ = nullptr;
+  }
+}
+
+void App::saver_anim_tick() {
+  if (saver_img_ == nullptr) return;
+  // Drawn size under the transform (the widget's layout box stays native).
+  const int scale = lv_image_get_scale(saver_img_);
+  const int w = ui::kLionW * scale / 256;
+  const int h = ui::kLionH * scale / 256;
+  int x = lv_obj_get_x(saver_img_) + saver_vx_;
+  int y = lv_obj_get_y(saver_img_) + saver_vy_;
+  bool bounced = false;
+  if (x <= 0) { x = 0; saver_vx_ = -saver_vx_; bounced = true; }
+  if (x + w >= screen_.width) { x = screen_.width - w; saver_vx_ = -saver_vx_; bounced = true; }
+  if (y <= 0) { y = 0; saver_vy_ = -saver_vy_; bounced = true; }
+  if (y + h >= screen_.height) { y = screen_.height - h; saver_vy_ = -saver_vy_; bounced = true; }
+  if (bounced) {
+    saver_color_i_ = (saver_color_i_ + 1) % kSaverColorCount;
+    lv_obj_set_style_image_recolor(saver_img_,
+                                   lv_color_hex(kSaverColors[saver_color_i_]), 0);
+  }
+  lv_obj_set_pos(saver_img_, x, y);
+}
+
+void App::pose_screensaver() {
+  // Sim-only: force the logo saver on (deterministic position from
+  // start_screensaver) so a render can show it.
+  screensaver_on_ = true;
+  start_screensaver(/*blank=*/false);
 }
 
 void App::shot_button() {

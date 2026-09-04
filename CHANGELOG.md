@@ -5,6 +5,22 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## Unreleased
+
+### Changes
+
+- **Screensaver enhanced** — the idle screen can now show a bouncing image
+  over the dimmed display, or blank the screen entirely. Pick under
+  **Settings → Device → Display → Screensaver** (Logo / Blank). **Screen
+  dim** also gains a 5‑minute option.
+
+- **X‑series 8" image fixed.** The previous 8" image was built for the older
+  ESP32‑P4 silicon revision and could not boot the rev 3.0+ chips these boxes
+  actually ship with (the board looked dead — no screen, no serial). The 8"
+  image now targets rev 3.0+ silicon and mounts the picture the right way up
+  for the 8" enclosure. (The 7" image is unchanged — 7" units in the wild are
+  the older revision.)
+
 ## v0.9.0
 
 ### Changes

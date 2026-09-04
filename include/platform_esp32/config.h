@@ -69,6 +69,8 @@ class Config {
 
   int screen_timeout_min() const;  // dim after this many idle minutes (0 = off; default 30)
   void set_screen_timeout_min(int minutes);
+  int screensaver_style() const;   // 0 = bouncing logo (default), 1 = blank
+  void set_screensaver_style(int style);
 
   bool clock_24h() const;     // 24-hour clock display (default true)
   void set_clock_24h(bool on);

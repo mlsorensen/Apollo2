@@ -24,14 +24,28 @@ void DisplaySettings::set_screen_timeout_min(int minutes) {
   config_.set_screen_timeout_min(minutes);
 }
 
-void DisplaySettings::set_screensaver(bool on) {
+void DisplaySettings::set_screensaver(SaverMode mode) {
   // Live backlight only — the persisted preference stays what the user set.
-  // On/off-only boards get 0 (backlight off) instead of a 5% dim.
-  if (on) {
-    display_.set_brightness(board::kSupportsBrightness ? 5 : 0);
-  } else {
-    display_.set_brightness(board::kSupportsBrightness ? config_.brightness() : 100);
+  switch (mode) {
+    case SaverMode::kDim:
+      // Bouncing-logo saver: dim where the backlight can PWM; boards that can
+      // only switch stay at full so the logo remains visible (Blank is the
+      // style for going dark on those).
+      display_.set_brightness(board::kSupportsBrightness ? 5 : 100);
+      break;
+    case SaverMode::kBlank:
+      display_.set_brightness(0);  // true off on every backlight path
+      break;
+    case SaverMode::kOff:
+      display_.set_brightness(board::kSupportsBrightness ? config_.brightness() : 100);
+      break;
   }
+}
+
+int DisplaySettings::screensaver_style() const { return config_.screensaver_style(); }
+
+void DisplaySettings::set_screensaver_style(int style) {
+  config_.set_screensaver_style(style);
 }
 
 int DisplaySettings::theme() const { return config_.theme(); }

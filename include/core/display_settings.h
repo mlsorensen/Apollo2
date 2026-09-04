@@ -17,13 +17,21 @@ class IDisplaySettings {
   virtual bool supports_brightness() const = 0;
 
   // Screen-dim timeout in minutes (0 = never). After this long with no touch
-  // input the UI calls set_screensaver(true); the next touch wakes it.
+  // input the UI enters the screensaver; the next touch wakes it.
   virtual int screen_timeout_min() const = 0;
   virtual void set_screen_timeout_min(int minutes) = 0;
-  // Live screensaver state — NOT persisted. true drops the backlight to 5%
-  // (fully off on boards that can only switch it); false restores the saved
-  // brightness. The persisted brightness preference is untouched either way.
-  virtual void set_screensaver(bool on) = 0;
+  // Live screensaver state — NOT persisted; the saved brightness preference is
+  // untouched either way. kDim keeps the panel visible for the bouncing-logo
+  // saver: 5% where the backlight can PWM, full brightness where it can only
+  // switch (the logo must stay visible). kBlank switches the backlight fully
+  // off on every board. kOff restores the user's brightness.
+  enum class SaverMode { kOff = 0, kDim = 1, kBlank = 2 };
+  virtual void set_screensaver(SaverMode mode) = 0;
+  // Persisted screensaver style: 0 = bouncing logo over the dimmed screen
+  // (default), 1 = blank (display off). Takes effect when the screen-dim
+  // timeout fires; irrelevant while the timeout is 0.
+  virtual int screensaver_style() const = 0;
+  virtual void set_screensaver_style(int style) = 0;
 
   // Selected color scheme, as an index into the UI's palette list (ui::theme).
   // The port only persists the choice; the UI owns the palettes + applies them.

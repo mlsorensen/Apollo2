@@ -11,6 +11,7 @@ constexpr char kNameKey[] = "name";
 constexpr char kTokenKey[] = "token";
 constexpr char kBrightnessKey[] = "bright";
 constexpr char kScreenTimeoutKey[] = "scrtimeout";
+constexpr char kSaverStyleKey[] = "ssstyle";
 constexpr char kClock24Key[] = "clock24";
 constexpr char kThemeKey[] = "theme";
 constexpr char kFahrenheitKey[] = "fahr";
@@ -379,6 +380,21 @@ void Config::set_screen_timeout_min(int minutes) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putInt(kScreenTimeoutKey, minutes);
+  p.end();
+}
+
+int Config::screensaver_style() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 0;
+  const int v = p.isKey(kSaverStyleKey) ? p.getInt(kSaverStyleKey, 0) : 0;
+  p.end();
+  return v;
+}
+
+void Config::set_screensaver_style(int style) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putInt(kSaverStyleKey, style);
   p.end();
 }
 

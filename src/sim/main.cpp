@@ -41,7 +41,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             bool clean_lock = false, int shot_modal_id = -1, int history_ym = 0,
             bool backflush = false, bool log_modal = false,
             bool unwired_midshot = false, bool toast = false,
-            bool join_modal = false) {
+            bool join_modal = false, bool screensaver = false) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
@@ -65,6 +65,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   if (toast)
     app.show_toast("Shot not started: Auto shot is enabled. "
                    "Connect the scale or switch to Manual mode.");
+  if (screensaver) app.pose_screensaver();  // bouncing-logo saver, start pose
   display.render_frame();
   if (!display.save_png(out_path)) {
     std::fprintf(stderr, "error: failed to write %s\n", out_path);
@@ -94,11 +95,11 @@ int main() {
                bool modal = false, int theme = 0, int stats = -1, bool clean_lock = false,
                int shot_id = -1, int history_ym = 0, bool backflush = false,
                bool log_modal = false, bool unwired_midshot = false,
-               bool toast = false, bool join_modal = false) {
+               bool toast = false, bool join_modal = false, bool screensaver = false) {
     return render(machine, provisioner, battery, disp, clock, history, scale,
                   scale_provisioner, brew, network, shots, s, path, tab, sec, modal, theme,
                   stats, clean_lock, shot_id, history_ym, backflush, log_modal,
-                  unwired_midshot, toast, join_modal);
+                  unwired_midshot, toast, join_modal, screensaver);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
@@ -152,6 +153,9 @@ int main() {
   // token modal — the overlay hides the tabview either way).
   ok &= r({800, 480}, "renders/clean_lock_800x480.png", 0, -1, false, 0, -1, true);
   ok &= r({320, 240}, "renders/clean_lock_320x240.png", 0, -1, false, 0, -1, true);
+  // Bouncing-logo screensaver (start pose; on-device it drifts + recolors).
+  ok &= r({800, 480}, "renders/screensaver_800x480.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, false, false, false, true);
   // Backflush cleaning (Settings > Micra): the prompt screen, and mid-sequence
   // with the cycle readout (the fake poses a running sequence the real
   // controller would advance from its poll).

@@ -53,8 +53,8 @@ Settings
 │  │                    · Drop negative g/s · Oscilloscope graph
 │  └─ Device settings — the scale's own settings (Beep · Auto-off/sleep · Unit …)
 ├─ Device
-│  ├─ Display     — Brightness* · Screen dim · Theme · Fahrenheit
-│  │               · Button sounds* · Performance overlay
+│  ├─ Display     — Brightness* · Screen dim · Screensaver (Logo/Blank)
+│  │               · Theme · Fahrenheit · Button sounds* · Performance overlay
 │  ├─ Time & date — Time · Date · 24-hour · Timezone
 │  └─ WiFi        — Enable · Status · Set up WiFi → QR portal · Forget
 │                  · Auto time (NTP)
@@ -394,23 +394,31 @@ page fits on screen with little to no scrolling.
 ![Display settings](docs/img/manual/device-display.png)
 
 - ① **Brightness** *(dimmable boards)* — backlight level.
-- ② **Screen dim** *(Off / 15 min / 30 min, default 30 min)* — after this idle
-  time the screen dims to 5 % (or switches off where the backlight can't dim);
-  any touch restores it.
-- ③ **Theme** — tap to cycle the color scheme: Midnight, Graphite, Espresso,
+- ② **Screen dim** *(Off / 5 / 15 / 30 min, default 30 min)* — after this idle
+  time the screensaver starts (see the next row); any touch wakes the screen.
+- ③ **Screensaver** *(Logo / Blank, default Logo; shown while Screen dim is
+  on)* — what the idle timeout shows. **Logo** dims the backlight to 5 % and
+  bounces the La Marzocco lion around a black screen, changing color at every
+  wall it hits (on boards whose backlight can't dim, the logo shows at full
+  brightness — choose Blank there to go dark). **Blank** switches the display
+  off entirely:
+
+  <img src="docs/img/manual/screensaver.png" width="70%" alt="The bouncing-logo screensaver">
+
+- ④ **Theme** — tap to cycle the color scheme: Midnight, Graphite, Espresso,
   Nord, Solarized, Plum, Forest, Rose, Mono (black & white), Contrast (high
   contrast), Ferrari, Sunset, Citrus, Modena, Gulf, Monaco, Ivory. The last
   four (plus Ferrari) are companions to the Micra body colors — the machine's
   paint as the accent: Ferrari red, Modena the yellow Micra, Gulf the light
   blue, Monaco the navy, Ivory the creme.
-- ④ **Fahrenheit** *(default off)* — display unit for temperatures. Set‑points
+- ⑤ **Fahrenheit** *(default off)* — display unit for temperatures. Set‑points
   are still stored in Celsius.
-- ⑤ **Button sounds** *(boards with a speaker; default on)* — click on button
+- ⑥ **Button sounds** *(boards with a speaker; default on)* — click on button
   presses. (The other sound, the warm‑up chime, is under
   [Settings → Micra → Controls](#controls) since it's about the machine.) With
   button sounds off *and* the chime volume `Off`, the audio hardware stays
   powered down until the next restart.
-- ⑥ **Performance overlay** *(default off)* — LVGL FPS/CPU overlay, for
+- ⑦ **Performance overlay** *(default off)* — LVGL FPS/CPU overlay, for
   debugging.
 
 ### Time & date

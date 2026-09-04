@@ -13,7 +13,9 @@ class FakeDisplaySettings : public core::IDisplaySettings {
   bool supports_brightness() const override { return true; }
   int screen_timeout_min() const override { return screen_timeout_min_; }
   void set_screen_timeout_min(int minutes) override { screen_timeout_min_ = minutes; }
-  void set_screensaver(bool) override {}  // no backlight to dim in the sim
+  void set_screensaver(SaverMode) override {}  // no backlight to dim in the sim
+  int screensaver_style() const override { return screensaver_style_; }
+  void set_screensaver_style(int style) override { screensaver_style_ = style; }
   int theme() const override { return theme_; }
   void set_theme(int index) override { theme_ = index; }
   bool use_fahrenheit() const override { return fahrenheit_; }
@@ -36,6 +38,7 @@ class FakeDisplaySettings : public core::IDisplaySettings {
  private:
   int brightness_ = 80;
   int screen_timeout_min_ = 30;  // matches the device default
+  int screensaver_style_ = 0;    // 0 = bouncing logo (device default)
   int theme_ = 0;
   bool fahrenheit_ = false;
   bool drop_negative_flow_ = true;

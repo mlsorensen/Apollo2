@@ -163,6 +163,13 @@ struct SettingsWidgets {
   lv_obj_t* dim_value = nullptr;
   int screen_timeout_min = 0;
 
+  // Screensaver style cycle button (Logo / Blank); the whole row hides while
+  // Screen dim is Off — no timeout, nothing to style.
+  lv_obj_t* saver_row = nullptr;
+  lv_obj_t* saver_btn = nullptr;
+  lv_obj_t* saver_value = nullptr;
+  int screensaver_style = 0;
+
   // Time & date dropdowns ("Time" = hour/minute, "Date" = month/day/year; a
   // stepper per field made the page scroll). App owns the options + selection
   // (hour labels depend on 12/24h, day count on the month; shot history needs

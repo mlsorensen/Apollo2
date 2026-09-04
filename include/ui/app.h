@@ -90,7 +90,10 @@ class App {
   void steam_set_enabled(bool on);       // steam boiler on/off switch
   void brightness_adjust(int dir);       // Display brightness +/-
   void cycle_screen_timeout();           // Device "Screen dim": Off / 15 min / 30 min
+  void cycle_screensaver_style();        // Device "Screensaver": Logo / Blank
   void screensaver_tick();               // idle-dim poll (from an lv_timer, ~4 Hz)
+  void saver_anim_tick();                // bouncing-logo step (from its lv_timer)
+  void pose_screensaver();               // sim: force the saver on for a render
   void hour_select(int idx);             // Time & date dropdowns: selection ->
   void minute_select(int idx);           // clock/date write (hour idx == hour,
   void month_select(int idx);            // month/day 1-based, year offset from
@@ -234,6 +237,15 @@ class App {
   // rebuilds — it belongs to the app, not the widget tree.
   lv_timer_t* screensaver_timer_ = nullptr;
   bool screensaver_on_ = false;
+  // Bouncing-logo saver (style 0): a black layer on lv_layer_top with the
+  // recolored lion image drifting DVD-style; torn down on wake.
+  lv_obj_t* saver_layer_ = nullptr;
+  lv_obj_t* saver_img_ = nullptr;       // null in Blank style
+  lv_timer_t* saver_anim_ = nullptr;
+  int saver_vx_ = 0, saver_vy_ = 0;     // px per anim tick
+  int saver_color_i_ = 0;               // palette index; advances on bounce
+  void start_screensaver(bool blank);
+  void stop_screensaver();
   // Cleaning lock: a full-screen opaque overlay on the top layer swallows all
   // touch input for kCleanLockSecs while a countdown shows time remaining.
   void end_clean_lock();
