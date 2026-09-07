@@ -15,6 +15,7 @@
 #include <lvgl.h>
 
 #include <esp_heap_caps.h>
+#include <hal/efuse_hal.h>
 #if __has_include(<esp_core_dump.h>)
 #include <esp_core_dump.h>
 #endif
@@ -389,7 +390,12 @@ void poll_serial_id() {
     if (c == '\n' || c == '\r') {
       buf[n] = '\0';
       if (n == 3 && std::strcmp(buf, "id?") == 0) {
-        core::logf("APOLLO2 BOARD=\"%s\" FW=%s\n", board::kName, fw::kVersion);
+        // REV: the silicon revision (efuse major*100+minor, e.g. 103 = v1.3).
+        // Future-proofing for P4 boards shipping in both revision generations:
+        // when per-silicon images exist, the web flasher's Detect can pick the
+        // right one from this. Appended field — existing parsers substring-match.
+        core::logf("APOLLO2 BOARD=\"%s\" FW=%s REV=%u\n", board::kName, fw::kVersion,
+                   static_cast<unsigned>(efuse_hal_chip_revision()));
       } else if (std::strncmp(buf, "padsense=", 9) == 0 ||
                  std::strncmp(buf, "paddrive=", 9) == 0) {
         // Per-UNIT paddle GPIO overrides (NVS; survive reflashes). Repair
@@ -476,7 +482,10 @@ void loop() {
     if (now_unix != 0) g_config.set_last_unix(now_unix);
   }
   g_network.poll();          // drive the WiFi station state machine + NTP->RTC
-  g_update_check.poll();     // daily release check (gated on NTP having synced)
+  // Daily release check (gated on NTP having synced) — but never while a shot
+  // is in flight: the TLS task's transient ~45KB heap bite and CPU burst have
+  // no business anywhere near the stop math. The check just waits its turn.
+  if (!core::shot_in_flight(g_brew.snapshot())) g_update_check.poll();
 
   // Reflect the latest cached machine state in the UI (cheap; no BLE here).
   // NOTE this path re-sets many Home widgets — everything it touches must go

@@ -1699,9 +1699,11 @@ void App::screensaver_tick() {
   const bool idle = mins > 0 && lv_display_get_inactive_time(nullptr) >=
                                     static_cast<uint32_t>(mins) * 60000u;
   // Piggyback the update-available offer on this 4 Hz poll — never over
-  // another modal or the running screensaver, and snoozed for a day by
-  // "Later" (signed tick diff, safe across the 49-day wrap).
+  // another modal, the running screensaver, or an in-flight shot (nothing
+  // may cover the live shot), and snoozed for a day by "Later" (signed tick
+  // diff, safe across the 49-day wrap).
   if (!idle && updates_ != nullptr && modal_ == nullptr && !screensaver_on_ &&
+      (brew_ == nullptr || !core::shot_in_flight(brew_->snapshot())) &&
       static_cast<int32_t>(lv_tick_get() - update_snooze_until_) >= 0 &&
       updates_->info().available) {
     open_update_modal();
