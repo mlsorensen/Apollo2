@@ -21,6 +21,7 @@ class DisplaySettings : public core::IDisplaySettings {
   void set_screensaver(SaverMode mode) override;
   int screensaver_style() const override;
   void set_screensaver_style(int style) override;
+  bool flash_write_disturbs_display() const override;
   int theme() const override;
   void set_theme(int index) override;
   bool use_fahrenheit() const override;

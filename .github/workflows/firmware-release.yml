@@ -95,6 +95,22 @@ jobs:
           # above stays the clean-install / recovery download.
           python3 tools/stage_flash_parts.py .pio/build/${{ matrix.env }} \
                   "out/parts/${{ matrix.board }}"
+          # App-only image for the on-device self-updater (esp_https_ota
+          # streams it into the inactive OTA slot; the parts above are NOT
+          # usable for that — they bundle otadata with the app). The .sha256
+          # sidecar is for humans/scripts; the device trusts TLS + the OTA
+          # image validation.
+          mkdir -p out/app
+          cp .pio/build/${{ matrix.env }}/firmware.bin \
+             "out/app/${{ matrix.board }}.bin"
+          ( cd out/app && shasum -a 256 "${{ matrix.board }}.bin" \
+              > "${{ matrix.board }}.bin.sha256" )
+          # Guard the self-updater's URL contract: the slug this build's
+          # board_config.h bakes in as kUpdateSlug must be exactly this
+          # matrix row's board name.
+          grep -Fq 'kUpdateSlug[] = "${{ matrix.board }}"' \
+              include/platform_esp32/board_config.h || {
+            echo "::error::kUpdateSlug for ${{ matrix.env }} != '${{ matrix.board }}' - the self-updater would fetch the wrong image"; exit 1; }
           # Debug symbols: this build's .elf, bundled into one archive by the
           # release job. A crash dump pulled off a device later
           # (http://<ip>/coredump) can only be symbolicated against the .elf
@@ -235,6 +251,8 @@ jobs:
           ' CHANGELOG.md > "public/${RELEASE_TAG}/notes.txt"
           cp fw/*.bin "public/${RELEASE_TAG}/firmware/"
           cp -r fw/parts "public/${RELEASE_TAG}/firmware/parts"
+          # App-only images the on-device self-updater fetches.
+          cp -r fw/app "public/${RELEASE_TAG}/firmware/app"
           python3 - <<'EOF'
           import json, os, glob, re
           tag = os.environ["RELEASE_TAG"]

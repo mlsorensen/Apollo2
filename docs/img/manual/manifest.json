@@ -150,6 +150,7 @@
     ]
   },
   {"src": "renders/update_modal_800x480.png", "out": "update-modal.png", "size": [800, 480], "callouts": []},
+  {"src": "renders/update_install_800x480.png", "out": "update-install.png", "size": [800, 480], "callouts": []},
   {
     "src": "renders/stats_brew_800x480.png",
     "out": "stats-graphs.png",

@@ -57,7 +57,7 @@ Settings
 │  │               · Theme · Fahrenheit · Button sounds* · Performance overlay
 │  ├─ Time & date — Time · Date · 24-hour · Timezone
 │  └─ WiFi        — Enable · Status · Set up WiFi → QR portal · Forget
-│                  · Auto time (NTP) · Check for updates
+│                  · Auto time (NTP) · Check for updates → notice → Install now
 ├─ Restart display
 └─ Lock display for cleaning  → 30 s touch lock
 
@@ -460,9 +460,20 @@ page fits on screen with little to no scrolling.
   <img src="docs/img/manual/update-modal.png" width="70%" alt="Update-available notice">
 
   **Later** closes it and reminds again in about a day; **Skip this version**
-  never offers that version again (the next release will). Nothing installs
-  by itself — updating still happens from a browser via the web flasher
-  (which keeps your settings).
+  never offers that version again (the next release will); **Install now**
+  updates right on the device — it downloads the new firmware into the spare
+  firmware slot, verifies it, and restarts:
+
+  <img src="docs/img/manual/update-install.png" width="70%" alt="Self-install progress">
+
+  Settings, the paired machine, and shot history are untouched. Nothing
+  installs without that tap, and the process is safe to interrupt: until the
+  restart the current firmware keeps running, and even a bad download can't
+  take the device out — a new image that fails to start is rolled back
+  automatically on the next boot. On boards with an RGB panel the screen may
+  flicker while the update writes; that's expected. The
+  [web flasher](https://mlsorensen.github.io/Apollo2/) remains available for
+  recovery and for the rare release the self-updater can't apply.
 
 ### Root page
 

@@ -1,15 +1,17 @@
 #include "platform_esp32/update_check.h"
 
 #include <Arduino.h>
-#include <HTTPClient.h>
-#include <NetworkClientSecure.h>
+#include <esp_crt_bundle.h>
+#include <esp_http_client.h>
+#include <esp_https_ota.h>
+#include <hal/efuse_hal.h>
 
 #include <cstdio>
 #include <cstring>
 
-#include "core/log_ring.h"
 #include "core/network.h"
 #include "core/system.h"
+#include "platform_esp32/board_config.h"
 #include "platform_esp32/config.h"
 #include "platform_esp32/network.h"
 #include "version.h"
@@ -21,6 +23,11 @@ constexpr char kSiteBase[] = "https://mlsorensen.github.io/Apollo2";
 constexpr unsigned long kCheckIntervalMs = 24ul * 60ul * 60ul * 1000ul;  // daily
 constexpr unsigned long kRetryMs = 60ul * 60ul * 1000ul;  // failed fetch: hourly
 constexpr size_t kMaxNotesBytes = 4096;  // bound RAM; notes truncate past this
+
+// Per-silicon image variant. "" today; when the P4 boards start shipping in
+// both revision generations and the workflow publishes dual images, rev3
+// units select the "-rev3" file here (efuse_hal_chip_revision() >= 300).
+const char* update_variant_suffix() { return ""; }
 
 // Parse "v1.2.3" or "1.2.3" into a comparable triple. Returns false on
 // anything that isn't strict major.minor.patch — callers treat that as
@@ -44,20 +51,49 @@ bool semver_newer(const char* a, const char* b) {
 // Pull the first "vX.Y.Z" out of releases.json (a JSON array, newest first).
 // A full JSON parse is overkill for ["v0.10.0", ...] — scan for the first
 // quoted token that parses as a version.
-std::string first_version(const String& body) {
+std::string first_version(const std::string& body) {
   int start = -1;
-  for (int i = 0; i < static_cast<int>(body.length()); ++i) {
+  for (int i = 0; i < static_cast<int>(body.size()); ++i) {
     if (body[i] != '"') continue;
     if (start < 0) {
       start = i + 1;
     } else {
-      std::string tok(body.c_str() + start, i - start);
+      std::string tok(body.data() + start, i - start);
       int v[3];
       if (parse_semver(tok.c_str(), v)) return tok;
       start = -1;
     }
   }
   return {};
+}
+
+// Small authenticated GET into a bounded string. Trust = the cert bundle
+// embedded in the core libs (only reachable through the IDF client config's
+// crt_bundle_attach — the Arduino wrapper can't use the built-in bundle).
+bool https_get(const std::string& url, std::string& out, size_t cap) {
+  esp_http_client_config_t cfg = {};
+  cfg.url = url.c_str();
+  cfg.crt_bundle_attach = esp_crt_bundle_attach;
+  cfg.timeout_ms = 10000;
+  esp_http_client_handle_t h = esp_http_client_init(&cfg);
+  if (h == nullptr) return false;
+  bool ok = false;
+  if (esp_http_client_open(h, 0) == ESP_OK) {
+    esp_http_client_fetch_headers(h);
+    if (esp_http_client_get_status_code(h) == 200) {
+      char buf[512];
+      int n;
+      while ((n = esp_http_client_read(h, buf, sizeof(buf))) > 0) {
+        const size_t room = cap - out.size();
+        out.append(buf, std::min(static_cast<size_t>(n), room));
+        if (out.size() >= cap) break;
+      }
+      ok = true;
+    }
+    esp_http_client_close(h);
+  }
+  esp_http_client_cleanup(h);
+  return ok;
 }
 
 }  // namespace
@@ -76,14 +112,14 @@ void UpdateCheck::poll() {
   in_flight_.store(true);
   // Short-lived task so the TLS handshake (~seconds, ~45KB transient heap)
   // never runs on the LVGL loop. Stack is generous for mbedTLS.
-  if (xTaskCreatePinnedToCore(task_entry, "updchk", 12 * 1024, this, 1, nullptr,
-                              0) != pdPASS) {
+  if (xTaskCreatePinnedToCore(check_task_entry, "updchk", 12 * 1024, this, 1,
+                              nullptr, 0) != pdPASS) {
     in_flight_.store(false);
     next_check_ms_ = millis() + kRetryMs;  // heap-tight moment; try later
   }
 }
 
-void UpdateCheck::task_entry(void* arg) {
+void UpdateCheck::check_task_entry(void* arg) {
   auto* self = static_cast<UpdateCheck*>(arg);
   self->run_check();
   self->in_flight_.store(false);
@@ -93,25 +129,11 @@ void UpdateCheck::task_entry(void* arg) {
 void UpdateCheck::run_check() {
   next_check_ms_ = millis() + kRetryMs;  // assume failure; success extends below
 
-  NetworkClientSecure client;
-  // Notify-only endpoint: the response can only ever produce an on-screen
-  // notice, and installing happens through the browser (with real TLS). A
-  // tampered response can't deliver code, so skipping cert validation trades
-  // a spoofable notification for not carrying a CA bundle + its rotations.
-  client.setInsecure();
-  HTTPClient http;
-  http.setTimeout(10000);
-
-  String releases_url = String(kSiteBase) + "/releases.json";
-  if (!http.begin(client, releases_url)) return;
-  if (http.GET() != HTTP_CODE_OK) {
-    http.end();
+  std::string body;
+  if (!https_get(std::string(kSiteBase) + "/releases.json", body, 2048)) {
     core::logf("UpdateCheck: releases.json fetch failed\n");
     return;
   }
-  const String body = http.getString();
-  http.end();
-
   const std::string latest = first_version(body);
   if (latest.empty()) {
     core::logf("UpdateCheck: no version in releases.json\n");
@@ -121,15 +143,8 @@ void UpdateCheck::run_check() {
   std::string notes;
   if (semver_newer(latest.c_str(), fw::kVersion)) {
     // Release notes are best-effort (older releases predate notes.txt).
-    String notes_url = String(kSiteBase) + "/" + latest.c_str() + "/notes.txt";
-    if (http.begin(client, notes_url)) {
-      if (http.GET() == HTTP_CODE_OK) {
-        String n = http.getString();
-        notes.assign(n.c_str(), std::min(static_cast<size_t>(n.length()),
-                                         kMaxNotesBytes));
-      }
-      http.end();
-    }
+    https_get(std::string(kSiteBase) + "/" + latest + "/notes.txt", notes,
+              kMaxNotesBytes);
     core::logf("UpdateCheck: v%s running, %s available\n", fw::kVersion,
                latest.c_str());
   }
@@ -165,5 +180,117 @@ void UpdateCheck::skip_current() {
 bool UpdateCheck::enabled() const { return config_.update_check_enabled(); }
 
 void UpdateCheck::set_enabled(bool on) { config_.set_update_check_enabled(on); }
+
+void UpdateCheck::start_install() {
+  if (in_flight_.load()) return;  // a check or install is already running
+  std::string v;
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    v = latest_;
+  }
+  if (v.empty() || !semver_newer(v.c_str(), fw::kVersion)) return;
+  cancel_.store(false);
+  install_pct_.store(0);
+  install_state_.store(static_cast<int>(core::InstallState::kDownloading));
+  in_flight_.store(true);
+  if (xTaskCreatePinnedToCore(install_task_entry, "updinst", 12 * 1024, this, 1,
+                              nullptr, 0) != pdPASS) {
+    in_flight_.store(false);
+    std::lock_guard<std::mutex> lock(mu_);
+    install_error_ = "out of memory";
+    install_state_.store(static_cast<int>(core::InstallState::kError));
+  }
+}
+
+void UpdateCheck::cancel_install() { cancel_.store(true); }
+
+core::InstallStatus UpdateCheck::install_status() const {
+  core::InstallStatus s;
+  s.state = static_cast<core::InstallState>(install_state_.load());
+  s.percent = install_pct_.load();
+  if (s.state == core::InstallState::kError) {
+    std::lock_guard<std::mutex> lock(mu_);
+    s.error = install_error_;
+  }
+  return s;
+}
+
+void UpdateCheck::install_task_entry(void* arg) {
+  auto* self = static_cast<UpdateCheck*>(arg);
+  self->run_install();
+  self->in_flight_.store(false);
+  vTaskDelete(nullptr);
+}
+
+void UpdateCheck::run_install() {
+  const auto fail = [this](const char* why) {
+    core::logf("UpdateInstall: FAILED - %s\n", why);
+    {
+      std::lock_guard<std::mutex> lock(mu_);
+      install_error_ = why;
+    }
+    install_state_.store(static_cast<int>(core::InstallState::kError));
+  };
+
+  std::string version;
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    version = latest_;
+  }
+  const std::string url = std::string(kSiteBase) + "/" + version +
+                          "/firmware/app/" + board::kUpdateSlug +
+                          update_variant_suffix() + ".bin";
+  core::logf("UpdateInstall: %s -> inactive OTA slot\n", url.c_str());
+
+  // esp_https_ota streams straight into the inactive app slot, validates the
+  // image header, and (on finish) flips the boot partition. With
+  // BOOTLOADER_APP_ROLLBACK_ENABLE the new image boots PENDING_VERIFY and the
+  // bootloader reverts it unless main.cpp's health check marks it valid.
+  esp_http_client_config_t http = {};
+  http.url = url.c_str();
+  http.crt_bundle_attach = esp_crt_bundle_attach;
+  http.timeout_ms = 15000;
+  http.keep_alive_enable = true;
+  esp_https_ota_config_t ota = {};
+  ota.http_config = &http;
+
+  esp_https_ota_handle_t handle = nullptr;
+  if (esp_https_ota_begin(&ota, &handle) != ESP_OK) {
+    fail("download failed (wrong board image missing?)");
+    return;
+  }
+  const int total = esp_https_ota_get_image_size(handle);
+
+  esp_err_t err;
+  while ((err = esp_https_ota_perform(handle)) == ESP_ERR_HTTPS_OTA_IN_PROGRESS) {
+    if (total > 0) {
+      install_pct_.store(esp_https_ota_get_image_len_read(handle) * 100 / total);
+    }
+    if (cancel_.load()) {
+      esp_https_ota_abort(handle);
+      core::logf("UpdateInstall: canceled\n");
+      install_state_.store(static_cast<int>(core::InstallState::kIdle));
+      return;
+    }
+  }
+  if (err != ESP_OK) {
+    esp_https_ota_abort(handle);
+    fail("download interrupted");
+    return;
+  }
+  if (!esp_https_ota_is_complete_data_received(handle)) {
+    esp_https_ota_abort(handle);
+    fail("download truncated");
+    return;
+  }
+
+  install_state_.store(static_cast<int>(core::InstallState::kVerifying));
+  if (esp_https_ota_finish(handle) != ESP_OK) {  // validates + sets boot slot
+    fail("image rejected");
+    return;
+  }
+  core::logf("UpdateInstall: %s written and set to boot\n", version.c_str());
+  install_state_.store(static_cast<int>(core::InstallState::kReady));
+}
 
 }  // namespace platform

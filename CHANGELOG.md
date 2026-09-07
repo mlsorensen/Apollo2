@@ -9,12 +9,15 @@ for someone reading the diff.
 
 ### Changes
 
-- **The device can tell you about updates.** With WiFi + NTP on, it checks
-  the releases site once a day and — when a newer firmware exists — shows a
-  dismissable notice with the version and its release notes (**Later** /
-  **Skip this version**). Nothing installs by itself; updating still happens
-  from a browser. A **Check for updates** switch on the WiFi page turns the
-  daily check off.
+- **The device can tell you about updates — and install them.** With WiFi +
+  NTP on, it checks the releases site once a day and, when a newer firmware
+  exists, shows a dismissable notice with the version and its release notes
+  (**Install now** / **Later** / **Skip this version**). Install now updates
+  right on the device: the new firmware downloads into the spare slot,
+  verifies, and restarts — settings, the paired machine and shot history
+  untouched, and a bad image rolls back automatically. Nothing ever installs
+  without that tap; a **Check for updates** switch on the WiFi page turns the
+  daily check off, and the web flasher remains for recovery.
 - **Settings → Device is now Settings → Apollo** — "Device" was ambiguous
   next to the machine and the scale; the page is about this device, Apollo.
 

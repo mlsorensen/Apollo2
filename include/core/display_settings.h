@@ -33,6 +33,11 @@ class IDisplaySettings {
   virtual int screensaver_style() const = 0;
   virtual void set_screensaver_style(int style) = 0;
 
+  // Whether long flash writes visibly disturb this display (RGB-parallel
+  // panels scan continuously from PSRAM, which flash writes stall). The OTA
+  // install screen shows a "may flicker" note when true. Default: no.
+  virtual bool flash_write_disturbs_display() const { return false; }
+
   // Selected color scheme, as an index into the UI's palette list (ui::theme).
   // The port only persists the choice; the UI owns the palettes + applies them.
   virtual int theme() const = 0;

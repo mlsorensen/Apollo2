@@ -42,6 +42,14 @@ void DisplaySettings::set_screensaver(SaverMode mode) {
   }
 }
 
+bool DisplaySettings::flash_write_disturbs_display() const {
+#if defined(BOARD_DISPLAY_RGB)
+  return true;  // continuous PSRAM scanout; flash writes stall the bus
+#else
+  return false;
+#endif
+}
+
 int DisplaySettings::screensaver_style() const { return config_.screensaver_style(); }
 
 void DisplaySettings::set_screensaver_style(int style) {

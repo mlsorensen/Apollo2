@@ -15,6 +15,7 @@
 #include <lvgl.h>
 
 #include <esp_heap_caps.h>
+#include <esp_ota_ops.h>
 #include <hal/efuse_hal.h>
 #if __has_include(<esp_core_dump.h>)
 #include <esp_core_dump.h>
@@ -125,6 +126,11 @@ void batt_only_init() {
 
 }  // namespace
 
+// Arduino weak-hook override: do NOT auto-confirm an OTA-installed image at
+// init — loop() confirms it after 60 s of healthy running (above), so a build
+// that boots but immediately crashes still rolls back.
+extern "C" bool verifyRollbackLater() { return true; }
+
 void setup() {
   Serial.begin(115200);
 #if defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT
@@ -177,6 +183,15 @@ void setup() {
       default: break;
     }
     core::logf("reset reason: %s (%d)\n", name, static_cast<int>(rr));
+  }
+  {
+    // Which OTA slot is live, and is it awaiting its health confirm?
+    const esp_partition_t* run = esp_ota_get_running_partition();
+    esp_ota_img_states_t st;
+    const bool pending = esp_ota_get_state_partition(run, &st) == ESP_OK &&
+                         st == ESP_OTA_IMG_PENDING_VERIFY;
+    core::logf("OTA: running from %s%s\n", run != nullptr ? run->label : "?",
+               pending ? " (pending verify - confirms after 60s)" : "");
   }
 #if defined(CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH)
   {
@@ -486,6 +501,44 @@ void loop() {
   // is in flight: the TLS task's transient ~45KB heap bite and CPU burst have
   // no business anywhere near the stop math. The check just waits its turn.
   if (!core::shot_in_flight(g_brew.snapshot())) g_update_check.poll();
+  // Self-install lifecycle: park BLE while an install runs (frees heap, quiets
+  // the radio), resume if it fails or is canceled, restart once the new image
+  // is written and set to boot.
+  {
+    const core::InstallStatus ist = g_update_check.install_status();
+    const bool busy = ist.state == core::InstallState::kDownloading ||
+                      ist.state == core::InstallState::kVerifying;
+    static bool ble_parked = false;
+    if (busy != ble_parked) {
+      ble_parked = busy;
+      g_micra.pause_connects(busy);
+      g_scale.pause_connects(busy);
+      core::logf("UpdateInstall: BLE %s\n", busy ? "parked" : "resumed");
+    }
+    if (ist.state == core::InstallState::kReady) {
+      core::logf("UpdateInstall: restarting into the new image\n");
+      delay(400);  // one more LVGL paint ("Restarting...") + log flush
+      esp_restart();
+    }
+  }
+
+  // First-boot health confirm for an OTA-installed image: the bootloader
+  // boots it PENDING_VERIFY (verifyRollbackLater below defers the automatic
+  // confirm), and a build that crashes/bootloops before this point is rolled
+  // back automatically. Surviving 60 s of normal loop() = healthy.
+  {
+    static bool ota_checked = false;
+    if (!ota_checked && millis() > 60000) {
+      ota_checked = true;
+      const esp_partition_t* run = esp_ota_get_running_partition();
+      esp_ota_img_states_t st;
+      if (esp_ota_get_state_partition(run, &st) == ESP_OK &&
+          st == ESP_OTA_IMG_PENDING_VERIFY) {
+        esp_ota_mark_app_valid_cancel_rollback();
+        core::logf("OTA: new image confirmed healthy (rollback canceled)\n");
+      }
+    }
+  }
 
   // Reflect the latest cached machine state in the UI (cheap; no BLE here).
   // NOTE this path re-sets many Home widgets — everything it touches must go

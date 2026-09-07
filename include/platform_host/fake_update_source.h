@@ -22,12 +22,20 @@ class FakeUpdateSource : public core::IUpdateSource {
   void skip_current() override { available_ = false; }
   bool enabled() const override { return enabled_; }
   void set_enabled(bool on) override { enabled_ = on; }
+  void start_install() override { install_.state = core::InstallState::kDownloading; }
+  void cancel_install() override { install_ = {}; }
+  core::InstallStatus install_status() const override { return install_; }
 
   void set_available(bool on) { available_ = on; }
+  void pose_install(int percent) {  // sim: freeze the install screen mid-download
+    install_.state = core::InstallState::kDownloading;
+    install_.percent = percent;
+  }
 
  private:
   bool available_ = false;  // renders stay update-free unless a pose asks
   bool enabled_ = true;
+  core::InstallStatus install_;
 };
 
 }  // namespace host

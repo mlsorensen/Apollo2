@@ -98,6 +98,10 @@ class App {
   void open_update_modal();              // update-available notice (also sim pose)
   void skip_update();                    // modal "Skip this version"
   void set_update_check(bool on);        // WiFi page "Check for updates" switch
+  void begin_install();                  // modal "Install now"
+  void open_install_overlay();           // full-screen progress (also sim pose)
+  void close_install_overlay();          // Cancel/Close on the overlay
+  void install_overlay_tick();           // 4 Hz status poll (from its lv_timer)
   void hour_select(int idx);             // Time & date dropdowns: selection ->
   void minute_select(int idx);           // clock/date write (hour idx == hour,
   void month_select(int idx);            // month/day 1-based, year offset from
@@ -212,6 +216,12 @@ class App {
   // "Later" = snooze: don't re-offer the notice until this tick (a day away —
   // these devices stay powered for weeks, so once-per-boot would mean never).
   uint32_t update_snooze_until_ = 0;
+  // Self-install progress overlay (full-screen, clean-lock style).
+  lv_obj_t* install_layer_ = nullptr;
+  lv_obj_t* install_bar_ = nullptr;
+  lv_obj_t* install_state_label_ = nullptr;
+  lv_obj_t* install_cancel_btn_ = nullptr;
+  lv_timer_t* install_timer_ = nullptr;
   core::ISound* sound_ = nullptr;
   core::IShotStore* shots_ = nullptr;
   bool click_sound_on_ = true;  // cached from IDisplaySettings (checked per press)

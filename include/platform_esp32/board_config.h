@@ -16,6 +16,9 @@ namespace board {
 // Waveshare ESP32-S3-Touch-LCD-2 — 2.0", 240x320 ST7789T3 over 4-wire SPI,
 // CST816 capacitive touch over I2C. Values traced to Waveshare's demo source.
 constexpr char kName[] = "Waveshare ESP32-S3-Touch-LCD-2";
+// Release-artifact slug — MUST match the firmware-release.yml matrix "board"
+// field (CI asserts it): the self-updater fetches firmware/app/<slug>.bin.
+constexpr char kUpdateSlug[] = "s3-touch-lcd-2";
 #define BOARD_DISPLAY_SPI    // ST7789 over SPI
 #define BOARD_TOUCH_CST816   // CST816, 8-bit registers
 constexpr bool kSupportsBrightness = true;  // LEDC PWM backlight (dimmable)
@@ -81,6 +84,9 @@ constexpr bool kPaddleActiveHigh = true;   // drive level that "closes" the shot
 // Arduino demo (examples/Arduino/examples/06_LCD + 08_TOUCH). UNVERIFIED on
 // hardware yet — tweak here if the panel is dark/garbled or touch is off.
 constexpr char kName[] = "Waveshare ESP32-S3-Touch-LCD-7B";
+// Release-artifact slug — MUST match the firmware-release.yml matrix "board"
+// field (CI asserts it): the self-updater fetches firmware/app/<slug>.bin.
+constexpr char kUpdateSlug[] = "s3-touch-lcd-7b";
 #define BOARD_DISPLAY_RGB     // RGB parallel panel via Arduino_GFX
 #define BOARD_TOUCH_GT911     // GT911, 16-bit registers
 #define BOARD_HAS_IO_EXTENSION
@@ -156,6 +162,9 @@ constexpr bool kPaddleActiveHigh = true;
 // resolution + RGB timing differ (values from Waveshare's 4.3B config). We reuse
 // the 7B's io_extension/touch/backlight/battery paths unchanged. UNVERIFIED on HW.
 constexpr char kName[] = "Waveshare ESP32-S3-Touch-LCD-4.3B";
+// Release-artifact slug — MUST match the firmware-release.yml matrix "board"
+// field (CI asserts it): the self-updater fetches firmware/app/<slug>.bin.
+constexpr char kUpdateSlug[] = "s3-touch-lcd-4.3b";
 #define BOARD_DISPLAY_RGB
 #define BOARD_TOUCH_GT911
 #define BOARD_HAS_IO_EXTENSION
@@ -227,6 +236,9 @@ constexpr bool kPaddleActiveHigh = true;
 // (reg 0x05, inverted duty) and a battery ADC (reg 0x06). Pins + RGB timing
 // traced to Waveshare's 4.3C demo (examples/arduino 03_lcd + 14_lvgl_slider).
 constexpr char kName[] = "Waveshare ESP32-S3-Touch-LCD-4.3C";
+// Release-artifact slug — MUST match the firmware-release.yml matrix "board"
+// field (CI asserts it): the self-updater fetches firmware/app/<slug>.bin.
+constexpr char kUpdateSlug[] = "s3-touch-lcd-4.3c";
 #define BOARD_DISPLAY_RGB
 #define BOARD_TOUCH_GT911
 #define BOARD_HAS_IO_EXTENSION
@@ -346,6 +358,9 @@ constexpr int kSdD0 = 13;
 // native GPIOs. Pins traced from the board schematic + Waveshare's BSP
 // (esp32_p4_wifi6_touch_lcd_4_3.h). UNVERIFIED on hardware yet.
 constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-4.3";
+// Release-artifact slug — MUST match the firmware-release.yml matrix "board"
+// field (CI asserts it): the self-updater fetches firmware/app/<slug>.bin.
+constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-4.3";
 #define BOARD_DISPLAY_DSI     // MIPI-DSI panel via Arduino_GFX
 #define BOARD_DSI_PANEL_ST7701  // panel controller (selects the DCS init table)
 #define BOARD_TOUCH_GT911     // GT911, 16-bit registers
@@ -479,6 +494,9 @@ constexpr int kSdLdoChannel = 4;
 //     controller comes up on its own; we just probe both addresses.
 // UNVERIFIED on hardware yet.
 constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-5";
+// Release-artifact slug — MUST match the firmware-release.yml matrix "board"
+// field (CI asserts it): the self-updater fetches firmware/app/<slug>.bin.
+constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-5";
 #define BOARD_DISPLAY_DSI
 #define BOARD_DSI_PANEL_HX8394  // panel controller (selects the DCS init table)
 #define BOARD_TOUCH_GT911
@@ -599,6 +617,9 @@ constexpr bool kSupportsBrightness = true;  // LEDC PWM backlight (dimmable)
 
 #if defined(BOARD_WAVESHARE_P4_WIFI6_X_7)
 constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-X-7";
+// Release-artifact slug — MUST match the firmware-release.yml matrix "board"
+// field (CI asserts it): the self-updater fetches firmware/app/<slug>.bin.
+constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-x-7";
 #define BOARD_DSI_PANEL_ILI9881C  // panel controller (selects the DCS init table)
 // UI: same panel geometry as the P4-5 (720x1280 rotated) on larger glass —
 // same 1.5x zoom, logical 853x480 (the extra width feeds the flex layout).
@@ -613,9 +634,15 @@ constexpr int  kDsiVsyncPulse = 30, kDsiVsyncBack = 20,  kDsiVsyncFront = 2;
 #else
 #if defined(BOARD_WAVESHARE_P4_WIFI6_X_8)
 constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-X-8";
+// Release-artifact slug — MUST match the firmware-release.yml matrix "board"
+// field (CI asserts it): the self-updater fetches firmware/app/<slug>.bin.
+constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-x-8";
 #define BOARD_DSI_PANEL_JD9365     // 8" DCS init table
 #else
 constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-X-10.1";
+// Release-artifact slug — MUST match the firmware-release.yml matrix "board"
+// field (CI asserts it): the self-updater fetches firmware/app/<slug>.bin.
+constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-x-10.1";
 #define BOARD_DSI_PANEL_JD9365_10  // the 10.1" glass's own DCS init table
 #endif
 // UI: 800x1280 rotated => 1280x800. Zoom 1.6x for a logical 800x500 — the

@@ -22,6 +22,27 @@ accurate and the layering rules there are hard rules:
 - Board differences live in `include/platform_esp32/board_config.h` blocks +
   feature macros; driver code never hardcodes pins.
 
+## OTA self-update (v0.11+)
+
+- Artifact contract: the device fetches
+  `<site>/<tag>/firmware/app/<kUpdateSlug><variant>.bin` (app-only image;
+  published by the pages job with a .sha256 sidecar for humans). The parts/
+  files are NOT usable for OTA — they bundle otadata with the app. CI asserts
+  kUpdateSlug (board_config.h) == the matrix `board` field per env.
+  `<variant>` is "" today; becomes "-rev3" per-silicon when dual-rev P4
+  images ever ship (update_variant_suffix() in update_check.cpp).
+- Trust: esp_http_client/esp_https_ota with `crt_bundle_attach` — the cert
+  bundle embedded in the core libs. The Arduino NetworkClientSecure wrapper
+  CANNOT reach that built-in bundle (its setCACertBundle requires a
+  caller-supplied blob); use the IDF client for anything HTTPS.
+- Rollback: BOOTLOADER_APP_ROLLBACK_ENABLE=y in all cores. main.cpp
+  overrides `verifyRollbackLater()` -> true and marks the image valid after
+  60 s of healthy loop() — an OTA image that bootloops is auto-reverted.
+  Consequence: bootloader/partition-table changes CANNOT ship via OTA (app
+  slot only); such releases need the web flasher, called out in their notes.
+- Interlocks: no check or install starts mid-shot; BLE (both links) is
+  pause_connects()-parked during an install and resumed on failure/cancel.
+
 ## Git conventions
 
 - Commit as `marcus@turboio.com` (repo-local config). Do NOT add

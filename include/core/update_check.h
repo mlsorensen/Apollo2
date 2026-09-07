@@ -15,6 +15,16 @@ struct UpdateInfo {
   std::string notes;       // that release's changelog section (may be empty)
 };
 
+// Self-install ("Install now") progress. kReady means the new image is
+// written and set to boot — the device restarts moments later.
+enum class InstallState { kIdle, kDownloading, kVerifying, kReady, kError };
+
+struct InstallStatus {
+  InstallState state = InstallState::kIdle;
+  int percent = 0;         // download progress, 0-100
+  std::string error;       // short reason when state == kError
+};
+
 class IUpdateSource {
  public:
   virtual ~IUpdateSource() = default;
@@ -30,6 +40,14 @@ class IUpdateSource {
   // default on (the check is already implicitly opt-in via WiFi + NTP).
   virtual bool enabled() const = 0;
   virtual void set_enabled(bool on) = 0;
+
+  // Self-install: download the offered version into the inactive OTA slot.
+  // start_install() is a no-op while a check/install is already running;
+  // cancel_install() is honored between download chunks (a canceled or
+  // failed install leaves the running firmware untouched).
+  virtual void start_install() = 0;
+  virtual void cancel_install() = 0;
+  virtual InstallStatus install_status() const = 0;
 };
 
 }  // namespace core
