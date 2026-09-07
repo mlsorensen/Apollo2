@@ -370,6 +370,13 @@ void build_device_wifi_rows(lv_obj_t* page, const lv_font_t* text_font,
   lv_obj_t* rnt = make_setting_row(page, "Auto time (NTP)", text_font);
   out.ntp_switch = lv_switch_create(rnt);
   lv_obj_set_size(out.ntp_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
+
+  // Daily release check (needs WiFi + a successful NTP sync, so it lives with
+  // them). App hides the row when no update source is wired.
+  out.update_check_row = make_setting_row(page, "Check for updates", text_font);
+  out.update_check_switch = lv_switch_create(out.update_check_row);
+  lv_obj_set_size(out.update_check_switch, btn_size + ui::dp(8),
+                  btn_size / 2 + ui::dp(6));
 }
 
 // A tappable card row "<label>   <glyph>" that runs an action instead of
@@ -735,7 +742,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   // --- Chooser pages: short nav lists under each root entry -----------------
   out.micra_page = lv_menu_page_create(menu, "Micra");
   out.scale_page = lv_menu_page_create(menu, "Scale");
-  out.device_page = lv_menu_page_create(menu, "Device");
+  out.device_page = lv_menu_page_create(menu, "Apollo");
   page_column(out.micra_page, compact);
   page_column(out.scale_page, compact);
   page_column(out.device_page, compact);
@@ -755,7 +762,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   page_column(out.root_page, compact);
   root_entry(menu, out.root_page, out.micra_page, "Micra", font, btn_h);
   root_entry(menu, out.root_page, out.scale_page, "Scale", font, btn_h);
-  root_entry(menu, out.root_page, out.device_page, "Device", font, btn_h);
+  root_entry(menu, out.root_page, out.device_page, "Apollo", font, btn_h);
 
   // Root-level action rows (not drill-ins). Same card styling as the entries,
   // an action glyph instead of a chevron:

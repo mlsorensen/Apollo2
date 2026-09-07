@@ -146,7 +146,7 @@ Where to get the token:
 
 On the same setup page you can enter your home Wi‑Fi name and password. The
 device then joins your network, gets an IP, and syncs the clock over NTP. Pick
-your city under **Settings → Device → WiFi → Timezone**. Auto‑sync can be turned
+your city under **Settings → Apollo → WiFi → Timezone**. Auto‑sync can be turned
 off there too (**Auto time (NTP)**).
 
 Because the setup page is always reachable from **Set up WiFi**, you can never be

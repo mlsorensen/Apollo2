@@ -19,6 +19,7 @@
 #include "platform_host/fake_history.h"
 #include "platform_host/fake_machine.h"
 #include "platform_host/fake_network.h"
+#include "platform_host/fake_update_source.h"
 #include "platform_host/fake_provisioner.h"
 #include "platform_host/fake_scale.h"
 #include "platform_host/fake_scale_provisioner.h"
@@ -41,7 +42,8 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             bool clean_lock = false, int shot_modal_id = -1, int history_ym = 0,
             bool backflush = false, bool log_modal = false,
             bool unwired_midshot = false, bool toast = false,
-            bool join_modal = false, bool screensaver = false) {
+            bool join_modal = false, bool screensaver = false,
+            bool update_modal = false, core::IUpdateSource* updates = nullptr) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
@@ -50,7 +52,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   static host::FakeSound fake_sound;  // stateless; shared across renders
   ui::App app;
   app.build(machine, provisioner, battery, disp_settings, clock, history, scale,
-            scale_provisioner, brew, network, fake_sound, shots, screen);
+            scale_provisioner, brew, network, fake_sound, shots, screen, updates);
   app.show_tab(tab);
   if (settings_section >= 0) app.select_settings_section(settings_section);
   if (stats_section >= 0) app.select_stats_section(stats_section);
@@ -66,6 +68,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
     app.show_toast("Shot not started: Auto shot is enabled. "
                    "Connect the scale or switch to Manual mode.");
   if (screensaver) app.pose_screensaver();  // bouncing-logo saver, start pose
+  if (update_modal) app.open_update_modal();
   display.render_frame();
   if (!display.save_png(out_path)) {
     std::fprintf(stderr, "error: failed to write %s\n", out_path);
@@ -88,6 +91,7 @@ int main() {
   host::FakeScaleProvisioner scale_provisioner;
   host::FakeBrewController brew;
   host::FakeNetwork network;
+  host::FakeUpdateSource updates;
   host::FakeShotStore shots;
 
   // One PNG per supported layout. Add a line here when a new form factor lands.
@@ -95,11 +99,12 @@ int main() {
                bool modal = false, int theme = 0, int stats = -1, bool clean_lock = false,
                int shot_id = -1, int history_ym = 0, bool backflush = false,
                bool log_modal = false, bool unwired_midshot = false,
-               bool toast = false, bool join_modal = false, bool screensaver = false) {
+               bool toast = false, bool join_modal = false, bool screensaver = false,
+               bool update_modal = false) {
     return render(machine, provisioner, battery, disp, clock, history, scale,
                   scale_provisioner, brew, network, shots, s, path, tab, sec, modal, theme,
                   stats, clean_lock, shot_id, history_ym, backflush, log_modal,
-                  unwired_midshot, toast, join_modal, screensaver);
+                  unwired_midshot, toast, join_modal, screensaver, update_modal, &updates);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
@@ -156,6 +161,11 @@ int main() {
   // Bouncing-logo screensaver (start pose; on-device it drifts + recolors).
   ok &= r({800, 480}, "renders/screensaver_800x480.png", 0, -1, false, 0, -1,
           false, -1, 0, false, false, false, false, false, true);
+  // Update-available modal (canned notes from FakeUpdateSource).
+  updates.set_available(true);
+  ok &= r({800, 480}, "renders/update_modal_800x480.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, false, false, false, false, true);
+  updates.set_available(false);
   // Backflush cleaning (Settings > Micra): the prompt screen, and mid-sequence
   // with the cycle readout (the fake poses a running sequence the real
   // controller would advance from its poll).

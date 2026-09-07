@@ -5,6 +5,19 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## Unreleased
+
+### Changes
+
+- **The device can tell you about updates.** With WiFi + NTP on, it checks
+  the releases site once a day and — when a newer firmware exists — shows a
+  dismissable notice with the version and its release notes (**Later** /
+  **Skip this version**). Nothing installs by itself; updating still happens
+  from a browser. A **Check for updates** switch on the WiFi page turns the
+  daily check off.
+- **Settings → Device is now Settings → Apollo** — "Device" was ambiguous
+  next to the machine and the scale; the page is about this device, Apollo.
+
 ## v0.10.0
 
 ### Changes

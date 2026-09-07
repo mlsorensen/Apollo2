@@ -12,6 +12,8 @@ constexpr char kTokenKey[] = "token";
 constexpr char kBrightnessKey[] = "bright";
 constexpr char kScreenTimeoutKey[] = "scrtimeout";
 constexpr char kSaverStyleKey[] = "ssstyle";
+constexpr char kSkippedUpdateKey[] = "skipver";
+constexpr char kUpdateCheckKey[] = "updchk";
 constexpr char kClock24Key[] = "clock24";
 constexpr char kThemeKey[] = "theme";
 constexpr char kFahrenheitKey[] = "fahr";
@@ -380,6 +382,30 @@ void Config::set_screen_timeout_min(int minutes) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putInt(kScreenTimeoutKey, minutes);
+  p.end();
+}
+
+std::string Config::skipped_update() const { return read_key(kSkippedUpdateKey); }
+
+void Config::set_skipped_update(const std::string& version) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putString(kSkippedUpdateKey, version.c_str());
+  p.end();
+}
+
+bool Config::update_check_enabled() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return true;
+  const bool v = p.isKey(kUpdateCheckKey) ? p.getBool(kUpdateCheckKey, true) : true;
+  p.end();
+  return v;
+}
+
+void Config::set_update_check_enabled(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kUpdateCheckKey, on);
   p.end();
 }
 

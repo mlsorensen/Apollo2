@@ -15,7 +15,7 @@ your board.
 - [Settings → Micra](#settings-micra) — Bluetooth · Controls · Cleaning
 - [Settings → Scale](#settings-scale) — Bluetooth · Shot settings · Device
   settings · Per‑scale nuances
-- [Settings → Device](#settings-device) — Display · Time & date · WiFi ·
+- [Settings → Apollo](#settings-device) — Display · Time & date · WiFi ·
   Root page
 - [Stats](#stats-section) — Brew/Boiler graphs · History · Info
 - [Brew‑by‑weight quick reference](#bbw-reference)
@@ -52,12 +52,12 @@ Settings
 │  ├─ Shot settings   — Target · Review hold · Detect lead-in · Smoothing
 │  │                    · Drop negative g/s · Oscilloscope graph
 │  └─ Device settings — the scale's own settings (Beep · Auto-off/sleep · Unit …)
-├─ Device
+├─ Apollo
 │  ├─ Display     — Brightness* · Screen dim · Screensaver (Logo/Blank)
 │  │               · Theme · Fahrenheit · Button sounds* · Performance overlay
 │  ├─ Time & date — Time · Date · 24-hour · Timezone
 │  └─ WiFi        — Enable · Status · Set up WiFi → QR portal · Forget
-│                  · Auto time (NTP)
+│                  · Auto time (NTP) · Check for updates
 ├─ Restart display
 └─ Lock display for cleaning  → 30 s touch lock
 
@@ -384,7 +384,7 @@ machine is already warming up when you arrive.
 
 <a id="settings-device"></a>
 
-## Settings → Device
+## Settings → Apollo
 
 Three short sub‑pages — **Display**, **Time & date**, and **WiFi** — so each
 page fits on screen with little to no scrolling.
@@ -452,6 +452,17 @@ page fits on screen with little to no scrolling.
 - ③ **Forget** — clears the saved network.
 - ④ **Auto time (NTP)** *(default on)* — sync the clock over WiFi while
   connected. (The timezone it applies is set under **Time & date**.)
+- ⑤ **Check for updates** *(default on)* — once a day (and only after an NTP
+  sync has proven the internet reachable), the device checks the releases
+  site for a newer firmware. When one exists, a dismissable notice shows the
+  version and its release notes:
+
+  <img src="docs/img/manual/update-modal.png" width="70%" alt="Update-available notice">
+
+  **Later** closes it and reminds again in about a day; **Skip this version**
+  never offers that version again (the next release will). Nothing installs
+  by itself — updating still happens from a browser via the web flasher
+  (which keeps your settings).
 
 ### Root page
 
@@ -518,7 +529,7 @@ actions live directly on the root:
     fills up, new shots stop being saved and History says so.
   - **What's recorded and when**: recorded shots are viewable immediately —
     no clock needed. Recording NEW shots additionally needs a real date/time
-    (NTP, or Settings → Device) — until the clock is set the footer warns
+    (NTP, or Settings → Apollo) — until the clock is set the footer warns
     that shots aren't being saved. Records live on the card under `/Apollo2`
     — an index CSV plus one samples CSV per shot — so the whole history can
     be read on any computer (graphs are drawn from the data by the device

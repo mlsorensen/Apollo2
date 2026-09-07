@@ -27,6 +27,11 @@ class Network : public core::INetwork {
   void begin();
   void poll();
 
+  // True once an NTP sync has actually landed this session — the working
+  // proof that the internet (not just the LAN) is reachable. Gates the
+  // daily update check.
+  bool ntp_synced() const;
+
   core::NetState status() const override { return status_; }
   const char* ssid() const override;
   const char* ip() const override { return ip_.c_str(); }

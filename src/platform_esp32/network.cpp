@@ -149,6 +149,8 @@ void Network::poll() {
   }
 }
 
+bool Network::ntp_synced() const { return config_.ntp_enabled() && time_persisted_; }
+
 const char* Network::ssid() const {
   str_cache_ = config_.wifi_ssid();
   return str_cache_.c_str();

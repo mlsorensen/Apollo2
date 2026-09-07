@@ -33,6 +33,7 @@
 #include "platform_esp32/log_setup.h"
 #include "platform_esp32/micra_link.h"
 #include "platform_esp32/network.h"
+#include "platform_esp32/update_check.h"
 #include "platform_esp32/paddle.h"
 #include "platform_esp32/provisioner.h"
 #include "platform_esp32/scale_link.h"
@@ -64,6 +65,7 @@ platform::Battery g_battery;
 platform::DisplaySettings g_display_settings{g_display, g_config};
 platform::Clock g_clock{g_config};
 platform::Network g_network{g_config, g_clock, g_token_setup};  // WiFi station + NTP
+platform::UpdateCheck g_update_check{g_config, g_network};  // daily release check
 platform::History g_history;
 platform::ScaleLink g_scale;            // NimBLE Bluetooth scale (Bookoo/Acaia)
 platform::ScaleProvisioner g_scale_provisioner{g_scale, g_config};
@@ -312,7 +314,7 @@ void setup() {
   });
   g_app.build(g_micra, g_provisioner, g_battery, g_display_settings, g_clock, g_history,
               g_scale, g_scale_provisioner, g_brew, g_network, platform::sound(), g_shots,
-              screen);
+              screen, &g_update_check);
 
   // Settings "Restart display": on RGB boards this is a panel DMA resync, not
   // a reboot — the shifted/ghosted raster is a latched bounce-buffer underrun,
@@ -474,6 +476,7 @@ void loop() {
     if (now_unix != 0) g_config.set_last_unix(now_unix);
   }
   g_network.poll();          // drive the WiFi station state machine + NTP->RTC
+  g_update_check.poll();     // daily release check (gated on NTP having synced)
 
   // Reflect the latest cached machine state in the UI (cheap; no BLE here).
   // NOTE this path re-sets many Home widgets — everything it touches must go

@@ -610,6 +610,55 @@ void on_ntp_switch(lv_event_t* e) {
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
   app->set_ntp_enabled(lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
+void on_update_check_switch(lv_event_t* e) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  app->set_update_check(lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
+void on_update_later(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->dismiss_modal();
+}
+void on_update_skip(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->skip_update();
+}
+
+// Release notes come straight from CHANGELOG.md, which uses typographic
+// characters (non-breaking hyphens, arrows, bold markers) that LVGL's fonts
+// don't all carry. Map the common ones to ASCII and drop the rest, so the
+// modal never shows tofu.
+std::string sanitize_notes(const std::string& in) {
+  std::string out;
+  out.reserve(in.size());
+  bool line_start = true;
+  for (size_t i = 0; i < in.size();) {
+    const unsigned char c = in[i];
+    if (c < 0x80) {
+      if (c == '*' && i + 1 < in.size() && in[i + 1] == '*') { i += 2; continue; }
+      if (line_start && c == '#') {  // "### Changes" -> "Changes"
+        while (i < in.size() && (in[i] == '#' || in[i] == ' ')) ++i;
+        line_start = false;
+        continue;
+      }
+      out += static_cast<char>(c);
+      line_start = (c == '\n');
+      ++i;
+      continue;
+    }
+    line_start = false;
+    const size_t len = (c >= 0xF0) ? 4 : (c >= 0xE0) ? 3 : 2;
+    const std::string seq = in.substr(i, len);
+    if (seq == "‑" || seq == "–") out += '-';
+    else if (seq == "—") out += "--";
+    else if (seq == "→") out += "->";
+    else if (seq == "‘" || seq == "’") out += '\'';
+    else if (seq == "“" || seq == "”") out += '"';
+    else if (seq == "…") out += "...";
+    else if (seq == "×") out += 'x';
+    else out += seq;  // pass through (accents, degree signs — the fonts have them)
+    i += len;
+  }
+  return out;
+}
 void on_wifi_setup_cancel(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cancel_wifi_setup();
 }
@@ -745,8 +794,9 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                 core::IClock& clock, core::IHistory& history, core::IScale& scale,
                 core::IScaleProvisioner& scale_provisioner, core::IBrewController& brew,
                 core::INetwork& network, core::ISound& sound, core::IShotStore& shots,
-                const ScreenProfile& screen) {
+                const ScreenProfile& screen, core::IUpdateSource* updates) {
   machine_ = &machine;
+  updates_ = updates;
   shots_ = &shots;
   hist_built_count_ = -1;  // a rebuild recreates the list; force a row refill
   // Shot-record staging lives in the LVGL pool (PSRAM on device) — see the
@@ -1042,6 +1092,8 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(settings_.wifi_forget_btn, on_wifi_forget_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.tz_dropdown, on_tz_dropdown, LV_EVENT_VALUE_CHANGED, this);
   lv_obj_add_event_cb(settings_.ntp_switch, on_ntp_switch, LV_EVENT_VALUE_CHANGED, this);
+  lv_obj_add_event_cb(settings_.update_check_switch, on_update_check_switch,
+                      LV_EVENT_VALUE_CHANGED, this);
   lv_obj_add_event_cb(settings_.menu, on_menu_page_changed, LV_EVENT_VALUE_CHANGED, this);
 
   build_stats_tab(stats, screen, stats_);
@@ -1093,6 +1145,12 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   if (network_ != nullptr) {
     if (network_->enabled()) lv_obj_add_state(settings_.wifi_switch, LV_STATE_CHECKED);
     if (network_->ntp_enabled()) lv_obj_add_state(settings_.ntp_switch, LV_STATE_CHECKED);
+    if (updates_ != nullptr) {
+      if (updates_->enabled())
+        lv_obj_add_state(settings_.update_check_switch, LV_STATE_CHECKED);
+    } else {
+      lv_obj_add_flag(settings_.update_check_row, LV_OBJ_FLAG_HIDDEN);
+    }
     // Select the dropdown row whose POSIX string matches the saved timezone.
     const char* tz = network_->timezone();
     for (int i = 0; i < ui::kTimezoneCount; ++i) {
@@ -1640,6 +1698,14 @@ void App::screensaver_tick() {
   const int mins = settings_.screen_timeout_min;
   const bool idle = mins > 0 && lv_display_get_inactive_time(nullptr) >=
                                     static_cast<uint32_t>(mins) * 60000u;
+  // Piggyback the update-available offer on this 4 Hz poll — never over
+  // another modal or the running screensaver, and snoozed for a day by
+  // "Later" (signed tick diff, safe across the 49-day wrap).
+  if (!idle && updates_ != nullptr && modal_ == nullptr && !screensaver_on_ &&
+      static_cast<int32_t>(lv_tick_get() - update_snooze_until_) >= 0 &&
+      updates_->info().available) {
+    open_update_modal();
+  }
   if (idle == screensaver_on_) return;  // touch resets LVGL's inactivity clock
   screensaver_on_ = idle;
   if (idle) {
@@ -1724,6 +1790,61 @@ void App::pose_screensaver() {
   // start_screensaver) so a render can show it.
   screensaver_on_ = true;
   start_screensaver(/*blank=*/false);
+}
+
+void App::open_update_modal() {
+  if (updates_ == nullptr) return;
+  const core::UpdateInfo info = updates_->info();
+  if (info.version.empty()) return;
+  update_snooze_until_ = lv_tick_get() + 24u * 60u * 60u * 1000u;
+
+  char head[96];
+  std::snprintf(head, sizeof(head), "%s is available - you have v%s.",
+                info.version.c_str(), fw::kVersion);
+  lv_obj_t* card = open_modal("Update available", head);
+
+  // Scrollable release notes, same shell as the diagnostic-log viewer.
+  lv_obj_t* box = lv_obj_create(card);
+  lv_obj_remove_style_all(box);
+  lv_obj_set_width(box, lv_pct(100));
+  lv_obj_set_height(box, screen_.height * 45 / 100);
+  lv_obj_set_style_bg_color(box, lv_color_hex(ui::theme::bg()), 0);
+  lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(box, ui::dp(6), 0);
+  lv_obj_set_style_pad_all(box, ui::dp(8), 0);
+  lv_obj_add_flag(box, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_scroll_dir(box, LV_DIR_VER);
+  lv_obj_set_scrollbar_mode(box, LV_SCROLLBAR_MODE_AUTO);
+  lv_obj_t* text = lv_label_create(box);
+  lv_obj_set_width(text, lv_pct(100));
+  lv_label_set_long_mode(text, LV_LABEL_LONG_WRAP);
+  lv_obj_set_style_text_color(text, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(text, ui::font_dp(12), 0);
+  const std::string notes = sanitize_notes(info.notes);
+  lv_label_set_text(text, notes.empty()
+                              ? "(no release notes)"
+                              : notes.c_str());
+
+  lv_obj_t* hint = lv_label_create(card);
+  lv_obj_set_width(hint, lv_pct(100));
+  lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
+  lv_obj_set_style_text_color(hint, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(hint, ui::font_dp(12), 0);
+  lv_label_set_text(hint,
+                    "Update from a computer or phone at "
+                    "mlsorensen.github.io/Apollo2 - settings are kept.");
+
+  modal_button(card, "Skip this version", ui::theme::card(), on_update_skip, this);
+  modal_button(card, "Later", ui::theme::rail(), on_update_later, this);
+}
+
+void App::skip_update() {
+  if (updates_ != nullptr) updates_->skip_current();
+  dismiss_modal();
+}
+
+void App::set_update_check(bool on) {
+  if (updates_ != nullptr) updates_->set_enabled(on);
 }
 
 void App::shot_button() {

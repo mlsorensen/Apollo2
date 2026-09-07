@@ -71,6 +71,10 @@ class Config {
   void set_screen_timeout_min(int minutes);
   int screensaver_style() const;   // 0 = bouncing logo (default), 1 = blank
   void set_screensaver_style(int style);
+  std::string skipped_update() const;  // version the user chose to skip ("" = none)
+  void set_skipped_update(const std::string& version);
+  bool update_check_enabled() const;   // daily release check (default on)
+  void set_update_check_enabled(bool on);
 
   bool clock_24h() const;     // 24-hour clock display (default true)
   void set_clock_24h(bool on);

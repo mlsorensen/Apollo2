@@ -225,6 +225,14 @@ jobs:
         run: |
           mkdir -p "public/${RELEASE_TAG}/firmware" "public/${RELEASE_TAG}/manifests"
           cp site/index.html public/
+          # notes.txt: this version's CHANGELOG section (same extraction as the
+          # release notes). The on-device update check fetches it to show the
+          # "what's new" text in its notification modal.
+          awk -v tag="${RELEASE_TAG}" '
+            $0 == "## " tag { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > "public/${RELEASE_TAG}/notes.txt"
           cp fw/*.bin "public/${RELEASE_TAG}/firmware/"
           cp -r fw/parts "public/${RELEASE_TAG}/firmware/parts"
           python3 - <<'EOF'

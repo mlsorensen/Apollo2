@@ -11,6 +11,7 @@
 #include "core/machine.h"
 #include "core/network.h"
 #include "core/provisioner.h"
+#include "core/update_check.h"
 #include "core/ready_chime.h"
 #include "core/scale.h"
 #include "core/scale_provisioner.h"
@@ -39,7 +40,7 @@ class App {
              core::IClock& clock, core::IHistory& history, core::IScale& scale,
              core::IScaleProvisioner& scale_provisioner, core::IBrewController& brew,
              core::INetwork& network, core::ISound& sound, core::IShotStore& shots,
-             const ScreenProfile& screen);
+             const ScreenProfile& screen, core::IUpdateSource* updates = nullptr);
 
   // Reflect the latest machine state and scan results in the UI (no I/O).
   void refresh();
@@ -94,6 +95,9 @@ class App {
   void screensaver_tick();               // idle-dim poll (from an lv_timer, ~4 Hz)
   void saver_anim_tick();                // bouncing-logo step (from its lv_timer)
   void pose_screensaver();               // sim: force the saver on for a render
+  void open_update_modal();              // update-available notice (also sim pose)
+  void skip_update();                    // modal "Skip this version"
+  void set_update_check(bool on);        // WiFi page "Check for updates" switch
   void hour_select(int idx);             // Time & date dropdowns: selection ->
   void minute_select(int idx);           // clock/date write (hour idx == hour,
   void month_select(int idx);            // month/day 1-based, year offset from
@@ -204,6 +208,10 @@ class App {
   core::IScaleProvisioner* scale_provisioner_ = nullptr;
   core::IBrewController* brew_ = nullptr;
   core::INetwork* network_ = nullptr;
+  core::IUpdateSource* updates_ = nullptr;  // optional; null = no update UI
+  // "Later" = snooze: don't re-offer the notice until this tick (a day away —
+  // these devices stay powered for weeks, so once-per-boot would mean never).
+  uint32_t update_snooze_until_ = 0;
   core::ISound* sound_ = nullptr;
   core::IShotStore* shots_ = nullptr;
   bool click_sound_on_ = true;  // cached from IDisplaySettings (checked per press)
