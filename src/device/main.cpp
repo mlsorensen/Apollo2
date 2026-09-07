@@ -506,7 +506,8 @@ void loop() {
   // is written and set to boot.
   {
     const core::InstallStatus ist = g_update_check.install_status();
-    const bool busy = ist.state == core::InstallState::kDownloading ||
+    const bool busy = g_update_check.task_active() ||
+                      ist.state == core::InstallState::kDownloading ||
                       ist.state == core::InstallState::kVerifying;
     static bool ble_parked = false;
     if (busy != ble_parked) {

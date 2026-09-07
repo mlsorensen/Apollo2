@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <esp_crt_bundle.h>
+#include <esp_heap_caps.h>
 #include <esp_http_client.h>
 #include <esp_https_ota.h>
 #include <hal/efuse_hal.h>
@@ -67,6 +68,19 @@ std::string first_version(const std::string& body) {
   return {};
 }
 
+// The P4's hosted radio asserts (sdio_rx_get_buffer) when the DMA-capable
+// internal pool runs dry, and the prebuilt mbedtls forces ALL TLS memory
+// internal (MBEDTLS_INTERNAL_MEM_ALLOC) — a fetch is a ~55KB internal spike.
+// Log the pool around TLS work; the gate below refuses to start a fetch
+// without comfortable headroom. (Plain internal-free is misleading on the
+// P4 — the DMA subset is what the radio starves on.)
+void log_heap(const char* tag) {
+  core::logf("UpdateCheck: heap[%s] dma free=%u largest=%u int free=%u\n", tag,
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DMA),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+}
+
 // Small authenticated GET into a bounded string. Trust = the cert bundle
 // embedded in the core libs (only reachable through the IDF client config's
 // crt_bundle_attach — the Arduino wrapper can't use the built-in bundle).
@@ -79,6 +93,7 @@ bool https_get(const std::string& url, std::string& out, size_t cap) {
   if (h == nullptr) return false;
   bool ok = false;
   if (esp_http_client_open(h, 0) == ESP_OK) {
+    log_heap("handshake");  // peak: TLS session is up right here
     esp_http_client_fetch_headers(h);
     if (esp_http_client_get_status_code(h) == 200) {
       char buf[512];
@@ -109,6 +124,22 @@ void UpdateCheck::poll() {
   if (network_.status() != core::NetState::Connected || !network_.ntp_synced()) return;
   if (next_check_ms_ != 0 && millis() < next_check_ms_) return;
 
+  // HARD GATE, measured on the P4-5 (2026-09-07): one TLS connection eats
+  // ~34KB of the DMA-capable pool (mbedtls record buffers, force-internal in
+  // the prebuilt core), and the hosted radio asserts (sdio_rx_get_buffer ->
+  // panic reboot) when that pool bottoms out. Only fetch with enough room
+  // for the spike PLUS a radio floor. On today's P4 steady-state (~40KB free,
+  // ~35KB largest) this never passes — the check is effectively disabled
+  // there until the boot-time-check design lands; the S3's on-chip radio
+  // pre-reserves its buffers, so it clears the gate or fails gracefully.
+  constexpr size_t kTlsSpike = 36 * 1024, kRadioFloor = 24 * 1024;
+  if (heap_caps_get_largest_free_block(MALLOC_CAP_DMA) < kTlsSpike ||
+      heap_caps_get_free_size(MALLOC_CAP_DMA) < kTlsSpike + kRadioFloor) {
+    if (next_check_ms_ == 0) log_heap("deferred-low-dma");  // log once, not 4 Hz
+    next_check_ms_ = millis() + kRetryMs;  // re-evaluate hourly
+    return;
+  }
+
   in_flight_.store(true);
   // Short-lived task so the TLS handshake (~seconds, ~45KB transient heap)
   // never runs on the LVGL loop. Stack is generous for mbedTLS.
@@ -129,8 +160,11 @@ void UpdateCheck::check_task_entry(void* arg) {
 void UpdateCheck::run_check() {
   next_check_ms_ = millis() + kRetryMs;  // assume failure; success extends below
 
+  log_heap("pre-tls");
   std::string body;
-  if (!https_get(std::string(kSiteBase) + "/releases.json", body, 2048)) {
+  const bool got = https_get(std::string(kSiteBase) + "/releases.json", body, 2048);
+  log_heap("post-tls");
+  if (!got) {
     core::logf("UpdateCheck: releases.json fetch failed\n");
     return;
   }

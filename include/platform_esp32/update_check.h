@@ -22,6 +22,9 @@ class UpdateCheck : public core::IUpdateSource {
   UpdateCheck(Config& config, Network& network);
 
   void poll();  // gate + schedule the daily check; call from loop()
+  // True while a fetch/install task is alive — main parks BLE connects for
+  // the duration (TLS's internal-RAM spike + the hosted radio don't mix).
+  bool task_active() const { return in_flight_.load(); }
 
   core::UpdateInfo info() const override;
   void skip_current() override;
