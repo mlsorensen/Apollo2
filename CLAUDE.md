@@ -81,6 +81,12 @@ bsp/esp32_p4_wifi6_touch_lcd_x):
   DEFAULT` (XTAL); select at runtime via `efuse_hal_chip_revision() >= 300`
   so one binary-per-rev source file serves both families. (2) Our JD9365 8"
   table + 80 MHz/1500 Mbps timings worked first time (panel up in ~340 ms).
+  HEADS-UP (user, 2026-09): the OTHER P4 boards (4.3/5) may eventually ship
+  with v3 silicon too — when that lands, each P4 board needs BOTH an -es and
+  a production-silicon image (deliberately NOT built yet). Prep in place: the
+  serial identify line reports `REV=` (efuse major*100+minor) so the web
+  flasher's Detect can pick the right variant, and display.cpp's PHY-clock
+  #if would become the runtime efuse check from (1).
   (3) The 8" box mounts its glass the OPPOSITE way up from the 7": same
   table renders upside down — fix is rotating 270° instead of 90° in the
   flush (a direction constant; touch mapping follows it). Our per-size touch
