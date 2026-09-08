@@ -1,0 +1,24 @@
+
+### Changes
+
+- **Apollo can update itself, right on the device.** With WiFi on, it checks
+  the releases site and shows a notice when a newer firmware is out — with the
+  version and release notes, and **Install now / Remind me later / Skip this
+  version**. Install now downloads the new firmware and installs it: a progress
+  bar, then a short "screen goes dark ~20 seconds, don't power off" phase, then
+  it restarts on the new version. Your settings, paired machine and shot
+  history are kept, and a firmware that won't boot rolls back on its own. The
+  [web flasher](https://mlsorensen.github.io/Apollo2/) is still there for
+  recovery and for the P4 boards' first flash.
+- **Choose how it checks: Off / On boot / Daily.** Under **Settings → Apollo →
+  WiFi → Check for updates**. "On boot" checks once each startup; "Daily" also
+  re-checks about once a day while the machine stays on. You can always check
+  by hand from **Stats → Info → Check for updates**; if it can't reach the
+  server it says so instead of claiming you're up to date.
+- **Faster, more reliable Wi-Fi on the P4 boards.** On first boot Apollo
+  updates the board's Wi-Fi co-processor to the matching firmware (a brief
+  one-time "Updating Wi-Fi co-processor" screen), which fixes a stale-factory
+  quirk that slowed every connection. One-time and automatic.
+- **Settings → Device is now Settings → Apollo** — "Device" was ambiguous
+  next to the machine and the scale; the page is about this device, Apollo.
+
