@@ -1,0 +1,7 @@
+
+### Changes
+
+- **The update notice now tells you how to turn it off.** The "Update available"
+  screen adds a line pointing to **Settings → Apollo → WiFi** (set **Check for
+  updates** to **Off**) if you'd rather not be prompted.
+
