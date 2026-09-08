@@ -485,6 +485,7 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
       make_info_row(out.info_box, LV_SYMBOL_BATTERY_2 " Runtime", font, compact);
   out.info_val[2] = make_info_row(out.info_box, "Uptime", font, compact);
   out.info_val[3] = make_info_row(out.info_box, "IP address", font, compact);
+  out.info_val[4] = make_info_row(out.info_box, "NTP synced", font, compact);
   // Clickable row: opens the log-viewer modal (recent diagnostics, kept in
   // RAM). App attaches the callback; the value doubles as the affordance.
   {
@@ -499,7 +500,7 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
   static const char* kMicraKeys[5] = {"Manufacturer", "Model", "Serial", "Firmware",
                                       "Software"};
   for (int i = 0; i < 5; ++i)
-    out.info_val[4 + i] = make_info_row(out.info_box, kMicraKeys[i], font, compact);
+    out.info_val[5 + i] = make_info_row(out.info_box, kMicraKeys[i], font, compact);
 
   stats_select_section(out, kStatsBrew);
 }

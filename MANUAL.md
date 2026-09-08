@@ -66,7 +66,7 @@ Stats
 ├─ Brew | Boiler — temperature history graphs (+/− zoom)
 ├─ History — headline stats (tap → reset) · month filter · shot list
 │            └─ tap a shot → full-screen shot card (with delete)
-└─ Info — firmware (→ Check for updates) · uptime · IP · Diagnostic log
+└─ Info — firmware (→ Check for updates) · uptime · IP · NTP synced · Diagnostic log
           (tap → viewer) · Micra details
 
   * = only on boards whose hardware supports it (see the note above)
@@ -567,8 +567,9 @@ actions live directly on the root:
 ![Device info](docs/img/manual/stats-info.png)
 
 - **Info** — device details: our firmware version + git revision, uptime,
-  battery/USB state with a runtime estimate, and the machine's Device
-  Information (manufacturer, model, serial, firmware) read over Bluetooth.
+  battery/USB state with a runtime estimate, **NTP synced** (how long ago the
+  clock last synced over the internet, or "not since boot"), and the machine's
+  Device Information (manufacturer, model, serial, firmware) read over Bluetooth.
   - **Check for updates** — next to the firmware version, tap it to check the
     releases site right now (needs WiFi + NTP). It reports back either an
     update notice or "You're on the latest firmware" — the same check the boot

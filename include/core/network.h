@@ -54,6 +54,11 @@ class INetwork {
   // clock on whatever was set manually / last synced. Persisted.
   virtual bool ntp_enabled() const = 0;
   virtual void set_ntp_enabled(bool on) = 0;
+
+  // Seconds since the last REAL SNTP sync landed this session, or -1 if none yet
+  // (best-effort, not persisted). For the Info page's honest "NTP synced" row.
+  // Default -1 for sources without SNTP (the sim/fake).
+  virtual int ntp_seconds_since_sync() const { return -1; }
 };
 
 }  // namespace core

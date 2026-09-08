@@ -5,6 +5,17 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## v0.11.3
+
+### Changes
+
+- **More reliable clock sync, and you can see it.** After connecting to WiFi,
+  Apollo now keeps retrying the time sync every ~30 s until it actually lands
+  (instead of possibly waiting up to an hour on a missed first try), then settles
+  to an hourly refresh. **Stats → Info** shows an honest **NTP synced** line —
+  "2m ago", or "not since boot" if it hasn't synced yet — so you can tell at a
+  glance whether the clock is really coming from the internet.
+
 ## v0.11.2
 
 ### Changes

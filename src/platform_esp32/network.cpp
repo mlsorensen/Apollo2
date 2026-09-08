@@ -18,8 +18,16 @@ namespace {
 constexpr uint32_t kConnectTimeoutMs = 15000;   // give up on an association attempt
 constexpr uint32_t kRetryMs = 10000;            // re-attempt after a failure/outage
 constexpr uint32_t kRtcResyncMs = 60UL * 60 * 1000;  // refresh the RTC from NTP hourly
-constexpr uint32_t kNtpSyncIntervalMs = 60UL * 60 * 1000;  // SNTP poll cadence
+constexpr uint32_t kNtpSyncIntervalMs = 60UL * 60 * 1000;  // steady SNTP cadence
+constexpr uint32_t kNtpInitialSyncMs = 30UL * 1000;  // retry fast until the 1st
+                                                     // real sync, then relax
 constexpr int kBaseYear = 2024;  // system time is "real" once past this (matches Clock)
+
+// Set the moment a REAL SNTP sync lands (via the notification callback below);
+// 0 = none this boot. File-scope so the C callback can reach it. Read through
+// Network::ntp_seconds_since_sync() for the Info page's honest NTP readout.
+volatile uint32_t s_last_ntp_sync_ms = 0;
+void on_ntp_synced(struct timeval*) { s_last_ntp_sync_ms = millis(); }
 
 // The low TX power TokenSetup uses to avoid brown-outs applies to the station too
 // — the router may be further than a phone, but on a USB-powered board a full-power
@@ -78,15 +86,21 @@ void Network::on_connected() {
 
 void Network::start_ntp() {
   time_persisted_ = false;  // force an RTC write on the first sync
+  ntp_relaxed_ = false;     // start on the fast retry until a real sync lands
   const std::string tz = config_.timezone();
   const std::string ntp = config_.ntp_server();
+  // Honest "did SNTP actually sync?" signal — fires only on a real server reply,
+  // unlike ntp_synced() which the RTC-provided boot time already satisfies.
+  sntp_set_time_sync_notification_cb(on_ntp_synced);
   // configTzTime sets the system clock from SNTP asynchronously and applies TZ for
   // local display; poll() then persists the synced time to the RTC (see below).
   configTzTime(tz.c_str(), ntp.c_str(), "pool.ntp.org");
-  sntp_set_sync_interval(kNtpSyncIntervalMs);
+  // Poll FAST until the first real sync (a missed boot sync mustn't cost an hour),
+  // then poll() relaxes to the steady hourly cadence.
+  sntp_set_sync_interval(kNtpInitialSyncMs);
   sntp_restart();
-  core::logf("Network: NTP started (server=%s, resync %us)\n", ntp.c_str(),
-             static_cast<unsigned>(kNtpSyncIntervalMs / 1000));
+  core::logf("Network: NTP started (server=%s, retry %us until synced)\n",
+             ntp.c_str(), static_cast<unsigned>(kNtpInitialSyncMs / 1000));
 }
 
 void Network::poll() {
@@ -138,6 +152,14 @@ void Network::poll() {
           last_rtc_sync_ms_ = millis();
         }
       }
+      // Once a real SNTP sync has landed, relax from the fast initial retry to
+      // the steady hourly cadence.
+      if (!ntp_relaxed_ && s_last_ntp_sync_ms != 0) {
+        sntp_set_sync_interval(kNtpSyncIntervalMs);
+        ntp_relaxed_ = true;
+        core::logf("Network: NTP synced; relaxing resync to %us\n",
+                   static_cast<unsigned>(kNtpSyncIntervalMs / 1000));
+      }
       break;
 
     case core::NetState::Failed:
@@ -150,6 +172,11 @@ void Network::poll() {
 }
 
 bool Network::ntp_synced() const { return config_.ntp_enabled() && time_persisted_; }
+
+int Network::ntp_seconds_since_sync() const {
+  if (s_last_ntp_sync_ms == 0) return -1;  // no real sync since boot
+  return static_cast<int>((millis() - s_last_ntp_sync_ms) / 1000);
+}
 
 const char* Network::ssid() const {
   str_cache_ = config_.wifi_ssid();

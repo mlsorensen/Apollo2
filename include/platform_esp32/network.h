@@ -32,6 +32,12 @@ class Network : public core::INetwork {
   // daily update check.
   bool ntp_synced() const;
 
+  // Seconds since the last REAL SNTP sync landed this session (set by the SNTP
+  // notification callback — not the RTC-provided boot time, which ntp_synced()
+  // is happy with). -1 = no real sync since boot. For the Info page's honest
+  // "NTP last synced" readout. Best-effort; not persisted across reboot.
+  int ntp_seconds_since_sync() const;
+
   core::NetState status() const override { return status_; }
   const char* ssid() const override;
   const char* ip() const override { return ip_.c_str(); }
@@ -68,6 +74,7 @@ class Network : public core::INetwork {
   uint32_t connect_deadline_ms_ = 0;  // STA association timeout
   uint32_t retry_at_ms_ = 0;          // next reconnect attempt after a failure
   uint32_t last_rtc_sync_ms_ = 0;     // last time NTP was persisted to the RTC
+  bool ntp_relaxed_ = false;          // synced once -> slow the SNTP poll to hourly
   bool time_persisted_ = false;       // have we written a valid NTP time to the RTC?
   bool from_portal_ = false;          // connecting with creds just entered via the portal
 };

@@ -3324,10 +3324,23 @@ void App::update_stats_view() {
                       network_->status() == core::NetState::Connected)
                          ? network_->ip()
                          : "";
+    // NTP: honest "last real sync" (the RTC-provided boot time doesn't count).
+    char ntp[24];
+    const int nsec = (network_ != nullptr) ? network_->ntp_seconds_since_sync() : -1;
+    if (nsec < 0)
+      std::snprintf(ntp, sizeof(ntp), "not since boot");
+    else if (nsec < 60)
+      std::snprintf(ntp, sizeof(ntp), "%ds ago", nsec);
+    else if (nsec < 3600)
+      std::snprintf(ntp, sizeof(ntp), "%dm ago", nsec / 60);
+    else
+      std::snprintf(ntp, sizeof(ntp), "%dh ago", nsec / 3600);
+
     const char* vals[kStatsInfoRows] = {rfw,
                                         batt_runtime_text_,
                                         up,
                                         ip,
+                                        ntp,
                                         snap.manufacturer,
                                         snap.model,
                                         snap.serial,
