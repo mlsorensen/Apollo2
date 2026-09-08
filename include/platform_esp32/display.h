@@ -30,4 +30,15 @@ class Display {
   bool rgb_resync(bool verbose = true);
 };
 
+#if defined(BOARD_DISPLAY_DSI)
+// Lightweight display for the boot-flag OTA install mode (install_mode.cpp):
+// the per-board DSI panel with num_fbs=2 but no use_dma2d / async dirty-sync,
+// so the internal-DMA pool stays free for the hosted-radio download. Bring the
+// panel up, present full portrait frames, and blank the backlight for the
+// (screen-glitching) flash-write phase. DSI boards only.
+bool install_panel_begin();
+void install_panel_present(const uint16_t* portrait_fb);  // native WxH RGB565
+void install_panel_backlight(bool on);
+#endif
+
 }  // namespace platform

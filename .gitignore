@@ -19,3 +19,4 @@ sim_sd/
 tools/webapp/node_modules/
 tools/webapp/dist/
 include/platform_esp32/webapp_dist.h
+

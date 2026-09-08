@@ -43,8 +43,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             bool backflush = false, bool log_modal = false,
             bool unwired_midshot = false, bool toast = false,
             bool join_modal = false, bool screensaver = false,
-            bool update_modal = false, core::IUpdateSource* updates = nullptr,
-            bool install_overlay = false) {
+            bool update_modal = false, core::IUpdateSource* updates = nullptr) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
@@ -70,10 +69,6 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
                    "Connect the scale or switch to Manual mode.");
   if (screensaver) app.pose_screensaver();  // bouncing-logo saver, start pose
   if (update_modal) app.open_update_modal();
-  if (install_overlay) {  // pose_install() on the fake first, then this
-    app.open_install_overlay();
-    app.install_overlay_tick();  // paint the posed percent (no timers in a render)
-  }
   display.render_frame();
   if (!display.save_png(out_path)) {
     std::fprintf(stderr, "error: failed to write %s\n", out_path);
@@ -105,12 +100,11 @@ int main() {
                int shot_id = -1, int history_ym = 0, bool backflush = false,
                bool log_modal = false, bool unwired_midshot = false,
                bool toast = false, bool join_modal = false, bool screensaver = false,
-               bool update_modal = false, bool install_overlay = false) {
+               bool update_modal = false) {
     return render(machine, provisioner, battery, disp, clock, history, scale,
                   scale_provisioner, brew, network, shots, s, path, tab, sec, modal, theme,
                   stats, clean_lock, shot_id, history_ym, backflush, log_modal,
-                  unwired_midshot, toast, join_modal, screensaver, update_modal, &updates,
-                  install_overlay);
+                  unwired_midshot, toast, join_modal, screensaver, update_modal, &updates);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
@@ -171,11 +165,6 @@ int main() {
   updates.set_available(true);
   ok &= r({800, 480}, "renders/update_modal_800x480.png", 0, -1, false, 0, -1,
           false, -1, 0, false, false, false, false, false, false, true);
-  // Self-install progress screen, posed mid-download.
-  updates.pose_install(43);
-  ok &= r({800, 480}, "renders/update_install_800x480.png", 0, -1, false, 0, -1,
-          false, -1, 0, false, false, false, false, false, false, false, true);
-  updates.cancel_install();
   updates.set_available(false);
   // Backflush cleaning (Settings > Micra): the prompt screen, and mid-sequence
   // with the cycle readout (the fake poses a running sequence the real

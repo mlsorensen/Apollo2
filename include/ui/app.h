@@ -99,16 +99,16 @@ class App {
   void open_checking_modal();            // "checking..." spinner during a live check
   void open_no_update_modal();           // "up to date" notice (forced check, boot)
   void skip_update();                    // modal "Skip this version"
-  void set_update_check(bool on);        // WiFi page "Check for updates" switch
+  void cycle_update_cadence();           // WiFi "Check for updates": Off/Boot/Daily
   void manual_update_check();            // Stats > Info button -> live check
   void update_result_poll();             // watch check_seq(); show the outcome
-  bool update_ui_active() const {
-    return modal_ != nullptr || install_layer_ != nullptr;
+  bool update_ui_active() const { return modal_ != nullptr; }
+  // "Install now" -> device main stashes the version and reboots into the
+  // early-boot install mode (the download can't run with the full display up).
+  void set_install_handler(std::function<void(const std::string&)> h) {
+    install_handler_ = std::move(h);
   }
-  void begin_install();                  // modal "Install now" (dormant)
-  void open_install_overlay();           // full-screen progress (also sim pose)
-  void close_install_overlay();          // Cancel/Close on the overlay
-  void install_overlay_tick();           // 4 Hz status poll (from its lv_timer)
+  void request_install();                // modal "Install now"
   void hour_select(int idx);             // Time & date dropdowns: selection ->
   void minute_select(int idx);           // clock/date write (hour idx == hour,
   void month_select(int idx);            // month/day 1-based, year offset from
@@ -225,12 +225,7 @@ class App {
   bool manual_check_pending_ = false;  // a user-initiated check awaits its result
   uint32_t manual_check_started_ = 0;  // lv_tick when the manual check began
   static constexpr uint32_t kManualCheckTimeoutMs = 30000;  // give up + report
-  // Self-install progress overlay (full-screen, clean-lock style).
-  lv_obj_t* install_layer_ = nullptr;
-  lv_obj_t* install_bar_ = nullptr;
-  lv_obj_t* install_state_label_ = nullptr;
-  lv_obj_t* install_cancel_btn_ = nullptr;
-  lv_timer_t* install_timer_ = nullptr;
+  std::function<void(const std::string&)> install_handler_;  // "Install now"
   core::ISound* sound_ = nullptr;
   core::IShotStore* shots_ = nullptr;
   bool click_sound_on_ = true;  // cached from IDisplaySettings (checked per press)

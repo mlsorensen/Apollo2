@@ -13,6 +13,7 @@ constexpr char kBrightnessKey[] = "bright";
 constexpr char kScreenTimeoutKey[] = "scrtimeout";
 constexpr char kSaverStyleKey[] = "ssstyle";
 constexpr char kSkippedUpdateKey[] = "skipver";
+constexpr char kPendingInstallKey[] = "otainst";  // boot-flag install target version
 constexpr char kUpdateCheckKey[] = "updchk";   // legacy bool (pre-mode)
 constexpr char kUpdateModeKey[] = "updmode";
 constexpr char kClock24Key[] = "clock24";
@@ -413,6 +414,15 @@ void Config::set_update_check_mode(int mode) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putInt(kUpdateModeKey, mode);
+  p.end();
+}
+
+std::string Config::pending_install() const { return read_key(kPendingInstallKey); }
+
+void Config::set_pending_install(const std::string& version) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putString(kPendingInstallKey, version.c_str());
   p.end();
 }
 

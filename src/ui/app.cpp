@@ -610,10 +610,8 @@ void on_ntp_switch(lv_event_t* e) {
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
   app->set_ntp_enabled(lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
-void on_update_check_switch(lv_event_t* e) {
-  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
-  auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
-  app->set_update_check(lv_obj_has_state(sw, LV_STATE_CHECKED));
+void on_update_check_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_update_cadence();
 }
 void on_manual_check_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->manual_update_check();
@@ -625,13 +623,7 @@ void on_update_skip(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->skip_update();
 }
 void on_update_install(lv_event_t* e) {
-  static_cast<ui::App*>(lv_event_get_user_data(e))->begin_install();
-}
-void on_install_cancel(lv_event_t* e) {
-  static_cast<ui::App*>(lv_event_get_user_data(e))->close_install_overlay();
-}
-void on_install_timer(lv_timer_t* t) {
-  static_cast<ui::App*>(lv_timer_get_user_data(t))->install_overlay_tick();
+  static_cast<ui::App*>(lv_event_get_user_data(e))->request_install();
 }
 
 // Release notes come straight from CHANGELOG.md, which uses typographic
@@ -1105,9 +1097,9 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(settings_.wifi_forget_btn, on_wifi_forget_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.tz_dropdown, on_tz_dropdown, LV_EVENT_VALUE_CHANGED, this);
   lv_obj_add_event_cb(settings_.ntp_switch, on_ntp_switch, LV_EVENT_VALUE_CHANGED, this);
-  if (settings_.update_check_switch != nullptr)
-    lv_obj_add_event_cb(settings_.update_check_switch, on_update_check_switch,
-                        LV_EVENT_VALUE_CHANGED, this);
+  if (settings_.update_check_btn != nullptr)
+    lv_obj_add_event_cb(settings_.update_check_btn, on_update_check_clicked,
+                        LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.menu, on_menu_page_changed, LV_EVENT_VALUE_CHANGED, this);
 
   build_stats_tab(stats, screen, stats_);
@@ -1167,8 +1159,10 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     if (network_->enabled()) lv_obj_add_state(settings_.wifi_switch, LV_STATE_CHECKED);
     if (network_->ntp_enabled()) lv_obj_add_state(settings_.ntp_switch, LV_STATE_CHECKED);
     if (updates_ != nullptr) {
-      if (updates_->check_at_startup())
-        lv_obj_add_state(settings_.update_check_switch, LV_STATE_CHECKED);
+      static const char* kCadence[] = {"Off", "On boot", "Daily"};
+      const int m = updates_->check_cadence();
+      lv_label_set_text(settings_.update_check_value,
+                        kCadence[(m >= 0 && m <= 2) ? m : 1]);
     } else {
       lv_obj_add_flag(settings_.update_check_row, LV_OBJ_FLAG_HIDDEN);
     }
@@ -1874,120 +1868,20 @@ void App::open_update_modal() {
   }
 }
 
-void App::begin_install() {
-  dismiss_modal();
-  if (updates_ != nullptr) updates_->start_install();
-  open_install_overlay();
-}
-
-void App::open_install_overlay() {
-  if (install_layer_ != nullptr || updates_ == nullptr) return;
+void App::request_install() {
+  if (updates_ == nullptr) return;
   const core::UpdateInfo info = updates_->info();
-
-  install_layer_ = lv_obj_create(lv_layer_top());
-  lv_obj_remove_style_all(install_layer_);
-  lv_obj_set_size(install_layer_, lv_pct(100), lv_pct(100));
-  lv_obj_set_style_bg_color(install_layer_, lv_color_hex(ui::theme::bg()), 0);
-  lv_obj_set_style_bg_opa(install_layer_, LV_OPA_COVER, 0);
-  lv_obj_add_flag(install_layer_, LV_OBJ_FLAG_CLICKABLE);  // swallow taps
-  lv_obj_remove_flag(install_layer_, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_flex_flow(install_layer_, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_flex_align(install_layer_, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
-                        LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_row(install_layer_, ui::dp(18), 0);
-
-  lv_obj_t* title = lv_label_create(install_layer_);
-  char t[48];
-  std::snprintf(t, sizeof(t), "Installing %s",
-                info.version.empty() ? "update" : info.version.c_str());
-  lv_label_set_text(title, t);
-  lv_obj_set_style_text_color(title, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(title, ui::font_dp(28), 0);
-
-  install_bar_ = lv_bar_create(install_layer_);
-  lv_obj_set_size(install_bar_, lv_pct(70), ui::dp(14));
-  lv_bar_set_range(install_bar_, 0, 100);
-  lv_obj_set_style_bg_color(install_bar_, lv_color_hex(ui::theme::card()), 0);
-  lv_obj_set_style_bg_color(install_bar_, lv_color_hex(ui::theme::accent()),
-                            LV_PART_INDICATOR);
-
-  install_state_label_ = lv_label_create(install_layer_);
-  lv_label_set_text(install_state_label_, "Downloading...");
-  lv_obj_set_width(install_state_label_, lv_pct(86));
-  lv_label_set_long_mode(install_state_label_, LV_LABEL_LONG_WRAP);
-  lv_obj_set_style_text_align(install_state_label_, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_set_style_text_color(install_state_label_, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(install_state_label_, ui::font_dp(20), 0);
-
-  if (display_ != nullptr && display_->flash_write_disturbs_display()) {
-    // RGB boards: flash writes stall the PSRAM bus the panel scans from —
-    // glitches during install are expected and harmless (resync + the
-    // reboot clean up).
-    lv_obj_t* warn = lv_label_create(install_layer_);
-    lv_label_set_text(warn, "The screen may flicker while the update writes -\n"
-                            "that's normal.");
-    lv_obj_set_style_text_align(warn, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(warn, lv_color_hex(ui::theme::muted()), 0);
-    lv_obj_set_style_text_font(warn, ui::font_dp(14), 0);
-  }
-
-  install_cancel_btn_ = modal_button(install_layer_, "Cancel", ui::theme::rail(),
-                                     on_install_cancel, this);
-  install_timer_ = lv_timer_create(on_install_timer, 250, this);
-}
-
-void App::install_overlay_tick() {
-  if (install_layer_ == nullptr || updates_ == nullptr) return;
-  const core::InstallStatus s = updates_->install_status();
-  switch (s.state) {
-    case core::InstallState::kDownloading: {
-      lv_bar_set_value(install_bar_, s.percent, LV_ANIM_OFF);
-      char b[32];
-      std::snprintf(b, sizeof(b), "Downloading...  %d%%", s.percent);
-      ui::set_text(install_state_label_, b);
-      break;
-    }
-    case core::InstallState::kVerifying:
-      lv_bar_set_value(install_bar_, 100, LV_ANIM_OFF);
-      ui::set_text(install_state_label_, "Verifying...");
-      lv_obj_add_flag(install_cancel_btn_, LV_OBJ_FLAG_HIDDEN);  // past no-return
-      break;
-    case core::InstallState::kReady:
-      ui::set_text(install_state_label_, "Restarting...");
-      lv_obj_add_flag(install_cancel_btn_, LV_OBJ_FLAG_HIDDEN);
-      break;
-    case core::InstallState::kError: {
-      std::string msg = "Update failed: " + s.error +
-                        "\nNothing was changed - the current firmware keeps running.";
-      ui::set_text(install_state_label_, msg.c_str());
-      lv_obj_add_flag(install_bar_, LV_OBJ_FLAG_HIDDEN);
-      lv_obj_remove_flag(install_cancel_btn_, LV_OBJ_FLAG_HIDDEN);
-      if (lv_obj_t* lbl = lv_obj_get_child(install_cancel_btn_, 0))
-        lv_label_set_text(lbl, "Close");
-      break;
-    }
-    case core::InstallState::kIdle:
-      close_install_overlay();  // canceled from our side; installer wound down
-      break;
-  }
-}
-
-void App::close_install_overlay() {
-  if (updates_ != nullptr) {
-    const core::InstallState st = updates_->install_status().state;
-    if (st == core::InstallState::kDownloading) updates_->cancel_install();
-  }
-  if (install_timer_ != nullptr) {
-    lv_timer_delete(install_timer_);
-    install_timer_ = nullptr;
-  }
-  if (install_layer_ != nullptr) {
-    lv_obj_delete(install_layer_);
-    install_layer_ = nullptr;
-    install_bar_ = nullptr;
-    install_state_label_ = nullptr;
-    install_cancel_btn_ = nullptr;
-  }
+  if (info.version.empty()) { dismiss_modal(); return; }
+  dismiss_modal();
+  // The download can't run with the full display up (it fragments the DMA pool
+  // the hosted radio needs). Hand off to device main, which reboots into the
+  // early-boot install mode. Show a brief "restarting" note first.
+  lv_obj_t* card = open_modal("Installing update",
+      "Apollo will restart to install. The screen goes dark for about "
+      "20 seconds - don't power off. It restarts on its own when done.");
+  (void)card;
+  lv_refr_now(nullptr);  // paint the notice before the handler reboots us
+  if (install_handler_) install_handler_(info.version);
 }
 
 void App::skip_update() {
@@ -1995,8 +1889,12 @@ void App::skip_update() {
   dismiss_modal();
 }
 
-void App::set_update_check(bool on) {
-  if (updates_ != nullptr) updates_->set_check_at_startup(on);
+void App::cycle_update_cadence() {
+  if (updates_ == nullptr) return;
+  const int m = (updates_->check_cadence() + 1) % 3;  // Off -> On boot -> Daily
+  updates_->set_check_cadence(m);
+  static const char* kCadence[] = {"Off", "On boot", "Daily"};
+  lv_label_set_text(settings_.update_check_value, kCadence[m]);
 }
 
 void App::manual_update_check() {
@@ -2055,6 +1953,20 @@ void App::update_result_poll() {
   // Never interrupt a live shot with a modal; try again on the next poll.
   if (brew_ != nullptr && core::shot_in_flight(brew_->snapshot())) {
     if (manual) manual_check_pending_ = true;
+    return;
+  }
+
+  // A check that couldn't reach the server (DNS/TLS/network) must NOT read as
+  // "up to date". Tell the user we couldn't check (manual only); an automatic
+  // boot check stays silent and tries again next boot.
+  if (!updates_->last_check_ok()) {
+    if (manual) {
+      lv_obj_t* card = open_modal("Couldn't check",
+          "No response from the update server. Check the internet connection "
+          "and try again.");
+      modal_button(modal_button_row(card), "OK", ui::theme::rail(),
+                   on_update_later, this);
+    }
     return;
   }
 

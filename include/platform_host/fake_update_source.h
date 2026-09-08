@@ -20,26 +20,19 @@ class FakeUpdateSource : public core::IUpdateSource {
     return i;
   }
   void skip_current() override { available_ = false; }
-  bool check_at_startup() const override { return startup_; }
-  void set_check_at_startup(bool on) override { startup_ = on; }
+  int check_cadence() const override { return cadence_; }
+  void set_check_cadence(int mode) override { cadence_ = mode; }
   void request_check() override { ++seq_; }  // completes instantly in the sim
   bool checking() const override { return false; }
   int check_seq() const override { return seq_; }
-  void start_install() override { install_.state = core::InstallState::kDownloading; }
-  void cancel_install() override { install_ = {}; }
-  core::InstallStatus install_status() const override { return install_; }
+  bool last_check_ok() const override { return true; }
 
   void set_available(bool on) { available_ = on; }
-  void pose_install(int percent) {  // sim: freeze the install screen mid-download
-    install_.state = core::InstallState::kDownloading;
-    install_.percent = percent;
-  }
 
  private:
   bool available_ = false;  // renders stay update-free unless a pose asks
-  bool startup_ = true;
+  int cadence_ = 1;
   int seq_ = 0;
-  core::InstallStatus install_;
 };
 
 }  // namespace host

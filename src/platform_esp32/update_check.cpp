@@ -4,9 +4,6 @@
 #include <esp_crt_bundle.h>
 #include <esp_heap_caps.h>
 #include <esp_http_client.h>
-#include <esp_ota_ops.h>
-#include <esp_partition.h>
-#include <hal/efuse_hal.h>
 #include <mbedtls/platform.h>
 
 #include <cstdio>
@@ -25,10 +22,6 @@ namespace {
 constexpr char kSiteBase[] = "https://mlsorensen.github.io/Apollo2";
 constexpr size_t kMaxNotesBytes = 4096;  // bound RAM; notes truncate past this
 
-// Per-silicon image variant. "" today; when the P4 boards start shipping in
-// both revision generations and the workflow publishes dual images, rev3
-// units select the "-rev3" file here (efuse_hal_chip_revision() >= 300).
-const char* update_variant_suffix() { return ""; }
 
 // Parse "v1.2.3" or "1.2.3" into a comparable triple. Returns false on
 // anything that isn't strict major.minor.patch — callers treat that as
@@ -77,6 +70,9 @@ std::string first_version(const std::string& body) {
 void* psram_calloc(size_t n, size_t sz) {
   return heap_caps_calloc(n, sz, MALLOC_CAP_SPIRAM);
 }
+// Point mbedTLS at PSRAM so TLS's ~46KB of record buffers don't land in the
+// scarce internal-DMA pool the hosted C6 radio's SDIO driver shares and starve
+// it — lets the check's TLS fetch run with BLE up. Idempotent.
 void use_psram_for_tls() {
   static bool done = false;
   if (done) return;
@@ -147,6 +143,7 @@ void UpdateCheck::check_task_entry(void* arg) {
 }
 
 void UpdateCheck::run_check() {
+  last_ok_.store(false);  // set true only once we've actually read a version
   use_psram_for_tls();
   std::string body;
   if (!https_get(std::string(kSiteBase) + "/releases.json", body, 2048)) {
@@ -173,6 +170,7 @@ void UpdateCheck::run_check() {
     latest_ = latest;
     notes_ = notes;
   }
+  last_ok_.store(true);  // reached the server and read a version
 }
 
 core::UpdateInfo UpdateCheck::info() const {
@@ -195,186 +193,10 @@ void UpdateCheck::skip_current() {
   if (!v.empty()) config_.set_skipped_update(v);
 }
 
-bool UpdateCheck::check_at_startup() const {
-  return config_.update_check_mode() != 0;  // 0 off, else on
-}
+int UpdateCheck::check_cadence() const { return config_.update_check_mode(); }
 
-void UpdateCheck::set_check_at_startup(bool on) {
-  config_.set_update_check_mode(on ? 1 : 0);
-}
-
-void UpdateCheck::start_install() {
-  if (in_flight_.load()) return;
-  std::string v;
-  {
-    std::lock_guard<std::mutex> lock(mu_);
-    v = latest_;
-  }
-  if (v.empty() || !semver_newer(v.c_str(), fw::kVersion)) return;
-  cancel_.store(false);
-  install_pct_.store(0);
-  install_state_.store(static_cast<int>(core::InstallState::kDownloading));
-  in_flight_.store(true);
-  // Park BLE NOW, synchronously, before the task opens its TLS connection — so
-  // the radio is already down for the whole download (no handshake racing the
-  // loop's observer).
-  if (ble_park_) ble_park_(true);
-  if (xTaskCreatePinnedToCore(install_task_entry, "updinst", 12 * 1024, this, 1,
-                              nullptr, 0) != pdPASS) {
-    in_flight_.store(false);
-    if (ble_park_) ble_park_(false);  // task never started; restore BLE
-    std::lock_guard<std::mutex> lock(mu_);
-    install_error_ = "out of memory";
-    install_state_.store(static_cast<int>(core::InstallState::kError));
-  }
-}
-
-core::InstallStatus UpdateCheck::install_status() const {
-  core::InstallStatus s;
-  s.state = static_cast<core::InstallState>(install_state_.load());
-  s.percent = install_pct_.load();
-  if (s.state == core::InstallState::kError) {
-    std::lock_guard<std::mutex> lock(mu_);
-    s.error = install_error_;
-  }
-  return s;
-}
-
-void UpdateCheck::install_task_entry(void* arg) {
-  auto* self = static_cast<UpdateCheck*>(arg);
-  self->run_install();
-  self->in_flight_.store(false);
-  // Restore BLE unless we're about to reboot into the freshly written image.
-  if (self->install_state_.load() !=
-          static_cast<int>(core::InstallState::kReady) &&
-      self->ble_park_) {
-    self->ble_park_(false);
-  }
-  vTaskDelete(nullptr);
-}
-
-void UpdateCheck::run_install() {
-  const auto fail = [this](const char* why) {
-    core::logf("UpdateInstall: FAILED - %s\n", why);
-    {
-      std::lock_guard<std::mutex> lock(mu_);
-      install_error_ = why;
-    }
-    install_state_.store(static_cast<int>(core::InstallState::kError));
-  };
-
-  std::string version;
-  {
-    std::lock_guard<std::mutex> lock(mu_);
-    version = latest_;
-  }
-  use_psram_for_tls();
-  const std::string url = std::string(kSiteBase) + "/" + version +
-                          "/firmware/app/" + board::kUpdateSlug +
-                          update_variant_suffix() + ".bin";
-  core::logf("UpdateInstall: %s\n", url.c_str());
-
-  // RANGED download: the esp-hosted SDIO link can't sustain a full-speed
-  // multi-MB stream (its RX buffers fill faster than we drain and it asserts),
-  // so pull the image in bounded pieces via HTTP Range requests. Each piece is
-  // a short transfer with an idle gap after, and is flashed before the next —
-  // no sustained high throughput, and only a small PSRAM buffer needed.
-  constexpr int kChunk = 128 * 1024;
-  uint8_t* buf = static_cast<uint8_t*>(heap_caps_malloc(kChunk, MALLOC_CAP_SPIRAM));
-  if (buf == nullptr) { fail("out of memory"); return; }
-
-  const auto range_get = [&](int off, int want, int& out_len, int& out_total) -> bool {
-    char range[48];
-    std::snprintf(range, sizeof(range), "bytes=%d-%d", off, off + want - 1);
-    esp_http_client_config_t http = {};
-    http.url = url.c_str();
-    http.crt_bundle_attach = esp_crt_bundle_attach;
-    http.timeout_ms = 15000;
-    esp_http_client_handle_t c = esp_http_client_init(&http);
-    if (c == nullptr) return false;
-    esp_http_client_set_header(c, "Range", range);
-    bool ok = false;
-    out_len = 0;
-    out_total = 0;
-    if (esp_http_client_open(c, 0) == ESP_OK) {
-      const int clen = esp_http_client_fetch_headers(c);
-      const int status = esp_http_client_get_status_code(c);
-      // 206 Partial Content: "Content-Range: bytes X-Y/TOTAL" gives the size.
-      char cr[64] = {};
-      char* crp = cr;
-      if (esp_http_client_get_header(c, "Content-Range", &crp) == ESP_OK && crp) {
-        const char* slash = std::strrchr(crp, '/');
-        if (slash) out_total = atoi(slash + 1);
-      }
-      if (status == 206 || status == 200) {
-        int n = 0;
-        while (n < clen && n < want) {
-          const int r = esp_http_client_read(c, reinterpret_cast<char*>(buf + n),
-                                             std::min(4096, want - n));
-          if (r <= 0) break;
-          n += r;
-        }
-        out_len = n;
-        ok = n > 0;
-      } else {
-        core::logf("UpdateInstall: HTTP %d for range %s\n", status, range);
-      }
-      esp_http_client_close(c);
-    }
-    esp_http_client_cleanup(c);
-    return ok;
-  };
-
-  // First range establishes the total size and opens the OTA session.
-  int total = 0, first_len = 0;
-  if (!range_get(0, kChunk, first_len, total) || total <= 0) {
-    heap_caps_free(buf);
-    fail("download failed (wrong board image?)");
-    return;
-  }
-  const esp_partition_t* part = esp_ota_get_next_update_partition(nullptr);
-  esp_ota_handle_t ota = 0;
-  if (esp_ota_begin(part, total, &ota) != ESP_OK) {
-    heap_caps_free(buf);
-    fail("OTA begin failed");
-    return;
-  }
-
-  int off = 0, len = first_len;
-  bool ok = true;
-  while (off < total) {
-    if (off > 0) {  // range 0 already fetched
-      int rtotal = 0;
-      if (!range_get(off, std::min(kChunk, total - off), len, rtotal)) {
-        ok = false;
-        break;
-      }
-    }
-    if (esp_ota_write(ota, buf, len) != ESP_OK) { ok = false; break; }
-    off += len;
-    install_pct_.store(off * 100 / total);
-    if (cancel_.load()) { ok = false; break; }
-    delay(20);  // let the SDIO RX drain fully before the next burst
-  }
-  heap_caps_free(buf);
-
-  if (cancel_.load()) {
-    esp_ota_abort(ota);
-    install_state_.store(static_cast<int>(core::InstallState::kIdle));
-    return;
-  }
-  if (!ok || off != total) { esp_ota_abort(ota); fail("download interrupted"); return; }
-
-  install_state_.store(static_cast<int>(core::InstallState::kVerifying));
-  esp_err_t e = esp_ota_end(ota);  // validates the image
-  if (e == ESP_OK) e = esp_ota_set_boot_partition(part);
-  if (e != ESP_OK) {
-    core::logf("UpdateInstall: finalize failed (%s)\n", esp_err_to_name(e));
-    fail("image rejected");
-    return;
-  }
-  core::logf("UpdateInstall: %s written and set to boot\n", version.c_str());
-  install_state_.store(static_cast<int>(core::InstallState::kReady));
+void UpdateCheck::set_check_cadence(int mode) {
+  config_.set_update_check_mode(mode);
 }
 
 }  // namespace platform

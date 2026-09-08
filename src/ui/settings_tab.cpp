@@ -371,13 +371,16 @@ void build_device_wifi_rows(lv_obj_t* page, const lv_font_t* text_font,
   out.ntp_switch = lv_switch_create(rnt);
   lv_obj_set_size(out.ntp_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 
-  // Check for updates at startup (needs WiFi + NTP, so it lives with them).
-  // App hides the row when no update source is wired.
-  out.update_check_row =
-      make_setting_row(page, "Check for updates on boot", text_font);
-  out.update_check_switch = lv_switch_create(out.update_check_row);
-  lv_obj_set_size(out.update_check_switch, btn_size + ui::dp(8),
-                  btn_size / 2 + ui::dp(6));
+  // Check for updates (needs WiFi + NTP, so it lives with them). Cycle button:
+  // Off / On boot / Daily. App hides the row when no update source is wired.
+  out.update_check_row = make_setting_row(page, "Check for updates", text_font);
+  out.update_check_btn = ui::make_button(out.update_check_row);
+  lv_obj_set_height(out.update_check_btn, btn_size);
+  lv_obj_set_style_pad_hor(out.update_check_btn, ui::dp(14), 0);
+  lv_obj_set_style_bg_color(out.update_check_btn, lv_color_hex(ui::theme::card()), 0);
+  out.update_check_value = lv_label_create(out.update_check_btn);
+  lv_label_set_text(out.update_check_value, "On boot");
+  lv_obj_center(out.update_check_value);
 }
 
 // A tappable card row "<label>   <glyph>" that runs an action instead of

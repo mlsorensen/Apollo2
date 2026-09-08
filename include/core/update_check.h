@@ -1,10 +1,11 @@
 #pragma once
 
 // Firmware-update notification port. The platform side checks the releases
-// site once per boot (if enabled) and on demand from the Info button — only
-// once NTP has synced, proof the internet is actually reachable. The UI polls
-// info() and offers a dismissable modal. Notify-only: installing still happens
-// through the web flasher.
+// site (off / on boot / daily, per Settings) and on demand from the Info
+// button — only once NTP has synced, proof the internet is reachable. The UI
+// polls info() and offers a dismissable modal; "Install now" hands the version
+// to device main, which reboots into the early-boot install mode (see
+// platform_esp32/install_mode.h). This port only checks + reports.
 
 #include <string>
 
@@ -14,16 +15,6 @@ struct UpdateInfo {
   bool available = false;  // newer than the running firmware and not skipped
   std::string version;     // e.g. "v0.11.0" (empty until a check succeeded)
   std::string notes;       // that release's changelog section (may be empty)
-};
-
-// Self-install ("Install now") progress. kReady means the new image is
-// written and set to boot — the device restarts moments later.
-enum class InstallState { kIdle, kDownloading, kVerifying, kReady, kError };
-
-struct InstallStatus {
-  InstallState state = InstallState::kIdle;
-  int percent = 0;         // download progress, 0-100
-  std::string error;       // short reason when state == kError
 };
 
 class IUpdateSource {
@@ -38,9 +29,10 @@ class IUpdateSource {
   // Persist "don't offer this version again" (the modal's Skip button).
   virtual void skip_current() = 0;
 
-  // Settings → Apollo → WiFi "Check for updates": check once after each boot.
-  virtual bool check_at_startup() const = 0;
-  virtual void set_check_at_startup(bool on) = 0;
+  // Settings → Apollo → WiFi "Check for updates" cadence:
+  // 0 = Off, 1 = On boot, 2 = Daily (on boot + every ~24 h while running).
+  virtual int check_cadence() const = 0;
+  virtual void set_check_cadence(int mode) = 0;
 
   // Manual "Check for updates" (Stats → Info): request a live check. Watch
   // checking() and check_seq() (bumped when any check finishes) for the result.
@@ -48,14 +40,10 @@ class IUpdateSource {
   virtual bool checking() const = 0;
   virtual int check_seq() const = 0;
 
-  // Self-install into the inactive OTA slot. DORMANT on the hosted-radio P4
-  // boards (the esp-hosted SDIO link asserts under a multi-MB download — see
-  // the 2026-09 findings); those notify and hand off to the web flasher. Kept
-  // wired for the S3 boards / a future fix. cancel_install() is honored between
-  // chunks; a canceled/failed install leaves the running firmware untouched.
-  virtual void start_install() = 0;
-  virtual void cancel_install() = 0;
-  virtual InstallStatus install_status() const = 0;
+  // Did the most recently completed check actually reach the releases server
+  // (and read a version)? False after a network/DNS/TLS failure — so the UI can
+  // say "couldn't check" instead of mistaking a failed check for "up to date".
+  virtual bool last_check_ok() const = 0;
 };
 
 }  // namespace core

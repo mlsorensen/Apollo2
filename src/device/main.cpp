@@ -26,11 +26,13 @@
 #include "core/system.h"
 #include "platform_esp32/battery.h"
 #include "platform_esp32/board_config.h"
+#include "platform_esp32/c6_update.h"
 #include "platform_esp32/clock.h"
 #include "platform_esp32/config.h"
 #include "platform_esp32/display.h"
 #include "platform_esp32/display_settings.h"
 #include "platform_esp32/history.h"
+#include "platform_esp32/install_mode.h"
 #include "platform_esp32/io_extension.h"
 #include "platform_esp32/log_setup.h"
 #include "platform_esp32/micra_link.h"
@@ -208,6 +210,18 @@ void setup() {
 #endif
   g_config.begin();  // create NVS namespace on first boot (quiets read errors)
 
+#if defined(BOARD_DISPLAY_DSI)
+  // Boot-flag OTA install: an "Install now" tap set a target version and
+  // rebooted here. Do the install NOW — before the full display, BLE, or app
+  // come up — so the internal-DMA pool is at its clean baseline for the
+  // hosted-radio download (the full display fragments away the contiguous block
+  // the SDIO RX needs). run() downloads to PSRAM behind a light progress UI,
+  // writes flash with the screen blanked, and reboots. Never returns when set.
+  if (!g_config.pending_install().empty()) {
+    platform::install_mode::run(g_config);
+  }
+#endif
+
 #if defined(CONFIG_ESP_HOSTED_ENABLE_BT_NIMBLE)
   // Hosted-radio boards (P4 + C6 over SDIO): the transport must be brought up
   // through Arduino's hosted HAL (esp_hosted_init + connect_to_slave + BT
@@ -232,6 +246,55 @@ void setup() {
   } else {
     core::logf("WARN: CST816 touch not detected on I2C\n");
   }
+
+#if defined(CONFIG_ESP_HOSTED_ENABLE_BT_NIMBLE)
+  // One-time co-processor (C6) firmware update: the factory slave is stale
+  // (mismatched host lib -> boot RPC timeout + broken RX under load). We flash
+  // the embedded matching image now — display is up so we can show progress,
+  // and this is the quiet window (WiFi/NimBLE not started yet). Host->slave TX
+  // over SDIO, so it works on the stale slave. On success the C6 reboots and we
+  // reboot the P4 to re-init the link. See c6_update.cpp.
+  if (platform::c6_update_needed()) {
+    core::logf("C6 update: needed; applying embedded slave firmware\n");
+    lv_obj_t* ov = lv_obj_create(lv_screen_active());
+    lv_obj_remove_style_all(ov);
+    lv_obj_set_size(ov, lv_pct(100), lv_pct(100));
+    lv_obj_set_style_bg_color(ov, lv_color_hex(0x101418), 0);
+    lv_obj_set_style_bg_opa(ov, LV_OPA_COVER, 0);
+    lv_obj_set_flex_flow(ov, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(ov, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(ov, 18, 0);
+    lv_obj_t* title = lv_label_create(ov);
+    lv_label_set_text(title, "Updating Wi-Fi co-processor");
+    lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_t* sub = lv_label_create(ov);
+    lv_label_set_text(sub, "One-time setup, ~30s - please wait, don't power off.");
+    lv_obj_set_style_text_color(sub, lv_color_hex(0xA0A0A0), 0);
+    lv_obj_t* bar = lv_bar_create(ov);
+    lv_obj_set_size(bar, lv_pct(70), 18);
+    lv_bar_set_range(bar, 0, 100);
+    lv_obj_t* pctlbl = lv_label_create(ov);
+    lv_label_set_text(pctlbl, "0%");
+    lv_obj_set_style_text_color(pctlbl, lv_color_hex(0xFFFFFF), 0);
+    lv_timer_handler();
+    const bool ok = platform::c6_update_apply([&](int pct) {
+      lv_bar_set_value(bar, pct, LV_ANIM_OFF);
+      char b[8];
+      std::snprintf(b, sizeof(b), "%d%%", pct);
+      lv_label_set_text(pctlbl, b);
+      lv_timer_handler();  // pump the panel between chunks
+    });
+    core::logf("C6 update: %s\n", ok ? "applied; rebooting" : "failed");
+    lv_label_set_text(sub, ok ? "Done - restarting..."
+                              : "Update failed - continuing on old firmware.");
+    lv_timer_handler();
+    Serial.flush();
+    delay(1500);
+    if (ok) esp_restart();  // reboot P4 so the hosted link re-inits on new slave
+    lv_obj_delete(ov);      // failure: drop the overlay and boot normally
+  }
+#endif
 
   g_battery.begin();
   g_clock.begin();  // seed wall-clock from the RTC (if any); I2C is up via Display
@@ -354,20 +417,20 @@ void setup() {
     enter_lowbatt_sleep();
   });
 
-  // Self-install (experimental): fully drop both BLE links while the image
-  // downloads, so the hosted radio isn't contending with the SDIO transfer for
-  // the internal-DMA pool. Called synchronously as the install starts (park) and
-  // after a failure/cancel (restore); success reboots, so no restore then.
-  g_update_check.set_ble_park([](bool park) {
-    core::logf("UpdateInstall: %s BLE for install\n", park ? "parking" : "resuming");
-    g_micra.set_connect_enabled(!park);
-    g_scale.set_connect_enabled(!park);
+  // "Install now" (update notice): stash the target version and reboot into the
+  // early-boot install mode (see the top of setup()), which downloads + flashes
+  // with a clean DMA pool. Installing never happens live in the app.
+  g_app.set_install_handler([](const std::string& version) {
+    g_config.set_pending_install(version);
+    core::logf("UpdateInstall: reboot into install mode for %s\n", version.c_str());
+    Serial.flush();
+    delay(1500);  // let the "Installing update" notice show before we reboot
+    esp_restart();
   });
 
-  // Join home WiFi (if enabled) for NTP time. The update check rides on top of
-  // this: mbedTLS is pointed at PSRAM (see update_check.cpp) so a TLS fetch no
-  // longer starves the hosted radio's internal-DMA pool — checks run LIVE from
-  // loop(), with BLE up, no boot-window or soft-restart dance.
+  // Join home WiFi (if enabled) for NTP time. Update checks run LIVE from loop()
+  // with BLE up: mbedTLS is pointed at PSRAM (see update_check.cpp) so a small
+  // TLS fetch no longer starves the hosted radio's internal-DMA pool.
   g_network.begin();
 
   // Bring up NimBLE once here (single-threaded), so the Micra + scale link tasks
@@ -518,13 +581,37 @@ void loop() {
   // PSRAM so it coexists with the BLE links (see update_check.cpp). Never start
   // one mid-shot — the radio and heap are busy and a notice would interrupt.
   {
-    static bool boot_check_armed = false;
-    if (!boot_check_armed && g_update_check.network_ready()) {
-      boot_check_armed = true;  // one automatic check per boot, once NTP's synced
-      if (g_update_check.check_at_startup()) {
-        core::logf("UpdateCheck: automatic check at boot\n");
-        g_update_check.request_check();
+    // Automatic boot check: fire once the network's ready, and RETRY a few
+    // times if it can't reach the server — DNS often isn't resolvable for a
+    // second or two right after WiFi associates, and a single miss would
+    // silently skip the boot notice for the whole session. Retries stop as soon
+    // as one check reaches the server (last_check_ok), or after a few tries.
+    static int boot_tries = 0;
+    static bool boot_done = false;
+    static uint32_t next_boot_try_ms = 0;
+    if (!boot_done && g_update_check.check_cadence() >= 1 &&
+        g_update_check.network_ready() && !g_update_check.task_active() &&
+        !core::shot_in_flight(g_brew.snapshot()) && millis() >= next_boot_try_ms) {
+      if (boot_tries > 0 && g_update_check.last_check_ok()) {
+        boot_done = true;  // a check reached the server; nothing more to do
+      } else if (boot_tries >= 5) {
+        boot_done = true;
+        core::logf("UpdateCheck: boot check unreachable after retries\n");
+      } else {
+        core::logf("UpdateCheck: automatic check at boot (try %d)\n", ++boot_tries);
+        g_update_check.begin_check();
+        next_boot_try_ms = millis() + 6000;  // space retries while DNS settles
       }
+    }
+    // Daily cadence (mode 2): re-check every ~24 h while the machine stays on.
+    static uint32_t last_daily_ms = 0;
+    if (g_update_check.check_cadence() == 2 && boot_done &&
+        g_update_check.network_ready() && !g_update_check.task_active() &&
+        !core::shot_in_flight(g_brew.snapshot()) &&
+        millis() - last_daily_ms >= 24u * 60u * 60u * 1000u) {
+      last_daily_ms = millis();
+      core::logf("UpdateCheck: daily automatic check\n");
+      g_update_check.begin_check();
     }
     // Consume the request LAST: if the network isn't ready yet (NTP still
     // syncing) or a shot's running, leave it pending so the check fires as soon
@@ -536,16 +623,6 @@ void loop() {
       core::logf("UpdateCheck: live check\n");
       g_update_check.begin_check();
     }
-  }
-
-  // Self-install reached kReady: the new image is written to the spare slot and
-  // set to boot. Reboot into it (BLE was already parked for the download; the
-  // 60 s health-confirm below arms rollback if it doesn't come up clean).
-  if (g_update_check.install_status().state == core::InstallState::kReady) {
-    core::logf("UpdateInstall: restarting into the new image\n");
-    Serial.flush();
-    delay(400);
-    esp_restart();
   }
 
   // First-boot health confirm for an OTA-installed image: the bootloader

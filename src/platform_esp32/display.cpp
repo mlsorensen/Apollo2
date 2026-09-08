@@ -1249,6 +1249,102 @@ void flush_cb(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map) {
 
 namespace platform {
 
+#if defined(BOARD_DISPLAY_DSI)
+// ---- Lightweight install-mode display -------------------------------------
+// The boot-flag OTA install mode (install_mode.cpp) brings the panel up like
+// this instead of the full Display::begin(): same per-board DSI init table, but
+// num_fbs=2 with NO use_dma2d and NO async dirty-sync — so the internal-DMA
+// pool stays free (~100 KB contiguous) for the hosted-radio download. Present
+// is a whole-frame draw_bitmap (tear-free flip on the frame boundary). See the
+// [[ota-p4-solution]] memory for why the full display can't coexist with a
+// bulk download.
+esp_lcd_panel_handle_t g_install_panel = nullptr;
+
+bool install_panel_begin() {
+  esp_ldo_channel_handle_t ldo = nullptr;
+  esp_ldo_channel_config_t ldo_cfg = {};
+  ldo_cfg.chan_id = 3;
+  ldo_cfg.voltage_mv = 2500;
+  if (esp_ldo_acquire_channel(&ldo_cfg, &ldo) != ESP_OK) return false;
+
+  esp_lcd_dsi_bus_config_t bus_cfg = {};
+  bus_cfg.bus_id = 0;
+  bus_cfg.num_data_lanes = 2;
+#if defined(BOARD_WAVESHARE_P4_WIFI6_X_8) || defined(BOARD_WAVESHARE_P4_WIFI6_X_10_1)
+  bus_cfg.phy_clk_src = MIPI_DSI_PHY_PLLREF_CLK_SRC_DEFAULT;  // rev3 XTAL
+#else
+  bus_cfg.phy_clk_src = MIPI_DSI_PHY_CLK_SRC_DEFAULT;
+#endif
+  bus_cfg.lane_bit_rate_mbps = board::kDsiLaneBitRateMbps;
+  esp_lcd_dsi_bus_handle_t bus = nullptr;
+  if (esp_lcd_new_dsi_bus(&bus_cfg, &bus) != ESP_OK) return false;
+
+  const int rst_assert = board::kLcdRstActiveHigh ? HIGH : LOW;
+  const int rst_release = board::kLcdRstActiveHigh ? LOW : HIGH;
+  pinMode(board::kLcdRst, OUTPUT);
+  digitalWrite(board::kLcdRst, rst_release);
+  delay(10);
+  digitalWrite(board::kLcdRst, rst_assert);
+  delay(10);
+  digitalWrite(board::kLcdRst, rst_release);
+  delay(120);
+
+  esp_lcd_dbi_io_config_t dbi_cfg = {};
+  dbi_cfg.virtual_channel = 0;
+  dbi_cfg.lcd_cmd_bits = 8;
+  dbi_cfg.lcd_param_bits = 8;
+  esp_lcd_panel_io_handle_t dbi = nullptr;
+  if (esp_lcd_new_panel_io_dbi(bus, &dbi_cfg, &dbi) != ESP_OK) return false;
+  for (size_t i = 0; i < sizeof(kDsiPanelInit) / sizeof(kDsiPanelInit[0]); ++i) {
+    esp_lcd_panel_io_tx_param(dbi, kDsiPanelInit[i].cmd, kDsiPanelInit[i].data,
+                              kDsiPanelInit[i].data_bytes);
+    if (kDsiPanelInit[i].delay_ms) delay(kDsiPanelInit[i].delay_ms);
+  }
+
+  esp_lcd_dpi_panel_config_t dpi = {};
+  dpi.virtual_channel = 0;
+  dpi.dpi_clk_src = MIPI_DSI_DPI_CLK_SRC_DEFAULT;
+  dpi.dpi_clock_freq_mhz = board::kDsiDpiClockHz / 1000000;
+  dpi.pixel_format = LCD_COLOR_PIXEL_FORMAT_RGB565;
+  dpi.num_fbs = 2;
+  dpi.video_timing.h_size = board::kLcdNativeW;
+  dpi.video_timing.v_size = board::kLcdNativeH;
+  dpi.video_timing.hsync_pulse_width = board::kDsiHsyncPulse;
+  dpi.video_timing.hsync_back_porch = board::kDsiHsyncBack;
+  dpi.video_timing.hsync_front_porch = board::kDsiHsyncFront;
+  dpi.video_timing.vsync_pulse_width = board::kDsiVsyncPulse;
+  dpi.video_timing.vsync_back_porch = board::kDsiVsyncBack;
+  dpi.video_timing.vsync_front_porch = board::kDsiVsyncFront;
+  dpi.flags.use_dma2d = false;  // keep the internal-DMA pool free for the DL
+  if (esp_lcd_new_panel_dpi(bus, &dpi, &g_install_panel) != ESP_OK ||
+      esp_lcd_panel_init(g_install_panel) != ESP_OK) {
+    return false;
+  }
+
+  if (board::kLcdBacklightEn >= 0) {
+    pinMode(board::kLcdBacklightEn, OUTPUT);
+    digitalWrite(board::kLcdBacklightEn, HIGH);
+  }
+  ledcAttach(board::kLcdBacklight, 5000, 8);
+  ledcWrite(board::kLcdBacklight, board::kBacklightActiveLow ? 0 : 255);
+  return true;
+}
+
+// Present a full portrait (native kLcdNativeW x kLcdNativeH) RGB565 frame.
+void install_panel_present(const uint16_t* portrait_fb) {
+  if (g_install_panel != nullptr) {
+    esp_lcd_panel_draw_bitmap(g_install_panel, 0, 0, board::kLcdNativeW,
+                              board::kLcdNativeH, portrait_fb);
+  }
+}
+
+void install_panel_backlight(bool on) {
+  const int duty = on ? (board::kBacklightActiveLow ? 0 : 255)
+                      : (board::kBacklightActiveLow ? 255 : 0);
+  ledcWrite(board::kLcdBacklight, duty);
+}
+#endif  // BOARD_DISPLAY_DSI
+
 bool Display::begin() {
 #if defined(BOARD_DISPLAY_DSI)
   // MIPI-DSI panel (the P4 4.3"), direct esp_lcd — NOT Arduino_GFX — so the
