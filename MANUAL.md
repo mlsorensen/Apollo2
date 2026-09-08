@@ -57,7 +57,8 @@ Settings
 │  │               · Theme · Fahrenheit · Button sounds* · Performance overlay
 │  ├─ Time & date — Time · Date · 24-hour · Timezone
 │  └─ WiFi        — Enable · Status · Set up WiFi → QR portal · Forget
-│                  · Auto time (NTP) · Check for updates on boot → notice
+│                  · Auto time (NTP) · Check for updates (Off/Boot/Daily)
+│                    → notice → Install now
 ├─ Restart display
 └─ Lock display for cleaning  → 30 s touch lock
 
@@ -453,22 +454,28 @@ page fits on screen with little to no scrolling.
 - ③ **Forget** — clears the saved network.
 - ④ **Auto time (NTP)** *(default on)* — sync the clock over WiFi while
   connected. (The timezone it applies is set under **Time & date**.)
-- ⑤ **Check for updates on boot** *(default on)* — at startup (and only after
-  an NTP sync has proven the internet reachable), the device checks the
-  releases site for a newer firmware. When one exists, a dismissable notice
-  shows the version and its release notes:
+- ⑤ **Check for updates** *(default On boot)* — tap to cycle **Off / On boot /
+  Daily**. "On boot" checks once at startup; "Daily" also re-checks about once
+  a day while the machine stays on. Checks only run after an NTP sync has proven
+  the internet is reachable. When a newer firmware exists, a notice shows the
+  version and its release notes:
 
   <img src="docs/img/manual/update-modal.png" width="70%" alt="Update-available notice">
 
-  **Later** closes it and reminds again on the next check; **Skip this
+  **Install now** installs it right on the device (see below); **Remind me
+  later** closes the notice and offers again on the next check; **Skip this
   version** never offers that version again (the next release will). You can
-  also check any time — even with the boot check off — from **Stats → Info →
-  Check for updates**.
+  also check any time from **Stats → Info → Check for updates** — and if it
+  can't reach the server it says "Couldn't check" rather than "up to date".
 
-  Updating itself is a quick reflash from a phone or computer at the
-  [web flasher](https://mlsorensen.github.io/Apollo2/): plug in over USB, pick
-  the board, flash. Your settings, the paired machine, and shot history live in
-  a separate memory and are kept across the reflash.
+  **Installing** — after **Install now**, Apollo restarts into a minimal update
+  screen: a progress bar while it downloads the new firmware, then a short
+  **"screen goes dark for about 20 seconds — don't power off"** phase while it
+  writes, then it restarts on the new version. Your settings, the paired
+  machine, and shot history are kept, and a firmware that fails to boot rolls
+  back to the old one automatically. The
+  [web flasher](https://mlsorensen.github.io/Apollo2/) remains the fallback for
+  recovery and for a board's very first flash.
 
 ### Root page
 

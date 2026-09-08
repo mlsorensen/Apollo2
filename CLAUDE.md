@@ -24,24 +24,45 @@ accurate and the layering rules there are hard rules:
 
 ## OTA self-update (v0.11+)
 
-- Artifact contract: the device fetches
-  `<site>/<tag>/firmware/app/<kUpdateSlug><variant>.bin` (app-only image;
-  published by the pages job with a .sha256 sidecar for humans). The parts/
-  files are NOT usable for OTA — they bundle otadata with the app. CI asserts
-  kUpdateSlug (board_config.h) == the matrix `board` field per env.
-  `<variant>` is "" today; becomes "-rev3" per-silicon when dual-rev P4
-  images ever ship (update_variant_suffix() in update_check.cpp).
-- Trust: esp_http_client/esp_https_ota with `crt_bundle_attach` — the cert
-  bundle embedded in the core libs. The Arduino NetworkClientSecure wrapper
-  CANNOT reach that built-in bundle (its setCACertBundle requires a
-  caller-supplied blob); use the IDF client for anything HTTPS.
-- Rollback: BOOTLOADER_APP_ROLLBACK_ENABLE=y in all cores. main.cpp
-  overrides `verifyRollbackLater()` -> true and marks the image valid after
-  60 s of healthy loop() — an OTA image that bootloops is auto-reverted.
-  Consequence: bootloader/partition-table changes CANNOT ship via OTA (app
-  slot only); such releases need the web flasher, called out in their notes.
-- Interlocks: no check or install starts mid-shot; BLE (both links) is
-  pause_connects()-parked during an install and resumed on failure/cancel.
+Two separate parts: a CHECK/notify port (`update_check.*`) and an INSTALL that
+runs in a dedicated early-boot mode (`install_mode.*`). Full rationale +
+measurements: the `ota-p4-solution` memory. The short version of WHY install is
+its own boot mode: a bulk download over the hosted-radio SDIO link needs a
+~64 KB CONTIGUOUS internal-DMA buffer, and Apollo's graph-optimized DSI display
+(use_dma2d + async double-buffer) fragments that pool to ~16 KB → the download
+asserts `sdio_rx_get_buffer`; and flash writes disable the cache, stalling the
+DSI's PSRAM framebuffer scan → the panel strobes. Both go away when the full
+display isn't up.
+
+- Artifact contract: `<site>/<tag>/firmware/app/<kUpdateSlug>.bin` (app-only
+  image). The parts/ files are NOT usable for OTA — they bundle otadata with
+  the app. CI asserts kUpdateSlug (board_config.h) == the matrix `board` field.
+- Check (update_check.cpp): a short-lived task fetches releases.json + notes.txt
+  via esp_http_client + `crt_bundle_attach` (the cert bundle in the core libs;
+  the Arduino NetworkClientSecure wrapper CANNOT reach it). mbedTLS is pointed
+  at PSRAM (use_psram_for_tls) so the small fetch runs with BLE up. Cadence Off/
+  On boot/Daily (Config::update_check_mode). Notify only — never installs.
+- Install (install_mode.cpp): "Install now" stashes the version in NVS
+  (Config::pending_install) and reboots. VERY EARLY in setup() — before the full
+  display / BLE / app — main runs install_mode::run(): a LIGHTWEIGHT display
+  (display.cpp `install_panel_*`: same per-board DSI init but num_fbs=2, no
+  use_dma2d, no async sync) shows a progress UI, downloads the whole image into
+  PSRAM (no flash writes → clean), then blanks the backlight and writes
+  PSRAM→flash (screen glitches during flash writes regardless) and reboots.
+  DSI boards only (no-op on S3, which don't hit the DMA/hosted-radio problem).
+  Clock only needed for the cert dates: install mode inherits the RTC and only
+  NTP-syncs as a failsafe.
+- Rollback: BOOTLOADER_APP_ROLLBACK_ENABLE=y in all cores. main.cpp overrides
+  `verifyRollbackLater()` -> true and marks the image valid after 60 s of
+  healthy loop() — an image that bootloops is auto-reverted. Consequence:
+  bootloader/partition-table changes CANNOT ship via OTA (app slot only).
+- C6 auto-update (c6_update.cpp): on every P4 boot, if the on-board ESP32-C6
+  esp-hosted slave is older than the host lib, flash the embedded matching image
+  (`firmware_blobs/c6_slave.bin`, committed, embedded on all P4 envs) to the C6
+  over SDIO and reboot. Fixes the stale-factory-slave boot-WiFi delay. Bump the
+  blob when the pinned platform's esp-hosted host version changes.
+- Proving ground: the `esp32-p4-dltest` env (src/dltest/) is the standalone
+  firmware the install mode was developed + verified in; keep it.
 
 ## Git conventions
 
