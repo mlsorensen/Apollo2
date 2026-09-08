@@ -624,6 +624,9 @@ void on_update_later(lv_event_t* e) {
 void on_update_skip(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->skip_update();
 }
+void on_update_install(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->begin_install();
+}
 void on_install_cancel(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->close_install_overlay();
 }
@@ -1856,16 +1859,18 @@ void App::open_update_modal() {
                     "Update from a computer or phone at "
                     "mlsorensen.github.io/Apollo2 - settings are kept.");
 
-  // Notify-only: the machine hands off to the web flasher (self-install is
-  // dormant on the hosted-radio boards — see update_check.cpp). Later = remind
-  // me next check; Skip = don't offer this version again.
+  // Install now downloads the image and reboots into it (both BLE links are
+  // parked for the download); Remind me later re-offers next check; Skip won't
+  // offer this version again. The web flasher stays the fallback (hint above).
   lv_obj_t* row = modal_button_row(card);
   lv_obj_t* later = modal_button(row, "Remind me later", ui::theme::rail(),
                                  on_update_later, this);
   lv_obj_t* skip = modal_button(row, "Skip this version", ui::theme::card(),
                                 on_update_skip, this);
+  lv_obj_t* install = modal_button(row, "Install now", ui::theme::accent(),
+                                   on_update_install, this);
   if (row != card) {
-    for (lv_obj_t* b : {later, skip}) lv_obj_set_flex_grow(b, 1);
+    for (lv_obj_t* b : {later, skip, install}) lv_obj_set_flex_grow(b, 1);
   }
 }
 

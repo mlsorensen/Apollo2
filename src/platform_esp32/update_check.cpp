@@ -215,9 +215,14 @@ void UpdateCheck::start_install() {
   install_pct_.store(0);
   install_state_.store(static_cast<int>(core::InstallState::kDownloading));
   in_flight_.store(true);
+  // Park BLE NOW, synchronously, before the task opens its TLS connection — so
+  // the radio is already down for the whole download (no handshake racing the
+  // loop's observer).
+  if (ble_park_) ble_park_(true);
   if (xTaskCreatePinnedToCore(install_task_entry, "updinst", 12 * 1024, this, 1,
                               nullptr, 0) != pdPASS) {
     in_flight_.store(false);
+    if (ble_park_) ble_park_(false);  // task never started; restore BLE
     std::lock_guard<std::mutex> lock(mu_);
     install_error_ = "out of memory";
     install_state_.store(static_cast<int>(core::InstallState::kError));
@@ -239,6 +244,12 @@ void UpdateCheck::install_task_entry(void* arg) {
   auto* self = static_cast<UpdateCheck*>(arg);
   self->run_install();
   self->in_flight_.store(false);
+  // Restore BLE unless we're about to reboot into the freshly written image.
+  if (self->install_state_.load() !=
+          static_cast<int>(core::InstallState::kReady) &&
+      self->ble_park_) {
+    self->ble_park_(false);
+  }
   vTaskDelete(nullptr);
 }
 

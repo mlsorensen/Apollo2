@@ -7,11 +7,17 @@
 // pointing mbedTLS at PSRAM at runtime (use_psram_for_tls in the .cpp), so a
 // check runs LIVE from main's loop with BLE up — no boot-window or restart. The
 // fetch runs on its own short-lived task; main's loop spawns it on request.
-// Self-install (run_install) stays DORMANT here: a sustained multi-MB download
-// still exhausts the esp-hosted SDIO RX pool below where TCP flow control can
-// see it. Kept wired for the S3 boards / a future rate-limited attempt.
+//
+// EXPERIMENTAL self-install (this branch): run_install pulls the app image in
+// ranged HTTP pieces (kChunk, with an idle gap and an esp_ota_write between
+// each) and, crucially, main FULLY PARKS BOTH BLE LINKS for the duration
+// (set_ble_park below) so the hosted radio isn't fighting the SDIO download for
+// the internal-DMA pool that overflowed the RX ring before. Success reboots
+// into the new slot; any failure/cancel leaves the running image untouched
+// (rollback-armed) and restores BLE.
 
 #include <atomic>
+#include <functional>
 #include <mutex>
 
 #include "core/update_check.h"
@@ -30,6 +36,12 @@ class UpdateCheck : public core::IUpdateSource {
   bool take_check_request();    // manual check requested?
   void begin_check();           // spawn the live fetch task
   bool task_active() const { return in_flight_.load(); }
+
+  // Called synchronously as an install begins (park=true, before the TLS
+  // handshake) and after it fails/cancels (park=false). main wires this to
+  // fully drop both BLE links so the hosted radio isn't contending with the
+  // SDIO download for the internal-DMA pool. Not called on success (we reboot).
+  void set_ble_park(std::function<void(bool)> h) { ble_park_ = std::move(h); }
 
   // --- core::IUpdateSource ---
   core::UpdateInfo info() const override;
@@ -58,6 +70,8 @@ class UpdateCheck : public core::IUpdateSource {
 
   std::atomic<int> install_state_{0};  // core::InstallState
   std::atomic<int> install_pct_{0};
+
+  std::function<void(bool)> ble_park_;  // set_ble_park(): drop/restore BLE links
 
   mutable std::mutex mu_;  // guards latest_/notes_/install_error_
   std::string latest_;

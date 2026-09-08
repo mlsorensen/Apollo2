@@ -354,10 +354,20 @@ void setup() {
     enter_lowbatt_sleep();
   });
 
+  // Self-install (experimental): fully drop both BLE links while the image
+  // downloads, so the hosted radio isn't contending with the SDIO transfer for
+  // the internal-DMA pool. Called synchronously as the install starts (park) and
+  // after a failure/cancel (restore); success reboots, so no restore then.
+  g_update_check.set_ble_park([](bool park) {
+    core::logf("UpdateInstall: %s BLE for install\n", park ? "parking" : "resuming");
+    g_micra.set_connect_enabled(!park);
+    g_scale.set_connect_enabled(!park);
+  });
+
   // Join home WiFi (if enabled) for NTP time. The update check rides on top of
   // this: mbedTLS is pointed at PSRAM (see update_check.cpp) so a TLS fetch no
   // longer starves the hosted radio's internal-DMA pool — checks run LIVE from
-  // loop(), with BLE up, no boot-window or soft-restart dance. Notify-only.
+  // loop(), with BLE up, no boot-window or soft-restart dance.
   g_network.begin();
 
   // Bring up NimBLE once here (single-threaded), so the Micra + scale link tasks
@@ -526,6 +536,16 @@ void loop() {
       core::logf("UpdateCheck: live check\n");
       g_update_check.begin_check();
     }
+  }
+
+  // Self-install reached kReady: the new image is written to the spare slot and
+  // set to boot. Reboot into it (BLE was already parked for the download; the
+  // 60 s health-confirm below arms rollback if it doesn't come up clean).
+  if (g_update_check.install_status().state == core::InstallState::kReady) {
+    core::logf("UpdateInstall: restarting into the new image\n");
+    Serial.flush();
+    delay(400);
+    esp_restart();
   }
 
   // First-boot health confirm for an OTA-installed image: the bootloader
