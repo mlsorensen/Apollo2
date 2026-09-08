@@ -223,6 +223,7 @@ class App {
   core::IUpdateSource* updates_ = nullptr;  // optional; null = no update UI
   int update_last_seq_ = -1;         // last seen check_seq(); -1 = not baselined
   bool manual_check_pending_ = false;  // a user-initiated check awaits its result
+  bool update_notice_pending_ = false;  // an auto notice deferred under the saver
   uint32_t manual_check_started_ = 0;  // lv_tick when the manual check began
   static constexpr uint32_t kManualCheckTimeoutMs = 30000;  // give up + report
   std::function<void(const std::string&)> install_handler_;  // "Install now"

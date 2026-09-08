@@ -1724,6 +1724,12 @@ void App::screensaver_tick() {
   } else {
     display_->set_screensaver(core::IDisplaySettings::SaverMode::kOff);
     stop_screensaver();
+    // Surface an update notice that arrived while the screen was asleep, now
+    // that the user has woken it — this is the natural moment to see it.
+    if (update_notice_pending_) {
+      update_notice_pending_ = false;
+      open_update_modal();
+    }
   }
 }
 
@@ -1972,6 +1978,15 @@ void App::update_result_poll() {
 
   const core::UpdateInfo info = updates_->info();
   if (info.available) {
+    // A daily/boot notice that lands while the screensaver is up must NOT pop a
+    // modal over the saver: it would replace the idle animation and read as the
+    // machine waking itself. Defer it — screensaver_tick re-offers it the
+    // moment the screen is woken. A manual check (the user is right there) is
+    // never deferred.
+    if (!manual && screensaver_on_) {
+      update_notice_pending_ = true;
+      return;
+    }
     open_update_modal();
   } else if (manual) {
     open_no_update_modal();  // an explicit request always gets an answer
