@@ -73,8 +73,8 @@ class Config {
   void set_screensaver_style(int style);
   std::string skipped_update() const;  // version the user chose to skip ("" = none)
   void set_skipped_update(const std::string& version);
-  bool update_check_enabled() const;   // daily release check (default on)
-  void set_update_check_enabled(bool on);
+  int update_check_mode() const;   // 0 = never, else check once at boot (default)
+  void set_update_check_mode(int mode);
 
   bool clock_24h() const;     // 24-hour clock display (default true)
   void set_clock_24h(bool on);

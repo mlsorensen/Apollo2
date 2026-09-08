@@ -50,6 +50,7 @@ struct StatsWidgets {
   lv_obj_t* info_box = nullptr;
   lv_obj_t* info_val[kStatsInfoRows] = {nullptr, nullptr, nullptr, nullptr, nullptr};
   lv_obj_t* info_log_btn = nullptr;  // "Diagnostic log" row -> App's log modal
+  lv_obj_t* update_btn = nullptr;        // Firmware row "Check for updates"
 
   // History view. Headline metric cards on top (total shots, lifetime / 30-day
   // accuracy), then a filter card (wide tier only) beside the scrollable shot

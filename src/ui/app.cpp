@@ -615,14 +615,14 @@ void on_update_check_switch(lv_event_t* e) {
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
   app->set_update_check(lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
+void on_manual_check_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->manual_update_check();
+}
 void on_update_later(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->dismiss_modal();
 }
 void on_update_skip(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->skip_update();
-}
-void on_update_install(lv_event_t* e) {
-  static_cast<ui::App*>(lv_event_get_user_data(e))->begin_install();
 }
 void on_install_cancel(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->close_install_overlay();
@@ -806,6 +806,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                 const ScreenProfile& screen, core::IUpdateSource* updates) {
   machine_ = &machine;
   updates_ = updates;
+  if (updates_ != nullptr) update_last_seq_ = updates_->check_seq();  // baseline
   shots_ = &shots;
   hist_built_count_ = -1;  // a rebuild recreates the list; force a row refill
   // Shot-record staging lives in the LVGL pool (PSRAM on device) — see the
@@ -1101,8 +1102,9 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(settings_.wifi_forget_btn, on_wifi_forget_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.tz_dropdown, on_tz_dropdown, LV_EVENT_VALUE_CHANGED, this);
   lv_obj_add_event_cb(settings_.ntp_switch, on_ntp_switch, LV_EVENT_VALUE_CHANGED, this);
-  lv_obj_add_event_cb(settings_.update_check_switch, on_update_check_switch,
-                      LV_EVENT_VALUE_CHANGED, this);
+  if (settings_.update_check_switch != nullptr)
+    lv_obj_add_event_cb(settings_.update_check_switch, on_update_check_switch,
+                        LV_EVENT_VALUE_CHANGED, this);
   lv_obj_add_event_cb(settings_.menu, on_menu_page_changed, LV_EVENT_VALUE_CHANGED, this);
 
   build_stats_tab(stats, screen, stats_);
@@ -1119,6 +1121,13 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   }
   if (stats_.info_log_btn != nullptr)
     lv_obj_add_event_cb(stats_.info_log_btn, on_info_log_row, LV_EVENT_CLICKED, this);
+  if (stats_.update_btn != nullptr) {
+    if (updates_ != nullptr)
+      lv_obj_add_event_cb(stats_.update_btn, on_manual_check_clicked,
+                          LV_EVENT_CLICKED, this);
+    else
+      lv_obj_add_flag(stats_.update_btn, LV_OBJ_FLAG_HIDDEN);
+  }
 
   if (brew_ != nullptr) {
     const core::BrewSnapshot b = brew_->snapshot();
@@ -1155,7 +1164,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     if (network_->enabled()) lv_obj_add_state(settings_.wifi_switch, LV_STATE_CHECKED);
     if (network_->ntp_enabled()) lv_obj_add_state(settings_.ntp_switch, LV_STATE_CHECKED);
     if (updates_ != nullptr) {
-      if (updates_->enabled())
+      if (updates_->check_at_startup())
         lv_obj_add_state(settings_.update_check_switch, LV_STATE_CHECKED);
     } else {
       lv_obj_add_flag(settings_.update_check_row, LV_OBJ_FLAG_HIDDEN);
@@ -1249,6 +1258,7 @@ void App::refresh() {
   if (tabview_ != nullptr && lv_tabview_get_tab_active(tabview_) == 2) {
     update_stats_view();  // only while the Stats tab is showing
   }
+  update_result_poll();  // surface a finished update check (notice / "up to date")
 }
 
 // A press updates the local value AND writes it to the machine right away (the
@@ -1707,16 +1717,6 @@ void App::screensaver_tick() {
   const int mins = settings_.screen_timeout_min;
   const bool idle = mins > 0 && lv_display_get_inactive_time(nullptr) >=
                                     static_cast<uint32_t>(mins) * 60000u;
-  // Piggyback the update-available offer on this 4 Hz poll — never over
-  // another modal, the running screensaver, or an in-flight shot (nothing
-  // may cover the live shot), and snoozed for a day by "Later" (signed tick
-  // diff, safe across the 49-day wrap).
-  if (!idle && updates_ != nullptr && modal_ == nullptr && !screensaver_on_ &&
-      (brew_ == nullptr || !core::shot_in_flight(brew_->snapshot())) &&
-      static_cast<int32_t>(lv_tick_get() - update_snooze_until_) >= 0 &&
-      updates_->info().available) {
-    open_update_modal();
-  }
   if (idle == screensaver_on_) return;  // touch resets LVGL's inactivity clock
   screensaver_on_ = idle;
   if (idle) {
@@ -1803,11 +1803,22 @@ void App::pose_screensaver() {
   start_screensaver(/*blank=*/false);
 }
 
+void App::open_checking_modal() {
+  open_modal("Checking for updates", "Contacting the update server...");
+}
+
+void App::open_no_update_modal() {
+  char head[96];
+  std::snprintf(head, sizeof(head),
+                "You're on the latest firmware (v%s).", fw::kVersion);
+  lv_obj_t* card = open_modal("No update available", head);
+  modal_button(modal_button_row(card), "OK", ui::theme::rail(), on_update_later, this);
+}
+
 void App::open_update_modal() {
   if (updates_ == nullptr) return;
   const core::UpdateInfo info = updates_->info();
   if (info.version.empty()) return;
-  update_snooze_until_ = lv_tick_get() + 24u * 60u * 60u * 1000u;
 
   char head[96];
   std::snprintf(head, sizeof(head), "%s is available - you have v%s.",
@@ -1845,15 +1856,17 @@ void App::open_update_modal() {
                     "Update from a computer or phone at "
                     "mlsorensen.github.io/Apollo2 - settings are kept.");
 
-  // Install is disabled mid-shot (nothing heavy runs near the stop math);
-  // everything else about the shot gate is upstream — the modal itself never
-  // opens during one.
-  lv_obj_t* install = modal_button(card, "Install now", ui::theme::accent(),
-                                   on_update_install, this);
-  if (brew_ != nullptr && core::shot_in_flight(brew_->snapshot()))
-    lv_obj_add_state(install, LV_STATE_DISABLED);
-  modal_button(card, "Skip this version", ui::theme::card(), on_update_skip, this);
-  modal_button(card, "Later", ui::theme::rail(), on_update_later, this);
+  // Notify-only: the machine hands off to the web flasher (self-install is
+  // dormant on the hosted-radio boards — see update_check.cpp). Later = remind
+  // me next check; Skip = don't offer this version again.
+  lv_obj_t* row = modal_button_row(card);
+  lv_obj_t* later = modal_button(row, "Remind me later", ui::theme::rail(),
+                                 on_update_later, this);
+  lv_obj_t* skip = modal_button(row, "Skip this version", ui::theme::card(),
+                                on_update_skip, this);
+  if (row != card) {
+    for (lv_obj_t* b : {later, skip}) lv_obj_set_flex_grow(b, 1);
+  }
 }
 
 void App::begin_install() {
@@ -1978,7 +1991,74 @@ void App::skip_update() {
 }
 
 void App::set_update_check(bool on) {
-  if (updates_ != nullptr) updates_->set_enabled(on);
+  if (updates_ != nullptr) updates_->set_check_at_startup(on);
+}
+
+void App::manual_update_check() {
+  if (updates_ == nullptr) return;
+  // Needs the internet — no WiFi, nothing to check. Say so instead of spinning
+  // on a check that can't reach anything.
+  if (network_ == nullptr || network_->status() != core::NetState::Connected) {
+    lv_obj_t* card = open_modal("No WiFi",
+        "Connect to WiFi first (Settings > Apollo > WiFi), then check for "
+        "updates.");
+    modal_button(modal_button_row(card), "OK", ui::theme::rail(),
+                 on_update_later, this);
+    return;
+  }
+  // Live check, in place — mbedTLS is on PSRAM so TLS no longer starves the
+  // radio, no restart needed. Ask the platform to run the fetch (main's loop
+  // picks up the request and spawns the task) and watch for the result in
+  // update_result_poll(); show a spinner meanwhile.
+  manual_check_pending_ = true;
+  manual_check_started_ = lv_tick_get();
+  updates_->request_check();
+  open_checking_modal();
+}
+
+// Poll the check task's result (called from the UI refresh). check_seq() bumps
+// once per completed check; on a bump we show the outcome — the update modal
+// when something's newer, and (for a user-initiated check only) an explicit
+// "up to date" notice otherwise. An automatic boot check stays silent when
+// there's nothing new.
+void App::update_result_poll() {
+  if (updates_ == nullptr) return;
+  const int seq = updates_->check_seq();
+  if (update_last_seq_ < 0) { update_last_seq_ = seq; return; }  // baseline
+
+  // A manual check that never gets to run (WiFi up but no internet, so NTP
+  // never syncs and the request stays pending) shouldn't spin forever.
+  if (seq == update_last_seq_) {
+    if (manual_check_pending_ &&
+        lv_tick_elaps(manual_check_started_) > kManualCheckTimeoutMs) {
+      manual_check_pending_ = false;
+      dismiss_modal();
+      lv_obj_t* card = open_modal("Couldn't check",
+          "No response from the update server. Check the internet connection "
+          "and try again.");
+      modal_button(modal_button_row(card), "OK", ui::theme::rail(),
+                   on_update_later, this);
+    }
+    return;
+  }
+  update_last_seq_ = seq;
+
+  const bool manual = manual_check_pending_;
+  manual_check_pending_ = false;
+  if (manual) dismiss_modal();  // close the "Checking..." spinner
+
+  // Never interrupt a live shot with a modal; try again on the next poll.
+  if (brew_ != nullptr && core::shot_in_flight(brew_->snapshot())) {
+    if (manual) manual_check_pending_ = true;
+    return;
+  }
+
+  const core::UpdateInfo info = updates_->info();
+  if (info.available) {
+    open_update_modal();
+  } else if (manual) {
+    open_no_update_modal();  // an explicit request always gets an answer
+  }
 }
 
 void App::shot_button() {
@@ -2298,6 +2378,21 @@ lv_obj_t* App::open_modal(const char* title, const char* body) {
   lv_obj_set_style_text_color(b, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(b, ui::font_dp(modal_compact ? 14 : 16), 0);
   return card;
+}
+
+lv_obj_t* App::modal_button_row(lv_obj_t* card) {
+  // Buttons side by side where they fit — stacked buttons sit too close and
+  // invite fat-fingering the wrong one. Compact (2") keeps the column.
+  if (is_compact(screen_)) return card;
+  lv_obj_t* row = lv_obj_create(card);
+  lv_obj_remove_style_all(row);
+  lv_obj_set_width(row, lv_pct(100));
+  lv_obj_set_height(row, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(row, ui::dp(12), 0);
+  return row;
 }
 
 lv_obj_t* App::open_modal_card(const char* title) {

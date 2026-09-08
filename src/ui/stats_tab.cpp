@@ -463,10 +463,24 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
 
   // Two groups: this remote, then the machine. info_val indices stay aligned with
   // update_stats_view's vals[] (0 our FW, 1 Runtime, 2 Uptime, 3 IP, 4..8 Micra
-  // DIS fields). The "Device" header disambiguates, so the firmware row is just
-  // "Firmware".
-  make_info_header(out.info_box, "Device", font);
+  // DIS fields). The "Apollo" header disambiguates (same rename rationale as
+  // Settings), so the firmware row is just "Firmware".
+  make_info_header(out.info_box, "Apollo", font);
   out.info_val[0] = make_info_row(out.info_box, "Firmware", font, compact);
+  // The manual update check lives with the firmware version it would change.
+  // App attaches the callback and hides the row when no update source exists.
+  {
+    lv_obj_t* row = lv_obj_get_parent(out.info_val[0]);
+    out.update_btn = ui::make_button(row);
+    lv_obj_set_style_bg_color(out.update_btn, lv_color_hex(ui::theme::card()), 0);
+    lv_obj_set_style_pad_hor(out.update_btn, ui::dp(10), 0);
+    lv_obj_set_style_pad_ver(out.update_btn, ui::dp(6), 0);
+    lv_obj_t* lbl = lv_label_create(out.update_btn);
+    lv_label_set_text(lbl, compact ? "Check" : "Check for updates");
+    lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::accent()), 0);
+    lv_obj_set_style_text_font(lbl, font, 0);
+    lv_obj_center(lbl);
+  }
   out.info_val[1] =
       make_info_row(out.info_box, LV_SYMBOL_BATTERY_2 " Runtime", font, compact);
   out.info_val[2] = make_info_row(out.info_box, "Uptime", font, compact);

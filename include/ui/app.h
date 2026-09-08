@@ -96,9 +96,16 @@ class App {
   void saver_anim_tick();                // bouncing-logo step (from its lv_timer)
   void pose_screensaver();               // sim: force the saver on for a render
   void open_update_modal();              // update-available notice (also sim pose)
+  void open_checking_modal();            // "checking..." spinner during a live check
+  void open_no_update_modal();           // "up to date" notice (forced check, boot)
   void skip_update();                    // modal "Skip this version"
   void set_update_check(bool on);        // WiFi page "Check for updates" switch
-  void begin_install();                  // modal "Install now"
+  void manual_update_check();            // Stats > Info button -> live check
+  void update_result_poll();             // watch check_seq(); show the outcome
+  bool update_ui_active() const {
+    return modal_ != nullptr || install_layer_ != nullptr;
+  }
+  void begin_install();                  // modal "Install now" (dormant)
   void open_install_overlay();           // full-screen progress (also sim pose)
   void close_install_overlay();          // Cancel/Close on the overlay
   void install_overlay_tick();           // 4 Hz status poll (from its lv_timer)
@@ -188,6 +195,7 @@ class App {
   void request_layout_rebuild(int section);  // defer a rebuild, returning to `section`
   lv_obj_t* open_modal(const char* title, const char* body);  // returns the card
   lv_obj_t* open_modal_card(const char* title);  // card + title only (no body)
+  lv_obj_t* modal_button_row(lv_obj_t* card);    // side-by-side button container
   // Portal instructions: WIFI: join QR + the manual ssid/url steps.
   lv_obj_t* open_join_modal(const char* title, const char* ssid, const char* url,
                             const char* then_line);
@@ -213,9 +221,10 @@ class App {
   core::IBrewController* brew_ = nullptr;
   core::INetwork* network_ = nullptr;
   core::IUpdateSource* updates_ = nullptr;  // optional; null = no update UI
-  // "Later" = snooze: don't re-offer the notice until this tick (a day away —
-  // these devices stay powered for weeks, so once-per-boot would mean never).
-  uint32_t update_snooze_until_ = 0;
+  int update_last_seq_ = -1;         // last seen check_seq(); -1 = not baselined
+  bool manual_check_pending_ = false;  // a user-initiated check awaits its result
+  uint32_t manual_check_started_ = 0;  // lv_tick when the manual check began
+  static constexpr uint32_t kManualCheckTimeoutMs = 30000;  // give up + report
   // Self-install progress overlay (full-screen, clean-lock style).
   lv_obj_t* install_layer_ = nullptr;
   lv_obj_t* install_bar_ = nullptr;

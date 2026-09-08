@@ -1,9 +1,10 @@
 #pragma once
 
 // Firmware-update notification port. The platform side checks the releases
-// site (at most daily, and only once NTP has synced — proof the internet is
-// actually reachable); the UI polls info() and offers a dismissable modal.
-// Notify-only: installing still happens through the web flasher.
+// site once per boot (if enabled) and on demand from the Info button — only
+// once NTP has synced, proof the internet is actually reachable. The UI polls
+// info() and offers a dismissable modal. Notify-only: installing still happens
+// through the web flasher.
 
 #include <string>
 
@@ -29,22 +30,29 @@ class IUpdateSource {
  public:
   virtual ~IUpdateSource() = default;
 
-  // Snapshot of the latest check result (thread-safe on the device — the
-  // fetch runs on its own short-lived task).
+  // Snapshot of the latest check result. The fetch runs LIVE (mbedTLS is
+  // pointed at PSRAM so TLS no longer starves the radio's internal-DMA pool),
+  // on its own short-lived task; inert without WiFi + NTP.
   virtual UpdateInfo info() const = 0;
 
   // Persist "don't offer this version again" (the modal's Skip button).
   virtual void skip_current() = 0;
 
-  // The Settings toggle: whether the daily check runs at all. Persisted;
-  // default on (the check is already implicitly opt-in via WiFi + NTP).
-  virtual bool enabled() const = 0;
-  virtual void set_enabled(bool on) = 0;
+  // Settings → Apollo → WiFi "Check for updates": check once after each boot.
+  virtual bool check_at_startup() const = 0;
+  virtual void set_check_at_startup(bool on) = 0;
 
-  // Self-install: download the offered version into the inactive OTA slot.
-  // start_install() is a no-op while a check/install is already running;
-  // cancel_install() is honored between download chunks (a canceled or
-  // failed install leaves the running firmware untouched).
+  // Manual "Check for updates" (Stats → Info): request a live check. Watch
+  // checking() and check_seq() (bumped when any check finishes) for the result.
+  virtual void request_check() = 0;
+  virtual bool checking() const = 0;
+  virtual int check_seq() const = 0;
+
+  // Self-install into the inactive OTA slot. DORMANT on the hosted-radio P4
+  // boards (the esp-hosted SDIO link asserts under a multi-MB download — see
+  // the 2026-09 findings); those notify and hand off to the web flasher. Kept
+  // wired for the S3 boards / a future fix. cancel_install() is honored between
+  // chunks; a canceled/failed install leaves the running firmware untouched.
   virtual void start_install() = 0;
   virtual void cancel_install() = 0;
   virtual InstallStatus install_status() const = 0;

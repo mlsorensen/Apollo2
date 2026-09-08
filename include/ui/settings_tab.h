@@ -201,8 +201,8 @@ struct SettingsWidgets {
   lv_obj_t* tz_dropdown = nullptr;      // timezone picker (POSIX TZ under the
                                         // hood; lives on the Time & date page)
   lv_obj_t* ntp_switch = nullptr;       // sync clock from NTP while connected (default on)
-  lv_obj_t* update_check_row = nullptr;     // daily release check (hidden when
-  lv_obj_t* update_check_switch = nullptr;  // no update source is wired)
+  lv_obj_t* update_check_row = nullptr;     // "Check for updates" at startup
+  lv_obj_t* update_check_switch = nullptr;  // (hidden if no update source)
   lv_obj_t* click_sound_switch = nullptr;  // button-press click (audio boards only)
 };
 

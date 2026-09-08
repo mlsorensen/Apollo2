@@ -354,6 +354,12 @@ void setup() {
     enter_lowbatt_sleep();
   });
 
+  // Join home WiFi (if enabled) for NTP time. The update check rides on top of
+  // this: mbedTLS is pointed at PSRAM (see update_check.cpp) so a TLS fetch no
+  // longer starves the hosted radio's internal-DMA pool — checks run LIVE from
+  // loop(), with BLE up, no boot-window or soft-restart dance. Notify-only.
+  g_network.begin();
+
   // Bring up NimBLE once here (single-threaded), so the Micra + scale link tasks
   // — which each guard on isInitialized() — share one host without racing init.
   NimBLEDevice::init("micra-remote");
@@ -384,10 +390,6 @@ void setup() {
   g_scale.set_name(g_config.scale_name());
   core::logf("Saved scale: mac=%s\n", scale_mac.empty() ? "(none)" : scale_mac.c_str());
   g_scale.begin(scale_mac);
-
-  // Join home WiFi (if enabled) for NTP time; idles otherwise. WiFi coexists with
-  // NimBLE on the S3, so this is safe alongside the BLE links.
-  g_network.begin();
 }
 
 namespace {
@@ -497,29 +499,32 @@ void loop() {
     if (now_unix != 0) g_config.set_last_unix(now_unix);
   }
   g_network.poll();          // drive the WiFi station state machine + NTP->RTC
-  // Daily release check (gated on NTP having synced) — but never while a shot
-  // is in flight: the TLS task's transient ~45KB heap bite and CPU burst have
-  // no business anywhere near the stop math. The check just waits its turn.
-  if (!core::shot_in_flight(g_brew.snapshot())) g_update_check.poll();
-  // Self-install lifecycle: park BLE while an install runs (frees heap, quiets
-  // the radio), resume if it fails or is canceled, restart once the new image
-  // is written and set to boot.
+
+  // Update check (notify-only): the App requests a check — automatically once
+  // per boot when "check at startup" is on, or from the Info button — and the
+  // App watches check_seq() for the result. We just spawn the live fetch task
+  // when a request is pending and the network's genuinely up (station + NTP,
+  // proof the internet's reachable); it no-ops without WiFi. TLS runs against
+  // PSRAM so it coexists with the BLE links (see update_check.cpp). Never start
+  // one mid-shot — the radio and heap are busy and a notice would interrupt.
   {
-    const core::InstallStatus ist = g_update_check.install_status();
-    const bool busy = g_update_check.task_active() ||
-                      ist.state == core::InstallState::kDownloading ||
-                      ist.state == core::InstallState::kVerifying;
-    static bool ble_parked = false;
-    if (busy != ble_parked) {
-      ble_parked = busy;
-      g_micra.pause_connects(busy);
-      g_scale.pause_connects(busy);
-      core::logf("UpdateInstall: BLE %s\n", busy ? "parked" : "resumed");
+    static bool boot_check_armed = false;
+    if (!boot_check_armed && g_update_check.network_ready()) {
+      boot_check_armed = true;  // one automatic check per boot, once NTP's synced
+      if (g_update_check.check_at_startup()) {
+        core::logf("UpdateCheck: automatic check at boot\n");
+        g_update_check.request_check();
+      }
     }
-    if (ist.state == core::InstallState::kReady) {
-      core::logf("UpdateInstall: restarting into the new image\n");
-      delay(400);  // one more LVGL paint ("Restarting...") + log flush
-      esp_restart();
+    // Consume the request LAST: if the network isn't ready yet (NTP still
+    // syncing) or a shot's running, leave it pending so the check fires as soon
+    // as it can — a manual check's "Checking..." spinner then resolves on its
+    // own instead of hanging on a swallowed request.
+    const bool shot_busy = core::shot_in_flight(g_brew.snapshot());
+    if (g_update_check.network_ready() && !g_update_check.task_active() &&
+        !shot_busy && g_update_check.take_check_request()) {
+      core::logf("UpdateCheck: live check\n");
+      g_update_check.begin_check();
     }
   }
 

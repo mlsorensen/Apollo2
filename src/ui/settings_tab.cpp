@@ -371,9 +371,10 @@ void build_device_wifi_rows(lv_obj_t* page, const lv_font_t* text_font,
   out.ntp_switch = lv_switch_create(rnt);
   lv_obj_set_size(out.ntp_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 
-  // Daily release check (needs WiFi + a successful NTP sync, so it lives with
-  // them). App hides the row when no update source is wired.
-  out.update_check_row = make_setting_row(page, "Check for updates", text_font);
+  // Check for updates at startup (needs WiFi + NTP, so it lives with them).
+  // App hides the row when no update source is wired.
+  out.update_check_row =
+      make_setting_row(page, "Check for updates on boot", text_font);
   out.update_check_switch = lv_switch_create(out.update_check_row);
   lv_obj_set_size(out.update_check_switch, btn_size + ui::dp(8),
                   btn_size / 2 + ui::dp(6));

@@ -13,7 +13,8 @@ constexpr char kBrightnessKey[] = "bright";
 constexpr char kScreenTimeoutKey[] = "scrtimeout";
 constexpr char kSaverStyleKey[] = "ssstyle";
 constexpr char kSkippedUpdateKey[] = "skipver";
-constexpr char kUpdateCheckKey[] = "updchk";
+constexpr char kUpdateCheckKey[] = "updchk";   // legacy bool (pre-mode)
+constexpr char kUpdateModeKey[] = "updmode";
 constexpr char kClock24Key[] = "clock24";
 constexpr char kThemeKey[] = "theme";
 constexpr char kFahrenheitKey[] = "fahr";
@@ -394,18 +395,24 @@ void Config::set_skipped_update(const std::string& version) {
   p.end();
 }
 
-bool Config::update_check_enabled() const {
+int Config::update_check_mode() const {
   Preferences p;
-  if (!p.begin(kNamespace, /*readOnly=*/true)) return true;
-  const bool v = p.isKey(kUpdateCheckKey) ? p.getBool(kUpdateCheckKey, true) : true;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 1;
+  int v = 1;  // default: boot-time only
+  if (p.isKey(kUpdateModeKey)) {
+    v = p.getInt(kUpdateModeKey, 1);
+  } else if (p.isKey(kUpdateCheckKey)) {
+    // Migrate the short-lived boolean: off stays off, on becomes boot-only.
+    v = p.getBool(kUpdateCheckKey, true) ? 1 : 0;
+  }
   p.end();
   return v;
 }
 
-void Config::set_update_check_enabled(bool on) {
+void Config::set_update_check_mode(int mode) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
-  p.putBool(kUpdateCheckKey, on);
+  p.putInt(kUpdateModeKey, mode);
   p.end();
 }
 

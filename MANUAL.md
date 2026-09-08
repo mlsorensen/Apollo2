@@ -57,7 +57,7 @@ Settings
 │  │               · Theme · Fahrenheit · Button sounds* · Performance overlay
 │  ├─ Time & date — Time · Date · 24-hour · Timezone
 │  └─ WiFi        — Enable · Status · Set up WiFi → QR portal · Forget
-│                  · Auto time (NTP) · Check for updates → notice → Install now
+│                  · Auto time (NTP) · Check for updates on boot → notice
 ├─ Restart display
 └─ Lock display for cleaning  → 30 s touch lock
 
@@ -65,7 +65,8 @@ Stats
 ├─ Brew | Boiler — temperature history graphs (+/− zoom)
 ├─ History — headline stats (tap → reset) · month filter · shot list
 │            └─ tap a shot → full-screen shot card (with delete)
-└─ Info — firmware · uptime · IP · Diagnostic log (tap → viewer) · Micra details
+└─ Info — firmware (→ Check for updates) · uptime · IP · Diagnostic log
+          (tap → viewer) · Micra details
 
   * = only on boards whose hardware supports it (see the note above)
 ```
@@ -452,28 +453,22 @@ page fits on screen with little to no scrolling.
 - ③ **Forget** — clears the saved network.
 - ④ **Auto time (NTP)** *(default on)* — sync the clock over WiFi while
   connected. (The timezone it applies is set under **Time & date**.)
-- ⑤ **Check for updates** *(default on)* — once a day (and only after an NTP
-  sync has proven the internet reachable), the device checks the releases
-  site for a newer firmware. When one exists, a dismissable notice shows the
-  version and its release notes:
+- ⑤ **Check for updates on boot** *(default on)* — at startup (and only after
+  an NTP sync has proven the internet reachable), the device checks the
+  releases site for a newer firmware. When one exists, a dismissable notice
+  shows the version and its release notes:
 
   <img src="docs/img/manual/update-modal.png" width="70%" alt="Update-available notice">
 
-  **Later** closes it and reminds again in about a day; **Skip this version**
-  never offers that version again (the next release will); **Install now**
-  updates right on the device — it downloads the new firmware into the spare
-  firmware slot, verifies it, and restarts:
+  **Later** closes it and reminds again on the next check; **Skip this
+  version** never offers that version again (the next release will). You can
+  also check any time — even with the boot check off — from **Stats → Info →
+  Check for updates**.
 
-  <img src="docs/img/manual/update-install.png" width="70%" alt="Self-install progress">
-
-  Settings, the paired machine, and shot history are untouched. Nothing
-  installs without that tap, and the process is safe to interrupt: until the
-  restart the current firmware keeps running, and even a bad download can't
-  take the device out — a new image that fails to start is rolled back
-  automatically on the next boot. On boards with an RGB panel the screen may
-  flicker while the update writes; that's expected. The
-  [web flasher](https://mlsorensen.github.io/Apollo2/) remains available for
-  recovery and for the rare release the self-updater can't apply.
+  Updating itself is a quick reflash from a phone or computer at the
+  [web flasher](https://mlsorensen.github.io/Apollo2/): plug in over USB, pick
+  the board, flash. Your settings, the paired machine, and shot history live in
+  a separate memory and are kept across the reflash.
 
 ### Root page
 
@@ -566,6 +561,10 @@ actions live directly on the root:
 - **Info** — device details: our firmware version + git revision, uptime,
   battery/USB state with a runtime estimate, and the machine's Device
   Information (manufacturer, model, serial, firmware) read over Bluetooth.
+  - **Check for updates** — next to the firmware version, tap it to check the
+    releases site right now (needs WiFi + NTP). It reports back either an
+    update notice or "You're on the latest firmware" — the same check the boot
+    option runs, on demand.
   - ① **Diagnostic log** — tap **View** for the recent diagnostic log (the same
     messages the USB serial console prints), each line stamped with the time
     (or seconds‑since‑boot before the clock is set). The log lives in RAM:
