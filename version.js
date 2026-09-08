@@ -1,1 +1,1 @@
-window.APOLLO2_VERSION = "v0.11.3";
+window.APOLLO2_VERSION = "v0.11.4";

@@ -1,0 +1,10 @@
+
+### Changes
+
+- **Fixed unreliable WiFi on the S3 boards.** The S3's WiFi was going to sleep
+  between beacons and dropping incoming packets even with a strong signal — which
+  showed up as spotty connectivity, the clock rarely syncing over the internet,
+  and "Check for updates" failing with "couldn't check". Apollo now keeps the
+  S3's WiFi receiver awake while connected, so time sync and update checks work
+  reliably. (The P4 boards were never affected.)
+
