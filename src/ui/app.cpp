@@ -1856,7 +1856,7 @@ void App::open_update_modal() {
   lv_obj_set_style_text_color(hint, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(hint, ui::font_dp(12), 0);
   lv_label_set_text(hint,
-                    "Update from a computer or phone at "
+                    "Or install from a computer at "
                     "mlsorensen.github.io/Apollo2 - settings are kept.");
 
   // Install now downloads the image and reboots into it (both BLE links are
