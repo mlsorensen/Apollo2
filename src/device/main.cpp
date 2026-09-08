@@ -429,14 +429,22 @@ void setup() {
     esp_restart();
   });
 
+  // Bring up NimBLE once here (single-threaded), so the Micra + scale link tasks
+  // — which each guard on isInitialized() — share one host without racing init.
+  // ORDER MATTERS on native-radio (S3) boards: NimBLE's BT-controller init runs
+  // interrupt allocation (btdm_intr_alloc) on the ~1 KB ipc0 task, which has
+  // almost no headroom. If WiFi is mid-connect at the same instant, its radio
+  // ISRs nest on top and overflow ipc0's stack -> intermittent boot crash
+  // (canary watchpoint, ipc0). So init BT on a quiet ipc0 BEFORE starting WiFi.
+  // See the [[s3-ipc0-nimble-wifi-crash]] notes. (P4 offloads the radio to the
+  // C6 via hostedInitBLE() earlier, so this only bites the S3, but the ordering
+  // is harmless everywhere.)
+  NimBLEDevice::init("micra-remote");
+
   // Join home WiFi (if enabled) for NTP time. Update checks run LIVE from loop()
   // with BLE up: mbedTLS is pointed at PSRAM (see update_check.cpp) so a small
   // TLS fetch no longer starves the hosted radio's internal-DMA pool.
   g_network.begin();
-
-  // Bring up NimBLE once here (single-threaded), so the Micra + scale link tasks
-  // — which each guard on isInitialized() — share one host without racing init.
-  NimBLEDevice::init("micra-remote");
 
   // Radio arbitration: the host refuses to scan while ANY connect is pending,
   // so each link's scan preempts the OTHER link's connect attempts (cancels an
