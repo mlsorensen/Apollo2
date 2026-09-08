@@ -58,6 +58,17 @@ display isn't up.
   `verifyRollbackLater()` -> true and marks the image valid after 60 s of
   healthy loop() — an image that bootloops is auto-reverted. Consequence:
   bootloader/partition-table changes CANNOT ship via OTA (app slot only).
+- P4 16MB-FLASH-BOUNDARY RULE (found the hard way, see the
+  `ota-p4-16mb-boundary` memory): the P4's 2nd-stage bootloader mis-reads flash
+  ABOVE 0x1000000 (16MB) during its boot-time image verify (3-byte addressing
+  wraps), so an OTA'd app that spills past 16MB is rejected as "invalid segment
+  length" and rolls back — even though the flash content is byte-perfect (the
+  write + the running app's reads are fine; only the bootloader's read wraps).
+  FIX: `boards/p4_ota_under16.csv` (7MB app slots) keeps BOTH app slots entirely
+  under 16MB (app1 ends ~14MB); all P4 envs use it via the base env. Never let a
+  P4 app partition or its image cross 16MB. This is a partition-table change, so
+  existing P4 units need a one-time web-flash to adopt it (then OTA works). S3
+  boards are 16MB flash — no >16MB region, unaffected.
 - C6 auto-update (c6_update.cpp): on every P4 boot, if the on-board ESP32-C6
   esp-hosted slave is older than the host lib, flash the embedded matching image
   (`firmware_blobs/c6_slave.bin`, committed, embedded on all P4 envs) to the C6

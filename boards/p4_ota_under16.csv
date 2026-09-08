@@ -1,0 +1,17 @@
+# P4 (32MB flash) partition table that keeps BOTH app slots ENTIRELY under the
+# 16MB flash boundary. The stock default_32MB.csv uses 12.5MB app slots, which
+# puts app1 at 0xc90000 (12.56MB); any app image larger than ~3.4MB then spills
+# past 0x1000000 (16MB), and the P4's 2nd-stage bootloader mis-reads flash above
+# 16MB during its boot-time image verify (3-byte addressing wrap) -> a
+# byte-perfect OTA'd image is rejected as "invalid segment length" and rolls
+# back. See the [[ota-p4-16mb-boundary]] notes. 7MB app slots (app1 ends at
+# 0xe10000 = 14.06MB) keep the whole image below 16MB. Our app is ~3.76MB, so
+# 7MB leaves ample headroom. Changing this is a partition-table change: it can
+# NOT ship via OTA; existing P4 units need a one-time web-flash.
+# Name,     Type, SubType,  Offset,     Size,       Flags
+nvs,        data, nvs,      0x9000,     0x5000,
+otadata,    data, ota,      0xe000,     0x2000,
+app0,       app,  ota_0,    0x10000,    0x700000,
+app1,       app,  ota_1,    0x710000,   0x700000,
+spiffs,     data, spiffs,   0xe10000,   0x11e0000,
+coredump,   data, coredump, 0x1ff0000,  0x10000,

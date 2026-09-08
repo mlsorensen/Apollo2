@@ -110,6 +110,25 @@ bool https_get(const std::string& url, std::string& out, size_t cap) {
   return ok;
 }
 
+// Retry wrapper: a `sock < 0` (Connection failed) from https_get is transient —
+// the previous fetch's TCP socket can still be in TIME_WAIT and the small LWIP
+// socket pool (shared with BLE, the web server and NTP) briefly has none free.
+// A short backoff lets it clear. Fixes intermittent empty release notes and
+// "couldn't contact the update server" on the native-WiFi S3 boards.
+bool https_get_retry(const std::string& url, std::string& out, size_t cap,
+                     int tries) {
+  for (int attempt = 1; attempt <= tries; ++attempt) {
+    out.clear();
+    if (https_get(url, out, cap)) return true;
+    if (attempt < tries) {
+      core::logf("UpdateCheck: fetch attempt %d/%d failed, retrying\n", attempt,
+                 tries);
+      delay(700);
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 UpdateCheck::UpdateCheck(Config& config, Network& network)
@@ -146,7 +165,8 @@ void UpdateCheck::run_check() {
   last_ok_.store(false);  // set true only once we've actually read a version
   use_psram_for_tls();
   std::string body;
-  if (!https_get(std::string(kSiteBase) + "/releases.json", body, 2048)) {
+  if (!https_get_retry(std::string(kSiteBase) + "/releases.json", body, 2048,
+                       3)) {
     core::logf("UpdateCheck: releases.json fetch failed\n");
     return;
   }
@@ -157,18 +177,24 @@ void UpdateCheck::run_check() {
   }
 
   std::string notes;
+  bool got_notes = false;
   if (semver_newer(latest.c_str(), fw::kVersion)) {
-    // Release notes are best-effort (older releases predate notes.txt).
-    https_get(std::string(kSiteBase) + "/" + latest + "/notes.txt", notes,
-              kMaxNotesBytes);
+    // Release notes are best-effort (older releases predate notes.txt), but
+    // retry so a transient socket failure doesn't leave the notice blank.
+    got_notes = https_get_retry(
+        std::string(kSiteBase) + "/" + latest + "/notes.txt", notes,
+        kMaxNotesBytes, 3);
     core::logf("UpdateCheck: v%s running, %s available\n", fw::kVersion,
                latest.c_str());
   }
 
   {
     std::lock_guard<std::mutex> lock(mu_);
+    const bool same_version = (latest_ == latest);
     latest_ = latest;
-    notes_ = notes;
+    // Don't let a transient notes-fetch failure blank out notes we already have
+    // for this same version; a newer version always replaces them.
+    if (got_notes || !same_version) notes_ = notes;
   }
   last_ok_.store(true);  // reached the server and read a version
 }
