@@ -5,6 +5,14 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## v0.11.1
+
+### Changes
+
+- **The update notice now tells you how to turn it off.** The "Update available"
+  screen adds a line pointing to **Settings → Apollo → WiFi** (set **Check for
+  updates** to **Off**) if you'd rather not be prompted.
+
 ## v0.11.0
 
 ### Changes
