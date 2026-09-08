@@ -49,7 +49,9 @@ display isn't up.
   use_dma2d, no async sync) shows a progress UI, downloads the whole image into
   PSRAM (no flash writes → clean), then blanks the backlight and writes
   PSRAM→flash (screen glitches during flash writes regardless) and reboots.
-  DSI boards only (no-op on S3, which don't hit the DMA/hosted-radio problem).
+  Per display: DSI uses the light panel above; RGB (native-WiFi S3, no DMA-pool
+  problem) uses the normal full Display and just blanks the backlight for the
+  flash write. No-op only on the SPI 2-inch dev board (no real update UI there).
   Clock only needed for the cert dates: install mode inherits the RTC and only
   NTP-syncs as a failsafe.
 - Rollback: BOOTLOADER_APP_ROLLBACK_ENABLE=y in all cores. main.cpp overrides

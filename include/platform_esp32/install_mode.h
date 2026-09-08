@@ -15,8 +15,9 @@ class Config;
 
 namespace install_mode {
 
-// Perform the pending install and reboot. DSI boards only; on other boards it
-// just clears the flag and returns (install isn't offered there).
+// Perform the pending install and reboot. Works on DSI (light panel) and RGB
+// (full display) boards; a no-op that clears the flag on the SPI 2-inch (no
+// real update UI there). Never returns when an install runs.
 void run(Config& config);
 
 }  // namespace install_mode

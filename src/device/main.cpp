@@ -210,13 +210,14 @@ void setup() {
 #endif
   g_config.begin();  // create NVS namespace on first boot (quiets read errors)
 
-#if defined(BOARD_DISPLAY_DSI)
+#if defined(BOARD_DISPLAY_DSI) || defined(BOARD_DISPLAY_RGB)
   // Boot-flag OTA install: an "Install now" tap set a target version and
-  // rebooted here. Do the install NOW — before the full display, BLE, or app
-  // come up — so the internal-DMA pool is at its clean baseline for the
-  // hosted-radio download (the full display fragments away the contiguous block
-  // the SDIO RX needs). run() downloads to PSRAM behind a light progress UI,
-  // writes flash with the screen blanked, and reboots. Never returns when set.
+  // rebooted here. Do the install NOW — before the full app/BLE come up. On the
+  // hosted-radio DSI boards this also matters for the DMA pool (a light display
+  // is used so the download's SDIO RX can get its contiguous buffer); on native-
+  // WiFi RGB boards it's just a clean, self-contained flow. run() shows a
+  // progress UI, downloads to PSRAM, writes flash with the screen blanked
+  // (flash writes glitch the panel), and reboots. Never returns when set.
   if (!g_config.pending_install().empty()) {
     platform::install_mode::run(g_config);
   }
