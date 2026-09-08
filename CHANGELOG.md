@@ -5,6 +5,17 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## v0.11.4
+
+### Changes
+
+- **Fixed unreliable WiFi on the S3 boards.** The S3's WiFi was going to sleep
+  between beacons and dropping incoming packets even with a strong signal — which
+  showed up as spotty connectivity, the clock rarely syncing over the internet,
+  and "Check for updates" failing with "couldn't check". Apollo now keeps the
+  S3's WiFi receiver awake while connected, so time sync and update checks work
+  reliably. (The P4 boards were never affected.)
+
 ## v0.11.3
 
 ### Changes

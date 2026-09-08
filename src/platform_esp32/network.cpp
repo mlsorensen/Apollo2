@@ -65,6 +65,12 @@ void Network::start_station() {
   WiFi.mode(WIFI_STA);
   WiFi.setTxPower(kTxPower);
   WiFi.begin(ssid.c_str(), pass.c_str());
+  // Disable WiFi modem sleep (the Arduino default is WIFI_PS_MIN_MODEM). On the
+  // native-WiFi S3 the station otherwise sleeps between DTIM beacons and drops
+  // inbound packets even at strong RSSI — the "spotty ping" that starves DNS/NTP
+  // (UDP) and makes the update check's getaddrinfo() time out. The P4 is immune
+  // (WiFi lives on the separate C6 radio). WIFI_PS_NONE keeps the receiver awake.
+  WiFi.setSleep(false);
   status_ = core::NetState::Connecting;
   connect_deadline_ms_ = millis() + kConnectTimeoutMs;
   core::logf("Network: connecting to '%s'\n", ssid.c_str());
