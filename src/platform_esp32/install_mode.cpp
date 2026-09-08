@@ -218,9 +218,13 @@ void run(Config& config) {
   if (img == nullptr) { esp_http_client_cleanup(c); fail_and_reboot(config, "Out of memory"); return; }
   ui_set(0, "Downloading update...");
 
+  // Cap each read so the bar actually climbs — otherwise the fast PSRAM
+  // download returns the whole file in one or two reads and the % snaps 0->100.
+  constexpr int kReadChunk = 32 * 1024;
   int got = 0, lastpct = -1;
   while (got < total) {
-    const int r = esp_http_client_read(c, (char*)img + got, total - got);
+    const int want = (total - got < kReadChunk) ? (total - got) : kReadChunk;
+    const int r = esp_http_client_read(c, (char*)img + got, want);
     if (r < 0) break;
     if (r == 0) { if (esp_http_client_is_complete_data_received(c)) break; else continue; }
     got += r;
