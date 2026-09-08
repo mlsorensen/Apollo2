@@ -45,6 +45,11 @@ class App {
   // Reflect the latest machine state and scan results in the UI (no I/O).
   void refresh();
 
+  // True while the idle screensaver is showing (no touch for the screen-timeout).
+  // The device loop uses this to pause BLE reconnect scanning + run the daily
+  // update check only when idle (both free/spare internal RAM when it matters).
+  bool screensaver_active() const { return screensaver_on_; }
+
   // Drain the scale's native flow-rate stream into the Home flow graph. Called
   // every device-loop iteration (much faster than refresh()) so the line plots
   // the scale's real sample rate smoothly. Cheap no-op when nothing is pending.

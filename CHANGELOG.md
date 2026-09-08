@@ -5,6 +5,18 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## v0.11.2
+
+### Changes
+
+- **Quieter, steadier update checks.** While the screensaver is on (machine
+  idle), Apollo now pauses its Bluetooth reconnect attempts — no more pointless
+  retrying when nobody's using the machine — and it runs the once-a-day update
+  check in that idle window, when memory is freest, so the check is reliable and
+  never gets in the way during use. An already-connected machine or scale stays
+  connected. The startup check also stops retrying within about a minute so it
+  can't linger.
+
 ## v0.11.1
 
 ### Changes

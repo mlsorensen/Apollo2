@@ -582,6 +582,22 @@ void loop() {
   }
   g_network.poll();          // drive the WiFi station state machine + NTP->RTC
 
+  // Park BLE reconnect scanning while the machine is idle (screensaver on): it
+  // stops the pointless "connect failed" churn when nobody's using the machine
+  // AND frees the ~40 KB of internal RAM the radio's scanning holds — which is
+  // what lets the daily update check (fired only while idle, above) run reliably
+  // on the heap-tight S3. Only NEW (re)connect attempts are suppressed; an
+  // already-established Micra/scale link stays connected. Resumes on wake.
+  {
+    static bool saver_prev = false;
+    const bool saver = g_app.screensaver_active();
+    if (saver != saver_prev) {
+      saver_prev = saver;
+      g_micra.pause_connects(saver);
+      g_scale.pause_connects(saver);
+    }
+  }
+
   // Update check (notify-only): the App requests a check — automatically once
   // per boot when "check at startup" is on, or from the Info button — and the
   // App watches check_seq() for the result. We just spawn the live fetch task
@@ -598,6 +614,10 @@ void loop() {
     static int boot_tries = 0;
     static bool boot_done = false;
     static uint32_t next_boot_try_ms = 0;
+    // Bound the boot check to ~1 min of uptime so its retries never spill into
+    // normal use (a slow NTP delays the start; cap it regardless — the daily
+    // idle check and a manual check cover a machine whose NTP wasn't ready yet).
+    if (!boot_done && millis() > 60000) boot_done = true;
     if (!boot_done && g_update_check.check_cadence() >= 1 &&
         g_update_check.network_ready() && !g_update_check.task_active() &&
         !core::shot_in_flight(g_brew.snapshot()) && millis() >= next_boot_try_ms) {
@@ -612,9 +632,14 @@ void loop() {
         next_boot_try_ms = millis() + 6000;  // space retries while DNS settles
       }
     }
-    // Daily cadence (mode 2): re-check every ~24 h while the machine stays on.
+    // Daily cadence (mode 2): re-check every ~24 h, but ONLY while idle (the
+    // screensaver is on). BLE reconnect scanning is parked during the saver (see
+    // below), so the check runs with internal RAM freed — reliable, and never
+    // during active use. If the saver is disabled the daily check won't fire;
+    // boot + manual still cover it.
     static uint32_t last_daily_ms = 0;
     if (g_update_check.check_cadence() == 2 && boot_done &&
+        g_app.screensaver_active() &&
         g_update_check.network_ready() && !g_update_check.task_active() &&
         !core::shot_in_flight(g_brew.snapshot()) &&
         millis() - last_daily_ms >= 24u * 60u * 60u * 1000u) {

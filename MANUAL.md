@@ -456,8 +456,9 @@ page fits on screen with little to no scrolling.
   connected. (The timezone it applies is set under **Time & date**.)
 - ⑤ **Check for updates** *(default On boot)* — tap to cycle **Off / On boot /
   Daily**. "On boot" checks once at startup; "Daily" also re-checks about once
-  a day while the machine stays on. Checks only run after an NTP sync has proven
-  the internet is reachable. When a newer firmware exists, a notice shows the
+  a day while the machine stays on — during an idle moment (screensaver on), so
+  it never gets in the way. Checks only run after an NTP sync has proven the
+  internet is reachable. When a newer firmware exists, a notice shows the
   version and its release notes:
 
   <img src="docs/img/manual/update-modal.png" width="70%" alt="Update-available notice">
