@@ -15,6 +15,9 @@
   re-checks about once a day while the machine stays on. You can always check
   by hand from **Stats → Info → Check for updates**; if it can't reach the
   server it says so instead of claiming you're up to date.
+- **Steadier update checks.** A brief Wi-Fi/DNS hiccup during a check now
+  retries instead of showing a spurious "couldn't reach the server" or a blank
+  release-notes box.
 - **Faster, more reliable Wi-Fi on the P4 boards.** On first boot Apollo
   updates the board's Wi-Fi co-processor to the matching firmware (a brief
   one-time "Updating Wi-Fi co-processor" screen), which fixes a stale-factory
