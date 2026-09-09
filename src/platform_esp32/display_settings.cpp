@@ -31,7 +31,8 @@ void DisplaySettings::set_screensaver(SaverMode mode) {
       // Bouncing-logo saver: dim where the backlight can PWM; boards that can
       // only switch stay at full so the logo remains visible (Blank is the
       // style for going dark on those).
-      display_.set_brightness(board::kSupportsBrightness ? 5 : 100);
+      display_.set_brightness(board::kSupportsBrightness ? board::kSaverDimPercent
+                                                         : 100);
       break;
     case SaverMode::kBlank:
       display_.set_brightness(0);  // true off on every backlight path

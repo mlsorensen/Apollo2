@@ -562,14 +562,46 @@ void loop() {
   // internal-RAM ceiling (on-chip WiFi+BLE + task stacks + DMA buffers), and
   // every starvation bug so far surfaced as some SILENT downstream failure.
   // With this line in the log, the next one arrives with numbers attached.
+  //
+  // Sampled every 250ms and reported as a MINIMUM, because a once-a-minute
+  // reading misses every transient: an update fetch lasts ~1s, a BLE scan a few
+  // seconds, and those dips are exactly what starve the WiFi driver's RX pool.
+  //
+  // Both capability masks are reported. Plain INTERNAL also counts 32-bit-only
+  // IRAM, which ordinary allocations (malloc, task stacks, lwIP pbufs, WiFi RX
+  // buffers) can NEVER use — measured 2026-09-09 on the 4.3C, plain INTERNAL
+  // read 13812 while 8BIT read 8180 at the same moment. 8BIT is the number that
+  // decides whether an allocation actually succeeds; anything gating on plain
+  // INTERNAL reads ~5.6KB high. The gap is logged so it stays visible.
+  // COST NOTE: heap_caps_get_largest_free_block() WALKS THE HEAP holding the heap
+  // lock, so it is not free to call often — it blocks other tasks' allocations
+  // and janks the UI. Measured 2026-09-09 that plain INTERNAL and INTERNAL|8BIT
+  // return identical values on this board, so only the 8BIT walk is kept, at
+  // 500ms — still 2-4 samples across a ~1-2s fetch, at a quarter the cost of the
+  // first cut (two walks every 250ms).
+  static uint32_t last_heap_sample_ms = 0;
+  static size_t min_largest_8bit = static_cast<size_t>(-1);
+  if (millis() - last_heap_sample_ms >= 500u) {
+    last_heap_sample_ms = millis();
+    const size_t l8 = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL |
+                                                       MALLOC_CAP_8BIT);
+    if (l8 < min_largest_8bit) min_largest_8bit = l8;
+  }
   static uint32_t last_heap_log_ms = 0;
   if (millis() - last_heap_log_ms >= 60u * 1000u) {
     last_heap_log_ms = millis();
-    core::logf("heap: internal free=%u largest=%u\n",
-               static_cast<unsigned>(heap_caps_get_free_size(
-                   MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
-               static_cast<unsigned>(heap_caps_get_largest_free_block(
-                   MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)));
+    // loop_hw = bytes of THIS task's stack never touched. ARDUINO_LOOP_STACK_SIZE
+    // is 16KB by guess (a past overflow on theme rebuild + WiFi bring-up); this
+    // is the number to size it from.
+    core::logf(
+        "heap: internal free=%u largest=%u min=%u | loop_hw=%u\n",
+        static_cast<unsigned>(
+            heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+        static_cast<unsigned>(heap_caps_get_largest_free_block(
+            MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+        static_cast<unsigned>(min_largest_8bit),
+        static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
+    min_largest_8bit = static_cast<size_t>(-1);
   }
 
   // Hourly last-known-time snapshot -> NVS, so the next boot without a

@@ -540,7 +540,7 @@ void set_flush_delay_label(ui::SettingsWidgets& s, int delay_s) {
 constexpr const char* kSmoothName[] = {"Off", "Light", "Medium", "Strong"};
 
 // Screen-dim timeout choices (IDisplaySettings::screen_timeout_min).
-constexpr int kDimMinutes[] = {0, 5, 15, 30};
+constexpr int kDimMinutes[] = {0, 1, 5, 15, 30};
 constexpr int kDimCount = static_cast<int>(sizeof(kDimMinutes) / sizeof(kDimMinutes[0]));
 void on_dim_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_screen_timeout();
@@ -1711,6 +1711,15 @@ void App::cycle_screensaver_style() {
 
 void App::screensaver_tick() {
   if (display_ == nullptr) return;
+  // A shot is NOT idle. LVGL's inactivity clock only resets on input, so a
+  // brew that nobody touches counts as idle and the saver blanks the live shot
+  // graph -- the one moment the screen matters most. Harmless at the old 5-min
+  // minimum; routine at 1 min, which is why the gate lands with that option.
+  // Keep the clock reset (not just the saver suppressed) so the full timeout
+  // starts from the END of the shot rather than firing the instant it stops.
+  if (brew_ != nullptr && core::shot_in_flight(brew_->snapshot())) {
+    lv_display_trigger_activity(nullptr);
+  }
   const int mins = settings_.screen_timeout_min;
   const bool idle = mins > 0 && lv_display_get_inactive_time(nullptr) >=
                                     static_cast<uint32_t>(mins) * 60000u;
@@ -1750,12 +1759,17 @@ void App::start_screensaver(bool blank) {
   lv_image_set_src(saver_img_, ui::lion_logo());
   // Size the lion to ~40% of the screen's short side per axis budget: fit its
   // height to 40% of the screen height, never upscaling past native.
+  //
+  // Sized via an explicit box + STRETCH rather than lv_image_set_scale(): a
+  // SCALED lv_image keeps its FULL-SIZE layout box, and LVGL invalidates the
+  // box, not the drawn pixels. On the 4.3C that made the saver dirty ~135K
+  // px/frame to move a lion covering ~12K -- and it's why shrinking the lion
+  // via scale changed nothing measurable (128 vs 256 invalidate identically).
+  // An explicit size makes box == drawn size, cutting the dirty area ~2.5x.
   const int target_h = screen_.height * 2 / 5;
-  const int zoom = target_h * 256 / ui::kLionH;
-  lv_image_set_scale(saver_img_, zoom < 256 ? zoom : 256);
-  // A scaled lv_image keeps its full-size layout box; pivot the transform at
-  // the origin so position == top-left of the drawn pixels.
-  lv_image_set_pivot(saver_img_, 0, 0);
+  const int target_w = ui::kLionW * target_h / ui::kLionH;
+  lv_obj_set_size(saver_img_, target_w, target_h);
+  lv_image_set_inner_align(saver_img_, LV_IMAGE_ALIGN_STRETCH);
   saver_color_i_ = 0;
   lv_obj_set_style_image_recolor(saver_img_, lv_color_hex(kSaverColors[0]), 0);
   lv_obj_set_style_image_recolor_opa(saver_img_, LV_OPA_COVER, 0);
@@ -1780,10 +1794,9 @@ void App::stop_screensaver() {
 
 void App::saver_anim_tick() {
   if (saver_img_ == nullptr) return;
-  // Drawn size under the transform (the widget's layout box stays native).
-  const int scale = lv_image_get_scale(saver_img_);
-  const int w = ui::kLionW * scale / 256;
-  const int h = ui::kLionH * scale / 256;
+  // Box == drawn size now (explicit size + STRETCH in start_screensaver).
+  const int w = lv_obj_get_width(saver_img_);
+  const int h = lv_obj_get_height(saver_img_);
   int x = lv_obj_get_x(saver_img_) + saver_vx_;
   int y = lv_obj_get_y(saver_img_) + saver_vy_;
   bool bounced = false;

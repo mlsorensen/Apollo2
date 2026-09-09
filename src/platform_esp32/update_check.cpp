@@ -66,7 +66,24 @@ TaskHandle_t s_check_task = nullptr;
 // Note what this guard is NOT: it cannot see a fetch that fails and retries for
 // 85s. That failure mode is handled by the NTP gate (only check a proven
 // network) plus the preallocated stack, not by this number.
-constexpr size_t kMinInternalLargest = 8 * 1024;
+// SET FROM MEASUREMENT (4.3C, 2026-09-09), after three earlier cuts (24K, 12K,
+// 8K) all sat ABOVE the real operating point and silently refused every check
+// past the first.
+//
+// A fetch permanently drops the largest free block from ~12.8K (pristine, first
+// boot check) to a ~7.2K plateau, and thereafter jitters 5.6K-7.7K. That plateau
+// is NOT a leak: four consecutive fetches left it exactly where one did. And
+// fetches SUCCEED from it -- three runs starting at 7412/7668/7156 all completed
+// in ~1s, dipping transiently to 3444 at worst, with the device staying
+// responsive and on the network throughout.
+//
+// So this floor only has to reject states genuinely tighter than that plateau.
+// 6K admits the normal ~7.2K operating point and still refuses the degraded
+// ~5.6K excursions, where the same ~3.7K dip would reach the ~2.8K level that
+// collapsed the RX pool in the original bug. Note it was 85 SECONDS at that
+// depth that killed the network, not the depth alone; the NTP gate keeps a fetch
+// to ~1s.
+constexpr size_t kMinInternalLargest = 6 * 1024;
 
 // Parse "v1.2.3" or "1.2.3" into a comparable triple. Returns false on
 // anything that isn't strict major.minor.patch — callers treat that as
@@ -203,6 +220,13 @@ void UpdateCheck::begin_check() {
     core::logf("UpdateCheck: no WiFi/NTP; check skipped\n");
     return;  // no network -> the whole feature is inert
   }
+  // NOTE (2026-09-09): this reads plain INTERNAL, which also counts 32-bit-only
+  // IRAM that no ordinary allocation can use — it reads ~5.6KB HIGH versus the
+  // 8BIT figure the telltale reports (13812 vs 8180, same moment). So this gate
+  // is more permissive than it looks and should move to MALLOC_CAP_INTERNAL |
+  // MALLOC_CAP_8BIT once the logged pairs give a threshold to re-derive from.
+  // Left on the old mask for now so the verified boot-check path is unchanged
+  // while we gather the numbers.
   const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
   if (largest < kMinInternalLargest) {
     core::logf("UpdateCheck: internal RAM tight (largest=%u < %u); check skipped\n",
@@ -237,15 +261,22 @@ void UpdateCheck::check_task_entry(void* arg) {
     // as a SILENT downstream failure (see kMinInternalLargest). The start/done
     // delta is exactly what that threshold should be derived from.
     core::logf(
-        "UpdateCheck: check start (internal free=%u largest=%u)\n",
-        static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)),
+        "UpdateCheck: check start (8bit free=%u largest=%u | anycap largest=%u)\n",
+        static_cast<unsigned>(
+            heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+        static_cast<unsigned>(heap_caps_get_largest_free_block(
+            MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
         static_cast<unsigned>(
             heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)));
     self->run_check();
     // stack_hw = bytes of this stack never touched; feeds kCheckStackBytes.
     core::logf(
-        "UpdateCheck: check done (internal free=%u largest=%u stack_hw=%u)\n",
-        static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)),
+        "UpdateCheck: check done (8bit free=%u largest=%u | anycap largest=%u | "
+        "stack_hw=%u)\n",
+        static_cast<unsigned>(
+            heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+        static_cast<unsigned>(heap_caps_get_largest_free_block(
+            MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
         static_cast<unsigned>(
             heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)),
         static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));

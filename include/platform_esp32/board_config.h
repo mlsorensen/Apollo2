@@ -22,6 +22,8 @@ constexpr char kUpdateSlug[] = "s3-touch-lcd-2";
 #define BOARD_DISPLAY_SPI    // ST7789 over SPI
 #define BOARD_TOUCH_CST816   // CST816, 8-bit registers
 constexpr bool kSupportsBrightness = true;  // LEDC PWM backlight (dimmable)
+// Screensaver Dim floor (SaverMode::kDim). LEDC is linear here; keep the S3 boards consistent.
+constexpr int kSaverDimPercent = 10;
 
 // --- Display: ST7789 on the FSPI bus ---
 constexpr int  kLcdSclk = 39;
@@ -91,6 +93,8 @@ constexpr char kUpdateSlug[] = "s3-touch-lcd-7b";
 #define BOARD_TOUCH_GT911     // GT911, 16-bit registers
 #define BOARD_HAS_IO_EXTENSION
 constexpr bool kSupportsBrightness = true;  // IO-extension PWM backlight (dimmable)
+// Screensaver Dim floor (SaverMode::kDim). IO-extension PWM -- same inverted-duty part as the 4.3C.
+constexpr int kSaverDimPercent = 10;
 
 // --- Shared I2C bus (IO extension + GT911 touch) ---
 constexpr int kI2cSda = 8;
@@ -175,6 +179,9 @@ constexpr char kUpdateSlug[] = "s3-touch-lcd-4.3b";
 // PCF85063A RTC (I2C 0x51) backed by a coin cell -> wall-clock survives power-off.
 #define BOARD_HAS_PCF85063_RTC
 constexpr bool kSupportsBrightness = false;  // CH422G backlight is on/off only
+// Screensaver Dim floor (SaverMode::kDim). Unused (CH422G is on/off only) but must exist: display_settings.cpp
+// references it unconditionally.
+constexpr int kSaverDimPercent = 10;
 
 // --- Shared I2C bus (IO expander + GT911 touch) ---
 constexpr int kI2cSda = 8;
@@ -245,6 +252,10 @@ constexpr char kUpdateSlug[] = "s3-touch-lcd-4.3c";
 // PCF85063 RTC on the shared I2C bus (same as the 4.3B).
 #define BOARD_HAS_PCF85063_RTC
 constexpr bool kSupportsBrightness = true;  // IO-extension PWM backlight (dimmable)
+// Screensaver Dim floor (SaverMode::kDim). 5% put this board's inverted-duty IO-extension PWM below its usable
+// range: the panel read as fully BLACK rather than dim, and the saver was only
+// glimpsed on wake when the backlight returned. HW-observed 2026-09-09.
+constexpr int kSaverDimPercent = 10;
 
 // --- Shared I2C bus (IO extension + GT911 touch) ---
 constexpr int kI2cSda = 8;
@@ -365,6 +376,8 @@ constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-4.3";
 #define BOARD_DSI_PANEL_ST7701  // panel controller (selects the DCS init table)
 #define BOARD_TOUCH_GT911     // GT911, 16-bit registers
 constexpr bool kSupportsBrightness = true;  // LEDC PWM backlight (dimmable)
+// Screensaver Dim floor (SaverMode::kDim). Historical 5%: LEDC is linear and this board's low end is untested.
+constexpr int kSaverDimPercent = 5;
 
 // --- Shared I2C bus (GT911 touch; also the audio codecs / camera header) ---
 constexpr int kI2cSda = 7;
@@ -501,6 +514,8 @@ constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-5";
 #define BOARD_DSI_PANEL_HX8394  // panel controller (selects the DCS init table)
 #define BOARD_TOUCH_GT911
 constexpr bool kSupportsBrightness = true;  // LEDC PWM backlight (dimmable)
+// Screensaver Dim floor (SaverMode::kDim). Historical 5% -- untested low end (see the 4.3 block).
+constexpr int kSaverDimPercent = 5;
 // UI: 720x1280 on 5" is ~1.35x the 4.3's pixel density — render the wide
 // (800x480) layout scaled 1.5x so elements come out a touch larger physically
 // on the slightly larger glass, not two-thirds the size. 720 = 480 * 1.5
@@ -614,6 +629,9 @@ constexpr int kSdLdoChannel = 4;
 #define BOARD_DISPLAY_DSI
 #define BOARD_TOUCH_GT911
 constexpr bool kSupportsBrightness = true;  // LEDC PWM backlight (dimmable)
+// Screensaver Dim floor (SaverMode::kDim). Historical 5% -- untested low end. NOTE: this sits OUTSIDE the per-size
+// #if below, so all three X sizes get it.
+constexpr int kSaverDimPercent = 5;
 
 #if defined(BOARD_WAVESHARE_P4_WIFI6_X_7)
 constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-X-7";

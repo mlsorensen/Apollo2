@@ -396,10 +396,15 @@ page fits on screen with little to no scrolling.
 ![Display settings](docs/img/manual/device-display.png)
 
 - ① **Brightness** *(dimmable boards)* — backlight level.
-- ② **Screen dim** *(Off / 5 / 15 / 30 min, default 30 min)* — after this idle
-  time the screensaver starts (see the next row); any touch wakes the screen.
+- ② **Screen dim** *(Off / 1 / 5 / 15 / 30 min, default 30 min)* — after this
+  idle time the screensaver starts (see the next row); any touch wakes the
+  screen. A shot in progress never counts as idle, so the screensaver won't
+  cover a live shot no matter how short the timeout — the countdown restarts
+  when the shot ends.
 - ③ **Screensaver** *(Logo / Blank, default Logo; shown while Screen dim is
-  on)* — what the idle timeout shows. **Logo** dims the backlight to 5 % and
+  on)* — what the idle timeout shows. **Logo** dims the backlight (to 10 % on
+  the S3 boards, 5 % on the P4s — low enough to read as asleep, high enough
+  that the panel isn't mistaken for switched off) and
   bounces the La Marzocco lion around a black screen, changing color at every
   wall it hits (on boards whose backlight can't dim, the logo shows at full
   brightness — choose Blank there to go dark). **Blank** switches the display
