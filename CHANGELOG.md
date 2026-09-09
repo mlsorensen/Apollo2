@@ -5,6 +5,38 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## v0.12.0
+
+### Changes
+
+- **Fixed the S3 boards falling off the network after every boot.** For about
+  90 seconds after starting up, an S3 remote would get an IP address and then
+  be unreachable — no clock sync, no update check, and the web page wouldn't
+  load — before recovering on its own. The cause was the automatic update check
+  starting before the network was actually usable: it then tied up memory the
+  WiFi radio needed to receive anything, so it blocked the very connection it
+  was waiting for. Apollo now waits for a confirmed internet clock sync before
+  checking, so the check runs against a working connection and finishes in about
+  a second. (This is what v0.11.4 was meant to fix; that change addressed a
+  different theory and didn't solve it. The P4 boards were never affected.)
+- **Fixed only the first update check of each session working.** After the check
+  that runs at startup, every later check — including the daily one — was being
+  refused for lack of memory, silently. The limit it was measured against was
+  set too conservatively; it's now based on what a check actually uses.
+- **Fixed the Logo screensaver going completely black on the 4.3C.** The dimmed
+  backlight was being set below what that panel can show, so an idle machine
+  looked switched off rather than asleep — and tapping it seemed to do nothing.
+  The dim level is now set per board.
+- **The screensaver is far smoother and uses much less power.** It was redrawing
+  the shot graph hidden underneath it on every single frame. It now leaves the
+  hidden graph alone, which makes the bouncing logo about four times faster and
+  frees up processing for everything else. Shot recording is unaffected — a shot
+  that starts while the screen is asleep is still captured in full.
+- **Added a 1-minute option to Screen dim** (Settings > Display), alongside the
+  existing 5, 15 and 30. A shot in progress never counts as idle, so the
+  screensaver won't cover a live shot however short the timeout is; the countdown
+  restarts when the shot finishes.
+
 ## v0.11.4
 
 ### Changes
