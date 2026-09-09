@@ -88,8 +88,14 @@ Board targets are `<chip>-<panel>` after the Waveshare product names:
 `make build` (default, the 2-inch S3), `build-s3-7b`, `build-s3-4-3b`,
 `build-s3-4-3c`, `build-p4-4-3`, `build-p4-5`; matching `flash-*` targets
 auto-detect the port and can probe a running board's serial banner (pre-rename
-names like `build-p4`/`flash-7b` remain as aliases). All envs + `sim` must
-compile before committing platform changes.
+names like `build-p4`/`flash-7b` remain as aliases).
+
+WHEN to run full builds: all envs + `sim` must compile before you PUSH or cut a
+RELEASE of a platform change — not on every edit. During debug/development stay
+on `make sim` (fast, no node, no device contention) and at most the ONE device
+env you're actually testing on. Full sweeps mid-investigation are slow, contend
+for the shared `.pio` dir (see the build-workflow notes about flashing), and
+tell you nothing you don't already know until the fix is finished.
 
 The firmware embeds the History web page as a GENERATED, git-ignored header
 (`include/platform_esp32/webapp_dist.h`). Every device build/flash target

@@ -22,6 +22,51 @@ namespace {
 constexpr char kSiteBase[] = "https://mlsorensen.github.io/Apollo2";
 constexpr size_t kMaxNotesBytes = 4096;  // bound RAM; notes truncate past this
 
+// PREALLOCATED worker task. Both the stack and the TCB are static, so creating
+// this task takes NOTHING from the heap and can never fail for want of a
+// contiguous block. That is the whole point: internal largest-free falls from
+// ~131K just after boot to ~21K in steady state (measured 4.3C 2026-09-09), and
+// the old code asked for a fresh 12KB contiguous stack on every check — the
+// largest single request in the system, made at the moment it was least likely
+// to be satisfiable. Statically reserving it from .bss trades 12KB held always
+// for a check that can't be starved out by fragmentation.
+//
+// The task is created ONCE and then parks on a notification for the life of the
+// process. It must never be deleted and re-created: a re-create would race the
+// idle task's cleanup over these very buffers. (One UpdateCheck instance
+// exists — main's g_update_check — so file scope matches its lifetime.)
+// SIZED FROM MEASUREMENT (4.3C, 2026-09-09): a real check reported stack_hw=8252
+// of 12288, i.e. a peak use of 4036 bytes. 8KB leaves ~2x headroom over that for
+// deeper error/alert paths in the TLS handshake, and still hands 4KB back versus
+// the old 12KB. Re-check stack_hw after any change to the fetch path.
+constexpr uint32_t kCheckStackBytes = 8 * 1024;
+StackType_t s_check_stack[kCheckStackBytes];  // StackType_t is uint8_t here
+StaticTask_t s_check_tcb;
+TaskHandle_t s_check_task = nullptr;
+
+// Smallest largest-free INTERNAL block a check may start with. On the S3 the
+// WiFi driver's RX buffers can ONLY come from that pool (the stock core config
+// leaves CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP off), and a check piles its task
+// stack plus esp-http-client/esp-tls internals on top. Once the largest
+// free block drops below what an RX buffer needs, the driver silently discards
+// every INBOUND frame — ARP, DNS, ICMP, TCP SYN alike — so the device falls off
+// the network entirely until the check finally gives up (measured 2026-09-09 on
+// the 4.3C: a boot check ran the pool to 9236 free / 2804 largest and blacked
+// the board out for ~90s). Skipping a check beats taking the radio down with it.
+//
+// MEASURED (4.3C, 2026-09-09): steady-state largest-free with WiFi + NimBLE up
+// is ~21K. Two earlier cuts were wrong in the same direction — 24K then 12K sat
+// at or above what the FETCH actually needs, and skipped every check.
+//
+// With the task stack preallocated (above), this guard no longer has to cover
+// it. It only has to cover what the fetch itself allocates, and a real run
+// measured that at ~2KB (free 17172 -> 16416, largest 9204 -> 7156). 8K is ~4x
+// that, well under the ~21K steady state, and still a floor low enough that a
+// fetch can't chew into the WiFi driver's RX pool and take ARP/DNS/ICMP with it.
+// Note what this guard is NOT: it cannot see a fetch that fails and retries for
+// 85s. That failure mode is handled by the NTP gate (only check a proven
+// network) plus the preallocated stack, not by this number.
+constexpr size_t kMinInternalLargest = 8 * 1024;
 
 // Parse "v1.2.3" or "1.2.3" into a comparable triple. Returns false on
 // anything that isn't strict major.minor.patch — callers treat that as
@@ -134,8 +179,20 @@ bool https_get_retry(const std::string& url, std::string& out, size_t cap,
 UpdateCheck::UpdateCheck(Config& config, Network& network)
     : config_(config), network_(network) {}
 
+// "Is the internet actually reachable?" — the gate every check goes through.
+// It must key off a REAL SNTP reply, not ntp_synced(): on the RTC boards
+// (4.3B/4.3C PCF85063) the coin-cell clock hands the system a plausible year at
+// boot, which satisfies ntp_synced()'s "year looks real" test about a second
+// after DHCP — long before DNS works. The boot check then fired into a half-up
+// network, and its retry storm ran the internal heap down far enough to starve
+// the WiFi driver's RX pool, taking ARP/DNS/ICMP/TCP down with it for ~90s.
+// v0.11.3 fixed this same false positive for the Info page's readout but left
+// this gate on the old signal; the P4 boards have no discrete RTC, which is the
+// only reason they never showed the bug. A landed SNTP sync is proof that DNS
+// and a UDP round-trip both work.
 bool UpdateCheck::network_ready() const {
-  return network_.status() == core::NetState::Connected && network_.ntp_synced();
+  return network_.status() == core::NetState::Connected &&
+         network_.ntp_seconds_since_sync() >= 0;
 }
 
 bool UpdateCheck::take_check_request() { return check_req_.exchange(false); }
@@ -146,19 +203,55 @@ void UpdateCheck::begin_check() {
     core::logf("UpdateCheck: no WiFi/NTP; check skipped\n");
     return;  // no network -> the whole feature is inert
   }
-  in_flight_.store(true);
-  if (xTaskCreatePinnedToCore(check_task_entry, "updchk", 12 * 1024, this, 1,
-                              nullptr, 0) != pdPASS) {
-    in_flight_.store(false);
+  const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
+  if (largest < kMinInternalLargest) {
+    core::logf("UpdateCheck: internal RAM tight (largest=%u < %u); check skipped\n",
+               static_cast<unsigned>(largest),
+               static_cast<unsigned>(kMinInternalLargest));
+    return;  // a fetch here would starve the WiFi driver's RX pool
   }
+  // First call brings the worker up; it then lives forever, parked on its
+  // notification. Static buffers -> this allocates nothing and won't fail.
+  if (s_check_task == nullptr) {
+    s_check_task = xTaskCreateStaticPinnedToCore(check_task_entry, "updchk",
+                                                 kCheckStackBytes, this, 1,
+                                                 s_check_stack, &s_check_tcb, 0);
+    if (s_check_task == nullptr) {
+      core::logf("UpdateCheck: worker task create failed\n");
+      return;
+    }
+  }
+  in_flight_.store(true);
+  xTaskNotifyGive(s_check_task);  // hand the request to the parked worker
 }
 
+// Long-lived worker. Parks on a notification between checks — never deleted, so
+// its static stack/TCB are never re-entered while the kernel is still tearing a
+// previous instance down.
 void UpdateCheck::check_task_entry(void* arg) {
   auto* self = static_cast<UpdateCheck*>(arg);
-  self->run_check();
-  self->in_flight_.store(false);
-  self->seq_.fetch_add(1);  // wake the UI: a check finished
-  vTaskDelete(nullptr);
+  for (;;) {
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);  // wait for begin_check()
+    // Bracket the check with internal-heap figures: the fetch is the heaviest
+    // transient load on that pool, and every starvation bug here has surfaced
+    // as a SILENT downstream failure (see kMinInternalLargest). The start/done
+    // delta is exactly what that threshold should be derived from.
+    core::logf(
+        "UpdateCheck: check start (internal free=%u largest=%u)\n",
+        static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)),
+        static_cast<unsigned>(
+            heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)));
+    self->run_check();
+    // stack_hw = bytes of this stack never touched; feeds kCheckStackBytes.
+    core::logf(
+        "UpdateCheck: check done (internal free=%u largest=%u stack_hw=%u)\n",
+        static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)),
+        static_cast<unsigned>(
+            heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)),
+        static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
+    self->in_flight_.store(false);
+    self->seq_.fetch_add(1);  // wake the UI: a check finished
+  }
 }
 
 void UpdateCheck::run_check() {
