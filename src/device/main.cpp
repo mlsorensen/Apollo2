@@ -536,7 +536,28 @@ void loop() {
   poll_serial_id();          // web-flasher "which board is this?" responder
   g_brew.poll(millis());     // paddle relay + shot state machine (edge-critical)
   g_app.pump_scale_chart();  // drain the scale's flow stream into the graph (fast)
-  lv_timer_handler();        // LVGL render/input
+  // Frame-cost telemetry, replacing LVGL's on-screen perf overlay (which is a
+  // DEBUG tool that had been shipping enabled -- see lv_conf.h -- and which
+  // redraws every frame, inflating the very numbers it reports). This costs one
+  // micros() pair per iteration and reports over serial instead of on the glass.
+  {
+    const uint32_t t0 = micros();
+    lv_timer_handler();      // LVGL render/input
+    const uint32_t dt = micros() - t0;
+    static uint32_t acc = 0, iters = 0, worst = 0, last = 0;
+    acc += dt;
+    ++iters;
+    if (dt > worst) worst = dt;
+    if (millis() - last >= 60000) {  // telltale cadence, matches the heap line
+      last = millis();
+      core::logf("lvgl: %u frames, avg %u us, worst %u us (%u%% of wall)\n",
+                 static_cast<unsigned>(iters),
+                 static_cast<unsigned>(iters ? acc / iters : 0),
+                 static_cast<unsigned>(worst),
+                 static_cast<unsigned>(acc / 600000));  // % of the 60s window
+      acc = iters = worst = 0;
+    }
+  }
   g_token_setup.handle();    // portal auto-close timeout
   g_web_ui.poll();           // S3 boards serve here; no-op on the P4s (task)
 

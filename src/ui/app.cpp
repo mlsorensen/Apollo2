@@ -1746,6 +1746,15 @@ void App::start_screensaver(bool blank) {
   stop_screensaver();
   // Opaque black cover over everything (also swallows the waking tap so it
   // can't press whatever control happens to sit under the finger).
+  // DEAD END, do not retry: hiding the screen underneath with
+  // LV_OBJ_FLAG_HIDDEN. It looks tempting -- render drops 26ms -> 11ms, since
+  // what remains is LVGL compositing the home widgets beneath the lion's own
+  // rect -- but it BREAKS THE ERASE PATH: with the screen hidden, the area
+  // behind each old lion position never gets repainted, so the trail persists
+  // and the panel fills with lions. Waking is also visibly slow (seconds), and
+  // not merely the graph's catch-up backlog as first assumed. Both HW-observed
+  // on the 4.3C. The pause below is what actually does the work, at 32ms/frame
+  // (26|4) and ~25fps versus 128ms (104|24) and 5-6fps before it.
   saver_layer_ = lv_obj_create(lv_layer_top());
   lv_obj_remove_style_all(saver_layer_);
   lv_obj_set_size(saver_layer_, lv_pct(100), lv_pct(100));
@@ -1767,9 +1776,16 @@ void App::start_screensaver(bool blank) {
   // via scale changed nothing measurable (128 vs 256 invalidate identically).
   // An explicit size makes box == drawn size, cutting the dirty area ~2.5x.
   const int target_h = screen_.height * 2 / 5;
-  const int target_w = ui::kLionW * target_h / ui::kLionH;
-  lv_obj_set_size(saver_img_, target_w, target_h);
-  lv_image_set_inner_align(saver_img_, LV_IMAGE_ALIGN_STRETCH);
+  // The asset is generated at the 480px-tall boards' target (101x192), so on
+  // those it draws 1:1 -- no transform at all, which is the cheaper path per
+  // pixel AND keeps the layout box equal to the drawn size. Boards whose target
+  // differs materially (the 2-inch) still stretch to fit.
+  const int dh = ui::kLionH > target_h ? ui::kLionH - target_h : target_h - ui::kLionH;
+  const bool native_fits = dh * 10 <= target_h;  // within 10% of the target
+  const int h = native_fits ? ui::kLionH : target_h;
+  const int w = native_fits ? ui::kLionW : ui::kLionW * target_h / ui::kLionH;
+  lv_obj_set_size(saver_img_, w, h);
+  if (!native_fits) lv_image_set_inner_align(saver_img_, LV_IMAGE_ALIGN_STRETCH);
   saver_color_i_ = 0;
   lv_obj_set_style_image_recolor(saver_img_, lv_color_hex(kSaverColors[0]), 0);
   lv_obj_set_style_image_recolor_opa(saver_img_, LV_OPA_COVER, 0);
@@ -2235,13 +2251,23 @@ void App::pump_scale_chart() {
     }
   }
   if (!graph_frozen) {
-    if (home_.flow_shot_plot) {
+    // Under the screensaver, stop feeding the VISIBLE graph. Measured on the
+    // 4.3C: it invalidated a fixed 622x137 band (85K px) EVERY frame while
+    // completely hidden behind the opaque saver -- four times the lion's own
+    // 20K, and the real reason the saver cost 128ms/frame. Skipping the draw
+    // (rather than hiding the screen) removes the work instead of deferring it
+    // to wake, where a redraw backlog cost ~5s.
+    //
+    // The capture ring keeps running regardless: an unwired shot detected just
+    // after wake still needs its lead-in samples to exist.
+    const bool feed_ring = have_brew && !bsnap.paddle_wired;
+    if (screensaver_on_) {
+      if (feed_ring) ui::unwired_ring_tick(home_, snap);
+    } else if (home_.flow_shot_plot) {
       ui::shot_plot_tick(home_, snap);
     } else {
       ui::flow_graph_tick(home_, snap);
-      // Unwired: keep the always-on capture ring fed alongside the live sweep —
-      // a detected shot's samples must already exist when review replays them.
-      if (have_brew && !bsnap.paddle_wired) ui::unwired_ring_tick(home_, snap);
+      if (feed_ring) ui::unwired_ring_tick(home_, snap);
     }
   }
 
