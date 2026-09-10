@@ -87,7 +87,7 @@
     <li>Plug the board into this computer (port notes under each board below).</li>
     <li>Reinstalling or upgrading? Click <b>Detect board</b> and the right image
         is chosen for you. First install: click <b>Install</b> on <em>your</em>
-        board — they look similar but the builds are not interchangeable.</li>
+        board — the builds are not interchangeable.</li>
     <li>Pick the serial port in the popup, then follow the prompts. A first
         install should choose "Erase device" when offered. When upgrading,
         don't — an upgrade keeps your paired machine, Wi-Fi and settings
@@ -109,52 +109,12 @@
     <b>&#9888; Pick your exact board.</b> Without detection the flasher cannot
     tell the boards apart — a mismatched image won't damage anything, but the
     device will show a <b>black screen until the right image is flashed</b>.
-    The exact model name is printed on the back of the PCB. (Flashing across
-    chip families — an S3 image onto a P4 or vice versa — is detected and
-    refused.)
+    Go by screen size, or by the model name printed on the back of the PCB.
+    (Flashing across chip families — an S3 image onto a P4 or vice versa — is
+    detected and refused.)
   </div>
 
   <p id="showall-row" hidden><a href="#" id="showall">Not right? Show all boards</a></p>
-
-  <div class="board">
-    <div class="info">
-      <div class="name">ESP32-S3-Touch-LCD-2</div>
-      <div class="desc">2.0&quot; 240&times;320 &mdash; the portable, battery-friendly one. Single USB-C port.</div>
-    </div>
-    <esp-web-install-button data-board="s3-touch-lcd-2"><button slot="activate">Install</button></esp-web-install-button>
-  </div>
-
-  <div class="board">
-    <div class="info">
-      <div class="name">ESP32-S3-Touch-LCD-4.3B</div>
-      <div class="desc">4.3&quot; 800&times;480. Single USB-C port.</div>
-    </div>
-    <esp-web-install-button data-board="s3-touch-lcd-4.3b"><button slot="activate">Install</button></esp-web-install-button>
-  </div>
-
-  <div class="board">
-    <div class="info">
-      <div class="name">ESP32-S3-Touch-LCD-4.3C</div>
-      <div class="desc">4.3&quot; 800&times;480 with dimmable backlight + battery monitoring. Single USB-C port.</div>
-    </div>
-    <esp-web-install-button data-board="s3-touch-lcd-4.3c"><button slot="activate">Install</button></esp-web-install-button>
-  </div>
-
-  <div class="board">
-    <div class="info">
-      <div class="name">ESP32-S3-Touch-LCD-7B</div>
-      <div class="desc">7&quot; 1024&times;600. Two USB-C ports &mdash; use the one labeled <b>UART</b>.</div>
-    </div>
-    <esp-web-install-button data-board="s3-touch-lcd-7b"><button slot="activate">Install</button></esp-web-install-button>
-  </div>
-
-  <div class="board">
-    <div class="info">
-      <div class="name">ESP32-P4-WIFI6-Touch-LCD-4.3</div>
-      <div class="desc">4.3&quot; 800&times;480, ESP32-P4 + WiFi 6. Two USB-C ports &mdash; use the one labeled <b>UART</b>.</div>
-    </div>
-    <esp-web-install-button data-board="p4-wifi6-touch-lcd-4.3"><button slot="activate">Install</button></esp-web-install-button>
-  </div>
 
   <div class="board">
     <div class="info">
@@ -166,10 +126,10 @@
 
   <div class="board">
     <div class="info">
-      <div class="name">ESP32-P4-WIFI6-Touch-LCD-X (7&quot;)</div>
-      <div class="desc">7&quot; 1280&times;720 finished box, ESP32-P4 + WiFi 6. Two USB-C ports &mdash; use the one labeled <b>UART</b>.</div>
+      <div class="name">ESP32-S3-Touch-LCD-4.3C / 4.3C-BOX</div>
+      <div class="desc">4.3&quot; 800&times;480, ESP32-S3. Single USB-C port.</div>
     </div>
-    <esp-web-install-button data-board="p4-wifi6-touch-lcd-x-7"><button slot="activate">Install</button></esp-web-install-button>
+    <esp-web-install-button data-board="s3-touch-lcd-4.3c"><button slot="activate">Install</button></esp-web-install-button>
   </div>
 
   <div class="board">
@@ -270,17 +230,17 @@
   // Apollo 2 firmware (v0.1.1+) answers "id?" on its serial port with a line
   // naming the board; the boot banner carries the same name, which covers the
   // case where opening the port happens to reset a UART-bridge board. Matched
-  // most-specific-first ("...LCD-5" before "...LCD-4.3" etc.). No DTR/RTS
+  // most-specific-first ("...LCD-X-8" before "...LCD-5" etc.). No DTR/RTS
   // toggling — a scripted reset dance can strand S3 boards in download mode.
+  // Only the three PUBLISHED boards are listed: a device running one of the
+  // unreleased board builds has no image here, so it correctly falls through
+  // to "couldn't identify" rather than being offered someone else's firmware.
+  // The reply also carries REV= (silicon revision) — unused until the P4-5
+  // ships in two revisions and needs two images to choose between.
   const BOARD_PATTERNS = [
-    ['P4-WIFI6-Touch-LCD-X-7', 'p4-wifi6-touch-lcd-x-7'],
     ['P4-WIFI6-Touch-LCD-X-8', 'p4-wifi6-touch-lcd-x-8'],
     ['P4-WIFI6-Touch-LCD-5',   'p4-wifi6-touch-lcd-5'],
-    ['P4-WIFI6-Touch-LCD-4.3', 'p4-wifi6-touch-lcd-4.3'],
     ['S3-Touch-LCD-4.3C',      's3-touch-lcd-4.3c'],
-    ['S3-Touch-LCD-4.3B',      's3-touch-lcd-4.3b'],
-    ['S3-Touch-LCD-7',         's3-touch-lcd-7b'],
-    ['S3-Touch-LCD-2',         's3-touch-lcd-2'],
   ];
   const matchBoard = (text) => {
     for (const [pat, id] of BOARD_PATTERNS) if (text.includes(pat)) return id;
@@ -361,7 +321,7 @@
         status.textContent = `Detected: ${name} — Install below flashes it.`;
       } else {
         status.className = 'desc err';
-        status.textContent = 'No answer — likely a first install (or firmware older than v0.1.1). Choose your board from the list below.';
+        status.textContent = "Couldn't identify this device — it may be a first install, firmware older than v0.1.1, or a board with no published image. Choose from the list below.";
       }
     } catch (err) {
       status.className = 'desc err';
