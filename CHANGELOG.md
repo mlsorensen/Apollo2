@@ -31,6 +31,20 @@ for someone reading the diff.
 - **New printable backplate for the X 8" box**, so it mounts to the same
   counter-top stand as the other boards — see `hardware/3d-prints/`.
 
+## v0.12.2
+
+### Changes
+
+- **Fixed the 4.3C gradually losing its network features.** On a machine with a
+  scale paired and an SD card in, the remote could reach a state where checking
+  for updates failed, the log page wouldn't load, and the WiFi/token setup portal
+  would advertise but refuse to let a phone join it — all at once, and only
+  clearing on a restart. The board had run out of a specific kind of internal
+  memory that the radio, the display and encrypted connections all draw from.
+  Apollo now uses roughly 26 KB less of it, which restores all three.
+- **Fixed the "Check for updates" setting rendering in a smaller font** than the
+  buttons above it in Settings > Device > WiFi.
+
 ## v0.12.1
 
 ### Changes
