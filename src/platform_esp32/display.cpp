@@ -1270,7 +1270,7 @@ bool install_panel_begin() {
   esp_lcd_dsi_bus_config_t bus_cfg = {};
   bus_cfg.bus_id = 0;
   bus_cfg.num_data_lanes = 2;
-#if defined(BOARD_WAVESHARE_P4_WIFI6_X_8) || defined(BOARD_WAVESHARE_P4_WIFI6_X_10_1)
+#if defined(BOARD_P4_SILICON_REV3)
   bus_cfg.phy_clk_src = MIPI_DSI_PHY_PLLREF_CLK_SRC_DEFAULT;  // rev3 XTAL
 #else
   bus_cfg.phy_clk_src = MIPI_DSI_PHY_CLK_SRC_DEFAULT;
@@ -1363,11 +1363,12 @@ bool Display::begin() {
   esp_lcd_dsi_bus_config_t bus_cfg = {};
   bus_cfg.bus_id = 0;
   bus_cfg.num_data_lanes = 2;
-#if defined(BOARD_WAVESHARE_P4_WIFI6_X_8) || defined(BOARD_WAVESHARE_P4_WIFI6_X_10_1)
-  // These envs build for rev v3.0+ silicon (chip_variant "esp32p4"), where
-  // the DSI PHY's PLL reference mux changed: the legacy PLL_F20M source
-  // aborts inside the HAL's clock setter. XTAL is the rev3 default —
-  // verified on a real 8" box (sister-project bring-up, 2026-09).
+#if defined(BOARD_P4_SILICON_REV3)
+  // Rev v3.0+ silicon (chip_variant "esp32p4"), where the DSI PHY's PLL
+  // reference mux changed: the legacy PLL_F20M source aborts inside the HAL's
+  // clock setter. XTAL is the rev3 default — verified on a real 8" box
+  // (sister-project bring-up, 2026-09). The macro is set by the board's block
+  // in board_config.h, so this keys on SILICON, not on which panel is fitted.
   bus_cfg.phy_clk_src = MIPI_DSI_PHY_PLLREF_CLK_SRC_DEFAULT;
 #else
   bus_cfg.phy_clk_src = MIPI_DSI_PHY_CLK_SRC_DEFAULT;  // rev v1.x: PLL_F20M

@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # Build + flash the firmware for a connected board.
 #
+# Every env is flashable here, released or not — this is a dev tool. (Only
+# p4-5, s3-4-3c and p4-x-8 are published/advertised; see CLAUDE.md "Support
+# matrix".)
+#
 # Board selection (which PlatformIO env to flash):
-#   1. explicit:  tools/flash.sh s3-7b   (canonical <chip>-<panel> name, an old
-#                 alias like 7b/p4, or a full env name) / BOARD=s3-7b
+#   1. explicit:  tools/flash.sh p4-5    (canonical <chip>-<panel> name, an old
+#                 alias like 7b/p4, or a full env name) / BOARD=p4-5
 #   2. auto:      if our firmware is already running, read its boot banner over
 #                 serial and match the board; otherwise fall back to the default.
 # The S3 boards share the same MCU, so they can't be told apart over USB
@@ -73,7 +77,7 @@ ENV=""
 if [ -n "$BOARD" ]; then
   ENV="$(board_to_env "$BOARD")"
   if [ -z "$ENV" ]; then
-    echo "flash: unknown board '$BOARD' (use s3-2 | s3-7b | s3-4-3b | s3-4-3c | p4-4-3 | p4-5 | p4-x-7 | p4-x-8 | p4-x-10-1)" >&2
+    echo "flash: unknown board '$BOARD' (use p4-5 | s3-4-3c | p4-x-8 | s3-2 | s3-7b | s3-4-3b | p4-4-3 | p4-x-7 | p4-x-10-1)" >&2
     exit 2
   fi
 elif [ -n "$PORT" ]; then
@@ -84,14 +88,15 @@ if [ -z "$ENV" ]; then
   echo "flash: couldn't tell which board this is (the two share an MCU, and no" >&2
   echo "       running Micra firmware was detected to read its banner)." >&2
   echo "       Re-run with the board so we don't flash the wrong build:" >&2
-  echo "         make flash-s3-7b     (S3 7\" 1024x600)" >&2
-  echo "         make flash-s3-4-3b   (S3 4.3B 800x480)" >&2
-  echo "         make flash-s3-4-3c   (S3 4.3C 800x480, dimmable)" >&2
+  echo "         make flash-p4-5      (P4-WIFI6 5\" 1280x720)      [released]" >&2
+  echo "         make flash-s3-4-3c   (S3 4.3C 800x480, dimmable)  [released]" >&2
+  echo "         make flash-p4-x-8    (P4-WIFI6 X 8\" box 1280x800) [released]" >&2
+  echo "       internal-only boards (build fine, never published):" >&2
   echo "         make flash-s3-2      (S3 2\" 320x240)" >&2
+  echo "         make flash-s3-4-3b   (S3 4.3B 800x480)" >&2
+  echo "         make flash-s3-7b     (S3 7\" 1024x600)" >&2
   echo "         make flash-p4-4-3    (P4-WIFI6 4.3\" 800x480)" >&2
-  echo "         make flash-p4-5      (P4-WIFI6 5\" 1280x720)" >&2
   echo "         make flash-p4-x-7    (P4-WIFI6 X 7\" box 1280x720)" >&2
-  echo "         make flash-p4-x-8    (P4-WIFI6 X 8\" box 1280x800)" >&2
   echo "         make flash-p4-x-10-1 (P4-WIFI6 X 10.1\" box 1280x800)" >&2
   exit 2
 fi

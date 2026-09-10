@@ -5,6 +5,32 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## v0.13.0
+
+### Changes
+
+- **The supported board line-up is now three boards.** Firmware images are
+  built and published for the **ESP32-P4-WIFI6-Touch-LCD-5**, the
+  **ESP32-S3-Touch-LCD-4.3C / 4.3C-BOX**, and the
+  **ESP32-P4-WIFI6-Touch-LCD-X 8" box** — and those are what the
+  [web flasher](https://mlsorensen.github.io/Apollo2/) offers. The P4-5 is the
+  recommendation for mounting on the machine; the 4.3C is there for anyone who
+  would rather not 3D-print a case or make up a paddle cable (it's the only
+  supported board that's a finished box *and* has the opto-isolators built in);
+  the X 8" is the counter-top companion.
+- **Other boards are no longer published.** The S3 2", 4.3B and 7B, the bare
+  P4 4.3, and the X 7" and 10.1" have been dropped from releases and from the
+  web flasher. Nothing was removed from the source: every one of them still
+  builds from this repo exactly as before, and their pin/panel definitions,
+  build environments and printable shells are all still here. If you run one,
+  **stay on v0.12.1 or build from source** — and note that your device will
+  keep announcing new versions it cannot install, because the update check
+  doesn't know which boards have published images. Declining the update, or
+  turning the notices off under Settings > Apollo > WiFi, is the right move.
+  A failed install is harmless: the device rolls back to the running firmware.
+- **New printable backplate for the X 8" box**, so it mounts to the same
+  counter-top stand as the other boards — see `hardware/3d-prints/`.
+
 ## v0.12.1
 
 ### Changes

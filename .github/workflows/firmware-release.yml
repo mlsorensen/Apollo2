@@ -36,18 +36,24 @@ jobs:
         include:
           # board = user-facing name (Waveshare product, lowercased) used in
           # the artifact filename; env = the PlatformIO environment.
-          - { env: esp32-s3-micra,       board: s3-touch-lcd-2,          chip: ESP32-S3 }
-          - { env: esp32-s3-micra-7b,    board: s3-touch-lcd-7b,         chip: ESP32-S3 }
-          - { env: esp32-s3-micra-4-3b,  board: s3-touch-lcd-4.3b,       chip: ESP32-S3 }
-          - { env: esp32-s3-micra-4-3c,  board: s3-touch-lcd-4.3c,       chip: ESP32-S3 }
-          - { env: esp32-p4-micra-43,    board: p4-wifi6-touch-lcd-4.3,  chip: ESP32-P4 }
           - { env: esp32-p4-micra-5,     board: p4-wifi6-touch-lcd-5,    chip: ESP32-P4 }
-          - { env: esp32-p4-micra-x-7,   board: p4-wifi6-touch-lcd-x-7,  chip: ESP32-P4 }
+          - { env: esp32-s3-micra-4-3c,  board: s3-touch-lcd-4.3c,       chip: ESP32-S3 }
           - { env: esp32-p4-micra-x-8,   board: p4-wifi6-touch-lcd-x-8,  chip: ESP32-P4 }
-          # The X 10.1" env (esp32-p4-micra-x-10-1) builds but is deliberately
-          # NOT released: different glass/init than the 8", and no hardware to
-          # verify it on. Add a row here (+ a site/index.html card) if that
-          # changes.
+          # THIS LIST IS THE SUPPORT MATRIX. Three products are released and
+          # advertised: the P4-5 (mount-on-Micra, the default pick), the
+          # S3-4.3C BOX (mount-on-Micra with nothing to build) and the X 8"
+          # (counter-top). platformio.ini carries six MORE envs -
+          # esp32-s3-micra, -7b, -4-3b, esp32-p4-micra-43, -x-7, -x-10-1 -
+          # which build fine and are kept as the record of how those boards
+          # differ (and as the owner's own dev hardware). They are
+          # deliberately NOT built here, NOT in site/index.html, and NOT in
+          # the README. Do not add one back without asking - see the "Support
+          # matrix" section of CLAUDE.md.
+          #
+          # RESERVED: when a rev v3 production-silicon P4-5 sample lands it
+          # becomes a FOURTH row, board: p4-wifi6-touch-lcd-5-rev3. The plain
+          # p4-wifi6-touch-lcd-5 above keeps meaning the rev v1.x ("es")
+          # image so fielded LCD-5 units keep self-updating.
     steps:
       - uses: actions/checkout@v7
 
@@ -105,11 +111,17 @@ jobs:
              "out/app/${{ matrix.board }}.bin"
           ( cd out/app && shasum -a 256 "${{ matrix.board }}.bin" \
               > "${{ matrix.board }}.bin.sha256" )
-          # Guard the self-updater's URL contract: the slug this build's
-          # board_config.h bakes in as kUpdateSlug must be exactly this
-          # matrix row's board name.
-          grep -Fq 'kUpdateSlug[] = "${{ matrix.board }}"' \
-              include/platform_esp32/board_config.h || {
+          # Guard the self-updater's URL contract: the slug baked into THIS
+          # build as kUpdateSlug must be exactly this matrix row's board name,
+          # or the device would fetch another board's image. Check the BINARY,
+          # not board_config.h: every board's slug is present in that header
+          # unconditionally, so grepping the source passes for every row no
+          # matter which env was actually built (it did — that guard was a
+          # no-op). Match the NUL-delimited literal, not a substring: slugs
+          # nest (p4-wifi6-touch-lcd-5 sits inside ...-5-rev3), so a substring
+          # test would pass the exact mix-up this is here to catch.
+          python3 -c 'import sys; blob = open(sys.argv[1], "rb").read(); sys.exit(0 if blob.count(b"\0" + sys.argv[2].encode() + b"\0") == 1 else 1)' \
+              "out/app/${{ matrix.board }}.bin" "${{ matrix.board }}" || {
             echo "::error::kUpdateSlug for ${{ matrix.env }} != '${{ matrix.board }}' - the self-updater would fetch the wrong image"; exit 1; }
           # Debug symbols: this build's .elf, bundled into one archive by the
           # release job. A crash dump pulled off a device later

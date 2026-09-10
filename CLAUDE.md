@@ -15,7 +15,10 @@ accurate and the layering rules there are hard rules:
 - DOCS SYNC RULE: when features, settings, screens, or boards change, update
   in the same change: MANUAL.md prose + its "Where everything lives" tree +
   TOCs, docs/HARDWARE.md,
-  README.md, and the screenshots — refresh the affected docs/img/*.png from
+  README.md, and the screenshots. NOTE the user-facing docs cover only the
+  RELEASED boards (see "Support matrix" below) — a change to an internal-only
+  board updates CLAUDE.md and the code, and must NOT add that board to
+  README/HARDWARE/site — refresh the affected docs/img/*.png from
   renders/ and re-run `make docs-img` (tools/annotate_docs.py +
   docs/img/manual/manifest.json; re-measure callout boxes if the layout
   moved — the script warns when a render's size changes).
@@ -82,15 +85,65 @@ display isn't up.
 - Commit as `marcus@turboio.com` (repo-local config). Do NOT add
   "Co-Authored-By: Claude" or other AI-signature trailers.
 
+## Support matrix (READ BEFORE TOUCHING ANY BOARD LIST)
+
+THREE boards are released and advertised. Nothing else is, on purpose:
+
+| env | product | role | slug |
+|---|---|---|---|
+| `esp32-p4-micra-5` | P4-WIFI6-Touch-LCD-5 | mount-on-Micra, the default pick | `p4-wifi6-touch-lcd-5` |
+| `esp32-s3-micra-4-3c` | S3-Touch-LCD-4.3C BOX | mount-on-Micra, nothing to build | `s3-touch-lcd-4.3c` |
+| `esp32-p4-micra-x-8` | P4-WIFI6-Touch-LCD-X 8" | counter-top companion | `p4-wifi6-touch-lcd-x-8` |
+
+Positioning (keep the docs saying this): the **P4-5 is the recommendation** for
+mounting on the machine — it just needs a printed shell and, for Auto shot, a
+DIY opto cable. The **4.3C earns its place by removing BOTH of those**: it is
+the only supported board that is a finished box *and* has opto-isolators
+on-board (three wires into screw terminals). It is the slower part; that is the
+trade. The **X 8"** is the counter-top box.
+
+Every OTHER env — `esp32-s3-micra` (2"), `-7b`, `-4-3b`, `esp32-p4-micra-43`,
+`-x-7`, `-x-10-1` — is **INTERNAL-ONLY**: it still builds, is still maintained,
+and is deliberately absent from the release matrix, the web flasher and every
+user-facing doc. They are kept as the record of how those boards differ, and as
+dev hardware (the 7" X box is the owner's desk unit). **Do not add one back to
+README.md, docs/HARDWARE.md, site/index.html or the CI matrix without asking.**
+Nothing is deleted to de-advertise a board — only de-listed.
+
+The lists that must stay in sync when this changes: the
+`.github/workflows/firmware-release.yml` matrix, `site/index.html` (board cards
+*and* `BOARD_PATTERNS`), README.md ("Which board?", the 3D-print table, the
+flash/`pio run` lists), docs/HARDWARE.md, and the `[RELEASED]`/`[INTERNAL-ONLY]`
+markers in platformio.ini + board_config.h.
+
+- **OTA on de-listed boards: knowingly broken, do not "fix" it.** `releases.json`
+  is global, so an internal-only build still sees "update available" and its
+  install 404s and rolls back harmlessly. Accepted because none of these boards
+  are expected to be in anyone's hands — they get flashed over USB. Revisit only
+  if one actually sees use. No `kOtaPublished` flag, no UI gating.
+- **Coming: a second P4-5 image for rev v3 production silicon.** A sample is
+  expected. It lands as a SECOND board block + env + board json
+  (`chip_variant "esp32p4"`, `BOARD_P4_SILICON_REV3` defined) with slug
+  `p4-wifi6-touch-lcd-5-rev3`. The plain `p4-wifi6-touch-lcd-5` keeps meaning
+  the rev v1.x ("es") image — never rename it, fielded LCD-5 units self-update
+  from that path. The flasher's Detect will then need to read the `REV=` field
+  the identify banner already emits (`src/device/main.cpp`, efuse major*100+
+  minor, >= 300 = rev3); a first install on a blank board can't be probed and
+  will need an explicit choice. `BOARD_P4_SILICON_REV3` is already the macro
+  display.cpp uses to pick the DSI PHY's XTAL PLL reference.
+
 ## Boards / build
 
-Board targets are `<chip>-<panel>` after the Waveshare product names:
+Board targets are `<chip>-<panel>` after the Waveshare product names.
+Released: `build-p4-5`, `build-s3-4-3c`, `build-p4-x-8`. Internal-only:
 `make build` (default, the 2-inch S3), `build-s3-7b`, `build-s3-4-3b`,
-`build-s3-4-3c`, `build-p4-4-3`, `build-p4-5`; matching `flash-*` targets
+`build-p4-4-3`, `build-p4-x-7`, `build-p4-x-10-1`. Matching `flash-*` targets
 auto-detect the port and can probe a running board's serial banner (pre-rename
-names like `build-p4`/`flash-7b` remain as aliases).
+names like `build-p4`/`flash-7b` remain as aliases). Two sweeps:
+`make build-release` (the three released envs + sim — run this before pushing a
+platform change or cutting a release) and `make build-all` (every env + sim).
 
-WHEN to run full builds: all envs + `sim` must compile before you PUSH or cut a
+WHEN to run full builds: `make build-all` must pass before you PUSH or cut a
 RELEASE of a platform change — not on every edit. During debug/development stay
 on `make sim` (fast, no node, no device contention) and at most the ONE device
 env you're actually testing on. Full sweeps mid-investigation are slow, contend
@@ -104,7 +157,7 @@ that needs **node** (a real dev dependency; `make sim` does not need it). Bare
 `pio run` does NOT generate it: run `make webapp` first. Never commit the
 header or hand-edit `tools/webapp/dist/`.
 
-### ESP32-P4-WIFI6-Touch-LCD-5 (env `esp32-p4-micra-5`) — NOT yet HW-verified
+### ESP32-P4-WIFI6-Touch-LCD-5 (env `esp32-p4-micra-5`) — HW-VERIFIED, the owner's daily-driver board and the default recommendation
 
 Electronically the P4 4.3 (same radio/audio/battery/paddle wiring — everything
 in that section applies, including the rev v1.x chip_variant); only the panel
@@ -118,6 +171,11 @@ only), 58 MHz DPI / 700 Mbps lanes. UI: `BOARD_UI_SCALE 1.5f` renders the wide
 scale 1.0 boards are bit-identical, verified against baseline renders.
 
 ### ESP32-P4-WIFI6-Touch-LCD-X 7"/8"/10.1" (envs `esp32-p4-micra-x-7` / `-x-8` / `-x-10-1`) — 7" verified on HW (2026-08-29: boot, display, touch, hosted link, paddle sense); 8"/10.1" NOT yet
+
+RELEASE STATUS: the **8" is the released counter-top product**; the **7" is
+INTERNAL-ONLY** (the owner's desk/dev unit — de-listed 2026-09-10, not a
+capability judgement) and the 10.1" has never been released. Only the 8"
+appears in CI, the web flasher and the docs.
 
 The finished-box (all-in-one HMI) family. Electronics = the P4 4.3/5 (same
 I2C 7/8, GT911 probe-only, battery GPIO20 ÷3, ES8311 + PA GPIO53, SD 39-44 on
@@ -139,15 +197,21 @@ bsp/esp32_p4_wifi6_touch_lcd_x):
 - **X-8 bring-up learnings (from the sister project, HW-verified there):**
   (1) rev3 DSI PHY: the legacy `MIPI_DSI_PHY_CLK_SRC_DEFAULT` (PLL_F20M)
   aborts inside the HAL on rev3 — it needs `MIPI_DSI_PHY_PLLREF_CLK_SRC_
-  DEFAULT` (XTAL); select at runtime via `efuse_hal_chip_revision() >= 300`
-  so one binary-per-rev source file serves both families. (2) Our JD9365 8"
+  DEFAULT` (XTAL). Now selected by the `BOARD_P4_SILICON_REV3` macro, which a
+  board's block in board_config.h defines when its json is `chip_variant
+  "esp32p4"` — keyed on silicon, not on panel, so a rev3 build of ANY P4 board
+  gets it. (A runtime `efuse_hal_chip_revision() >= 300` check would also work
+  but buys nothing: chip_variant is a link-time split, so rev1 and rev3 are
+  separate binaries regardless.) (2) Our JD9365 8"
   table + 80 MHz/1500 Mbps timings worked first time (panel up in ~340 ms).
   HEADS-UP (user, 2026-09): the OTHER P4 boards (4.3/5) may eventually ship
-  with v3 silicon too — when that lands, each P4 board needs BOTH an -es and
-  a production-silicon image (deliberately NOT built yet). Prep in place: the
-  serial identify line reports `REV=` (efuse major*100+minor) so the web
-  flasher's Detect can pick the right variant, and display.cpp's PHY-clock
-  #if would become the runtime efuse check from (1).
+  with v3 silicon too. For the RELEASED P4-5 this is now planned work — a
+  sample is expected; see the "Support matrix" section for the shape of it
+  (second env + json, slug `p4-wifi6-touch-lcd-5-rev3`, plain slug stays ES).
+  Prep in place: the serial identify line reports `REV=` (efuse
+  major*100+minor) so the web flasher's Detect can pick the right variant, and
+  display.cpp's PHY-clock branch already keys on `BOARD_P4_SILICON_REV3` — the
+  new board block just defines it.
   (3) The 8" box mounts its glass the OPPOSITE way up from the 7": same
   table renders upside down — fix is rotating 270° instead of 90° in the
   flush (a direction constant; touch mapping follows it). Our per-size touch

@@ -16,8 +16,12 @@ namespace board {
 // Waveshare ESP32-S3-Touch-LCD-2 — 2.0", 240x320 ST7789T3 over 4-wire SPI,
 // CST816 capacitive touch over I2C. Values traced to Waveshare's demo source.
 constexpr char kName[] = "Waveshare ESP32-S3-Touch-LCD-2";
-// Release-artifact slug — MUST match the firmware-release.yml matrix "board"
-// field (CI asserts it): the self-updater fetches firmware/app/<slug>.bin.
+// INTERNAL-ONLY board: deliberately NOT in the firmware-release.yml
+// matrix, the web flasher, or the docs, so nothing is published at
+// firmware/app/<slug>.bin and self-update cannot complete here (the
+// check still runs and the download 404s — accepted, see CLAUDE.md
+// "Support matrix"). The slug is kept so promoting the board later is
+// just a matrix row.
 constexpr char kUpdateSlug[] = "s3-touch-lcd-2";
 #define BOARD_DISPLAY_SPI    // ST7789 over SPI
 #define BOARD_TOUCH_CST816   // CST816, 8-bit registers
@@ -86,8 +90,12 @@ constexpr bool kPaddleActiveHigh = true;   // drive level that "closes" the shot
 // Arduino demo (examples/Arduino/examples/06_LCD + 08_TOUCH). UNVERIFIED on
 // hardware yet — tweak here if the panel is dark/garbled or touch is off.
 constexpr char kName[] = "Waveshare ESP32-S3-Touch-LCD-7B";
-// Release-artifact slug — MUST match the firmware-release.yml matrix "board"
-// field (CI asserts it): the self-updater fetches firmware/app/<slug>.bin.
+// INTERNAL-ONLY board: deliberately NOT in the firmware-release.yml
+// matrix, the web flasher, or the docs, so nothing is published at
+// firmware/app/<slug>.bin and self-update cannot complete here (the
+// check still runs and the download 404s — accepted, see CLAUDE.md
+// "Support matrix"). The slug is kept so promoting the board later is
+// just a matrix row.
 constexpr char kUpdateSlug[] = "s3-touch-lcd-7b";
 #define BOARD_DISPLAY_RGB     // RGB parallel panel via Arduino_GFX
 #define BOARD_TOUCH_GT911     // GT911, 16-bit registers
@@ -166,8 +174,12 @@ constexpr bool kPaddleActiveHigh = true;
 // resolution + RGB timing differ (values from Waveshare's 4.3B config). We reuse
 // the 7B's io_extension/touch/backlight/battery paths unchanged. UNVERIFIED on HW.
 constexpr char kName[] = "Waveshare ESP32-S3-Touch-LCD-4.3B";
-// Release-artifact slug — MUST match the firmware-release.yml matrix "board"
-// field (CI asserts it): the self-updater fetches firmware/app/<slug>.bin.
+// INTERNAL-ONLY board: deliberately NOT in the firmware-release.yml
+// matrix, the web flasher, or the docs, so nothing is published at
+// firmware/app/<slug>.bin and self-update cannot complete here (the
+// check still runs and the download 404s — accepted, see CLAUDE.md
+// "Support matrix"). The slug is kept so promoting the board later is
+// just a matrix row.
 constexpr char kUpdateSlug[] = "s3-touch-lcd-4.3b";
 #define BOARD_DISPLAY_RGB
 #define BOARD_TOUCH_GT911
@@ -243,8 +255,10 @@ constexpr bool kPaddleActiveHigh = true;
 // (reg 0x05, inverted duty) and a battery ADC (reg 0x06). Pins + RGB timing
 // traced to Waveshare's 4.3C demo (examples/arduino 03_lcd + 14_lvgl_slider).
 constexpr char kName[] = "Waveshare ESP32-S3-Touch-LCD-4.3C";
-// Release-artifact slug — MUST match the firmware-release.yml matrix "board"
-// field (CI asserts it): the self-updater fetches firmware/app/<slug>.bin.
+// RELEASED: this board is in the firmware-release.yml matrix, the web
+// flasher and the README. The slug MUST equal that matrix row's "board"
+// field (CI asserts it against the built binary): the self-updater
+// fetches firmware/app/<slug>.bin.
 constexpr char kUpdateSlug[] = "s3-touch-lcd-4.3c";
 #define BOARD_DISPLAY_RGB
 #define BOARD_TOUCH_GT911
@@ -369,8 +383,12 @@ constexpr int kSdD0 = 13;
 // native GPIOs. Pins traced from the board schematic + Waveshare's BSP
 // (esp32_p4_wifi6_touch_lcd_4_3.h). UNVERIFIED on hardware yet.
 constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-4.3";
-// Release-artifact slug — MUST match the firmware-release.yml matrix "board"
-// field (CI asserts it): the self-updater fetches firmware/app/<slug>.bin.
+// INTERNAL-ONLY board: deliberately NOT in the firmware-release.yml
+// matrix, the web flasher, or the docs, so nothing is published at
+// firmware/app/<slug>.bin and self-update cannot complete here (the
+// check still runs and the download 404s — accepted, see CLAUDE.md
+// "Support matrix"). The slug is kept so promoting the board later is
+// just a matrix row.
 constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-4.3";
 #define BOARD_DISPLAY_DSI     // MIPI-DSI panel via Arduino_GFX
 #define BOARD_DSI_PANEL_ST7701  // panel controller (selects the DCS init table)
@@ -505,10 +523,18 @@ constexpr int kSdLdoChannel = 4;
 //     separate boost-enable GPIO in the BSP's control path.
 //   - GT911 reset/int are NOT wired to P4 GPIOs (BSP: GPIO_NUM_NC) — the touch
 //     controller comes up on its own; we just probe both addresses.
-// UNVERIFIED on hardware yet.
+// HW-VERIFIED (the daily-driver board).
 constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-5";
-// Release-artifact slug — MUST match the firmware-release.yml matrix "board"
-// field (CI asserts it): the self-updater fetches firmware/app/<slug>.bin.
+// RELEASED: this board is in the firmware-release.yml matrix, the web
+// flasher and the README. The slug MUST equal that matrix row's "board"
+// field (CI asserts it against the built binary): the self-updater
+// fetches firmware/app/<slug>.bin.
+//
+// This slug means the rev v1.x ("es") silicon image, and must keep meaning
+// that: every LCD-5 in the field self-updates from it. When a rev v3
+// production-silicon sample lands it becomes a SECOND board block + env with
+// slug "p4-wifi6-touch-lcd-5-rev3" (chip_variant "esp32p4", and
+// BOARD_P4_SILICON_REV3 defined) — never a rename of this one.
 constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-5";
 #define BOARD_DISPLAY_DSI
 #define BOARD_DSI_PANEL_HX8394  // panel controller (selects the DCS init table)
@@ -622,10 +648,13 @@ constexpr int kSdLdoChannel = 4;
 // verified against the X schematic + Waveshare's BSP
 // (esp32_p4_wifi6_touch_lcd_x.h). One block, panel deltas in the #if below.
 //
-// SILICON: these ship rev v3.0+ chips (400 MHz) — boards jsons use
-// chip_variant "esp32p4", the OPPOSITE of the other P4 boards' "esp32p4_es".
-// The two revision groups are binary-incompatible; `esptool chip_id` tells
-// them apart. UNVERIFIED on hardware yet.
+// SILICON IS PER UNIT, not per size. The two P4 revision generations are
+// binary-incompatible (one image cannot boot both); `esptool chip-id` tells
+// them apart, and BOARD_P4_SILICON_REV3 below is how the drivers ask.
+//   7"    rev v1.3 on the unit we have -> boards json chip_variant
+//         "esp32p4_es", so NO BOARD_P4_SILICON_REV3.
+//   8"    rev v3.2 (verified) -> "esp32p4" + BOARD_P4_SILICON_REV3.
+//   10.1" no hardware; rev3 assumed, same as the 8".
 #define BOARD_DISPLAY_DSI
 #define BOARD_TOUCH_GT911
 constexpr bool kSupportsBrightness = true;  // LEDC PWM backlight (dimmable)
@@ -635,8 +664,12 @@ constexpr int kSaverDimPercent = 5;
 
 #if defined(BOARD_WAVESHARE_P4_WIFI6_X_7)
 constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-X-7";
-// Release-artifact slug — MUST match the firmware-release.yml matrix "board"
-// field (CI asserts it): the self-updater fetches firmware/app/<slug>.bin.
+// INTERNAL-ONLY board: deliberately NOT in the firmware-release.yml
+// matrix, the web flasher, or the docs, so nothing is published at
+// firmware/app/<slug>.bin and self-update cannot complete here (the
+// check still runs and the download 404s — accepted, see CLAUDE.md
+// "Support matrix"). The slug is kept so promoting the board later is
+// just a matrix row.
 constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-x-7";
 #define BOARD_DSI_PANEL_ILI9881C  // panel controller (selects the DCS init table)
 // UI: same panel geometry as the P4-5 (720x1280 rotated) on larger glass —
@@ -650,16 +683,27 @@ constexpr int  kDsiLaneBitRateMbps = 1000;
 constexpr int  kDsiHsyncPulse = 50, kDsiHsyncBack = 239, kDsiHsyncFront = 33;
 constexpr int  kDsiVsyncPulse = 30, kDsiVsyncBack = 20,  kDsiVsyncFront = 2;
 #else
+// Rev v3.0+ silicon (both the 8" and the 10.1"): 400 MHz, and the DSI PHY's
+// PLL reference mux changed, so display.cpp must pick the XTAL source. Keyed
+// on silicon, NOT on panel — a rev3 build of any other P4 board defines this
+// too (see the reserved p4-wifi6-touch-lcd-5-rev3 note above).
+#define BOARD_P4_SILICON_REV3
 #if defined(BOARD_WAVESHARE_P4_WIFI6_X_8)
 constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-X-8";
-// Release-artifact slug — MUST match the firmware-release.yml matrix "board"
-// field (CI asserts it): the self-updater fetches firmware/app/<slug>.bin.
+// RELEASED: this board is in the firmware-release.yml matrix, the web
+// flasher and the README. The slug MUST equal that matrix row's "board"
+// field (CI asserts it against the built binary): the self-updater
+// fetches firmware/app/<slug>.bin.
 constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-x-8";
 #define BOARD_DSI_PANEL_JD9365     // 8" DCS init table
 #else
 constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-X-10.1";
-// Release-artifact slug — MUST match the firmware-release.yml matrix "board"
-// field (CI asserts it): the self-updater fetches firmware/app/<slug>.bin.
+// INTERNAL-ONLY board: deliberately NOT in the firmware-release.yml
+// matrix, the web flasher, or the docs, so nothing is published at
+// firmware/app/<slug>.bin and self-update cannot complete here (the
+// check still runs and the download 404s — accepted, see CLAUDE.md
+// "Support matrix"). The slug is kept so promoting the board later is
+// just a matrix row.
 constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-x-10.1";
 #define BOARD_DSI_PANEL_JD9365_10  // the 10.1" glass's own DCS init table
 #endif
