@@ -32,6 +32,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
+      # One board's transient failure must not cancel the other seven and skip
+      # publishing. v0.12.1 died exactly that way: a 500 from the package CDN
+      # while fetching esptoolpy took out the x-7 job, fail-fast cancelled the
+      # rest, and `release`/`pages` were SKIPPED -- leaving a pushed tag with no
+      # artifacts, which is worse than either shipping or not shipping.
+      fail-fast: false
       matrix:
         include:
           # board = user-facing name (Waveshare product, lowercased) used in
@@ -67,7 +73,15 @@ jobs:
           path: |
             ~/.platformio
             ~/.cache/pip
+          # The key still tracks platformio.ini so a real platform/lib change gets
+          # a fresh cache -- but restore-keys means an unrelated edit no longer
+          # forces a FULL re-download from the CDN: the previous cache for this
+          # env is restored and only the delta is fetched. That matters because a
+          # full fetch is when a transient CDN outage can take out a release (a
+          # one-line monitor_dtr change invalidated all eight jobs' caches).
           key: pio-${{ matrix.env }}-${{ hashFiles('platformio.ini') }}
+          restore-keys: |
+            pio-${{ matrix.env }}-
 
       - name: Install PlatformIO
         run: pip install platformio
