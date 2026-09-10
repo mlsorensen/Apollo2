@@ -372,7 +372,8 @@ void build_device_wifi_rows(lv_obj_t* page, const lv_font_t* text_font,
   lv_obj_set_size(out.ntp_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 
   // Check for updates (needs WiFi + NTP, so it lives with them). Cycle button:
-  // Off / On boot / Daily. App hides the row when no update source is wired.
+  // Off / On boot / Daily / Hourly. App hides the row when no update source is
+  // wired.
   out.update_check_row = make_setting_row(page, "Check for updates", text_font);
   out.update_check_btn = ui::make_button(out.update_check_row);
   lv_obj_set_height(out.update_check_btn, btn_size);
@@ -380,6 +381,10 @@ void build_device_wifi_rows(lv_obj_t* page, const lv_font_t* text_font,
   lv_obj_set_style_bg_color(out.update_check_btn, lv_color_hex(ui::theme::card()), 0);
   out.update_check_value = lv_label_create(out.update_check_btn);
   lv_label_set_text(out.update_check_value, "On boot");
+  // Match the other cycle buttons (Screen timeout, Idle screen). Without this
+  // the label falls back to LVGL's default font and renders visibly smaller
+  // than every neighbouring button.
+  lv_obj_set_style_text_font(out.update_check_value, text_font, 0);
   lv_obj_center(out.update_check_value);
 }
 

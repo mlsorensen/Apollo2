@@ -230,13 +230,14 @@ void ShotStore::begin() {
   // and DMA compete for it — scarcest on the S3 boards): 8 KB covers FATFS +
   // stdio, and the create is CHECKED because a silent failure here means
   // shots quietly never save.
-  // 6144: measured peak 2,872 (mount + index build for 36 shots), but the WRITE
-  // path is not in that figure -- it only runs when a shot is saved, and its
-  // stdio/FATFS calls are the deep part (est. +2-3K). This is the least
-  // evidence-backed of the trims. The bracket in write_job reports the real
-  // number on the next saved shot; if it panics first, the canary names the
-  // task and 8192 goes back.
-  if (xTaskCreatePinnedToCore(task_entry, "shot_store", 6144, this, 1, nullptr,
+  // 5120. Measured peaks differ by PLATFORM, and this is the one task where they
+  // do: 2,876 on the S3 WITH the write path exercised (a real 57.8g shot saved
+  // to a mounted card), but 3,100 on the P4 WITHOUT it (no card in the X-7, so
+  // only mount retries ran). 4096 left just 996 bytes of margin there -- the
+  // thinnest in the system, on the one task whose deepest path is unexercised
+  // on that chip. 5120 restores ~2K. The other trims measured SHALLOWER on
+  // RISC-V than Xtensa; this one did not.
+  if (xTaskCreatePinnedToCore(task_entry, "shot_store", 5120, this, 1, nullptr,
                               0) != pdPASS) {
     core::logf("ShotStore: FAILED to create writer task (internal RAM?) — "
                "shots will not be saved\n");
@@ -432,14 +433,7 @@ void ShotStore::unmount() {
   core::logf("ShotStore: SD unavailable (removed?), will retry\n");
 }
 
-// TEMPORARY DIAGNOSTIC (2026-09-10): a shot save is a prime suspect for the
-// transient DMA-pool dip (observed lowest 1908 in a window that also contained
-// "ShotDetector: candidate"). The RECORD itself is PSRAM (see save()), but the
-// SD write underneath is not: sdmmc/FATFS transfers need DMA-capable INTERNAL
-// buffers. Bracketing the write shows whether that is the temporary user.
 void ShotStore::write_job(SaveJob& job) {
-  const unsigned dma_before =
-      heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
   if (!available_) return;
   if (job.rec == nullptr && job.remove_id != 0) {  // delete a shot's files
     remove_files(job.remove_id);
@@ -495,15 +489,10 @@ void ShotStore::write_job(SaveJob& job) {
   }
   std::fclose(sf);
 
-  core::logf("ShotStore: saved shot %lu (%.1fg, %lums) [DMA largest %u -> %u, "
-             "min during %u]\n",
+  core::logf("ShotStore: saved shot %lu (%.1fg, %lums)\n",
              static_cast<unsigned long>(r.summary.id),
              static_cast<double>(r.summary.final_g),
-             static_cast<unsigned long>(r.summary.duration_ms), dma_before,
-             static_cast<unsigned>(heap_caps_get_largest_free_block(
-                 MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)),
-             static_cast<unsigned>(heap_caps_get_minimum_free_size(
-                 MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)));
+             static_cast<unsigned long>(r.summary.duration_ms));
 }
 
 void ShotStore::save(const core::ShotRecord& record) {

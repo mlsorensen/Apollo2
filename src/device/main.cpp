@@ -653,7 +653,13 @@ void loop() {
         static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
 
 
-    // Task-stack census, every 5th heap line. Stacks are INTERNAL RAM and they
+#ifdef DEV_TASK_CENSUS
+    // Task-stack census, every 5th heap line. DEV TOOL, OFF BY DEFAULT: the line
+    // runs ~560 chars, i.e. ~112 B/min into a 64KB ring, which would give back
+    // roughly half the log retention the noise cleanup just won (~3.3h -> 4.5h).
+    // It also adds nothing for FIELD diagnosis -- a stack overflow trips the
+    // FreeRTOS canary, which names the task directly. Build with
+    // -D DEV_TASK_CENSUS when sizing stacks. Stacks are INTERNAL RAM and they
     // are the recoverable kind of waste: of the seven tasks this firmware
     // creates, only loop and updchk were ever measured, and BOTH sit ~50%
     // unused (loop 9476 of 16384; updchk ~4400 of 8192) -- 10.7KB dead in the
@@ -665,18 +671,38 @@ void loop() {
     static uint8_t census_tick = 0;
     if (++census_tick >= 5) {
       census_tick = 0;
-      static TaskStatus_t tasks[24];
-      const UBaseType_t n = uxTaskGetSystemState(tasks, 24, nullptr);
-      char line[420];
-      int len = std::snprintf(line, sizeof(line), "stacks(spare):");
-      for (UBaseType_t i = 0; i < n && len > 0 && len < (int)sizeof(line) - 24; ++i) {
-        len += std::snprintf(line + len, sizeof(line) - len, " %s=%u",
-                             tasks[i].pcTaskName,
-                             static_cast<unsigned>(
-                                 uxTaskGetStackHighWaterMark(tasks[i].xHandle)));
+      // uxTaskGetSystemState returns 0 -- not a partial list -- if the array
+      // cannot hold EVERY task, so an undersized array yields a silently empty
+      // census. 24 was enough for the S3 and not for the P4 (hosted-radio SDIO,
+      // esp-hosted RPC, the DSI sync task and its own web_ui task push it over),
+      // which is exactly how it failed: an empty line, no error.
+      constexpr UBaseType_t kMaxTasks = 40;
+      static TaskStatus_t tasks[kMaxTasks];
+      const UBaseType_t total = uxTaskGetNumberOfTasks();
+      const UBaseType_t n = uxTaskGetSystemState(tasks, kMaxTasks, nullptr);
+      if (n == 0) {
+        // NOT `return` -- this runs inside loop(); bailing out here would skip
+        // everything after it (update checks, brew poll) once every 5 minutes.
+        core::logf("stacks: census unavailable (%u tasks > %u slots)\n",
+                   static_cast<unsigned>(total),
+                   static_cast<unsigned>(kMaxTasks));
+      } else {
+        // STATIC, not a stack local: this runs on loopTask, whose stack is now
+        // trimmed to ~2.3K of margin, and a ~1K buffer here would spend half of
+        // it -- the diagnostic competing with the thing it measures.
+        static char line[1024];  // 40 tasks x ~14 chars + header + slack
+        int len = std::snprintf(line, sizeof(line), "stacks(spare):");
+        for (UBaseType_t i = 0;
+             i < n && len > 0 && len < static_cast<int>(sizeof(line)) - 24; ++i) {
+          len += std::snprintf(line + len, sizeof(line) - len, " %s=%u",
+                               tasks[i].pcTaskName,
+                               static_cast<unsigned>(uxTaskGetStackHighWaterMark(
+                                   tasks[i].xHandle)));
+        }
+        core::logf("%s\n", line);
       }
-      core::logf("%s\n", line);
     }
+#endif  // DEV_TASK_CENSUS
   }
 
   // Hourly last-known-time snapshot -> NVS, so the next boot without a
