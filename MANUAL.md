@@ -53,11 +53,11 @@ Settings
 │  │                    · Drop negative g/s · Oscilloscope graph
 │  └─ Device settings — the scale's own settings (Beep · Auto-off/sleep · Unit …)
 ├─ Apollo
-│  ├─ Display     — Brightness* · Screen dim · Screensaver (Logo/Blank)
+│  ├─ Display     — Brightness* · Screen timeout · Idle screen (Logo/Dim/Off)
 │  │               · Theme · Fahrenheit · Button sounds* · Performance overlay
 │  ├─ Time & date — Time · Date · 24-hour · Timezone
 │  └─ WiFi        — Enable · Status · Set up WiFi → QR portal · Forget
-│                  · Auto time (NTP) · Check for updates (Off/Boot/Daily)
+│                  · Auto time (NTP) · Check for updates (Off/Boot/Daily/Hourly)
 │                    → notice → Install now
 ├─ Restart display
 └─ Lock display for cleaning  → 30 s touch lock
@@ -85,8 +85,10 @@ Without a scale, the MICRA card fills the screen as a single hero:
 
 ![MICRA card](docs/img/manual/home-micra.png)
 
-- ① **Status** — `Set up in Settings` (nothing paired yet), `Token needed`,
-  `Disconnected`, `Connecting...`, `Heating` (powered on, boilers still coming
+- ① **Status** — `Not set up` (no machine chosen yet), `Setup unfinished`
+  (a machine is chosen but pairing never completed — in both of these the Power
+  button reads **Set up** and takes you straight to Settings > Micra >
+  Bluetooth), `Disconnected`, `Connecting...`, `Heating` (powered on, boilers still coming
   up to temperature — the dot pulses amber), `Ready` (at temperature), or
   `Standby`. The Micra itself doesn't report a warm‑up state; `Heating` is
   inferred from the live boiler temperatures vs their set‑points. A boiler
@@ -396,19 +398,20 @@ page fits on screen with little to no scrolling.
 ![Display settings](docs/img/manual/device-display.png)
 
 - ① **Brightness** *(dimmable boards)* — backlight level.
-- ② **Screen dim** *(Off / 1 / 5 / 15 / 30 min, default 30 min)* — after this
-  idle time the screensaver starts (see the next row); any touch wakes the
-  screen. A shot in progress never counts as idle, so the screensaver won't
+- ② **Screen timeout** *(Off / 1 / 5 / 15 / 30 min, default 30 min)* — after
+  this idle time the idle screen starts (see the next row); any touch wakes the
+  screen. A shot in progress never counts as idle, so the idle screen won't
   cover a live shot no matter how short the timeout — the countdown restarts
   when the shot ends.
-- ③ **Screensaver** *(Logo / Blank, default Logo; shown while Screen dim is
-  on)* — what the idle timeout shows. **Logo** dims the backlight (to 10 % on
-  the S3 boards, 5 % on the P4s — low enough to read as asleep, high enough
-  that the panel isn't mistaken for switched off) and
-  bounces the La Marzocco lion around a black screen, changing color at every
-  wall it hits (on boards whose backlight can't dim, the logo shows at full
-  brightness — choose Blank there to go dark). **Blank** switches the display
-  off entirely:
+- ③ **Idle screen** *(Logo / Dim / Off, default Logo; shown while Screen
+  timeout is on)* — what the timeout shows. **Logo** turns the backlight down
+  (to 10 % on the S3 boards, 5 % on the P4s — low enough to read as asleep, high
+  enough that the panel isn't mistaken for switched off) and bounces the La
+  Marzocco lion around a black screen, changing color at every wall it hits.
+  **Dim** uses the same low backlight but leaves the screen black, with no lion.
+  **Off** switches the backlight off entirely. On boards whose backlight can't
+  be turned down, Logo and Dim show at full brightness — choose Off there to go
+  dark.
 
   <img src="docs/img/manual/screensaver.png" width="70%" alt="The bouncing-logo screensaver">
 
@@ -460,9 +463,11 @@ page fits on screen with little to no scrolling.
 - ④ **Auto time (NTP)** *(default on)* — sync the clock over WiFi while
   connected. (The timezone it applies is set under **Time & date**.)
 - ⑤ **Check for updates** *(default On boot)* — tap to cycle **Off / On boot /
-  Daily**. "On boot" checks once at startup; "Daily" also re-checks about once
-  a day while the machine stays on — during an idle moment (screensaver on), so
-  it never gets in the way. Checks only run after an NTP sync has proven the
+  Daily / Hourly**. "On boot" checks once at startup; "Daily" and "Hourly" also
+  re-check on that interval while the machine stays on — always during an idle
+  moment (the idle screen is up), so they never get in the way. If Screen
+  timeout is Off, the repeating checks never fire; the startup check and the
+  manual button still work. Checks only run after an NTP sync has proven the
   internet is reachable. When a newer firmware exists, a notice shows the
   version and its release notes:
 

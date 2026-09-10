@@ -11,7 +11,8 @@ constexpr char kNameKey[] = "name";
 constexpr char kTokenKey[] = "token";
 constexpr char kBrightnessKey[] = "bright";
 constexpr char kScreenTimeoutKey[] = "scrtimeout";
-constexpr char kSaverStyleKey[] = "ssstyle";
+constexpr char kSaverStyleKey[] = "ssstyle";   // legacy: 0=Logo, 1=Blank
+constexpr char kSaverStyle2Key[] = "ssstyle2";  // 0=Logo, 1=Dim, 2=Off
 constexpr char kSkippedUpdateKey[] = "skipver";
 constexpr char kPendingInstallKey[] = "otainst";  // boot-flag install target version
 constexpr char kUpdateCheckKey[] = "updchk";   // legacy bool (pre-mode)
@@ -427,9 +428,18 @@ void Config::set_pending_install(const std::string& version) {
 }
 
 int Config::screensaver_style() const {
+  // 0 = Logo, 1 = Dim, 2 = Off. "Dim" was inserted at 1 when the third style
+  // landed, which would have flipped existing "Blank" users (old index 1) to
+  // Dim. So the value moved to a new key and the old one migrates: old 1
+  // (Blank) -> new 2 (Off). Same pattern as update_check_mode's bool->int move.
   Preferences p;
   if (!p.begin(kNamespace, /*readOnly=*/true)) return 0;
-  const int v = p.isKey(kSaverStyleKey) ? p.getInt(kSaverStyleKey, 0) : 0;
+  int v = 0;
+  if (p.isKey(kSaverStyle2Key)) {
+    v = p.getInt(kSaverStyle2Key, 0);
+  } else if (p.isKey(kSaverStyleKey)) {
+    v = p.getInt(kSaverStyleKey, 0) == 1 ? 2 : 0;
+  }
   p.end();
   return v;
 }
@@ -437,7 +447,7 @@ int Config::screensaver_style() const {
 void Config::set_screensaver_style(int style) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
-  p.putInt(kSaverStyleKey, style);
+  p.putInt(kSaverStyle2Key, style);  // see screensaver_style() for the migration
   p.end();
 }
 

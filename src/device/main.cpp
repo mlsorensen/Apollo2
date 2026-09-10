@@ -685,19 +685,23 @@ void loop() {
         next_boot_try_ms = millis() + 6000;  // space retries while DNS settles
       }
     }
-    // Daily cadence (mode 2): re-check every ~24 h, but ONLY while idle (the
-    // screensaver is on). BLE reconnect scanning is parked during the saver (see
-    // below), so the check runs with internal RAM freed — reliable, and never
-    // during active use. If the saver is disabled the daily check won't fire;
-    // boot + manual still cover it.
-    static uint32_t last_daily_ms = 0;
-    if (g_update_check.check_cadence() == 2 && boot_done &&
-        g_app.screensaver_active() &&
+    // Repeating cadences: Daily (mode 2) and Hourly (mode 3). Both fire ONLY
+    // while idle (the screensaver is on). BLE reconnect scanning is parked
+    // during the saver (see below), so the check runs with internal RAM freed —
+    // reliable, and never during active use. If the saver is disabled neither
+    // fires; boot + manual still cover it.
+    static uint32_t last_repeat_ms = 0;
+    const int cadence = g_update_check.check_cadence();
+    const uint32_t repeat_ms = cadence == 3   ? 60u * 60u * 1000u
+                               : cadence == 2 ? 24u * 60u * 60u * 1000u
+                                              : 0;
+    if (repeat_ms != 0 && boot_done && g_app.screensaver_active() &&
         g_update_check.network_ready() && !g_update_check.task_active() &&
         !core::shot_in_flight(g_brew.snapshot()) &&
-        millis() - last_daily_ms >= 24u * 60u * 60u * 1000u) {
-      last_daily_ms = millis();
-      core::logf("UpdateCheck: daily automatic check\n");
+        millis() - last_repeat_ms >= repeat_ms) {
+      last_repeat_ms = millis();
+      core::logf("UpdateCheck: %s automatic check\n",
+                 cadence == 3 ? "hourly" : "daily");
       g_update_check.begin_check();
     }
     // Consume the request LAST: if the network isn't ready yet (NTP still

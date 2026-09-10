@@ -1147,8 +1147,12 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   const char* status = "Disconnected";
   uint32_t dot = ui::theme::muted();
   switch (state.link) {
-    case core::Link::Unconfigured: status = "Set up in Settings"; dot = ui::theme::muted(); break;
-    case core::Link::NeedsToken:   status = "Token needed"; dot = ui::theme::warn(); break;
+    // Both of these mean "setup isn't finished"; they differ only in how far it
+    // got, and the next action is the same for both (the Power button becomes
+    // "Set up" and jumps to Settings > Micra > Bluetooth). "Token needed" used
+    // to leak the BLE auth token at users, who have no way to know what that is.
+    case core::Link::Unconfigured: status = "Not set up"; dot = ui::theme::muted(); break;
+    case core::Link::NeedsToken:   status = "Setup unfinished"; dot = ui::theme::warn(); break;
     case core::Link::Disconnected: status = "Disconnected"; dot = ui::theme::alert(); break;
     case core::Link::Connecting:   status = "Connecting..."; dot = ui::theme::warn(); break;
     case core::Link::Connected:
@@ -1333,21 +1337,23 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
       ui::set_bg_color(w.power_btn, ui::theme::accent());
       ui::set_text(w.power_label, LV_SYMBOL_REFRESH "  Connect");
       break;
-    case core::Link::Connecting:
     case core::Link::NeedsToken:
     case core::Link::Unconfigured:
+      // Setup incomplete: make the button the WAY IN, not a greyed-out verb.
+      // It previously read a disabled "Connect", which names an action the user
+      // can't take and doesn't say what to do instead. Tapping now opens
+      // Settings > Micra > Bluetooth (see App::toggle_power).
+      lv_obj_remove_state(w.power_btn, LV_STATE_DISABLED);
+      ui::set_bg_color(w.power_btn, ui::theme::accent());
+      ui::set_text(w.power_label, LV_SYMBOL_SETTINGS "  Set up");
+      break;
+    case core::Link::Connecting:
     default:
       lv_obj_add_state(w.power_btn, LV_STATE_DISABLED);
       ui::set_bg_color(w.power_btn, pow_neutral);
-      if (has_status_text) {
-        ui::set_text(w.power_label, LV_SYMBOL_REFRESH "  Connect");
-      } else if (state.link == core::Link::Connecting) {
-        ui::set_text(w.power_label, LV_SYMBOL_REFRESH "  Connecting...");
-      } else if (state.link == core::Link::NeedsToken) {
-        ui::set_text(w.power_label, LV_SYMBOL_WARNING "  Token needed");
-      } else {
-        ui::set_text(w.power_label, LV_SYMBOL_SETTINGS "  Set up in Settings");
-      }
+      ui::set_text(w.power_label, has_status_text
+                                      ? LV_SYMBOL_REFRESH "  Connect"
+                                      : LV_SYMBOL_REFRESH "  Connecting...");
       break;
   }
 

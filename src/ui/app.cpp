@@ -557,9 +557,13 @@ void set_dim_label(ui::SettingsWidgets& s) {
   }
 }
 
-// Screensaver style (IDisplaySettings::screensaver_style): what the dim
-// timeout shows. Order matches the persisted index.
-constexpr const char* kSaverName[] = {"Logo", "Blank"};
+// Idle-screen style (IDisplaySettings::screensaver_style): what the screen
+// timeout shows. Order matches the persisted index (see Config's migration --
+// "Dim" was inserted at 1, so the old Blank=1 maps to the new Off=2).
+//   Logo — backlight at the per-board dim floor, bouncing lion
+//   Dim  — backlight at the same dim floor, black screen, no lion
+//   Off  — backlight fully off (set_brightness(0) is a true off, not a minimum)
+constexpr const char* kSaverName[] = {"Logo", "Dim", "Off"};
 constexpr int kSaverCount = static_cast<int>(sizeof(kSaverName) / sizeof(kSaverName[0]));
 void on_saver_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_screensaver_style();
@@ -1159,10 +1163,10 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     if (network_->enabled()) lv_obj_add_state(settings_.wifi_switch, LV_STATE_CHECKED);
     if (network_->ntp_enabled()) lv_obj_add_state(settings_.ntp_switch, LV_STATE_CHECKED);
     if (updates_ != nullptr) {
-      static const char* kCadence[] = {"Off", "On boot", "Daily"};
+      static const char* kCadence[] = {"Off", "On boot", "Daily", "Hourly"};
       const int m = updates_->check_cadence();
       lv_label_set_text(settings_.update_check_value,
-                        kCadence[(m >= 0 && m <= 2) ? m : 1]);
+                        kCadence[(m >= 0 && m <= 3) ? m : 1]);
     } else {
       lv_obj_add_flag(settings_.update_check_row, LV_OBJ_FLAG_HIDDEN);
     }
@@ -1545,8 +1549,15 @@ void App::rebuild() {
   if (lv_obj_t* old_page = settings_section_page(settings_, section))
     scroll_y = lv_obj_get_scroll_y(old_page);
 
+  // Pass updates_ back in. build()'s `updates` parameter is defaulted, and
+  // omitting it here set updates_ = nullptr on EVERY layout rebuild -- which
+  // hid the Info page's "Check for updates" button AND the Settings cadence
+  // row, and made manual checks silently no-op, for the rest of the session.
+  // Rebuilds fire on theme changes and on scale connect/disconnect, so it
+  // looked sporadic. (Automatic checks were unaffected: main.cpp drives those
+  // through g_update_check directly, not through the App.)
   build(*machine_, *provisioner_, *battery_, *display_, *clock_, *history_, *scale_,
-        *scale_provisioner_, *brew_, *network_, *sound_, *shots_, screen_);
+        *scale_provisioner_, *brew_, *network_, *sound_, *shots_, screen_, updates_);
   show_tab(1);                       // back to Settings...
   select_settings_section(section);  // ...on the section that triggered the rebuild
 
@@ -1615,6 +1626,15 @@ void App::show_tab(int index) {
 void App::toggle_power() {
   if (machine_ == nullptr) return;
   const core::Link link = machine_->snapshot().link;
+  // Setup incomplete -> the Power button reads "Set up" (see home_tab.cpp) and
+  // is the shortcut into finishing it, rather than a dead greyed-out "Connect".
+  // Both states land in the same place: Unconfigured has no machine chosen yet,
+  // NeedsToken has one but never completed pairing.
+  if (link == core::Link::Unconfigured || link == core::Link::NeedsToken) {
+    show_tab(1);  // Settings
+    select_settings_section(kSectionMicraBt);
+    return;
+  }
   if (link == core::Link::Connected) {
     const core::Power prev = machine_->snapshot().power;
     machine_->set_power(prev != core::Power::On);
@@ -1726,10 +1746,16 @@ void App::screensaver_tick() {
   if (idle == screensaver_on_) return;  // touch resets LVGL's inactivity clock
   screensaver_on_ = idle;
   if (idle) {
-    const bool blank = settings_.screensaver_style == 1;
-    display_->set_screensaver(blank ? core::IDisplaySettings::SaverMode::kBlank
-                                    : core::IDisplaySettings::SaverMode::kDim);
-    start_screensaver(blank);
+    // 0 = Logo, 1 = Dim, 2 = Off. Dim and Off both show a black screen (no
+    // lion); they differ only in whether the backlight stays at the per-board
+    // dim floor or goes fully off. So the lion is suppressed for anything but
+    // Logo, and only Off drops the backlight to zero.
+    const int style = settings_.screensaver_style;
+    const bool lights_out = style == 2;
+    display_->set_screensaver(lights_out
+                                  ? core::IDisplaySettings::SaverMode::kBlank
+                                  : core::IDisplaySettings::SaverMode::kDim);
+    start_screensaver(/*blank=*/style != 0);
   } else {
     display_->set_screensaver(core::IDisplaySettings::SaverMode::kOff);
     stop_screensaver();
@@ -1927,9 +1953,11 @@ void App::skip_update() {
 
 void App::cycle_update_cadence() {
   if (updates_ == nullptr) return;
-  const int m = (updates_->check_cadence() + 1) % 3;  // Off -> On boot -> Daily
+  // Off -> On boot -> Daily -> Hourly. The repeating modes only ever fire while
+  // the screensaver is up (see main.cpp), so Hourly costs nothing during use.
+  const int m = (updates_->check_cadence() + 1) % 4;
   updates_->set_check_cadence(m);
-  static const char* kCadence[] = {"Off", "On boot", "Daily"};
+  static const char* kCadence[] = {"Off", "On boot", "Daily", "Hourly"};
   lv_label_set_text(settings_.update_check_value, kCadence[m]);
 }
 

@@ -40,7 +40,15 @@ class App {
              core::IClock& clock, core::IHistory& history, core::IScale& scale,
              core::IScaleProvisioner& scale_provisioner, core::IBrewController& brew,
              core::INetwork& network, core::ISound& sound, core::IShotStore& shots,
-             const ScreenProfile& screen, core::IUpdateSource* updates = nullptr);
+             const ScreenProfile& screen, core::IUpdateSource* updates);
+  // NOTE: `updates` is deliberately NOT defaulted. It used to be, and the
+  // internal layout-rebuild call omitted it -- so every rebuild silently set
+  // updates_ = nullptr, hiding the Info page's "Check for updates" button and
+  // the Settings cadence row, and no-oping manual checks, until the next boot.
+  // Rebuilds fire on theme changes and scale connect/disconnect, so it looked
+  // random. A defaulted parameter CHANGED an existing caller's behaviour
+  // instead of breaking the build; requiring it makes the compiler catch this.
+  // Pass nullptr explicitly if a caller genuinely has no update source.
 
   // Reflect the latest machine state and scan results in the UI (no I/O).
   void refresh();
@@ -104,7 +112,7 @@ class App {
   void open_checking_modal();            // "checking..." spinner during a live check
   void open_no_update_modal();           // "up to date" notice (forced check, boot)
   void skip_update();                    // modal "Skip this version"
-  void cycle_update_cadence();           // WiFi "Check for updates": Off/Boot/Daily
+  void cycle_update_cadence();           // "Check for updates": Off/Boot/Daily/Hourly
   void manual_update_check();            // Stats > Info button -> live check
   void update_result_poll();             // watch check_seq(); show the outcome
   bool update_ui_active() const { return modal_ != nullptr; }

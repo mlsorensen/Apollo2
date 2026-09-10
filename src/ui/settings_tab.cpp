@@ -200,7 +200,7 @@ void build_device_display_rows(lv_obj_t* page, const lv_font_t* text_font,
 
   // Screen dim: tap cycles Off / 15 min / 30 min. On every board — on/off-only
   // backlights just switch off instead of dimming.
-  lv_obj_t* rd = make_setting_row(page, "Screen dim", text_font);
+  lv_obj_t* rd = make_setting_row(page, "Screen timeout", text_font);
   out.dim_btn = ui::make_button(rd);
   lv_obj_set_height(out.dim_btn, btn_size);
   lv_obj_set_style_pad_hor(out.dim_btn, ui::dp(14), 0);
@@ -212,7 +212,7 @@ void build_device_display_rows(lv_obj_t* page, const lv_font_t* text_font,
 
   // Screensaver style: what the dim timeout shows — bouncing logo or a blank
   // screen. Hidden while Screen dim is Off (see App's sync of saver_row).
-  out.saver_row = make_setting_row(page, "Screensaver", text_font);
+  out.saver_row = make_setting_row(page, "Idle screen", text_font);
   out.saver_btn = ui::make_button(out.saver_row);
   lv_obj_set_height(out.saver_btn, btn_size);
   lv_obj_set_style_pad_hor(out.saver_btn, ui::dp(14), 0);
