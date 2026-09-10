@@ -10,7 +10,9 @@ void task_entry(void* arg) { static_cast<core::ScaleLink*>(arg)->run(); }
 
 void ScaleLink::begin(std::string address) {
   set_address(std::move(address));
-  xTaskCreatePinnedToCore(&task_entry, "scale_link", 8192, this,
+  // 4096: measured peak 2,356 (Acaia) / 2,300 (Bookoo), both connected +
+  // subscribed, and including a Settings scan. ~1.7K margin.
+  xTaskCreatePinnedToCore(&task_entry, "scale_link", 4096, this,
                           /*priority=*/1, nullptr, /*core=*/1);
 }
 

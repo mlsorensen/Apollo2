@@ -439,6 +439,20 @@ void setup() {
   // See the [[s3-ipc0-nimble-wifi-crash]] notes. (P4 offloads the radio to the
   // C6 via hostedInitBLE() earlier, so this only bites the S3, but the ordering
   // is harmless everywhere.)
+  // Name every FAILED allocation. This is the instrument that was missing all
+  // along: when the DMA pool ran dry mid-TLS, the only trace was a downstream
+  // "esp-aes: Failed to allocate memory" from a vendor tag, and working back to
+  // WHICH pool and HOW MUCH was wanted took an afternoon. The hook fires only on
+  // failure, so it costs nothing in the normal case, and it reports the exact
+  // size, the caps mask (DMA vs 8BIT is the distinction that mattered) and the
+  // calling function. Registered before the radios come up so nothing is missed.
+  heap_caps_register_failed_alloc_callback(
+      [](size_t size, uint32_t caps, const char* fn) {
+        core::logf("ALLOC FAILED: %u bytes caps=0x%x in %s\n",
+                   static_cast<unsigned>(size), static_cast<unsigned>(caps),
+                   fn ? fn : "?");
+      });
+
   NimBLEDevice::init("micra-remote");
 
   // Join home WiFi (if enabled) for NTP time. Update checks run LIVE from loop()
@@ -600,14 +614,21 @@ void loop() {
   // return identical values on this board, so only the 8BIT walk is kept, at
   // 500ms — still 2-4 samples across a ~1-2s fetch, at a quarter the cost of the
   // first cut (two walks every 250ms).
-  static uint32_t last_heap_sample_ms = 0;
-  static size_t min_largest_8bit = static_cast<size_t>(-1);
-  if (millis() - last_heap_sample_ms >= 500u) {
-    last_heap_sample_ms = millis();
-    const size_t l8 = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL |
-                                                       MALLOC_CAP_8BIT);
-    if (l8 < min_largest_8bit) min_largest_8bit = l8;
-  }
+  // DMA-CAPABLE is tracked separately and it is the one that matters: the
+  // hardware AES engine (and the LCD/SDIO DMA paths) allocate from
+  // MALLOC_CAP_INTERNAL|MALLOC_CAP_DMA, which is a NARROWER pool than 8BIT.
+  // Measured 2026-09-10 on the 4.3C: 8BIT reported a comfortable ~7KB largest
+  // while esp-aes could not allocate at all mid-TLS, failing every update
+  // check. Everything we logged until now was blind to that. See the
+  // p4-dma-capable-heap notes -- the same trap, on the other chip.
+  // NOTE: the old 500ms sampler that used to live here was structurally blind.
+  // It ran in loop(), so it could never observe a dip that happened INSIDE one
+  // loop iteration -- e.g. while handleClient() served a request, which is
+  // exactly the event we suspect. heap_caps_get_minimum_free_size() is the
+  // allocator's OWN low-water mark, updated on every alloc/free, so it has no
+  // sampling blind spot and costs nothing to read. It tracks free bytes rather
+  // than largest block (the allocator doesn't track that), which is the one
+  // thing the sampler did give us -- so largest is still read at log time.
   static uint32_t last_heap_log_ms = 0;
   if (millis() - last_heap_log_ms >= 60u * 1000u) {
     last_heap_log_ms = millis();
@@ -615,14 +636,47 @@ void loop() {
     // is 16KB by guess (a past overflow on theme rebuild + WiFi bring-up); this
     // is the number to size it from.
     core::logf(
-        "heap: internal free=%u largest=%u min=%u | loop_hw=%u\n",
+        "heap: 8bit free=%u largest=%u lowest=%u | DMA free=%u largest=%u lowest=%u | "
+        "loop_hw=%u\n",
         static_cast<unsigned>(
             heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
         static_cast<unsigned>(heap_caps_get_largest_free_block(
             MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
-        static_cast<unsigned>(min_largest_8bit),
+        static_cast<unsigned>(heap_caps_get_minimum_free_size(
+            MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+        static_cast<unsigned>(
+            heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)),
+        static_cast<unsigned>(heap_caps_get_largest_free_block(
+            MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)),
+        static_cast<unsigned>(heap_caps_get_minimum_free_size(
+            MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)),
         static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
-    min_largest_8bit = static_cast<size_t>(-1);
+
+
+    // Task-stack census, every 5th heap line. Stacks are INTERNAL RAM and they
+    // are the recoverable kind of waste: of the seven tasks this firmware
+    // creates, only loop and updchk were ever measured, and BOTH sit ~50%
+    // unused (loop 9476 of 16384; updchk ~4400 of 8192) -- 10.7KB dead in the
+    // two we could see. The other five (micra_link/scale_link/shot_store 8192
+    // each, rgb_resync 4096, snd_play 3584) are 32KB of pure guesswork.
+    // uxTaskGetSystemState needs no per-task plumbing and the trace facility is
+    // already enabled; the array is static so the census itself allocates
+    // nothing from the pool it is reporting on.
+    static uint8_t census_tick = 0;
+    if (++census_tick >= 5) {
+      census_tick = 0;
+      static TaskStatus_t tasks[24];
+      const UBaseType_t n = uxTaskGetSystemState(tasks, 24, nullptr);
+      char line[420];
+      int len = std::snprintf(line, sizeof(line), "stacks(spare):");
+      for (UBaseType_t i = 0; i < n && len > 0 && len < (int)sizeof(line) - 24; ++i) {
+        len += std::snprintf(line + len, sizeof(line) - len, " %s=%u",
+                             tasks[i].pcTaskName,
+                             static_cast<unsigned>(
+                                 uxTaskGetStackHighWaterMark(tasks[i].xHandle)));
+      }
+      core::logf("%s\n", line);
+    }
   }
 
   // Hourly last-known-time snapshot -> NVS, so the next boot without a

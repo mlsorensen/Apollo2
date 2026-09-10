@@ -398,7 +398,18 @@ void MicraLink::do_scan() {
   // lets the cancel land before the scan starts.
   if (peer_pause_) { peer_pause_(true); sleep_ms(300); }
   std::vector<ScanResult> found;
-  for (const ScanResult& r : ble_.scan(5000)) {
+  // 10 s, matching the scale's window and for the same reason (see
+  // ScaleLink::do_scan): the radio splits airtime with any LIVE link and with
+  // WiFi while scanning, so a 5 s window can miss advertisers a phone finds
+  // instantly. peer_pause_ above cancels the peer's pending CONNECTS but
+  // deliberately leaves an established link up, so its airtime cost remains.
+  // Pairing is a one-time flow; the extra 5 s costs nothing day to day.
+  //
+  // NOT evidence-backed: raised on symmetry with the scale, not on a measured
+  // miss. The 2026-09-10 "can't see the Micra" report that prompted it turned
+  // out to be unrelated -- another remote had taken the machine's SINGLE BLE
+  // slot, so it had stopped advertising and no scan length would have found it.
+  for (const ScanResult& r : ble_.scan(10000)) {
     if (std::strncmp(r.name, "MICRA", 5) != 0) continue;  // La Marzocco name prefix
     found.push_back(r);
   }

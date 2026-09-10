@@ -39,7 +39,12 @@ constexpr size_t kMaxNotesBytes = 4096;  // bound RAM; notes truncate past this
 // of 12288, i.e. a peak use of 4036 bytes. 8KB leaves ~2x headroom over that for
 // deeper error/alert paths in the TLS handshake, and still hands 4KB back versus
 // the old 12KB. Re-check stack_hw after any change to the fetch path.
-constexpr uint32_t kCheckStackBytes = 8 * 1024;
+// 6K: measured peak 4,036 bytes across completed checks, kept at ~2K margin
+// rather than the ~1K the other trims run at. The TLS handshake is the deep
+// part here and its depth varies with the SERVER's certificate chain, which is
+// outside our control and can change without any change on our side. Re-check
+// stack_hw after any change to the fetch path.
+constexpr uint32_t kCheckStackBytes = 6 * 1024;
 StackType_t s_check_stack[kCheckStackBytes];  // StackType_t is uint8_t here
 StaticTask_t s_check_tcb;
 TaskHandle_t s_check_task = nullptr;

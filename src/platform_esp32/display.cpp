@@ -1519,7 +1519,8 @@ bool Display::begin() {
   // registers no RGB event callbacks of its own, so on_vsync is free.
   g_rgb_panel = rgbpanel->*rgb_handle_member();
   g_resync_sem = xSemaphoreCreateBinary();
-  xTaskCreatePinnedToCore(rgb_resync_task, "rgb_resync", 4096, nullptr, 10,
+  // 1536: measured peak 788 (2026-09-10).
+  xTaskCreatePinnedToCore(rgb_resync_task, "rgb_resync", 1536, nullptr, 10,
                           nullptr, 1);
   const esp_lcd_rgb_panel_event_callbacks_t rgb_cbs = {
       .on_vsync = rgb_vsync_cb,

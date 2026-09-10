@@ -246,7 +246,8 @@ class Es8311Sound : public core::ISound {
     // Player task. Priority 4 (above the Arduino loop / LVGL, below the BLE
     // link tasks): it must wake promptly so the button tick stays instant, but
     // it spends nearly all its time blocked inside i2s_channel_write.
-    if (xTaskCreate(&Es8311Sound::player_entry, "snd_play", 3584, this, 4,
+    // 2048: measured peak 1,368 (2026-09-10).
+    if (xTaskCreate(&Es8311Sound::player_entry, "snd_play", 2048, this, 4,
                     &player_) != pdPASS)
       return;
 

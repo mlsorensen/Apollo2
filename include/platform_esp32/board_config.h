@@ -302,12 +302,24 @@ constexpr int  kRgbPclkActiveNeg = 1;
 //    delivers 25-30 fps here, so nothing visible is lost. Mind the floor:
 //    the 7B's panel showed no image below its stable range — if this panel
 //    misbehaves, go back to 16 MHz and rely on bounce size alone.
-//  - Bounce buffer 10 -> 12 lines/buffer: each refill window is 20% longer.
-//    Costs +6.4KB internal RAM (2x 19.2KB total); the S3 runtime floor was
-//    ~42KB free, and WiFi historically dies below ~9KB — don't go past
-//    x14 without re-checking the heap telltale.
+//  - Bounce buffer was raised 10 -> 12 lines/buffer here. REVERTED to x10 (the
+//    Waveshare demo value, and what the 7B/4.3B use) on 2026-09-10:
+//      * its benefit was never established. The one supporting observation --
+//        "no bouncing during web page loads" -- is CONFOUNDED: the web server
+//        had been moved to the main loop an hour earlier (75356a1 vs 9690c5c),
+//        which stops LVGL rendering for the whole request and independently
+//        explains it. The boot artifact it was aimed at was never rate-measured
+//        before or after, and the owner reports it never went away.
+//      * its cost is now acute. x12 held +6.4KB of INTERNAL DMA-CAPABLE RAM --
+//        the pool esp-aes needs for hardware AES. On this board that pool now
+//        runs dry mid-TLS ("esp-aes: Failed to allocate memory"), which breaks
+//        update checks entirely. The comment here used to justify the cost with
+//        "the S3 runtime floor was ~42KB free"; measured 2026-09-10 it is ~14KB
+//        at check start and ~6.8KB mid-check. That premise expired.
+//    If the boot ghosting measurably worsens over many boots, this is the knob
+//    to put back -- but measure the rate, don't infer it.
 constexpr long kRgbPclkHz = 14000000;
-constexpr int  kRgbBouncePx = kLcdNativeW * 12;
+constexpr int  kRgbBouncePx = kLcdNativeW * 10;
 
 // --- Touch: GT911 on the shared I2C bus (same as the 4.3B) ---
 constexpr int  kTouchSda = 8;
