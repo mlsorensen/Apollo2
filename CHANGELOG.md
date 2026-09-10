@@ -5,6 +5,40 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## v0.12.1
+
+### Changes
+
+- **Fixed "Check for updates" disappearing.** The button on Stats > Info and the
+  **Check for updates** setting (Settings > Device > WiFi) would both vanish
+  until the next restart, seemingly at random. They were being dropped whenever
+  the screen layout rebuilt — which happens when you change the theme, or when a
+  scale connects or disconnects. Automatic checks were still running the whole
+  time; only the controls were missing.
+- **The Micra's greyed-out "Connect" button is now a "Set up" button.** When a
+  machine isn't paired yet, the button did nothing and didn't say what to do
+  instead. Tapping it now takes you straight to Settings > Micra > Bluetooth. The
+  status text is plainer too: **Not set up** (no machine chosen) and **Setup
+  unfinished** (chosen, but pairing never completed) replace "Set up in Settings"
+  and "Token needed".
+- **Added a Dim option to the idle screen**, so there are now three: **Logo**
+  (dimmed backlight with the bouncing lion), **Dim** (same dimmed backlight, but
+  a plain black screen), and **Off** (backlight fully off). If you were using
+  "Blank" before, you're now on "Off" — the same behaviour, clearer name.
+- **Renamed two Display settings to match what they do.** "Screen dim" is now
+  **Screen timeout** (it sets the idle time, not the brightness), and
+  "Screensaver" is now **Idle screen**.
+- **Added an Hourly update check** alongside Daily. Like Daily, it only runs
+  while the machine is idle and the idle screen is up, so it never interrupts
+  you.
+- **The log page no longer freezes the display for as long.** Opening it showed
+  the entire log, which locks the screen while it's sent. It now shows the most
+  recent portion by default, with a link to the full log when you need it.
+- **The machine keeps more log history.** Two messages were repeating far more
+  than they needed to — the "no SD card" note and a line for every screen tap —
+  which pushed older entries out. Quieting them means a problem from earlier in
+  the day is more likely to still be recorded.
+
 ## v0.12.0
 
 ### Changes
