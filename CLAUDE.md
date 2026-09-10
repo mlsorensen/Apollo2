@@ -93,6 +93,17 @@ exactly how that happens. Prefer restructuring (move the work to a task that
 already has the room, log from loop() instead of a small task, reuse an
 existing buffer) over adding memory. Applies to fixes as much as features.
 
+## Release checklist (every tag, no exceptions)
+
+1. `include/version.h` — bump `fw::kVersion` to the tag (minus the `v`). The
+   device compares THIS to releases.json; forget it and the new image reports
+   the old version and re-prompts forever (v0.12.3, 2026-09-10). CI now fails
+   the build if the binary's kVersion != the tag, but bump it first anyway.
+2. `CHANGELOG.md` — real notes under `## vX.Y.Z` (the workflow extracts them).
+3. `make build-release` green (or `make build-all` for a platform change).
+4. Commit, push main, then `gh workflow run firmware-release.yml -f tag=vX.Y.Z`
+   (CI creates the tag + Release; never build release binaries locally).
+
 ## Git conventions
 
 - Commit as `marcus@turboio.com` (repo-local config). Do NOT add

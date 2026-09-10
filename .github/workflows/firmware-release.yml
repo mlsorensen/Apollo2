@@ -137,6 +137,15 @@ jobs:
           python3 -c 'import sys; blob = open(sys.argv[1], "rb").read(); sys.exit(0 if blob.count(b"\0" + sys.argv[2].encode() + b"\0") == 1 else 1)' \
               "out/app/${{ matrix.board }}.bin" "${{ matrix.board }}" || {
             echo "::error::kUpdateSlug for ${{ matrix.env }} != '${{ matrix.board }}' - the self-updater would fetch the wrong image"; exit 1; }
+          # Guard the self-updater's version contract: fw::kVersion baked into
+          # THIS build must equal the release tag (minus the 'v'), or the
+          # installed image reports the OLD version and the update check
+          # re-prompts forever (v0.12.3 shipped exactly that way, 2026-09-10 —
+          # the tag was cut without bumping include/version.h). Same
+          # NUL-delimited literal match as the slug check above.
+          python3 -c 'import sys; blob = open(sys.argv[1], "rb").read(); sys.exit(0 if blob.count(b"\0" + sys.argv[2].encode() + b"\0") >= 1 else 1)' \
+              "out/app/${{ matrix.board }}.bin" "${RELEASE_TAG#v}" || {
+            echo "::error::fw::kVersion in ${{ matrix.env }} != '${RELEASE_TAG#v}' - bump include/version.h before tagging"; exit 1; }
           # Debug symbols: this build's .elf, bundled into one archive by the
           # release job. A crash dump pulled off a device later
           # (http://<ip>/coredump) can only be symbolicated against the .elf
