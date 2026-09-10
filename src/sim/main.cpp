@@ -5,6 +5,8 @@
 // concrete platform (here: FakeMachine + PngDisplay) to the portable UI.
 
 #include <cstdio>
+#include "lvgl.h"
+#include "src/core/lv_obj_draw_private.h"  // lv_obj_get_ext_draw_size (saver check)
 #include <filesystem>
 
 #include "core/log_ring.h"
@@ -31,6 +33,37 @@
 #include "ui/theme.h"
 
 namespace {
+
+// The bouncing lion is the one thing that redraws every frame for hours, so
+// what it invalidates IS the saver's frame cost -- and a PNG can't show it.
+// Guard the two things that have each regressed it once: the widget's layout
+// box must equal the drawn size (a scaled lv_image otherwise keeps its native
+// box), and LVGL's ext-draw padding must be zero (it pads a scaled image by
+// its box*(scale-1) -- a 6-7x dirty area on the P4 panels that upscale; see
+// start_screensaver). Fails the sim run rather than silently rendering.
+bool check_saver_dirty_area(const ui::ScreenProfile& screen) {
+  lv_obj_t* layer = lv_obj_get_child(lv_layer_top(), -1);
+  lv_obj_t* img = layer != nullptr ? lv_obj_get_child(layer, 0) : nullptr;
+  if (img == nullptr) {
+    std::fprintf(stderr, "error: screensaver image not found on the top layer\n");
+    return false;
+  }
+  const int w = lv_obj_get_width(img), h = lv_obj_get_height(img);
+  const int ext = lv_obj_get_ext_draw_size(img);
+  const int drawn_w = static_cast<int>(lv_image_get_src_width(img)) *
+                      static_cast<int>(lv_image_get_scale_x(img)) / LV_SCALE_NONE;
+  const int drawn_h = static_cast<int>(lv_image_get_src_height(img)) *
+                      static_cast<int>(lv_image_get_scale_y(img)) / LV_SCALE_NONE;
+  std::printf("saver %dx%d: lion box %dx%d drawn %dx%d ext_draw %d -> %d px/frame\n",
+              screen.width, screen.height, w, h, drawn_w, drawn_h, ext,
+              (w + 2 * ext) * (h + 2 * ext));
+  const bool box_ok = drawn_w >= w - 1 && drawn_w <= w && drawn_h >= h - 1 && drawn_h <= h;
+  if (!box_ok || ext != 0) {
+    std::fprintf(stderr, "error: screensaver lion invalidates more than it draws\n");
+    return false;
+  }
+  return true;
+}
 
 bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             core::IBattery& battery, core::IDisplaySettings& disp_settings,
@@ -70,6 +103,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   if (screensaver) app.pose_screensaver();  // bouncing-logo saver, start pose
   if (update_modal) app.open_update_modal();
   display.render_frame();
+  if (screensaver && !check_saver_dirty_area(screen)) return false;
   if (!display.save_png(out_path)) {
     std::fprintf(stderr, "error: failed to write %s\n", out_path);
     return false;
@@ -159,6 +193,18 @@ int main() {
   ok &= r({800, 480}, "renders/clean_lock_800x480.png", 0, -1, false, 0, -1, true);
   ok &= r({320, 240}, "renders/clean_lock_320x240.png", 0, -1, false, 0, -1, true);
   // Bouncing-logo screensaver (start pose; on-device it drifts + recolors).
+  // Also at the P4 sizes that scale the lion (its check above is what
+  // caught the v0.12.0 saver regression there).
+  ok &= r({1280, 720, 1.5f}, "renders/screensaver_1280x720.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, false, false, false, true);
+  ok &= r({1280, 800, 1.6f}, "renders/screensaver_1280x800.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, false, false, false, true);
+  ok &= r({320, 240}, "renders/screensaver_320x240.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, false, false, false, true);
+  // No such board: a height between tiers that has to UPSCALE the nearest
+  // lion, so the stretch fallback (and its ext-draw clamp) stays exercised.
+  ok &= r({1280, 960}, "renders/screensaver_fallback_1280x960.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, false, false, false, true);
   ok &= r({800, 480}, "renders/screensaver_800x480.png", 0, -1, false, 0, -1,
           false, -1, 0, false, false, false, false, false, true);
   // Update-available modal (canned notes from FakeUpdateSource).

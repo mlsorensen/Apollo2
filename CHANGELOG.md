@@ -5,10 +5,30 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
-## v0.13.0
+## v0.12.3
+
+### Fixes
+
+- **The screensaver is fast again on the P4 boards.** v0.12.0 sped the
+  bouncing lion up on the 4.3C but slowed it down on the P4-5 and the X boxes
+  (about 12 fps at 93% CPU on the 5", from 30 fps at 75% before). The logo is
+  now pre-rendered at each screen's own size, so every board draws it directly
+  instead of scaling it — smoother on all of them, and the P4s are back above
+  where v0.11 left them.
+
+## v0.12.2
 
 ### Changes
 
+- **Fixed the 4.3C gradually losing its network features.** On a machine with a
+  scale paired and an SD card in, the remote could reach a state where checking
+  for updates failed, the log page wouldn't load, and the WiFi/token setup portal
+  would advertise but refuse to let a phone join it — all at once, and only
+  clearing on a restart. The board had run out of a specific kind of internal
+  memory that the radio, the display and encrypted connections all draw from.
+  Apollo now uses roughly 26 KB less of it, which restores all three.
+- **Fixed the "Check for updates" setting rendering in a smaller font** than the
+  buttons above it in Settings > Device > WiFi.
 - **The supported board line-up is now three boards.** Firmware images are
   built and published for the **ESP32-P4-WIFI6-Touch-LCD-5**, the
   **ESP32-S3-Touch-LCD-4.3C / 4.3C-BOX**, and the
@@ -30,20 +50,6 @@ for someone reading the diff.
   A failed install is harmless: the device rolls back to the running firmware.
 - **New printable backplate for the X 8" box**, so it mounts to the same
   counter-top stand as the other boards — see `hardware/3d-prints/`.
-
-## v0.12.2
-
-### Changes
-
-- **Fixed the 4.3C gradually losing its network features.** On a machine with a
-  scale paired and an SD card in, the remote could reach a state where checking
-  for updates failed, the log page wouldn't load, and the WiFi/token setup portal
-  would advertise but refuse to let a phone join it — all at once, and only
-  clearing on a restart. The board had run out of a specific kind of internal
-  memory that the radio, the display and encrypted connections all draw from.
-  Apollo now uses roughly 26 KB less of it, which restores all three.
-- **Fixed the "Check for updates" setting rendering in a smaller font** than the
-  buttons above it in Settings > Device > WiFi.
 
 ## v0.12.1
 

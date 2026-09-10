@@ -1791,27 +1791,46 @@ void App::start_screensaver(bool blank) {
   if (blank) return;  // backlight is off; nothing to draw
 
   saver_img_ = lv_image_create(saver_layer_);
-  lv_image_set_src(saver_img_, ui::lion_logo());
-  // Size the lion to ~40% of the screen's short side per axis budget: fit its
-  // height to 40% of the screen height, never upscaling past native.
-  //
-  // Sized via an explicit box + STRETCH rather than lv_image_set_scale(): a
-  // SCALED lv_image keeps its FULL-SIZE layout box, and LVGL invalidates the
-  // box, not the drawn pixels. On the 4.3C that made the saver dirty ~135K
-  // px/frame to move a lion covering ~12K -- and it's why shrinking the lion
-  // via scale changed nothing measurable (128 vs 256 invalidate identically).
-  // An explicit size makes box == drawn size, cutting the dirty area ~2.5x.
+  // Size the lion to ~40% of the screen height. img_lion.h carries one
+  // PRESCALED variant per screen tier (2/5 of 240/480/600/720/800), so every
+  // board draws its lion 1:1 -- no transform at all, which is the cheaper path
+  // per pixel (a scaled lv_image costs ~0.77us/px vs ~0.39 for solid fills on
+  // the 4.3C) AND sidesteps the LVGL padding quirk below. A screen height the
+  // generator doesn't list falls back to the nearest variant, stretched.
   const int target_h = screen_.height * 2 / 5;
-  // The asset is generated at the 480px-tall boards' target (101x192), so on
-  // those it draws 1:1 -- no transform at all, which is the cheaper path per
-  // pixel AND keeps the layout box equal to the drawn size. Boards whose target
-  // differs materially (the 2-inch) still stretch to fit.
-  const int dh = ui::kLionH > target_h ? ui::kLionH - target_h : target_h - ui::kLionH;
+  const lv_image_dsc_t* src = ui::lion_logo(target_h);
+  lv_image_set_src(saver_img_, src);
+  const int src_w = static_cast<int>(src->header.w);
+  const int src_h = static_cast<int>(src->header.h);
+  // Explicit box + STRETCH rather than lv_image_set_scale() for the fallback:
+  // a SCALED lv_image keeps its FULL-SIZE layout box, and LVGL invalidates the
+  // box, not the drawn pixels (on the 4.3C that dirtied ~135K px/frame to move
+  // a lion covering ~12K). An explicit size makes box == drawn size.
+  const int dh = src_h > target_h ? src_h - target_h : target_h - src_h;
   const bool native_fits = dh * 10 <= target_h;  // within 10% of the target
-  const int h = native_fits ? ui::kLionH : target_h;
-  const int w = native_fits ? ui::kLionW : ui::kLionW * target_h / ui::kLionH;
+  const int h = native_fits ? src_h : target_h;
+  const int w = native_fits ? src_w : src_w * target_h / src_h;
   lv_obj_set_size(saver_img_, w, h);
-  if (!native_fits) lv_image_set_inner_align(saver_img_, LV_IMAGE_ALIGN_STRETCH);
+  if (!native_fits) {
+    // LVGL quirk (9.5, lv_image.c LV_EVENT_REFR_EXT_DRAW_SIZE): a scaled image
+    // pads its invalidation area by the transformed size of its BOX -- which
+    // under STRETCH is already the scaled size, so the padding is box*(scale-1)
+    // on every side. Harmless when scaling DOWN (negative, clamped to 0), but
+    // scaling UP the single 101x192 asset of v0.12.0-v0.12.2 made the lion
+    // dirty 437x574 = 251K px per frame on the 720-tall P4 5"/7" and 561x691 =
+    // 388K on the 8" -- six to seven times the lion's own box, and the saver
+    // regression on those boards (30 -> 12 fps, 75 -> 93% CPU on the 5"). With
+    // STRETCH the drawn pixels ARE the box, so no padding is needed: clamp it
+    // to zero. Registered BEFORE the align so the refresh that STRETCH triggers
+    // already sees it; user callbacks run after the widget's own handler, so
+    // the zero wins. The sim asserts every screensaver render invalidates only
+    // its box (src/sim/main.cpp).
+    lv_obj_add_event_cb(
+        saver_img_,
+        [](lv_event_t* e) { *static_cast<int32_t*>(lv_event_get_param(e)) = 0; },
+        LV_EVENT_REFR_EXT_DRAW_SIZE, nullptr);
+    lv_image_set_inner_align(saver_img_, LV_IMAGE_ALIGN_STRETCH);
+  }
   saver_color_i_ = 0;
   lv_obj_set_style_image_recolor(saver_img_, lv_color_hex(kSaverColors[0]), 0);
   lv_obj_set_style_image_recolor_opa(saver_img_, LV_OPA_COVER, 0);
