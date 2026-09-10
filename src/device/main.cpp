@@ -591,6 +591,7 @@ void loop() {
     boot_resync_done = true;
     g_display.rgb_resync(/*verbose=*/false);
   }
+  g_display.rgb_poll();  // resync outcome + bounce parity fix log (display.cpp)
 #endif
 
   // Internal-heap telltale, once a minute: the S3 boards live close to the

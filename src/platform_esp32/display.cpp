@@ -26,11 +26,15 @@
 #include "platform_esp32/io_extension.h"
 #endif
 #if defined(BOARD_DISPLAY_RGB)
+#include <esp_idf_version.h>
+#include <esp_lcd_panel_interface.h>
 #include <esp_lcd_panel_ops.h>
 #include <esp_lcd_panel_rgb.h>
+#include <esp_memory_utils.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
+#include <sdkconfig.h>
 #endif
 
 // A single panel exists per device, and LVGL's flush callback is a plain
@@ -71,14 +75,143 @@ template struct RgbHandleRobber<&Arduino_ESP32RGBPanel::_panel_handle>;
 SemaphoreHandle_t g_resync_sem = nullptr;
 volatile bool g_resync_armed = false;
 volatile bool g_resync_verbose = false;
+// Outcome of the last re-init, logged from loop() (Display::rgb_poll):
+// the 1536-byte resync task cannot afford a printf. -1 = nothing pending.
+volatile int g_resync_result = -1;
+volatile bool g_resync_result_verbose = false;
+
+// --- Bounce-buffer bookkeeping: the ghost-raster fix ---
+// The IDF RGB driver refills its two bounce buffers from a DMA end-of-buffer
+// ISR and picks WHICH buffer to refill as `bb_eof_count % 2` — a software
+// counter advanced once per ISR call. Two buffers finishing before the ISR
+// runs (any core-1 interrupt latency > one bounce period, ~585 us here; a
+// flash write with the cache off is the obvious source) collapse into ONE
+// call, so the counter's parity flips and every later refill lands in the
+// buffer the panel is scanning. In this build (CONFIG_LCD_RGB_RESTART_IN_VSYNC)
+// nothing ever resets that counter — not the per-VSYNC restart, not
+// esp_lcd_panel_init — so the flip latches. THIS is the "every 10th line
+// flickers, frame ~10 px high, bottom wraps to the top" ghost the S3 RGB
+// boards have shown since day one (10 lines = kRgbBouncePx; HW-confirmed
+// 2026-09-10, see rgb_vsync_cb). Same code on IDF master; worth reporting.
+//
+// The counter is private to the driver, so this mirrors the prefix of its
+// esp_rgb_panel_t (IDF v5.5.4 components/esp_lcd/rgb/esp_lcd_panel_rgb.c,
+// S3 layout incl. dma_restart_link) up to the fields we touch, and refuses
+// to arm unless every checkable field agrees with what we configured. On a
+// platform bump: diff the struct against the new driver source, then move
+// the version check. Deterministic repro for re-verifying: GET
+// /coredump?erase=1 (multi-sector flash erase with the cache off).
+// Layout + bug verified identical on the v5.5.4 and v5.5.5 tags (2026-09-10);
+// the runtime validation in rgb_bounce_fix_arm() is the real safety net.
+#if ESP_IDF_VERSION_MAJOR == 5 && ESP_IDF_VERSION_MINOR == 5 && CONFIG_IDF_TARGET_ESP32S3
+#define RGB_BOUNCE_PARITY_FIX 1
+struct RgbPanelMirror {
+  esp_lcd_panel_t base;
+  int panel_id;
+  void* hal_dev;  // lcd_hal_context_t = one pointer
+  size_t data_width;
+  size_t fb_bits_per_pixel;
+  size_t num_fbs;
+  size_t output_bits_per_pixel;
+  size_t dma_burst_size;
+  void* intr;
+  void* pm_lock;
+  size_t num_dma_nodes;
+  void* dma_chan;
+  void* dma_fb_links[3];   // RGB_LCD_PANEL_MAX_FB_NUM
+  void* dma_bb_link;
+  void* dma_restart_link;  // RGB_LCD_NEEDS_SEPARATE_RESTART_LINK (S3)
+  uint8_t* fbs[3];
+  uint8_t* bounce_buffer[2];
+  size_t fb_size;
+  size_t bb_size;
+  uint8_t cur_fb_index;
+  uint8_t bb_fb_index;
+  size_t int_mem_align;
+  size_t ext_mem_align;
+  int hsync_gpio_num, vsync_gpio_num, de_gpio_num, pclk_gpio_num, disp_gpio_num;
+  int data_gpio_nums[16];  // SOC_LCDCAM_RGB_DATA_WIDTH
+  uint64_t gpio_reserve_mask;
+  uint32_t src_clk_hz;
+  esp_lcd_rgb_timing_t timings;
+  int bounce_pos_px;
+  size_t bb_eof_count;
+  size_t expect_eof_count;
+};
+RgbPanelMirror* g_bb_mirror = nullptr;  // null = mirror failed to validate
+// Parity flips seen at VSYNC (cumulative) + the parity of the last sample, for
+// the one-line log in Display::rgb_poll(). A flip = the driver lost a refill.
+volatile uint32_t g_bb_flips = 0;
+volatile bool g_bb_last_odd = false;
+#endif
 
 bool IRAM_ATTR rgb_vsync_cb(esp_lcd_panel_handle_t,
                             const esp_lcd_rgb_panel_event_data_t*, void*) {
+#if RGB_BOUNCE_PARITY_FIX
+  if (g_bb_mirror != nullptr) {
+    // THE FIX (HW-confirmed 2026-09-10: telemetry caught a 47-EOF frame
+    // flipping parity ODD at the exact second the ghost appeared, and it
+    // stayed ODD every frame after; A/B with this line compiled out, six
+    // GET /coredump?erase=1 flash erases: parity latched ODD and the screen
+    // stayed ghosted until reboot — with it, every flip healed on the next
+    // frame, one visible blip). The driver's per-VSYNC restart, which runs
+    // right after this callback in the same ISR, always resumes the DMA at
+    // bounce buffer 0 — so the correct counter parity here is ALWAYS even.
+    // Force it, exactly as the driver's own non-RESTART_IN_VSYNC branch does
+    // (`bb_eof_count = 0` at VSYNC_END). A coalesced EOF now costs one bad
+    // frame instead of latching forever.
+    const bool odd = (g_bb_mirror->bb_eof_count & 1u) != 0;
+    g_bb_mirror->bb_eof_count = 0;
+    if (odd != g_bb_last_odd) ++g_bb_flips;
+    g_bb_last_odd = odd;
+  }
+#endif
   if (!g_resync_armed) return false;
   g_resync_armed = false;
   BaseType_t hpw = pdFALSE;
   xSemaphoreGiveFromISR(g_resync_sem, &hpw);
   return hpw == pdTRUE;
+}
+
+// Validate the mirror against the panel we configured; arm only on a full
+// match so a driver bump can't silently read garbage.
+void rgb_bounce_fix_arm() {
+#if RGB_BOUNCE_PARITY_FIX
+  auto* m = reinterpret_cast<RgbPanelMirror*>(g_rgb_panel);
+  void* fb0 = nullptr;
+  esp_lcd_rgb_panel_get_frame_buffer(g_rgb_panel, 1, &fb0);
+  const size_t fb_bytes =
+      static_cast<size_t>(board::kLcdNativeW) * board::kLcdNativeH * 2;
+  const size_t bb_bytes = static_cast<size_t>(board::kRgbBouncePx) * 2;
+  const bool ok = m->num_fbs == 1 && m->fb_bits_per_pixel == 16 &&
+                  m->fb_size == fb_bytes && m->bb_size == bb_bytes &&
+                  m->expect_eof_count == fb_bytes / bb_bytes &&
+                  m->timings.h_res == static_cast<uint32_t>(board::kLcdNativeW) &&
+                  m->timings.v_res == static_cast<uint32_t>(board::kLcdNativeH) &&
+                  m->timings.pclk_hz == static_cast<uint32_t>(board::kRgbPclkHz) &&
+                  m->fbs[0] == fb0 && fb0 != nullptr &&
+                  esp_ptr_internal(m->bounce_buffer[0]) &&
+                  esp_ptr_internal(m->bounce_buffer[1]);
+  if (ok) {
+    g_bb_mirror = m;
+    core::logf("RGB: bounce parity fix armed (bb=%u B, %u EOF/frame)\n",
+               static_cast<unsigned>(m->bb_size),
+               static_cast<unsigned>(m->expect_eof_count));
+  } else {
+    core::logf("RGB: bounce parity fix DISABLED - mirror mismatch (num_fbs=%u bpp=%u "
+               "fb=%u/%u bb=%u/%u eof=%u res=%ux%u pclk=%u)\n",
+               static_cast<unsigned>(m->num_fbs),
+               static_cast<unsigned>(m->fb_bits_per_pixel),
+               static_cast<unsigned>(m->fb_size), static_cast<unsigned>(fb_bytes),
+               static_cast<unsigned>(m->bb_size), static_cast<unsigned>(bb_bytes),
+               static_cast<unsigned>(m->expect_eof_count),
+               static_cast<unsigned>(m->timings.h_res),
+               static_cast<unsigned>(m->timings.v_res),
+               static_cast<unsigned>(m->timings.pclk_hz));
+  }
+#else
+  core::logf("RGB: bounce parity fix not built (IDF != 5.5.x)\n");
+#endif
 }
 
 void rgb_resync_task(void*) {
@@ -89,10 +222,9 @@ void rgb_resync_task(void*) {
     // restart. The engine is stopped while this runs, so overshooting the
     // back porch only starts the next frame late — never mid-scanline.
     const esp_err_t err = esp_lcd_panel_init(g_rgb_panel);
-    if (g_resync_verbose || err != ESP_OK) {
-      core::logf("RGB: panel re-init resync -> %s\n", esp_err_to_name(err));
-    }
+    g_resync_result_verbose = g_resync_verbose;
     g_resync_verbose = false;
+    g_resync_result = static_cast<int>(err);  // picked up by rgb_poll()
   }
 }
 #endif
@@ -1519,13 +1651,17 @@ bool Display::begin() {
   // registers no RGB event callbacks of its own, so on_vsync is free.
   g_rgb_panel = rgbpanel->*rgb_handle_member();
   g_resync_sem = xSemaphoreCreateBinary();
-  // 1536: measured peak 788 (2026-09-10).
+  // 1536: measured peak 788 (2026-09-10) — for the re-init alone. Nothing
+  // else may run in this task: a core::logf from it (the old verbose path)
+  // blew the stack canary and panic-rebooted the board (HW, 2026-09-10
+  // 16:05:57). The result is logged from loop() instead (rgb_poll).
   xTaskCreatePinnedToCore(rgb_resync_task, "rgb_resync", 1536, nullptr, 10,
                           nullptr, 1);
   const esp_lcd_rgb_panel_event_callbacks_t rgb_cbs = {
       .on_vsync = rgb_vsync_cb,
   };
   esp_lcd_rgb_panel_register_event_callbacks(g_rgb_panel, &rgb_cbs, nullptr);
+  rgb_bounce_fix_arm();
   g_gfx->fillScreen(0x0000);
   io_extension().set(board::kIoExtBacklight, true);  // backlight on
 #else
@@ -1680,17 +1816,13 @@ void Display::set_brightness(int percent) {
 
 bool Display::rgb_resync(bool verbose) {
 #if defined(BOARD_DISPLAY_RGB)
-  // The ghosted/shifted raster is a latched frame-position offset in the
-  // driver's bounce-buffer bookkeeping (bounce_pos_px), left behind by an
-  // underrun (PSRAM bus oversubscribed by flash reads / WiFi / rendering).
-  // esp_lcd_rgb_panel_restart() does NOT heal it — its bounce-mode path only
-  // zeroes bounce_pos_px when the counter overshot PAST two bounce buffers,
-  // and an underrun leaves it SHORT, so the restart re-feeds from the stale
-  // mid-frame position (verified on the 4.3C, 2026-07-25: ESP_OK, no change;
-  // IDF 5.5.4 esp_lcd_panel_rgb.c lcd_rgb_panel_try_restart_transmission).
-  // The heal is a full esp_lcd_panel_init(), but it must run inside vertical
-  // blanking (see rgb_resync_task) — this only arms it; the work happens at
-  // the next VSYNC, so expect the effect within one frame (~30 ms).
+  // Full pipeline restart from frame zero (esp_lcd_panel_init), run inside
+  // vertical blanking by rgb_resync_task — this only arms it; the work
+  // happens at the next VSYNC. Since the bounce-parity fix in rgb_vsync_cb
+  // (2026-09-10) the ghost raster heals by itself within a frame, so this
+  // is a belt-and-braces escape hatch (Settings "Restart display" + the
+  // one-shot at boot). esp_lcd_rgb_panel_restart() is a no-op in this build
+  // (CONFIG_LCD_RGB_RESTART_IN_VSYNC ignores need_restart) — don't use it.
   if (g_rgb_panel == nullptr || g_resync_sem == nullptr) return false;
   if (verbose) g_resync_verbose = true;
   g_resync_armed = true;
@@ -1698,6 +1830,33 @@ bool Display::rgb_resync(bool verbose) {
 #else
   (void)verbose;
   return false;
+#endif
+}
+
+void Display::rgb_poll() {
+#if defined(BOARD_DISPLAY_RGB)
+  // Report the resync task's outcome from here (task context is too small
+  // for a printf — see the task's stack comment).
+  if (g_resync_result != -1) {
+    const int err = g_resync_result;
+    g_resync_result = -1;
+    if (g_resync_result_verbose || err != ESP_OK) {
+      core::logf("RGB: panel re-init resync -> %s\n",
+                 esp_err_to_name(static_cast<esp_err_t>(err)));
+    }
+  }
+#endif
+#if defined(BOARD_DISPLAY_RGB) && RGB_BOUNCE_PARITY_FIX
+  // One line per parity flip the fix absorbed, so the RAM log shows how often
+  // the driver loses a refill and what else was going on at that moment.
+  static uint32_t seen_flips = 0;
+  const uint32_t flips = g_bb_flips;
+  if (flips != seen_flips) {
+    seen_flips = flips;
+    core::logf("RGB: bounce parity flip #%u healed (%s)\n",
+               static_cast<unsigned>(flips),
+               g_bb_last_odd ? "odd at VSYNC" : "back to even");
+  }
 #endif
 }
 

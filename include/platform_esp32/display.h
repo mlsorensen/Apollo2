@@ -28,6 +28,11 @@ class Display {
   // (caller falls back to a full soft reboot). verbose=false for the
   // periodic auto-resync so it doesn't spam serial.
   bool rgb_resync(bool verbose = true);
+
+  // RGB boards only: call from loop(). Logs the outcome of a rgb_resync()
+  // and each bounce-buffer parity flip the VSYNC fix absorbed (see the
+  // "Bounce-buffer bookkeeping" notes in display.cpp). No-op elsewhere.
+  void rgb_poll();
 };
 
 #if defined(BOARD_DISPLAY_DSI)

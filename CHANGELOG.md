@@ -9,6 +9,22 @@ for someone reading the diff.
 
 ### Fixes
 
+- **The 4.3C's ghosted screen is fixed.** Since the first S3 boards, the
+  display would occasionally latch into a corrupted state: roughly every tenth
+  row flickering with content from the row band above, the picture sitting a
+  few pixels high with the top wrapping to the bottom, sometimes from the
+  moment it powered on, and only a restart or luck would clear it. The cause is
+  a bookkeeping bug in the display driver Apollo is built on: whenever
+  something holds up the panel's refill interrupt for more than half a
+  millisecond (writing settings to flash is enough), the driver loses track of
+  which of its two line buffers to fill next and never recovers. Apollo now
+  corrects that every frame, so the same event costs one barely visible blip
+  instead of a stuck screen. Verified on hardware both ways.
+- **Settings > Restart display no longer reboots the 4.3C.** In v0.12.2 the
+  button crashed the board instead of restarting the display (a side effect of
+  the memory reclaim). It restarts the panel again, and with the fix above you
+  should rarely need it.
+
 - **The screensaver is fast again on the P4 boards.** v0.12.0 sped the
   bouncing lion up on the 4.3C but slowed it down on the P4-5 and the X boxes
   (about 12 fps at 93% CPU on the 5", from 30 fps at 75% before). The logo is

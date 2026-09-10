@@ -80,6 +80,19 @@ display isn't up.
 - Proving ground: the `esp32-p4-dltest` env (src/dltest/) is the standalone
   firmware the install mode was developed + verified in; keep it.
 
+## Memory budget rule (owner, 2026-09-10)
+
+**Never introduce more RAM use without review and a full explanation.** That
+means: no task-stack increase, no new task, no larger buffer, no new
+static/heap allocation on any device env — internal RAM, DMA-capable RAM or
+PSRAM — without first stating what it costs (bytes, which pool, on which
+boards), why the cheaper alternative doesn't work, and getting the owner's
+OK. The S3 boards run a few KB from starvation (esp-aes/TLS and WiFi have
+both failed for lack of internal RAM); a "harmless" 1.5 KB stack bump is
+exactly how that happens. Prefer restructuring (move the work to a task that
+already has the room, log from loop() instead of a small task, reuse an
+existing buffer) over adding memory. Applies to fixes as much as features.
+
 ## Git conventions
 
 - Commit as `marcus@turboio.com` (repo-local config). Do NOT add
