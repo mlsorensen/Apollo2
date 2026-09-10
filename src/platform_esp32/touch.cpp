@@ -115,7 +115,17 @@ void read_cb(lv_indev_t* /*indev*/, lv_indev_data_t* data) {
     data->point.y = y;
     data->state = LV_INDEV_STATE_PRESSED;
 
-    if (!g_logged_press) {  // one line per press, for coordinate calibration
+    // One line per press, for coordinate calibration -- but only the first few
+    // of a boot. Calibrating swap/mirror flags on a new board takes a handful of
+    // taps; logging every press for the life of the session floods the 64KB ring
+    // exactly when someone is using the machine, which is when the surrounding
+    // history matters most. (Measured 2026-09-09: the ring holds only ~3.3h at
+    // steady state, so anything unbounded costs real diagnostic history.)
+    constexpr uint32_t kMaxLoggedPresses = 10;
+    static uint32_t logged_presses = 0;
+    if (!g_logged_press && logged_presses < kMaxLoggedPresses) {
+      if (++logged_presses == kMaxLoggedPresses)
+        core::logf("touch: (further presses not logged this boot)\n");
       core::logf("touch: native(%d,%d) -> screen(%d,%d)\n", nx, ny, x, y);
       g_logged_press = true;
     }

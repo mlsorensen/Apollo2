@@ -273,7 +273,14 @@ bool ShotStore::try_mount() {
   static uint32_t attempts = 0;
   static esp_err_t last_err = ESP_OK;  // ESP_OK: nothing established yet
   const uint32_t attempt = ++attempts;
-  const bool log_this = (attempt % 12) == 1;
+  // Once "no card" is ESTABLISHED, back the heartbeat off from once a minute to
+  // once every ten. The line exists so the retry loop can be seen to be alive
+  // (the attempt number must climb by exactly the stride), and a minute's
+  // resolution only matters while the state is still news. At the old cadence
+  // this single line was ~98 B/min -- about 30% of ALL log volume on a cardless
+  // machine, against a fixed 64KB ring that holds only ~3.3 hours.
+  const uint32_t stride = (last_err == ESP_ERR_TIMEOUT) ? 120 : 12;
+  const bool log_this = (attempt % stride) == 1;
 
   // The IDF mount path ESP_LOGEs twice on every cardless attempt
   // ("send_op_cond returned 0x107" + "sdmmc_card_init failed"), which at the
@@ -317,8 +324,9 @@ bool ShotStore::try_mount() {
     storage_info_ = info;
     xSemaphoreGive(mutex_);
     // The attempt number is printed because the retries themselves are now
-    // silent: it should climb by exactly 12 per line. Anything else means the
-    // loop is not running at kRetryMs and the quiet is hiding something.
+    // silent: it should climb by exactly `stride` per line (12 while the state
+    // is still news, 120 once "no card" is established). Anything else means
+    // the loop is not running at kRetryMs and the quiet is hiding something.
     if (log_this) {
       if (info.state == core::MediumState::kBadFormat)
         core::logf(

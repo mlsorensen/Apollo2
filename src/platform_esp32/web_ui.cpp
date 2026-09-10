@@ -212,10 +212,37 @@ void WebUi::handle_log() {
     return;
   }
   const size_t n = core::log_ring().snapshot_tail(buf, cap);
+
+  // TRUNCATED BY DEFAULT. Serving runs on the main loop on RGB boards and the
+  // display is frozen for the duration -- that freeze is deliberate (see
+  // web_ui.h: serving while LVGL renders starves the panel's bounce buffer),
+  // so the lever we have is to serve less. 4KB keeps it brief; `?full=1` still
+  // gets the whole ring for a real diagnosis. The ring is a FIXED 64KB, so the
+  // full response never grows beyond that however long the device has been up
+  // (measured ~329 B/min, i.e. the ring holds roughly 3.3 hours).
+  constexpr size_t kTailBytes = 4 * 1024;
+  const bool full = server_.hasArg("full");
+  size_t start = (!full && n > kTailBytes) ? n - kTailBytes : 0;
+  if (start > 0) {  // don't begin mid-line
+    while (start < n && buf[start - 1] != '\n') ++start;
+  }
+
+  char head[160];
+  int head_len = 0;
+  if (start > 0) {
+    head_len = std::snprintf(
+        head, sizeof(head),
+        "--- truncated: showing the last %u of %u bytes. Full log: /log?full=1 "
+        "(slower; the screen freezes while it is served) ---\n",
+        static_cast<unsigned>(n - start), static_cast<unsigned>(n));
+    if (head_len < 0) head_len = 0;
+  }
+
   constexpr size_t kSlice = 8 * 1024;
-  server_.setContentLength(n);
+  server_.setContentLength(static_cast<size_t>(head_len) + (n - start));
   server_.send(200, "text/plain; charset=utf-8", "");
-  for (size_t off = 0; off < n; off += kSlice) {
+  if (head_len > 0) server_.sendContent(head, static_cast<size_t>(head_len));
+  for (size_t off = start; off < n; off += kSlice) {
     const size_t chunk = n - off < kSlice ? n - off : kSlice;
     server_.sendContent(buf + off, chunk);
   }
