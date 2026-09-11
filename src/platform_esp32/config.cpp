@@ -1,6 +1,7 @@
 #include "platform_esp32/config.h"
 
 #include <Preferences.h>
+#include <cmath>
 
 // NVS is initialized by the Arduino-ESP32 core at boot, so we just open the
 // namespace per call (cheap, and avoids holding the handle open).
@@ -25,11 +26,29 @@ constexpr char kScopeGraphKey[] = "scopegraph";
 constexpr char kPerfOverlayKey[] = "perfovl";
 constexpr char kClickSoundKey[] = "clicksnd";
 constexpr char kReadyChimeKey[] = "rdychime";    // legacy on/off, migrated below
-constexpr char kReadyChimeVolKey[] = "rdychimev";
+constexpr char kReadyChimeVolKey[] = "rdychimev";  // legacy LINEAR-AMPLITUDE %
+constexpr char kReadyChimeUiKey[] = "rdychimeu";   // current: perceptual 0-100
 constexpr char kReadyMelodyKey[] = "rdymel";     // warm-up tune: 0 off, 1.. melody
-// Half volume out of the box: loud enough to carry, quiet enough that the
-// first warm-up after a flash doesn't startle anyone.
-constexpr int kReadyChimeDefaultVol = 50;
+// Out of the box: loud enough to carry, quiet enough that the first warm-up
+// after a flash doesn't startle anyone. 80 on the perceptual scale is the same
+// loudness the old linear 50 % produced (see migrate_chime_volume).
+constexpr int kReadyChimeDefaultVol = 80;
+// The dB span the volume setting covers — MUST match kChimeRangeDb in
+// sound.cpp, which is what actually applies the curve. Only used to convert
+// pre-v0.13 stored values.
+constexpr float kReadyChimeRangeDb = 30.0f;
+
+// Convert a legacy LINEAR-amplitude percent to the perceptual 0-100 scale that
+// replaced it, preserving how loud the device actually was: the old value was
+// used as raw amplitude, so its level in dB is 20*log10(old/100), and the new
+// scale is that dB span mapped linearly onto 0-100.
+int migrate_chime_volume(int legacy_percent) {
+  if (legacy_percent <= 0) return 0;
+  if (legacy_percent >= 100) return 100;
+  const float db = 20.0f * std::log10(legacy_percent / 100.0f);
+  const int v = static_cast<int>(lroundf(100.0f + db / kReadyChimeRangeDb * 100.0f));
+  return v < 1 ? 1 : v > 100 ? 100 : v;  // never silence a device that wasn't
+}
 constexpr char kScaleMacKey[] = "smac";
 constexpr char kScaleNameKey[] = "sname";
 constexpr char kTargetKey[] = "tgtg";
@@ -560,8 +579,12 @@ int Config::ready_chime_volume() const {
   Preferences p;
   if (!p.begin(kNamespace, /*readOnly=*/true)) return kReadyChimeDefaultVol;
   int v = kReadyChimeDefaultVol;
-  if (p.isKey(kReadyChimeVolKey)) {
-    v = p.getInt(kReadyChimeVolKey, kReadyChimeDefaultVol);
+  if (p.isKey(kReadyChimeUiKey)) {
+    v = p.getInt(kReadyChimeUiKey, kReadyChimeDefaultVol);
+  } else if (p.isKey(kReadyChimeVolKey)) {
+    // Migrate the linear-amplitude percent this setting used before the scale
+    // became perceptual: convert so the chime stays exactly as loud as it was.
+    v = migrate_chime_volume(p.getInt(kReadyChimeVolKey, 50));
   } else if (p.isKey(kReadyChimeKey)) {
     // Migrate the on/off key this setting shipped as first: off stays off, on
     // keeps the full level it used to play at rather than dropping to the new
@@ -575,7 +598,7 @@ int Config::ready_chime_volume() const {
 void Config::set_ready_chime_volume(int percent) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
-  p.putInt(kReadyChimeVolKey, percent < 0 ? 0 : percent > 100 ? 100 : percent);
+  p.putInt(kReadyChimeUiKey, percent < 0 ? 0 : percent > 100 ? 100 : percent);
   p.end();
 }
 

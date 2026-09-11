@@ -59,7 +59,6 @@ Settings
 │  └─ WiFi        — Enable · Status · Set up WiFi → QR portal · Forget
 │                  · Auto time (NTP) · Check for updates (Off/Boot/Daily/Hourly)
 │                    → notice → Install now
-├─ Restart display
 └─ Lock display for cleaning  → 30 s touch lock
 
 Stats
@@ -225,10 +224,13 @@ Plots the live flow rate (or weight) from the scale.
   cycles to the next melody and auditions it; **Random** picks a different
   tune each time the machine warms up; `Off` silences the chime regardless of
   the volume below.
-- ③ **Chime volume** *(boards with a speaker; Off / 25 / 50 / 75 / 100 %, default
-  50 %)* — the warm‑up chime's level, so you can walk away and be called back.
-  Each tap cycles to the next level **and plays a note at it**, so you can set
-  it by ear; `Off` silences it.
+- ③ **Chime volume** *(boards with a speaker; 0–100 %, default 80 %)* — the
+  warm‑up chime's level, so you can walk away and be called back. Drag the
+  slider to get close, or tap **–** / **+** to nudge it 5 % at a time; either
+  way it **plays a note at the new level** so you can set it by ear. `0 %`
+  shows as `Off` and silences it. The scale is even *to the ear* rather than
+  arithmetically — each step is the same size in loudness, so the lower half
+  is as useful as the upper half.
 
   The chime marks the *end of a warm‑up*, not every moment the boilers are at
   temperature, so it sounds **at most once per turn‑on** and then stays quiet
@@ -492,15 +494,10 @@ page fits on screen with little to no scrolling.
 
 ![Settings root page](docs/img/manual/settings-root.png)
 
-The rows ①–③ open the **Micra**, **Scale**, and **Device** pages above; two
-actions live directly on the root:
+The rows ①–③ open the **Micra**, **Scale**, and **Device** pages above; one
+action lives directly on the root:
 
-- ④ **Restart display** — escape hatch for the rare RGB‑panel glitch where the
-  image comes up (or drifts) shifted by a few pixels. On RGB boards this
-  re‑aligns the panel in place — you'll see a single one‑frame hop, then a
-  clean image; nothing is lost and nothing reboots. Other boards do a soft
-  reboot. The firmware also re‑aligns itself once shortly after every boot.
-- ⑤ **Lock display for cleaning** — disables touch for 30 seconds so you can
+- ④ **Lock display for cleaning** — disables touch for 30 seconds so you can
   wipe the screen. A full‑screen countdown shows the time remaining; the lock
   ends on its own (touching the screen does nothing until then).
 

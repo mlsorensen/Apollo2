@@ -133,7 +133,10 @@ class App {
   void set_scope_graph(bool on);         // Scale "Oscilloscope graph" switch
   void set_perf_overlay(bool on);        // Device "Performance overlay" switch
   void set_click_sound(bool on);         // Device "Button sounds" switch
-  void cycle_ready_chime();              // Micra "Chime volume": Off/25/50/75/100%
+  // Micra "Chime volume": linear 0-100 (0 = Off), slider + [-]/[+]. sound.cpp
+  // maps it onto a dB curve so the steps are even by ear.
+  void set_ready_chime_vol(int percent, bool audition);
+  void ready_chime_vol_adjust(int dir);  // one step per [-]/[+] tap
   void cycle_ready_melody();             // Micra "Chime melody": Off/Blue/Pink/...
   void theme_select(int index);          // Device theme roller selection
   void apply_pending_theme();            // deferred rebuild (from lv_async_call)
@@ -243,7 +246,7 @@ class App {
   core::ISound* sound_ = nullptr;
   core::IShotStore* shots_ = nullptr;
   bool click_sound_on_ = true;  // cached from IDisplaySettings (checked per press)
-  int ready_chime_vol_ = 50;    // cached likewise, 0..100 (0 = chime off)
+  int ready_chime_vol_ = 80;    // cached likewise, 0..100 (0 = chime off)
   int ready_chime_mel_ = 1;     // cached likewise: 0 = off, 1.. = ready melody
   lv_obj_t* tabview_ = nullptr;
   ScreenProfile screen_{};          // stored so we can rebuild on a theme change

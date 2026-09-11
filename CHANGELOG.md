@@ -17,6 +17,20 @@ for someone reading the diff.
   battery, SD card and paddle wiring — with a 4.3" 800×480 screen instead of a
   5" 1280×720 one. Choose between the two on screen size and a small price
   difference; nothing else about them differs.
+- **Finer control over the warm-up chime volume.** The four fixed levels (25 /
+  50 / 75 / 100 %) are replaced by a slider with **–** and **+** buttons either
+  side: drag to get close, tap to nudge 5 % at a time, and either way it plays a
+  note at the new level so you can set it by ear. Just as importantly the scale
+  is now even *to the ear* — before, everything above about 40 % sounded much
+  the same and the quiet end jumped in big steps, because the setting was
+  applied directly as signal strength rather than as loudness. **Your existing
+  setting is carried over at the same volume**, so nothing changes how your
+  machine sounds: if it was on 50 % it now reads 80 % and is exactly as loud as
+  before.
+- **Removed "Restart display" from Settings.** It was an escape hatch for the
+  rare display glitch that was root-caused and fixed in v0.12.3, so there is
+  nothing left for it to fix. The automatic re-alignment after every boot is
+  unchanged.
 
 ## v0.12.3
 

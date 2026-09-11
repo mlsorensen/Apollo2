@@ -173,6 +173,24 @@ void codec_start() {
 // interrupts — because this board's BLE has proven sensitive to standing
 // internal-RAM/bus load (a continuously-clocking I2S broke Micra + scale
 // connects outright on first bring-up). The player enables the channel, and a
+// Volume is a LINEAR 0-100 setting, but loudness is logarithmic: scaling
+// amplitude by the percent directly puts every useful level under 40 (50% ->
+// 100% is a mere +6 dB, one perceptual step spread over half the range). So
+// bend the scale here instead of making the user think in decibels: 100 is
+// unity and each step down is an equal fraction of kChimeRangeDb, so the
+// setting feels linear. 0 is a true mute, not the bottom of the curve.
+//
+// Kept at this layer on purpose: the UI, Config and core all deal in the plain
+// percent, and only the thing that actually makes sound knows about dB.
+// Callers that pass no volume get 100 -> unity, so button clicks are unchanged.
+constexpr float kChimeRangeDb = 30.0f;
+
+float volume_amplitude(int percent) {
+  if (percent <= 0) return 0.0f;
+  if (percent >= 100) return 1.0f;
+  return powf(10.0f, (-kChimeRangeDb * (100 - percent) / 100.0f) / 20.0f);
+}
+
 // one-shot esp_timer disables it again once the tail has drained.
 class Es8311Sound : public core::ISound {
  public:
@@ -364,7 +382,7 @@ class Es8311Sound : public core::ISound {
     // then apply the request's volume on top.
     float amp_sum = 0.0f;
     for (int k = 0; k < voices; ++k) amp_sum += partials[k].amp;
-    const float gain = peak / amp_sum * (req.volume / 100.0f);
+    const float gain = peak / amp_sum * volume_amplitude(req.volume);
 
     for (int i = 0; i < req.count && !cancel_.load(); ++i) {
       const core::Tone& note = req.notes[i];

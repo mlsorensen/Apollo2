@@ -113,13 +113,13 @@ struct SettingsWidgets {
   lv_obj_t* drop_neg_flow_switch = nullptr;  // on = clamp negative g/s on the graph
   lv_obj_t* scope_graph_switch = nullptr;    // on = oscilloscope sweep, off = scroll
   lv_obj_t* perf_overlay_switch = nullptr;   // on = show LVGL FPS/CPU overlay
-  lv_obj_t* restart_btn = nullptr;           // soft reboot (display-glitch escape hatch)
   lv_obj_t* clean_lock_btn = nullptr;        // 30 s touch lockout for wiping the screen
   lv_obj_t* auto_connect_switch = nullptr;   // Micra > Bluetooth: connect to the
                                              // saved machine at boot
-  lv_obj_t* chime_vol_btn = nullptr;         // Micra > Controls: warm-up chime
-  lv_obj_t* chime_vol_value = nullptr;       // level cycle (Off / 25 / 50 / 75
-                                             // / 100%); audio boards only
+  lv_obj_t* chime_vol_minus = nullptr;       // Micra > Controls: warm-up chime
+  lv_obj_t* chime_vol_slider = nullptr;      // level. Slider + [-]/[+] + readout
+  lv_obj_t* chime_vol_value = nullptr;       // over a LINEAR 0-100 scale (0 =
+  lv_obj_t* chime_vol_plus = nullptr;        // Off); audio boards only
   lv_obj_t* chime_mel_btn = nullptr;         // Micra > Controls: warm-up chime
   lv_obj_t* chime_mel_value = nullptr;       // melody cycle (Off / Blue / Pink
                                              // / ...); audio boards only

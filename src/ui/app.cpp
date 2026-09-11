@@ -46,7 +46,10 @@ void on_shot_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->shot_button();
 }
 
-void on_restart_clicked(lv_event_t* e) {
+// Kept, unbound: the "Restart display" row was removed once the RGB ghost
+// raster was root-caused and fixed, but the resync machinery behind it stays
+// (see settings_tab.cpp). This is the other half of re-adding the row.
+[[maybe_unused]] void on_restart_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->restart_device();
 }
 
@@ -435,8 +438,19 @@ void on_click_sound_switch(lv_event_t* e) {
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
   app->set_click_sound(lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
-void on_chime_vol_clicked(lv_event_t* e) {
-  static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_ready_chime();
+void on_chime_vol_minus(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->ready_chime_vol_adjust(-1);
+}
+void on_chime_vol_plus(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->ready_chime_vol_adjust(+1);
+}
+// Drag: track the value live in the label, but stay silent until the finger
+// lifts — auditioning per drag step would machine-gun the speaker.
+void on_chime_vol_slider(lv_event_t* e) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  auto* sl = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  const bool released = lv_event_get_code(e) == LV_EVENT_RELEASED;
+  app->set_ready_chime_vol(lv_slider_get_value(sl), /*audition=*/released);
 }
 void on_chime_mel_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_ready_melody();
@@ -475,11 +489,10 @@ constexpr int kFlushCount = static_cast<int>(sizeof(kFlushChoices) / sizeof(kFlu
 constexpr int kFlushDelayChoices[] = {3, 6, 9, 15};
 constexpr int kFlushDelayCount =
     static_cast<int>(sizeof(kFlushDelayChoices) / sizeof(kFlushDelayChoices[0]));
-// Ready-chime levels (percent; 0 = off). Linear amplitude, so the label means
-// what it says.
-constexpr int kChimeVolChoices[] = {0, 25, 50, 75, 100};
-constexpr int kChimeVolCount =
-    static_cast<int>(sizeof(kChimeVolChoices) / sizeof(kChimeVolChoices[0]));
+// Ready-chime level: a linear 0-100 scale the user drags or steps. It is NOT
+// raw amplitude — sound.cpp bends it onto a dB curve so each step is an equal
+// change by ear (raw amplitude would put every useful level under 40).
+constexpr int kChimeVolStep = 5;
 
 void set_chime_vol_label(ui::SettingsWidgets& s, int percent) {
   if (s.chime_vol_value == nullptr) return;
@@ -1048,8 +1061,6 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                       LV_EVENT_VALUE_CHANGED, this);
   lv_obj_add_event_cb(settings_.scope_graph_switch, on_scope_graph_switch,
                       LV_EVENT_VALUE_CHANGED, this);
-  if (settings_.restart_btn != nullptr)
-    lv_obj_add_event_cb(settings_.restart_btn, on_restart_clicked, LV_EVENT_CLICKED, this);
   if (settings_.clean_lock_btn != nullptr)
     lv_obj_add_event_cb(settings_.clean_lock_btn, on_clean_lock_clicked, LV_EVENT_CLICKED,
                         this);
@@ -1088,10 +1099,18 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     lv_obj_add_event_cb(settings_.chime_mel_btn, on_chime_mel_clicked,
                         LV_EVENT_CLICKED, this);
   }
-  if (settings_.chime_vol_btn != nullptr) {  // audio boards only
+  if (settings_.chime_vol_slider != nullptr) {  // audio boards only
+    lv_slider_set_value(settings_.chime_vol_slider, ready_chime_vol_, LV_ANIM_OFF);
     set_chime_vol_label(settings_, ready_chime_vol_);
-    lv_obj_add_event_cb(settings_.chime_vol_btn, on_chime_vol_clicked,
+    lv_obj_add_event_cb(settings_.chime_vol_minus, on_chime_vol_minus,
                         LV_EVENT_CLICKED, this);
+    lv_obj_add_event_cb(settings_.chime_vol_plus, on_chime_vol_plus,
+                        LV_EVENT_CLICKED, this);
+    // VALUE_CHANGED tracks the drag; RELEASED is what auditions the result.
+    lv_obj_add_event_cb(settings_.chime_vol_slider, on_chime_vol_slider,
+                        LV_EVENT_VALUE_CHANGED, this);
+    lv_obj_add_event_cb(settings_.chime_vol_slider, on_chime_vol_slider,
+                        LV_EVENT_RELEASED, this);
   }
   if (settings_.theme_btn != nullptr)
     lv_obj_add_event_cb(settings_.theme_btn, on_theme_clicked, LV_EVENT_CLICKED, this);
@@ -1483,23 +1502,35 @@ void App::cycle_ready_melody() {
   }
 }
 
-void App::cycle_ready_chime() {
-  int i = 0;
-  while (i < kChimeVolCount && kChimeVolChoices[i] != ready_chime_vol_) ++i;
-  const int next = kChimeVolChoices[(i + 1) % kChimeVolCount];  // unknown -> Off
-  ready_chime_vol_ = next;
-  if (display_ != nullptr) display_->set_ready_chime_volume(next);  // persist
-  set_chime_vol_label(settings_, next);
-  // Audition the level you just landed on — one note, so cycling stays quick.
+// Chime volume. The scale here is a plain linear 0-100 (0 = Off); the audio
+// layer maps it onto a dB curve so equal steps sound like equal steps (see
+// kChimeRangeDb in sound.cpp). `audition` is false while a slider drag is in
+// flight — dragging would otherwise fire a note per pixel.
+void App::set_ready_chime_vol(int percent, bool audition) {
+  const int v = percent < 0 ? 0 : percent > 100 ? 100 : percent;
+  const bool changed = v != ready_chime_vol_;
+  ready_chime_vol_ = v;
+  set_chime_vol_label(settings_, v);
+  if (settings_.chime_vol_slider != nullptr &&
+      lv_slider_get_value(settings_.chime_vol_slider) != v) {
+    lv_slider_set_value(settings_.chime_vol_slider, v, LV_ANIM_OFF);
+  }
+  if (!changed && !audition) return;
+  if (display_ != nullptr) display_->set_ready_chime_volume(v);  // persist
+  // Audition the level you just landed on — one note, so nudging stays quick.
   // Play the SELECTED melody's note (Blue's when the melody is Off, so the
   // level is still audible while choosing). Priority bumped like the melody
   // audition so it cuts through a still-ringing melody preview.
-  if (next > 0 && sound_ != nullptr) {
+  if (audition && v > 0 && sound_ != nullptr) {
     core::Playback p = core::ready_melody_sample(
-        ready_chime_mel_ > 0 ? melody_variant(ready_chime_mel_) : 0, next);
+        ready_chime_mel_ > 0 ? melody_variant(ready_chime_mel_) : 0, v);
     ++p.priority;
     sound_->play(p);
   }
+}
+
+void App::ready_chime_vol_adjust(int dir) {
+  set_ready_chime_vol(ready_chime_vol_ + dir * kChimeVolStep, /*audition=*/true);
 }
 
 void App::set_perf_overlay(bool on) {

@@ -183,6 +183,54 @@ void make_inline_stepper(lv_obj_t* row, const lv_font_t* text_font,
   *out_plus = ui::make_step_button(grp, LV_SYMBOL_PLUS, btn_size, symbol_font);
 }
 
+// A [-] |=====----| value [+] control: a slider flanked by step buttons, with
+// the value read out on the right. The slider is for getting somewhere fast,
+// the buttons for landing on an exact value — dragging a thin bar on glass is
+// fiddly, and this setting is one people nudge. The slider grows into whatever
+// the row has spare (flex_grow 1) so it works at every UI scale from the
+// 800x480 boards up to the X 8".
+void make_inline_slider(lv_obj_t* row, const lv_font_t* text_font,
+                        const lv_font_t* symbol_font, int btn_size,
+                        lv_obj_t** out_minus, lv_obj_t** out_slider,
+                        lv_obj_t** out_value, lv_obj_t** out_plus) {
+  lv_obj_t* grp = lv_obj_create(row);
+  lv_obj_remove_style_all(grp);
+  lv_obj_remove_flag(grp, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_height(grp, LV_SIZE_CONTENT);
+  lv_obj_set_flex_grow(grp, 1);          // take the row's spare width
+  lv_obj_set_style_pad_left(grp, ui::dp(12), 0);
+  lv_obj_set_flex_flow(grp, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(grp, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(grp, ui::dp(8), 0);
+
+  *out_minus = ui::make_step_button(grp, LV_SYMBOL_MINUS, btn_size, symbol_font);
+
+  lv_obj_t* sl = lv_slider_create(grp);
+  lv_slider_set_range(sl, 0, 100);
+  lv_obj_set_flex_grow(sl, 1);
+  lv_obj_set_height(sl, ui::dp(10));
+  // Touch target: the bar is deliberately thin, so pad the hit area out to a
+  // finger rather than fattening the graphic.
+  lv_obj_set_ext_click_area(sl, ui::dp(14));
+  lv_obj_set_style_bg_color(sl, lv_color_hex(ui::theme::rail()), LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(sl, LV_OPA_COVER, LV_PART_MAIN);
+  lv_obj_set_style_radius(sl, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+  lv_obj_set_style_bg_color(sl, lv_color_hex(ui::theme::accent()), LV_PART_INDICATOR);
+  lv_obj_set_style_radius(sl, LV_RADIUS_CIRCLE, LV_PART_INDICATOR);
+  lv_obj_set_style_bg_color(sl, lv_color_hex(ui::theme::text()), LV_PART_KNOB);
+  lv_obj_set_style_pad_all(sl, ui::dp(6), LV_PART_KNOB);
+  *out_slider = sl;
+
+  *out_value = lv_label_create(grp);
+  lv_obj_set_width(*out_value, ui::dp(46));   // fixed: "Off".."100 %" must not jitter
+  lv_obj_set_style_text_align(*out_value, LV_TEXT_ALIGN_RIGHT, 0);
+  lv_obj_set_style_text_color(*out_value, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(*out_value, text_font, 0);
+
+  *out_plus = ui::make_step_button(grp, LV_SYMBOL_PLUS, btn_size, symbol_font);
+}
+
 // Device > Display: how the UI looks and sounds. Brightness only where the
 // backlight can dim, button sounds only on boards with a speaker (omitted rows
 // leave their pointers null; App guards on them).
@@ -594,17 +642,16 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
       lv_obj_set_style_text_color(out.chime_mel_value, lv_color_hex(ui::theme::text()), 0);
       lv_obj_set_style_text_font(out.chime_mel_value, font, 0);
       lv_obj_center(out.chime_mel_value);
+      // Chime volume: slider + [-]/[+] + readout. The scale is a plain linear
+      // 0-100; sound.cpp turns it into amplitude on a dB curve, so equal steps
+      // here are equal steps by ear (see kChimeRangeDb).
       lv_obj_t* rc = make_setting_row(out.micra_controls_page, "Chime volume", font);
-      out.chime_vol_btn = ui::make_button(rc);
-      lv_obj_set_height(out.chime_vol_btn, btn_size);
-      lv_obj_set_style_pad_hor(out.chime_vol_btn, ui::dp(14), 0);
-      lv_obj_set_style_bg_color(out.chime_vol_btn, lv_color_hex(ui::theme::card()), 0);
-      out.chime_vol_value = lv_label_create(out.chime_vol_btn);
-      lv_obj_set_style_text_color(out.chime_vol_value, lv_color_hex(ui::theme::text()), 0);
-      lv_obj_set_style_text_font(out.chime_vol_value, font, 0);
-      lv_obj_center(out.chime_vol_value);
+      make_inline_slider(rc, font, symbol_font, btn_size, &out.chime_vol_minus,
+                         &out.chime_vol_slider, &out.chime_vol_value,
+                         &out.chime_vol_plus);
     } else {
-      out.chime_vol_btn = out.chime_vol_value = nullptr;
+      out.chime_vol_minus = out.chime_vol_slider = nullptr;
+      out.chime_vol_value = out.chime_vol_plus = nullptr;
       out.chime_mel_btn = out.chime_mel_value = nullptr;
     }
   }
@@ -773,13 +820,17 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   root_entry(menu, out.root_page, out.scale_page, "Scale", font, btn_h);
   root_entry(menu, out.root_page, out.device_page, "Apollo", font, btn_h);
 
-  // Root-level action rows (not drill-ins). Same card styling as the entries,
-  // an action glyph instead of a chevron:
-  //  - Restart display: heals the RGB panel's shifted/ghosted raster (latched
-  //    DMA desync) — in-place resync on RGB boards, soft reboot elsewhere.
-  //  - Lock for cleaning: 30 s touch lockout so the glass can be wiped.
-  out.restart_btn = action_row(out.root_page, "Restart display", LV_SYMBOL_REFRESH,
-                               font, btn_h);
+  // Root-level action row (not a drill-in). Same card styling as the entries,
+  // an action glyph instead of a chevron.
+  //
+  // There used to be a "Restart display" row here too — an escape hatch for the
+  // RGB panel's shifted/ghosted raster. That bug was root-caused and fixed
+  // (the driver's bounce-buffer parity latch), so the manual escape hatch is
+  // gone from the UI. The machinery behind it is deliberately KEPT in case the
+  // workaround is ever needed again: Display::rgb_resync() (still called as the
+  // post-boot backstop in device main) and App::set_restart_handler(), which
+  // device main still wires. Re-adding the row is one action_row() call plus
+  // its LV_EVENT_CLICKED binding in App.
   out.clean_lock_btn = action_row(out.root_page, "Lock display for cleaning",
                                   LV_SYMBOL_TINT, font, btn_h);
 
