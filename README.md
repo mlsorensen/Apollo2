@@ -107,7 +107,7 @@ a USB cable.
 
 ```sh
 make flash            # print selection of flash options
-make flash-p4-5       # or target a board: p4-5 | s3-4-3c | p4-x-8
+make flash-p4-5       # or target a board: p4-5 | p4-4-3 | s3-4-3c | p4-x-8
 make monitor          # open the serial console (115200 baud)
 ```
 
@@ -193,7 +193,7 @@ build time.
 
 ### Which board?
 
-Three boards are supported, and each has its own firmware image. Every one of
+Four boards are supported, and each has its own firmware image. Every one of
 them delivers the full brew‑by‑weight experience with **zero wiring** (via Shot
 detect); the wiring column only matters if you *also* want **Auto shot** — the
 wired‑paddle mode where the machine's own paddle starts the shot and the
@@ -202,6 +202,7 @@ firmware cuts it at target weight.
 | Pick | Best for | Screen | Enclosure | Auto‑shot wiring *(optional)* | Performance |
 |------|----------|--------|-----------|-------------------------------|-------------|
 | [ESP32‑P4‑WIFI6‑Touch‑LCD‑5](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-5.htm) (SKU 33762) | **Mounting on the Micra** | 5" 1280×720 | [3D‑printed shell](hardware/3d-prints/) | DIY cable with an external opto module | **Best** |
+| [ESP32‑P4‑WIFI6‑Touch‑LCD‑4.3](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-4.3.htm) | **Mounting on the Micra, smaller screen** | 4.3" 800×480 | [3D‑printed shell](hardware/3d-prints/) | DIY cable with an external opto module | **Best** |
 | [ESP32‑S3‑Touch‑LCD‑4.3C **BOX**](https://www.waveshare.com/esp32-s3-touch-lcd-4.3c.htm?sku=33630) (SKU 33630) | **Mounting on the Micra with nothing to build** | 4.3" 800×480 | Finished box | **Built‑in opto** — three wires into screw terminals, nothing to build | Good |
 | [ESP32‑P4‑WIFI6‑Touch‑LCD‑X **8" box**](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-7-8-10.1.htm) | **Counter‑top companion** | 8" 1280×800 | Finished box | DIY cable with an external opto module | **Best** |
 
@@ -211,7 +212,14 @@ mount‑on‑the‑Micra option: the P4 is much faster than the S3 (32 MB flash 
 The cost is two bits of DIY — you print a [shell](hardware/3d-prints/), and if
 you want Auto shot you make up a cable with an external opto module.
 
-**Choose the S3‑4.3C BOX if you'd rather not do either of those.** It's the
+**The ESP32‑P4‑WIFI6‑Touch‑LCD‑4.3 is the same board with a smaller screen.**
+Identical electronics — same processor, radio, audio, battery path, SD slot and
+paddle wiring; only the panel differs (4.3" 800×480 instead of 5" 1280×720).
+Pick between the two on **screen size and a small price difference**, nothing
+else. It takes its own [printed shell](hardware/3d-prints/) and its own
+firmware image.
+
+**Choose the S3‑4.3C BOX if you'd rather not print a case or build a cable.** It's the
 only small board that arrives as a finished box *and* has the opto‑isolators
 built in, so Auto shot is three wires into screw terminals with no cable to
 assemble — genuinely the least‑hacking route to a fully wired setup. The
@@ -240,6 +248,7 @@ Ready‑to‑print 3MF files live in [`hardware/3d-prints/`](hardware/3d-prints/
 | [`esp32-s3-4.3c-shell.3mf`](hardware/3d-prints/esp32-s3-4.3c-shell.3mf) | Shell for the bare **ESP32‑S3‑Touch‑LCD‑4.3C** (no‑enclosure variant). |
 | [`esp32-p4-5-shell.3mf`](hardware/3d-prints/esp32-p4-5-shell.3mf) | Shell for the **ESP32‑P4‑WIFI6‑Touch‑LCD‑5**. |
 | [`esp32-p4-5-shell-slim.3mf`](hardware/3d-prints/esp32-p4-5-shell-slim.3mf) | Slimmer shell for the **ESP32‑P4‑WIFI6‑Touch‑LCD‑5** — no battery compartment (USB‑power only). |
+| [`esp32-p4-4.3-shell.3mf`](hardware/3d-prints/esp32-p4-4.3-shell.3mf) | Shell for the **ESP32‑P4‑WIFI6‑Touch‑LCD‑4.3**. |
 | [`esp32-p4-x-8-backplate.3mf`](hardware/3d-prints/esp32-p4-x-8-backplate.3mf) | Backplate that adapts the **ESP32‑P4‑WIFI6‑Touch‑LCD‑X 8" box** to the counter‑top stand above. |
 
 This [short video](https://youtube.com/shorts/Ea0IaJ7hjvQ) shows how the
@@ -332,6 +341,7 @@ handle it.
 
 ```sh
 pio run -e esp32-p4-micra-5       # 5"   1280x720 (P4, MIPI-DSI, WiFi6/BLE via C6)
+pio run -e esp32-p4-micra-43      # 4.3"  800x480 (P4, MIPI-DSI, same board as the 5)
 pio run -e esp32-s3-micra-4-3c    # 4.3"  800x480 (S3, RGB panel)
 pio run -e esp32-p4-micra-x-8     # X-series 8" box (P4, 1280x800)
 pio run -e sim                    # native simulator

@@ -395,12 +395,16 @@ constexpr int kSdD0 = 13;
 // native GPIOs. Pins traced from the board schematic + Waveshare's BSP
 // (esp32_p4_wifi6_touch_lcd_4_3.h). UNVERIFIED on hardware yet.
 constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-4.3";
-// INTERNAL-ONLY board: deliberately NOT in the firmware-release.yml
-// matrix, the web flasher, or the docs, so nothing is published at
-// firmware/app/<slug>.bin and self-update cannot complete here (the
-// check still runs and the download 404s — accepted, see CLAUDE.md
-// "Support matrix"). The slug is kept so promoting the board later is
-// just a matrix row.
+// RELEASED: this board is in the firmware-release.yml matrix, the web
+// flasher and the README. The slug MUST equal that matrix row's "board"
+// field (CI asserts it against the built binary): the self-updater
+// fetches firmware/app/<slug>.bin.
+//
+// As with the LCD-5, this slug means the rev v1.x ("es") silicon image and
+// must keep meaning that — fielded units self-update from it. A rev v3
+// board becomes a SECOND block + env with slug
+// "p4-wifi6-touch-lcd-4.3-rev3" (chip_variant "esp32p4",
+// BOARD_P4_SILICON_REV3), never a rename of this one.
 constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-4.3";
 #define BOARD_DISPLAY_DSI     // MIPI-DSI panel via Arduino_GFX
 #define BOARD_DSI_PANEL_ST7701  // panel controller (selects the DCS init table)

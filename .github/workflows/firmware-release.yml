@@ -43,23 +43,28 @@ jobs:
           # board = user-facing name (Waveshare product, lowercased) used in
           # the artifact filename; env = the PlatformIO environment.
           - { env: esp32-p4-micra-5,     board: p4-wifi6-touch-lcd-5,    chip: ESP32-P4 }
+          - { env: esp32-p4-micra-43,    board: p4-wifi6-touch-lcd-4.3,  chip: ESP32-P4 }
           - { env: esp32-s3-micra-4-3c,  board: s3-touch-lcd-4.3c,       chip: ESP32-S3 }
           - { env: esp32-p4-micra-x-8,   board: p4-wifi6-touch-lcd-x-8,  chip: ESP32-P4 }
-          # THIS LIST IS THE SUPPORT MATRIX. Three products are released and
-          # advertised: the P4-5 (mount-on-Micra, the default pick), the
-          # S3-4.3C BOX (mount-on-Micra with nothing to build) and the X 8"
-          # (counter-top). platformio.ini carries six MORE envs -
-          # esp32-s3-micra, -7b, -4-3b, esp32-p4-micra-43, -x-7, -x-10-1 -
-          # which build fine and are kept as the record of how those boards
-          # differ (and as the owner's own dev hardware). They are
-          # deliberately NOT built here, NOT in site/index.html, and NOT in
-          # the README. Do not add one back without asking - see the "Support
-          # matrix" section of CLAUDE.md.
+          # THIS LIST IS THE SUPPORT MATRIX. Four products are released and
+          # advertised: the P4-5 (mount-on-Micra, the default pick), the P4-4.3
+          # (same board, smaller glass), the S3-4.3C BOX (mount-on-Micra with
+          # nothing to build) and the X 8" (counter-top). platformio.ini
+          # carries five MORE envs - esp32-s3-micra, -7b, -4-3b,
+          # esp32-p4-micra-x-7, -x-10-1 - which build fine and are kept as the
+          # record of how those boards differ (and as the owner's own dev
+          # hardware). They are deliberately NOT built here, NOT in
+          # site/index.html, and NOT in the README. Do not add one back
+          # without asking - see the "Support matrix" section of CLAUDE.md.
           #
-          # RESERVED: when a rev v3 production-silicon P4-5 sample lands it
-          # becomes a FOURTH row, board: p4-wifi6-touch-lcd-5-rev3. The plain
-          # p4-wifi6-touch-lcd-5 above keeps meaning the rev v1.x ("es")
-          # image so fielded LCD-5 units keep self-updating.
+          # COMING: rev v3 production silicon. Waveshare does NOT change the
+          # SKU, so a buyer cannot tell which they got and the PRODUCT list
+          # must stay four - the silicon split doubles the IMAGES, not the
+          # boards. Each P4 product then has two rows, the plain slug meaning
+          # rev v1.x ("es") and a -rev3 sibling (p4-wifi6-touch-lcd-5-rev3,
+          # p4-wifi6-touch-lcd-4.3-rev3, ...), with the flasher picking
+          # between them. Never rename a plain slug: fielded units self-update
+          # from it.
     steps:
       - uses: actions/checkout@v7
 

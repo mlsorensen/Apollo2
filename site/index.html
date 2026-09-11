@@ -126,6 +126,14 @@
 
   <div class="board">
     <div class="info">
+      <div class="name">ESP32-P4-WIFI6-Touch-LCD-4.3</div>
+      <div class="desc">4.3&quot; 800&times;480, ESP32-P4 + WiFi 6. Two USB-C ports &mdash; use the one labeled <b>UART</b>.</div>
+    </div>
+    <esp-web-install-button data-board="p4-wifi6-touch-lcd-4.3"><button slot="activate">Install</button></esp-web-install-button>
+  </div>
+
+  <div class="board">
+    <div class="info">
       <div class="name">ESP32-S3-Touch-LCD-4.3C / 4.3C-BOX</div>
       <div class="desc">4.3&quot; 800&times;480, ESP32-S3. Single USB-C port.</div>
     </div>
@@ -240,6 +248,7 @@
   const BOARD_PATTERNS = [
     ['P4-WIFI6-Touch-LCD-X-8', 'p4-wifi6-touch-lcd-x-8'],
     ['P4-WIFI6-Touch-LCD-5',   'p4-wifi6-touch-lcd-5'],
+    ['P4-WIFI6-Touch-LCD-4.3', 'p4-wifi6-touch-lcd-4.3'],
     ['S3-Touch-LCD-4.3C',      's3-touch-lcd-4.3c'],
   ];
   const matchBoard = (text) => {

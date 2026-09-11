@@ -5,6 +5,19 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## v0.13.0
+
+### Changes
+
+- **The ESP32-P4-WIFI6-Touch-LCD-4.3 is supported again.** It's built,
+  published and offered by the [web flasher](https://mlsorensen.github.io/Apollo2/)
+  alongside the LCD-5, the S3-4.3C BOX and the X 8" box. It had been dropped in
+  v0.12.2; if you're running one, updates work normally again from this release
+  on. It is the **same board as the LCD-5** — same processor, radio, audio,
+  battery, SD card and paddle wiring — with a 4.3" 800×480 screen instead of a
+  5" 1280×720 one. Choose between the two on screen size and a small price
+  difference; nothing else about them differs.
+
 ## v0.12.3
 
 ### Fixes

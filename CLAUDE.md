@@ -111,23 +111,29 @@ existing buffer) over adding memory. Applies to fixes as much as features.
 
 ## Support matrix (READ BEFORE TOUCHING ANY BOARD LIST)
 
-THREE boards are released and advertised. Nothing else is, on purpose:
+FOUR boards are released and advertised. Nothing else is, on purpose:
 
 | env | product | role | slug |
 |---|---|---|---|
 | `esp32-p4-micra-5` | P4-WIFI6-Touch-LCD-5 | mount-on-Micra, the default pick | `p4-wifi6-touch-lcd-5` |
+| `esp32-p4-micra-43` | P4-WIFI6-Touch-LCD-4.3 | mount-on-Micra, smaller glass | `p4-wifi6-touch-lcd-4.3` |
 | `esp32-s3-micra-4-3c` | S3-Touch-LCD-4.3C BOX | mount-on-Micra, nothing to build | `s3-touch-lcd-4.3c` |
 | `esp32-p4-micra-x-8` | P4-WIFI6-Touch-LCD-X 8" | counter-top companion | `p4-wifi6-touch-lcd-x-8` |
 
 Positioning (keep the docs saying this): the **P4-5 is the recommendation** for
 mounting on the machine — it just needs a printed shell and, for Auto shot, a
-DIY opto cable. The **4.3C earns its place by removing BOTH of those**: it is
-the only supported board that is a finished box *and* has opto-isolators
-on-board (three wires into screw terminals). It is the slower part; that is the
-trade. The **X 8"** is the counter-top box.
+DIY opto cable. The **P4-4.3 is THE SAME BOARD with smaller glass** — the -5 env
+literally `extends` the -43 env, and the only board_config deltas are panel
+controller, DSI timings, reset/backlight polarity, touch rst/int and UI scale.
+Everything functional (P4NRW32, C6 radio, ES8311 audio, battery path, SD, paddle
+pins) is byte-identical. **Choose between them on screen size and a small price
+difference — nothing else.** The **4.3C earns its place by removing BOTH DIY
+steps**: it is the only supported board that is a finished box *and* has
+opto-isolators on-board (three wires into screw terminals). It is the slower
+part; that is the trade. The **X 8"** is the counter-top box.
 
-Every OTHER env — `esp32-s3-micra` (2"), `-7b`, `-4-3b`, `esp32-p4-micra-43`,
-`-x-7`, `-x-10-1` — is **INTERNAL-ONLY**: it still builds, is still maintained,
+Every OTHER env — `esp32-s3-micra` (2"), `-7b`, `-4-3b`, `-x-7`, `-x-10-1` — is
+**INTERNAL-ONLY**: it still builds, is still maintained,
 and is deliberately absent from the release matrix, the web flasher and every
 user-facing doc. They are kept as the record of how those boards differ, and as
 dev hardware (the 7" X box is the owner's desk unit). **Do not add one back to
@@ -145,16 +151,27 @@ markers in platformio.ini + board_config.h.
   install 404s and rolls back harmlessly. Accepted because none of these boards
   are expected to be in anyone's hands — they get flashed over USB. Revisit only
   if one actually sees use. No `kOtaPublished` flag, no UI gating.
-- **Coming: a second P4-5 image for rev v3 production silicon.** A sample is
-  expected. It lands as a SECOND board block + env + board json
-  (`chip_variant "esp32p4"`, `BOARD_P4_SILICON_REV3` defined) with slug
-  `p4-wifi6-touch-lcd-5-rev3`. The plain `p4-wifi6-touch-lcd-5` keeps meaning
-  the rev v1.x ("es") image — never rename it, fielded LCD-5 units self-update
-  from that path. The flasher's Detect will then need to read the `REV=` field
-  the identify banner already emits (`src/device/main.cpp`, efuse major*100+
-  minor, >= 300 = rev3); a first install on a blank board can't be probed and
-  will need an explicit choice. `BOARD_P4_SILICON_REV3` is already the macro
-  display.cpp uses to pick the DSI PHY's XTAL PLL reference.
+- **Coming: rev v3 production silicon for the P4 boards (BOTH the 5 and the
+  4.3).** Samples are expected; the owner will buy a v3 P4-4.3 to test at least
+  once, and the v3 P4-5 is expected to validate the pattern for the family.
+  **The product list stays FOUR — the silicon split doubles the IMAGES, not the
+  boards.** Waveshare does not change the SKU, so a buyer cannot tell which
+  silicon they got, and surfacing it as a separate product in the README/board
+  table would be wrong. Call it out in the DEVELOPER docs only; the flasher
+  handles selection. Shape of it, per P4 product:
+    * a SECOND board block + env + board json (`chip_variant "esp32p4"`,
+      `BOARD_P4_SILICON_REV3` defined — already the macro display.cpp uses for
+      the DSI PHY's XTAL PLL reference), slug `<plain-slug>-rev3`.
+    * the PLAIN slug keeps meaning rev v1.x ("es") — never rename it, fielded
+      units self-update from that path.
+    * the flasher keeps ONE card per product and chooses the image: Detect
+      reads the `REV=` field the identify banner already emits
+      (`src/device/main.cpp`, efuse major*100+minor, >= 300 = rev3). A first
+      install on a blank board can't be probed, so the card needs an explicit
+      silicon choice there.
+  **Picking wrong is recoverable and that is fine** — the board just won't come
+  up until the other image is flashed; nothing is damaged. Don't over-engineer
+  the guard-rails for it.
 
 ## Boards / build
 
@@ -293,7 +310,13 @@ ACK its init yet DROP the first direction-mask write (inputs read 0xFF
 forever); paddle.cpp re-asserts the mask in begin() and every ~64th sense
 poll — keep that if refactoring.
 
-### ESP32-P4-WIFI6-Touch-LCD-4.3 (env `esp32-p4-micra-43`) — bring-up pending
+### ESP32-P4-WIFI6-Touch-LCD-4.3 (env `esp32-p4-micra-43`) — RELEASED, HW-verified
+
+Re-added to the released set 2026-09-11 (a user has one). Display, touch,
+BLE, **paddle, audio and the battery ADC are all confirmed working on
+hardware** (owner, 2026-09-11) — the bring-up list below is kept for the
+wiring detail, not as a to-do. No 4.3 hardware is kept here, so the P4-5
+(same board, different glass) is the proxy for anything non-panel.
 
 First non-S3 board: P4NRW32, 480x800 ST7701 over 2-lane MIPI-DSI (rotated to
 landscape), GT911 touch, WiFi6/BLE via on-board ESP32-C6 over SDIO
@@ -347,8 +370,8 @@ Waveshare's factory image + demo repo (waveshareteam/ESP32-P4-WIFI6-Touch-
 LCD-4.3) is the known-good reference: flashing its FactoryOnly bin is the
 fastest way to prove the C6/slave/wiring are healthy when debugging.
 
-Hardware bring-up status (2026-07-17: boots clean — hosted link, DSI panel,
-GT911 all up; NimBLE host inits):
+Hardware bring-up detail (2026-07-17: boots clean — hosted link, DSI panel,
+GT911 all up; NimBLE host inits. Paddle/audio/ADC since confirmed, 2026-09-11):
 1. Display: panel + LVGL come up (800x480). Arduino_GFX rotation=1 goes
    through a per-pixel rotated bitmap path — still check flow-graph fps;
    fall back to LVGL-side rotation if slow.
@@ -364,13 +387,14 @@ GT911 all up; NimBLE host inits):
    Active-HIGH drive (IO high = contact closed) — opposite of the 4.3C's
    expander. GPIO51 <- paddle switch to board GND (INPUT_PULLUP, low =
    closed); the physical paddle touches only this board, never the Micra.
-   Config-only (native-GPIO path in paddle.cpp); not yet tested on HW.
+   Config-only (native-GPIO path in paddle.cpp). CONFIRMED working on HW.
 5. Audio: config-only reuse of the 4.3C's ES8311 driver — BSP pins MCLK 13 /
    BCLK 12 / LRCLK 10 / DOUT 9, codec at 0x18 on the shared I2C bus, PA
    enable native GPIO53 active-high (BOARD_AUDIO_PA_IOEXT selects expander-vs-
-   GPIO PA in sound.cpp). Not yet tested on HW.
+   GPIO PA in sound.cpp). CONFIRMED working on HW.
 6. Battery: WORKING — BAT_ADC GPIO20, divider ÷3 (confirmed: raw*3 == 4.20V
-   LiPo CV level while charging). `HWCDC::isPlugged()` is non-functional on
+   LiPo CV level while charging). The bring-up calibration log that used to sit
+   in battery.cpp behind BOARD_WAVESHARE_P4_WIFI6_43 is gone — divider settled. `HWCDC::isPlugged()` is non-functional on
    the P4's USB-Serial-JTAG (always false) — moot now that USB-vs-battery is
    voltage-only (>= kUsbPowerVolts) on all boards. Known hardware trait:
    plugging/unplugging USB with a battery attached FULLY POWER-CYCLES the

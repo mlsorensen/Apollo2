@@ -43,20 +43,6 @@ core::BatteryState Battery::battery() const {
   for (int i = 0; i < kSamples; ++i) mv_sum += analogReadMilliVolts(board::kBatteryAdc);
   const float raw_mv = mv_sum / static_cast<float>(kSamples);
   volts = raw_mv / 1000.0f * board::kBatteryDivider;
-
-#if defined(BOARD_WAVESHARE_P4_WIFI6_43)
-  // Bring-up calibration log (divider unverified on this board): compare the
-  // scaled volts against a multimeter on the pack, fix kBatteryDivider, then
-  // delete this block.
-  {
-    static uint32_t last_log_ms = 0;
-    if (millis() - last_log_ms > 10000) {
-      last_log_ms = millis();
-      core::logf("battery: adc raw=%.0fmV x%.2f -> %.2fV\n", raw_mv,
-                 board::kBatteryDivider, volts);
-    }
-  }
-#endif
 #endif
 
   // --- Windowed reporting: the charger bounces the node hard (top-off pulses
