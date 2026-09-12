@@ -446,15 +446,6 @@
   ]
  },
  {
-  "src": "renders/screensaver_800x480.png",
-  "out": "screensaver.png",
-  "size": [
-   800,
-   480
-  ],
-  "callouts": []
- },
- {
   "src": "renders/device_time_800x480.png",
   "out": "device-time.png",
   "size": [

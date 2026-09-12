@@ -408,15 +408,13 @@ page fits on screen with little to no scrolling.
 - ③ **Idle screen** *(Logo / Dim / Off, default Logo; shown while Screen
   timeout is on)* — what the timeout shows. **Logo** turns the backlight down
   (to 10 % on the S3 boards, 5 % on the P4s — low enough to read as asleep, high
-  enough that the panel isn't mistaken for switched off) and bounces the La
-  Marzocco lion around a black screen, changing color at every wall it hits.
+  enough that the panel isn't mistaken for switched off) and bounces a logo
+  around a black screen, changing color at every wall it hits.
   **Dim** turns the backlight down the same way but leaves the normal screen
   showing, so you can still glance at the machine from across the kitchen.
   **Off** switches the backlight off entirely. On boards whose backlight can't
   be turned down, Logo and Dim show at full brightness — choose Off there to go
   dark.
-
-  <img src="docs/img/manual/screensaver.png" width="70%" alt="The bouncing-logo screensaver">
 
 - ④ **Theme** — tap to cycle the color scheme: Midnight, Graphite, Espresso,
   Nord, Solarized, Plum, Forest, Rose, Mono (black & white), Contrast (high
