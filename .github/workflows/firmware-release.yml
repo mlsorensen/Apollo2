@@ -220,6 +220,11 @@ jobs:
       # publishing binaries always wins over perfect prose.
       - name: Compose release notes
         run: |
+          # Unreleased notes must have been renamed to this tag by the release
+          # commit; a leftover "## Unreleased" means notes are missing from the
+          # section below. Warn loudly (publishing binaries still wins).
+          grep -q '^## Unreleased' CHANGELOG.md && \
+            echo "::warning::CHANGELOG.md still has a '## Unreleased' section - rename it to ${RELEASE_TAG} (its notes are NOT in this release)"
           section() {
             awk -v tag="$1" '
               $0 == "## " tag { found = 1; next }

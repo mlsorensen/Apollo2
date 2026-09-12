@@ -125,6 +125,12 @@ existing buffer) over adding memory. Applies to fixes as much as features.
    the old version and re-prompts forever (v0.12.3, 2026-09-10). CI now fails
    the build if the binary's kVersion != the tag, but bump it first anyway.
 2. `CHANGELOG.md` — real notes under `## vX.Y.Z` (the workflow extracts them).
+   **NEVER invent a version heading for unreleased work.** Notes for work that
+   isn't tagged yet go under `## Unreleased` at the top; the release commit
+   renames that heading to the tag. A `## vX.Y.Z` heading with no matching
+   GitHub Release is a vestigial version (we've shipped several — v0.13.1 was
+   the last), and the workflow warns if `## Unreleased` is still there at
+   release time.
 3. `make build-release` green (or `make build-all` for a platform change).
 4. Commit, push main, then `gh workflow run firmware-release.yml -f tag=vX.Y.Z`
    (CI creates the tag + Release; never build release binaries locally).
