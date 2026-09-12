@@ -208,6 +208,16 @@ constexpr const char* kMonthNames[12] = {"Jan", "Feb", "Mar", "Apr",
                                          "May", "Jun", "Jul", "Aug",
                                          "Sep", "Oct", "Nov", "Dec"};
 
+// "12 Sep 2026 08:14" — a card can outlive several firmwares, so the stamp is
+// written long-form rather than in the numeric style the Stats cards use.
+void format_stamp(char* out, size_t n, int64_t unix_time) {
+  const time_t t = static_cast<time_t>(unix_time);
+  struct tm tm;
+  localtime_r(&t, &tm);
+  std::snprintf(out, n, "%d %s %d %02d:%02d", tm.tm_mday, kMonthNames[tm.tm_mon],
+                tm.tm_year + 1900, tm.tm_hour, tm.tm_min);
+}
+
 void on_shot_modal_close(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->dismiss_modal();
 }
@@ -233,6 +243,32 @@ void on_delete_shot_confirm(lv_event_t* e) {
 }
 
 void on_delete_shot_cancel(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->dismiss_modal();
+}
+
+void on_backup_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->open_backup_modal();
+}
+void on_restore_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->open_restore_modal();
+}
+void on_backup_wifi_switch(lv_event_t* e) {
+  auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  static_cast<ui::App*>(lv_event_get_user_data(e))
+      ->set_backup_include_wifi(lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
+void on_backup_token_switch(lv_event_t* e) {
+  auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  static_cast<ui::App*>(lv_event_get_user_data(e))
+      ->set_backup_include_token(lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
+void on_backup_confirm(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->confirm_backup();
+}
+void on_restore_confirm(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->confirm_restore();
+}
+void on_backup_cancel(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->dismiss_modal();
 }
 
@@ -681,6 +717,13 @@ std::string sanitize_notes(const std::string& in) {
     else if (seq == "“" || seq == "”") out += '"';
     else if (seq == "…") out += "...";
     else if (seq == "×") out += 'x';
+    // Angle quotes read as a breadcrumb separator in prose ("Settings › WiFi")
+    // but the fonts are ASCII-only and render them as a box (seen on the 4.3C
+    // with the v0.14.0-beta.1 notes). Anything NOT in this table passes through
+    // and will box the same way — keep release notes to what's mapped here.
+    else if (seq == "›") out += '>';
+    else if (seq == "‹") out += '<';
+    else if (seq == "•") out += '-';
     else out += seq;  // pass through (accents, degree signs — the fonts have them)
     i += len;
   }
@@ -821,9 +864,11 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                 core::IClock& clock, core::IHistory& history, core::IScale& scale,
                 core::IScaleProvisioner& scale_provisioner, core::IBrewController& brew,
                 core::INetwork& network, core::ISound& sound, core::IShotStore& shots,
-                const ScreenProfile& screen, core::IUpdateSource* updates) {
+                const ScreenProfile& screen, core::IUpdateSource* updates,
+                core::ISettingsBackup* backup) {
   machine_ = &machine;
   updates_ = updates;
+  backup_ = backup;
   if (updates_ != nullptr) update_last_seq_ = updates_->check_seq();  // baseline
   shots_ = &shots;
   hist_built_count_ = -1;  // a rebuild recreates the list; force a row refill
@@ -1001,7 +1046,12 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   update_battery_runtime(battery_state_);
 
   build_settings_tab(settings, screen, display_->supports_brightness(),
-                     sound_->available(), brew_->snapshot().paddle_hw, settings_);
+                     sound_->available(), brew_->snapshot().paddle_hw,
+                     backup_ != nullptr, settings_);
+  if (settings_.backup_btn != nullptr)
+    lv_obj_add_event_cb(settings_.backup_btn, on_backup_clicked, LV_EVENT_CLICKED, this);
+  if (settings_.restore_btn != nullptr)
+    lv_obj_add_event_cb(settings_.restore_btn, on_restore_clicked, LV_EVENT_CLICKED, this);
   // lv_menu handles page navigation (root <-> Micra/Scale/Device) itself.
   // Micra connection:
   lv_obj_add_event_cb(settings_.scan_btn, on_scan_clicked, LV_EVENT_CLICKED, this);
@@ -1293,6 +1343,7 @@ void App::refresh() {
     update_stats_view();  // only while the Stats tab is showing
   }
   update_result_poll();  // surface a finished update check (notice / "up to date")
+  backup_result_poll();  // ...and a finished settings backup/restore
 }
 
 // A press updates the local value AND writes it to the machine right away (the
@@ -1602,7 +1653,8 @@ void App::rebuild() {
   // looked sporadic. (Automatic checks were unaffected: main.cpp drives those
   // through g_update_check directly, not through the App.)
   build(*machine_, *provisioner_, *battery_, *display_, *clock_, *history_, *scale_,
-        *scale_provisioner_, *brew_, *network_, *sound_, *shots_, screen_, updates_);
+        *scale_provisioner_, *brew_, *network_, *sound_, *shots_, screen_, updates_,
+        backup_);
   show_tab(1);                       // back to Settings...
   select_settings_section(section);  // ...on the section that triggered the rebuild
 
@@ -2576,6 +2628,9 @@ void App::close_modal() {
   }
   log_box_ = nullptr;
   log_label_ = nullptr;
+  backup_wifi_switch_ = nullptr;  // all three live on the backup modal's card
+  backup_token_switch_ = nullptr;
+  backup_note_ = nullptr;
   if (modal_ != nullptr) {
     lv_obj_delete(modal_);
     modal_ = nullptr;
@@ -3240,6 +3295,218 @@ void App::capture_shot_record(const core::BrewSnapshot& bsnap,
   // The History list notices count() changed on its next visible refresh.
 }
 
+// --- Settings > Apollo > Backup ---------------------------------------------
+// Settings live in NVS, which does not travel with the card the shot history is
+// on: swap the hardware and every shot survives while every preference is lost.
+// These two buttons copy the settings to the card and back. Both confirm, and
+// both confirmations say the thing the user can't see: what plaintext lands on
+// a card they may carry around, and that a restore REPLACES rather than merges.
+
+
+void App::open_backup_modal() {
+  if (backup_ == nullptr) return;
+  const core::BackupInfo info = backup_->info();
+  if (!info.medium_ready) {
+    lv_obj_t* card = open_modal("No card", "Insert the memory card to back up "
+                                           "your settings.");
+    modal_button(modal_button_row(card), "OK", ui::theme::rail(), on_backup_cancel, this);
+    return;
+  }
+
+  // Both credentials default IN: the point of a backup is a replacement that
+  // works. Either can be left out, and the warning above says why you might.
+  backup_include_wifi_ = true;
+  backup_include_token_ = true;
+  const bool compact = is_compact(screen_);
+  lv_obj_t* card = open_modal(
+      "Back up settings?",
+      compact ? "Written to the card as plain text - keep the card safe."
+              : "Every setting is written to the card as Apollo2/settings.txt, "
+                "in plain text. Anyone with the card can read what it holds.");
+
+  // The switches sit IN the confirmation, not on the page behind it: the choice
+  // is about what THIS write puts on the card, and it only means anything next
+  // to the sentence explaining why you might say no.
+  auto credential_switch = [&](const char* label, lv_event_cb_t cb) {
+    lv_obj_t* row = lv_obj_create(card);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_width(row, lv_pct(100));
+    lv_obj_set_height(row, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_t* lbl = lv_label_create(row);
+    lv_label_set_text(lbl, label);
+    lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(lbl, ui::font_dp(compact ? 14 : 16), 0);
+    lv_obj_t* sw = lv_switch_create(row);
+    lv_obj_add_state(sw, LV_STATE_CHECKED);
+    lv_obj_add_event_cb(sw, cb, LV_EVENT_VALUE_CHANGED, this);
+    return sw;
+  };
+  backup_wifi_switch_ = credential_switch("Include WiFi network", on_backup_wifi_switch);
+  backup_token_switch_ =
+      credential_switch("Include Micra pairing token", on_backup_token_switch);
+
+  // One line under both switches, rewritten as they flip: it names what the
+  // replacement will need setting up by hand (see update_backup_note).
+  backup_note_ = lv_label_create(card);
+  lv_obj_set_width(backup_note_, lv_pct(100));
+  lv_label_set_long_mode(backup_note_, LV_LABEL_LONG_WRAP);
+  lv_obj_set_style_text_align(backup_note_, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_color(backup_note_, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(backup_note_, ui::font_dp(compact ? 12 : 14), 0);
+  update_backup_note();
+
+  lv_obj_t* brow = modal_button_row(card);
+  modal_button(brow, "Back up", ui::theme::accent(), on_backup_confirm, this);
+  modal_button(brow, "Cancel", ui::theme::rail(), on_backup_cancel, this);
+}
+
+void App::set_backup_include_wifi(bool on) {
+  backup_include_wifi_ = on;
+  // Sync the switch too: this is also how the sim poses an opted-out state
+  // (a programmatic state change fires no VALUE_CHANGED, so no feedback loop).
+  if (backup_wifi_switch_ != nullptr) {
+    if (on) lv_obj_add_state(backup_wifi_switch_, LV_STATE_CHECKED);
+    else lv_obj_remove_state(backup_wifi_switch_, LV_STATE_CHECKED);
+  }
+  update_backup_note();
+}
+
+void App::set_backup_include_token(bool on) {
+  backup_include_token_ = on;
+  if (backup_token_switch_ != nullptr) {
+    if (on) lv_obj_add_state(backup_token_switch_, LV_STATE_CHECKED);
+    else lv_obj_remove_state(backup_token_switch_, LV_STATE_CHECKED);
+  }
+  update_backup_note();
+}
+
+// What a replacement restored from this backup would still need done by hand.
+// Silent when both credentials are in — there is nothing to warn about then.
+void App::update_backup_note() {
+  if (backup_note_ == nullptr) return;
+  const bool wifi = backup_include_wifi_, token = backup_include_token_;
+  if (wifi && token) {
+    lv_label_set_text(backup_note_,
+                      "Your WiFi password and pairing token go on the card.");
+  } else if (wifi) {
+    lv_label_set_text(backup_note_,
+                      "Left out: the pairing token. Pair with the machine "
+                      "again on the replacement.");
+  } else if (token) {
+    lv_label_set_text(backup_note_,
+                      "Left out: WiFi. Set the network up again on the "
+                      "replacement.");
+  } else {
+    lv_label_set_text(backup_note_,
+                      "Left out: WiFi and the pairing token. Set both up again "
+                      "on the replacement.");
+  }
+}
+
+void App::confirm_backup() {
+  if (backup_ == nullptr) return;
+  backup_->request_backup(backup_include_wifi_, backup_include_token_);
+  backup_pending_ = true;
+  open_modal("Backing up", "Writing settings to the card...");
+  backup_result_poll();  // a fast card finishes before the next refresh tick
+}
+
+void App::open_restore_modal() {
+  if (backup_ == nullptr) return;
+  const core::BackupInfo info = backup_->info();
+  if (!info.medium_ready || !info.file_present) {
+    lv_obj_t* card = open_modal(
+        "Nothing to restore",
+        info.medium_ready ? "This card has no settings backup on it."
+                          : "Insert the memory card holding the backup.");
+    modal_button(modal_button_row(card), "OK", ui::theme::rail(), on_backup_cancel, this);
+    return;
+  }
+  char stamp[32];
+  format_stamp(stamp, sizeof(stamp), info.saved_unix);
+
+  // Refused, not merged: an older build indexes stored enums into fixed arrays,
+  // so a value written by newer firmware can be an out-of-bounds read here.
+  if (info.newer_firmware) {
+    char body[192];
+    std::snprintf(body, sizeof(body),
+                  "This backup was written by firmware %s, which is newer than "
+                  "the firmware on this Apollo. Update first, then restore.",
+                  info.version.c_str());
+    lv_obj_t* card = open_modal("Backup is too new", body);
+    modal_button(modal_button_row(card), "OK", ui::theme::rail(), on_backup_cancel, this);
+    return;
+  }
+
+  // Name what the backup leaves out, so "restored" doesn't come as a surprise
+  // when the machine won't pair or the network is gone after the restart.
+  const char* missing = info.has_wifi && info.has_token ? ""
+                        : info.has_token ? "\nIt has no WiFi network - set that "
+                                           "up after the restart."
+                        : info.has_wifi  ? "\nIt has no pairing token - pair "
+                                           "with the machine again after the restart."
+                                         : "\nIt has no WiFi network or pairing "
+                                           "token - set both up after the restart.";
+  char body[384];
+  std::snprintf(body, sizeof(body),
+                "Replaces every setting on this Apollo with the backup from "
+                "%s (firmware %s).\nAnything the backup doesn't cover returns "
+                "to its default.%s\n\nApollo restarts when it's done.",
+                stamp, info.version.c_str(), missing);
+  lv_obj_t* card = open_modal("Restore settings?", body);
+  lv_obj_t* brow = modal_button_row(card);
+  modal_button(brow, "Restore", ui::theme::warn(), on_restore_confirm, this);
+  modal_button(brow, "Cancel", ui::theme::rail(), on_backup_cancel, this);
+}
+
+void App::confirm_restore() {
+  if (backup_ == nullptr) return;
+  backup_->request_restore();
+  backup_pending_ = true;
+  open_modal("Restoring", "Reading settings from the card...");
+  backup_result_poll();
+}
+
+// Watches the port for the outcome of a request and swaps the working modal for
+// the result. Called from refresh() (and once straight after the request, so a
+// fast card doesn't flash a spinner nobody can read).
+void App::backup_result_poll() {
+  if (!backup_pending_ || backup_ == nullptr) return;
+  const core::BackupState st = backup_->state();
+  if (st == core::BackupState::kBusy || st == core::BackupState::kIdle) return;
+  backup_pending_ = false;
+  const bool restore = backup_->last_op() == core::BackupOp::kRestore;
+  const std::string detail = backup_->message();
+
+  if (st == core::BackupState::kFailed) {
+    lv_obj_t* card = open_modal(restore ? "Restore failed" : "Backup failed",
+                                detail.empty() ? "The card could not be read."
+                                               : detail.c_str());
+    modal_button(modal_button_row(card), "OK", ui::theme::rail(), on_backup_cancel, this);
+    return;
+  }
+
+  if (restore) {
+    // No button: the restart IS the acknowledgement, and a settings-restored
+    // device must not keep running with the old values in RAM.
+    open_modal("Settings restored", "Apollo is restarting...");
+    lv_refr_now(nullptr);  // paint before the reboot takes the screen
+    reboot_device();       // a REAL reboot: the restored values are read at boot
+    return;
+  }
+  char body[192];
+  std::snprintf(body, sizeof(body),
+                "%s%sKeep the card with the machine - it now holds your "
+                "settings as well as your shots.",
+                detail.c_str(), detail.empty() ? "" : ".\n");
+  lv_obj_t* card = open_modal("Settings backed up", body);
+  modal_button(modal_button_row(card), "OK", ui::theme::rail(), on_backup_cancel, this);
+  update_settings_view();  // the status line now has a backup to describe
+}
+
 void App::open_reset_stats_modal() {
   if (shots_ == nullptr || !shots_->available()) return;
   lv_obj_t* card = open_modal(
@@ -3606,6 +3873,34 @@ void App::update_settings_view() {
     }
     ui::set_text(settings_.wifi_status, buf);
     ui::set_text_color(settings_.wifi_status, color);
+  }
+
+  // Backup page: say what is actually on the card, and grey Restore when there
+  // is nothing to restore (or the backup outranks this firmware).
+  if (backup_ != nullptr && settings_.backup_status != nullptr) {
+    const core::BackupInfo info = backup_->info();
+    char buf[128];
+    uint32_t color = ui::theme::muted();
+    if (!info.medium_ready) {
+      std::snprintf(buf, sizeof(buf), "No card inserted");
+    } else if (!info.file_present) {
+      std::snprintf(buf, sizeof(buf), "No settings backup on this card");
+    } else {
+      char stamp[32];
+      format_stamp(stamp, sizeof(stamp), info.saved_unix);
+      const char* holds = info.has_wifi && info.has_token ? "WiFi and pairing token"
+                          : info.has_wifi                  ? "WiFi, no pairing token"
+                          : info.has_token                 ? "pairing token, no WiFi"
+                                                           : "no WiFi or pairing token";
+      std::snprintf(buf, sizeof(buf), "%s  (firmware %s)\n%s\nIncludes %s", stamp,
+                    info.version.c_str(), info.board.c_str(), holds);
+      color = ui::theme::ok();
+    }
+    ui::set_text(settings_.backup_status, buf);
+    ui::set_text_color(settings_.backup_status, color);
+    set_clickable(settings_.backup_btn, info.medium_ready);
+    set_clickable(settings_.restore_btn,
+                  info.medium_ready && info.file_present && !info.newer_firmware);
   }
 
   if (provisioner_ == nullptr) return;

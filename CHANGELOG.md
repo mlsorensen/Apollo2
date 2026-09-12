@@ -3,13 +3,15 @@
 Firmware releases. The section matching a release tag becomes that GitHub
 Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
-for someone reading the diff.
+for someone reading the diff. These notes are also shown ON THE DEVICE, whose
+fonts are ASCII-only: stick to characters `sanitize_notes()` (src/ui/app.cpp)
+maps — plain ASCII plus `— – → … × ' "` — or they render as empty boxes.
 
 ## v0.14.0-beta.1
 
 ### Changes
 
-- **Beta updates.** Settings › Apollo › WiFi has a new **Beta updates** switch
+- **Beta updates.** Settings > Apollo > WiFi has a new **Beta updates** switch
   (under "Check for updates"). With it on, Apollo also offers pre-release
   builds — versions like `0.14.0-beta.1` — so a release can be tried on real
   machines before it goes out to everyone. Everything else works the same: the
