@@ -8,6 +8,12 @@
 //
 // To add a board (e.g. the 4.3 RGB panel later), add another #elif block with
 // the same constant names that that board's driver needs.
+//
+// kUpdateSlug is `inline` on purpose and must STAY inline: a plain
+// `constexpr char[]` has internal linkage, so every translation unit that uses
+// it gets its OWN copy of the string, and the release workflow asserts the
+// slug appears EXACTLY ONCE in the binary (it is the self-updater's URL — two
+// copies fail the build, as adding a second user of it did).
 
 namespace board {
 
@@ -22,7 +28,7 @@ constexpr char kName[] = "Waveshare ESP32-S3-Touch-LCD-2";
 // check still runs and the download 404s — accepted, see CLAUDE.md
 // "Support matrix"). The slug is kept so promoting the board later is
 // just a matrix row.
-constexpr char kUpdateSlug[] = "s3-touch-lcd-2";
+inline constexpr char kUpdateSlug[] = "s3-touch-lcd-2";
 #define BOARD_DISPLAY_SPI    // ST7789 over SPI
 #define BOARD_TOUCH_CST816   // CST816, 8-bit registers
 constexpr bool kSupportsBrightness = true;  // LEDC PWM backlight (dimmable)
@@ -96,7 +102,7 @@ constexpr char kName[] = "Waveshare ESP32-S3-Touch-LCD-7B";
 // check still runs and the download 404s — accepted, see CLAUDE.md
 // "Support matrix"). The slug is kept so promoting the board later is
 // just a matrix row.
-constexpr char kUpdateSlug[] = "s3-touch-lcd-7b";
+inline constexpr char kUpdateSlug[] = "s3-touch-lcd-7b";
 #define BOARD_DISPLAY_RGB     // RGB parallel panel via Arduino_GFX
 #define BOARD_TOUCH_GT911     // GT911, 16-bit registers
 #define BOARD_HAS_IO_EXTENSION
@@ -180,7 +186,7 @@ constexpr char kName[] = "Waveshare ESP32-S3-Touch-LCD-4.3B";
 // check still runs and the download 404s — accepted, see CLAUDE.md
 // "Support matrix"). The slug is kept so promoting the board later is
 // just a matrix row.
-constexpr char kUpdateSlug[] = "s3-touch-lcd-4.3b";
+inline constexpr char kUpdateSlug[] = "s3-touch-lcd-4.3b";
 #define BOARD_DISPLAY_RGB
 #define BOARD_TOUCH_GT911
 #define BOARD_HAS_IO_EXTENSION
@@ -259,7 +265,7 @@ constexpr char kName[] = "Waveshare ESP32-S3-Touch-LCD-4.3C";
 // flasher and the README. The slug MUST equal that matrix row's "board"
 // field (CI asserts it against the built binary): the self-updater
 // fetches firmware/app/<slug>.bin.
-constexpr char kUpdateSlug[] = "s3-touch-lcd-4.3c";
+inline constexpr char kUpdateSlug[] = "s3-touch-lcd-4.3c";
 #define BOARD_DISPLAY_RGB
 #define BOARD_TOUCH_GT911
 #define BOARD_HAS_IO_EXTENSION
@@ -405,7 +411,7 @@ constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-4.3";
 // board becomes a SECOND block + env with slug
 // "p4-wifi6-touch-lcd-4.3-rev3" (chip_variant "esp32p4",
 // BOARD_P4_SILICON_REV3), never a rename of this one.
-constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-4.3";
+inline constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-4.3";
 #define BOARD_DISPLAY_DSI     // MIPI-DSI panel via Arduino_GFX
 #define BOARD_DSI_PANEL_ST7701  // panel controller (selects the DCS init table)
 #define BOARD_TOUCH_GT911     // GT911, 16-bit registers
@@ -551,7 +557,7 @@ constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-5";
 // production-silicon sample lands it becomes a SECOND board block + env with
 // slug "p4-wifi6-touch-lcd-5-rev3" (chip_variant "esp32p4", and
 // BOARD_P4_SILICON_REV3 defined) — never a rename of this one.
-constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-5";
+inline constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-5";
 #define BOARD_DISPLAY_DSI
 #define BOARD_DSI_PANEL_HX8394  // panel controller (selects the DCS init table)
 #define BOARD_TOUCH_GT911
@@ -686,7 +692,7 @@ constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-X-7";
 // check still runs and the download 404s — accepted, see CLAUDE.md
 // "Support matrix"). The slug is kept so promoting the board later is
 // just a matrix row.
-constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-x-7";
+inline constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-x-7";
 #define BOARD_DSI_PANEL_ILI9881C  // panel controller (selects the DCS init table)
 // UI: same panel geometry as the P4-5 (720x1280 rotated) on larger glass —
 // same 1.5x zoom, logical 853x480 (the extra width feeds the flex layout).
@@ -710,7 +716,7 @@ constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-X-8";
 // flasher and the README. The slug MUST equal that matrix row's "board"
 // field (CI asserts it against the built binary): the self-updater
 // fetches firmware/app/<slug>.bin.
-constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-x-8";
+inline constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-x-8";
 #define BOARD_DSI_PANEL_JD9365     // 8" DCS init table
 #else
 constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-X-10.1";
@@ -720,7 +726,7 @@ constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-X-10.1";
 // check still runs and the download 404s — accepted, see CLAUDE.md
 // "Support matrix"). The slug is kept so promoting the board later is
 // just a matrix row.
-constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-x-10.1";
+inline constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-x-10.1";
 #define BOARD_DSI_PANEL_JD9365_10  // the 10.1" glass's own DCS init table
 #endif
 // UI: 800x1280 rotated => 1280x800. Zoom 1.6x for a logical 800x500 — the
