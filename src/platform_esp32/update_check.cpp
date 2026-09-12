@@ -10,6 +10,7 @@
 #include <cstring>
 
 #include "core/network.h"
+#include "core/semver.h"
 #include "core/system.h"
 #include "platform_esp32/board_config.h"
 #include "platform_esp32/config.h"
@@ -108,43 +109,14 @@ constexpr size_t kMinInternalLargest = 6 * 1024;
 // follows silently reads a beta as the stable release of the same number. (That
 // is also why releases.json stays stable-only — firmware older than this parser
 // would make exactly that mistake.)
-bool parse_version(const char* s, int out[3], int& out_pre) {
-  if (*s == 'v') ++s;
-  int used = 0;
-  if (std::sscanf(s, "%d.%d.%d%n", &out[0], &out[1], &out[2], &used) != 3)
-    return false;
-  const char* tail = s + used;
-  if (*tail == '\0') {
-    out_pre = -1;  // a release
-    return true;
-  }
-  int pre = 0, pre_used = 0;
-  if (std::sscanf(tail, "-beta.%d%n", &pre, &pre_used) == 1 &&
-      tail[pre_used] == '\0' && pre >= 0) {
-    out_pre = pre;
-    return true;
-  }
-  return false;  // some other pre-release form: ignore rather than guess
-}
+// Version parsing/ordering lives in core/semver.h — the restore path needs the
+// same rules, and two copies of a comparison this subtle is one too many.
+using core::parse_version;
+using core::semver_newer;
 
 bool parse_semver(const char* s, int out[3]) {
   int pre = 0;
   return parse_version(s, out, pre);
-}
-
-// True iff a is newer than b: major, then minor, then patch, then pre-release —
-// where a release beats any beta of the same number and beta.2 beats beta.1.
-// NEVER compare version strings: "0.9.0" > "0.10.0" lexicographically.
-bool semver_newer(const char* a, const char* b) {
-  int va[3], vb[3], pa = -1, pb = -1;
-  if (!parse_version(a, va, pa) || !parse_version(b, vb, pb)) return false;
-  for (int i = 0; i < 3; ++i) {
-    if (va[i] != vb[i]) return va[i] > vb[i];
-  }
-  if (pa == pb) return false;
-  if (pa < 0) return true;   // a is the release, b a beta of the same version
-  if (pb < 0) return false;  // b is the release
-  return pa > pb;            // both betas of the same version
 }
 
 // Pull the first "vX.Y.Z" out of releases.json (a JSON array, newest first).

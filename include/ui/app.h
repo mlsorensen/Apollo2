@@ -11,6 +11,7 @@
 #include "core/machine.h"
 #include "core/network.h"
 #include "core/provisioner.h"
+#include "core/settings_backup.h"
 #include "core/update_check.h"
 #include "core/ready_chime.h"
 #include "core/scale.h"
@@ -40,7 +41,8 @@ class App {
              core::IClock& clock, core::IHistory& history, core::IScale& scale,
              core::IScaleProvisioner& scale_provisioner, core::IBrewController& brew,
              core::INetwork& network, core::ISound& sound, core::IShotStore& shots,
-             const ScreenProfile& screen, core::IUpdateSource* updates);
+             const ScreenProfile& screen, core::IUpdateSource* updates,
+             core::ISettingsBackup* backup);
   // NOTE: `updates` is deliberately NOT defaulted. It used to be, and the
   // internal layout-rebuild call omitted it -- so every rebuild silently set
   // updates_ = nullptr, hiding the Info page's "Check for updates" button and
@@ -49,6 +51,9 @@ class App {
   // random. A defaulted parameter CHANGED an existing caller's behaviour
   // instead of breaking the build; requiring it makes the compiler catch this.
   // Pass nullptr explicitly if a caller genuinely has no update source.
+  // `backup` is not defaulted for the same reason: null hides Apollo > Backup,
+  // which is right on the boards without a card slot and a silent regression
+  // everywhere else.
 
   // Reflect the latest machine state and scan results in the UI (no I/O).
   void refresh();
@@ -124,6 +129,17 @@ class App {
     install_handler_ = std::move(h);
   }
   void request_install();                // modal "Install now"
+  // Settings > Apollo > Backup. Both directions confirm first: the backup modal
+  // spells out that the card ends up holding the pairing token in plain text
+  // (and, unless the switch is turned off, the WiFi password); the restore modal
+  // spells out that the file REPLACES every setting and the device restarts.
+  void open_backup_modal();               // "Back up to card" -> confirm + switches
+  void set_backup_include_wifi(bool on);  // that modal's two credential switches
+  void set_backup_include_token(bool on);
+  void confirm_backup();                 // modal "Back up"
+  void open_restore_modal();             // "Restore from card" -> confirm / refusal
+  void confirm_restore();                // modal "Restore"
+  void backup_result_poll();             // watch state(); swap in the outcome modal
   void hour_select(int idx);             // Time & date dropdowns: selection ->
   void minute_select(int idx);           // clock/date write (hour idx == hour,
   void month_select(int idx);            // month/day 1-based, year offset from
@@ -157,6 +173,11 @@ class App {
   // DMA resync (falls back to esp_restart on other boards); no-op in the sim.
   void set_restart_handler(std::function<void()> h) { restart_handler_ = std::move(h); }
   void restart_device() { if (restart_handler_) restart_handler_(); }
+  // A FULL soft reboot. Separate from restart_device() on purpose: that one
+  // heals an RGB panel in place and never reboots, which is right for the
+  // "Restart display" row and wrong after a settings restore.
+  void set_reboot_handler(std::function<void()> h) { reboot_handler_ = std::move(h); }
+  void reboot_device() { if (reboot_handler_) reboot_handler_(); }
   void start_clean_lock();  // Settings "Lock display for cleaning": 30 s touch lockout
   void clean_lock_tick();   // countdown update (from an lv_timer, 4 Hz)
   // Backflush cleaning (Settings > Micra): a full-screen mode that prompts for
@@ -239,6 +260,14 @@ class App {
   core::IBrewController* brew_ = nullptr;
   core::INetwork* network_ = nullptr;
   core::IUpdateSource* updates_ = nullptr;  // optional; null = no update UI
+  core::ISettingsBackup* backup_ = nullptr;  // optional; null = no Backup page
+  bool backup_include_wifi_ = true;   // the backup modal's switches (per-open)
+  bool backup_include_token_ = true;
+  bool backup_pending_ = false;      // a request is out; poll for its outcome
+  lv_obj_t* backup_wifi_switch_ = nullptr;   // "Include WiFi network" (modal-owned)
+  lv_obj_t* backup_token_switch_ = nullptr;  // "Include pairing token"
+  lv_obj_t* backup_note_ = nullptr;          // what an opted-out backup leaves out
+  void update_backup_note();                 // rewrite that line from the switches
   int update_last_seq_ = -1;         // last seen check_seq(); -1 = not baselined
   bool manual_check_pending_ = false;  // a user-initiated check awaits its result
   bool update_notice_pending_ = false;  // an auto notice deferred under the saver
@@ -339,6 +368,7 @@ class App {
   // Low-battery cutoff -> deep sleep (handler provided by the device).
   std::function<void()> batt_low_handler_;
   std::function<void()> restart_handler_;  // Settings > Device "Restart" (device only)
+  std::function<void()> reboot_handler_;   // full reboot after a settings restore
   float batt_cutoff_volts_ = 0.0f;
   int batt_low_count_ = 0;  // consecutive sub-cutoff reads (debounce)
 

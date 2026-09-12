@@ -16,7 +16,7 @@ your board.
 - [Settings → Scale](#settings-scale) — Bluetooth · Shot settings · Device
   settings · Per‑scale nuances
 - [Settings → Apollo](#settings-device) — Display · Time & date · WiFi ·
-  Root page
+  Backup · Root page
 - [Stats](#stats-section) — Brew/Boiler graphs · History · Info
 - [Brew‑by‑weight quick reference](#bbw-reference)
 
@@ -56,9 +56,10 @@ Settings
 │  ├─ Display     — Brightness* · Screen timeout · Idle screen (Logo/Dim/Off)
 │  │               · Theme · Fahrenheit · Button sounds* · Performance overlay
 │  ├─ Time & date — Time · Date · 24-hour · Timezone
-│  └─ WiFi        — Enable · Status · Set up WiFi → QR portal · Forget
-│                  · Auto time (NTP) · Check for updates (Off/Boot/Daily/Hourly)
-│                    → notice → Install now · Beta updates
+│  ├─ WiFi        — Enable · Status · Set up WiFi → QR portal · Forget
+│  │               · Auto time (NTP) · Check for updates (Off/Boot/Daily/Hourly)
+│  │                 → notice → Install now · Beta updates
+│  └─ Backup      — On the card · Back up to card · Restore from card
 └─ Lock display for cleaning  → 30 s touch lock
 
 Stats
@@ -502,6 +503,45 @@ page fits on screen with little to no scrolling.
   To go back sooner, reflash the stable release from the
   [web flasher](https://mlsorensen.github.io/Apollo2/); your settings and
   history are kept.
+
+### Backup
+
+![Backup settings](docs/img/manual/device-backup.png)
+
+Your settings live inside Apollo, not on the memory card — so moving the card
+to another one brings every shot across and none of your preferences. This page
+copies the settings onto that same card, so a replacement can pick them up.
+
+- ① **On the card** — what the inserted card holds: when the backup was taken,
+  the firmware and board it was taken on, and whether it carries your WiFi
+  network and pairing token. Otherwise `No card inserted` or `No settings
+  backup on this card`.
+- ② **Back up to card** — writes every setting to `/Apollo2/settings.txt`,
+  beside your shots. It is plain text, readable on any computer:
+
+  <img src="docs/img/manual/backup-modal.png" width="70%" alt="The backup confirmation">
+
+  The two switches decide whether your **WiFi network** (name and password) and
+  your **Micra pairing token** go onto the card with everything else. Both are
+  on by default — the point of a backup is a replacement that just works — and
+  turning one off means setting that up by hand later, which is the trade worth
+  making if the card won't stay with the machine. Everything else (theme,
+  chime, target weight, flush settings, timezone, and the rest) always travels.
+- ③ **Restore from card** — replaces every setting on this Apollo with the
+  backup, then restarts to apply it. Anything the backup doesn't carry — a
+  setting added in a later firmware, or a credential you left out — goes back
+  to its default. Greyed out when the card holds no backup.
+
+A few things worth knowing:
+
+- **Moving between boards is the point.** A backup taken on any supported board
+  restores onto any other; nothing in it is board-specific.
+- **A backup from newer firmware is refused** — update this Apollo first, then
+  restore. Older backups are always fine.
+- **Nothing happens on its own.** No automatic backup, no automatic restore;
+  swapping cards between machines never changes a setting by itself.
+- **Your shots aren't part of this** — they are already on the card, and a
+  restore doesn't touch them.
 
 ### Root page
 

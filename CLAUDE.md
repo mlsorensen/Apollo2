@@ -105,6 +105,42 @@ display isn't up.
 - Proving ground: the `esp32-p4-dltest` env (src/dltest/) is the standalone
   firmware the install mode was developed + verified in; keep it.
 
+## Settings backup to the card (v0.14+)
+
+Settings live in NVS, which does NOT travel with the SD card the shot history
+is on — swap hardware and every shot survives while every preference is lost.
+`Settings > Apollo > Backup` copies the whole `micra` namespace to
+`/Apollo2/settings.txt` and back. Shape of it:
+
+- Port `core::ISettingsBackup` (info/request_backup/request_restore/state).
+  The DEVICE `ShotStore` implements it as a second interface: the writer task
+  already owns the mount and all its hard-won policy, so a settings file is
+  just another job kind on that queue (`JobKind::kBackup/kRestore`). No second
+  mount, no new task, no new mutex. The UI only sees the port.
+- `config_backup.cpp` does the NVS<->file work: keys are ENUMERATED
+  (`nvs_entry_find/next/info`), never listed by hand, so a setting added later
+  is carried without anyone remembering this file. Type-tagged lines
+  (`i32:bright=100`, `str:tz=...`, `blob:tgtg=<hex>` — Preferences stores
+  floats as 4-byte blobs) so values round-trip exactly.
+- RESTORE IS A REPLACE, not a merge: hold the per-unit keys, `nvs_erase_all`,
+  apply the file. A key the file doesn't carry is then ABSENT and every
+  isKey()-guarded getter reads its compiled default — which is what makes an
+  older backup land exactly like an upgrade (the legacy fallbacks ssstyle ->
+  ssstyle2 etc. do the rest). Then a full reboot (`App::set_reboot_handler` —
+  the existing restart handler deliberately only resyncs an RGB panel).
+- PER-UNIT KEYS never leave the board and survive the erase: `padsense`,
+  `paddrive` (repair knobs for a damaged pad), `otainst` (install boot flag),
+  `lastunix` (clock seed), `_init`.
+- The two credentials — `wifipass` (with `ssid`/`wifi_en`: an SSID with no PSK
+  is a join that can never succeed) and `token` — are OPT-OUT switches in the
+  confirm modal, because the file is plain text on a card that leaves the
+  machine. `mac`/`name` always travel: they identify the machine, not open it.
+- A backup written by NEWER firmware is refused (`core::semver_newer`, shared
+  with update_check.cpp — do not fork it): an older build indexes stored enums
+  into fixed arrays, so a widened value would be an out-of-bounds read. Same
+  reasoning as the NVS RULE below.
+- Boards without a card slot pass `nullptr` for the port and the page is absent.
+
 ## Memory budget rule (owner, 2026-09-10)
 
 **Never introduce more RAM use without review and a full explanation.** That

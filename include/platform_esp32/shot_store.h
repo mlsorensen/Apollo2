@@ -8,8 +8,10 @@
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
 
+#include <string>
 #include <vector>
 
+#include "core/settings_backup.h"
 #include "core/shot_store.h"
 
 namespace platform {
@@ -24,7 +26,11 @@ namespace platform {
 // background writer task owns ALL SD I/O — mounting (lazy, retried), index
 // appends, samples. Any I/O failure unmounts; the card can be hot-inserted/
 // removed and the store recovers on the next retry tick.
-class ShotStore : public core::IShotStore {
+// The settings backup rides along on this class rather than owning storage of
+// its own: the writer task and its mount ARE the medium (all the retry/no-op-
+// deinit policy above), and a settings file is one more thing on the same card.
+// The UI only ever sees the two ports.
+class ShotStore : public core::IShotStore, public core::ISettingsBackup {
  public:
   // Spawns the writer task. Call once after NVS/Serial are up; safe before
   // any card is inserted.
@@ -48,15 +54,28 @@ class ShotStore : public core::IShotStore {
   int64_t stats_since() const override;
   void set_stats_since(int64_t t) override;
 
+  // --- core::ISettingsBackup ----------------------------------------------
+  // Cached at mount and after every backup/restore (the UI thread must never
+  // touch the card); the requests queue a job for the writer task.
+  core::BackupInfo info() const override;
+  void request_backup(bool include_wifi, bool include_token) override;
+  void request_restore() override;
+  core::BackupState state() const override { return backup_state_; }
+  core::BackupOp last_op() const override { return backup_op_; }
+  std::string message() const override;
+
   // Below this free space, saves are dropped (a shot's files run ~200-400 KB
   // and FS writes fail silently once space runs out).
   static constexpr uint64_t kMinFreeBytes = 2ull * 1024 * 1024;
 
  private:
+  enum class JobKind : uint8_t { kShot, kBackup, kRestore };
+
   struct SaveJob {
     core::ShotRecord* rec;  // PSRAM copy, owned by the writer. null jobs:
     uint32_t remove_id;     //   0 = stats-reset marker (persist stats_since_),
                             //   else = delete this shot's files off the card
+    JobKind kind;           // kShot: the above. Otherwise a settings job.
   };
 
   static void task_entry(void* self);
@@ -66,6 +85,8 @@ class ShotStore : public core::IShotStore {
   void write_job(SaveJob& job);
   void remove_files(uint32_t id);  // writer task only: samples + index rewrite
   void refresh_storage();     // writer task only: requery + cache capacity
+  void settings_job(const SaveJob& job);  // writer task only: backup / restore
+  void refresh_backup_info();  // writer task only: re-read the file's header
 
   void* card_ = nullptr;  // sdmmc_card_t* while mounted (IDF type kept out
                           // of this header)
@@ -75,6 +96,12 @@ class ShotStore : public core::IShotStore {
   int64_t stats_since_ = 0;               // cache; guarded by mutex_
   std::vector<core::ShotSummary> index_;  // newest first
   core::StorageInfo storage_info_;        // cache; guarded by mutex_
+  core::BackupInfo backup_info_;          // cache; guarded by mutex_
+  std::string backup_msg_;                // cache; guarded by mutex_
+  volatile core::BackupState backup_state_ = core::BackupState::kIdle;
+  volatile core::BackupOp backup_op_ = core::BackupOp::kNone;
+  bool backup_wifi_ = true;   // request parameters, set before the job is
+  bool backup_token_ = true;  // queued (one request can be in flight)
   mutable SemaphoreHandle_t mutex_ = nullptr;
   QueueHandle_t queue_ = nullptr;
 };

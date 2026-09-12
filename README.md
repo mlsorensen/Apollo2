@@ -58,6 +58,11 @@ to the machine instead of a phone app.
   filterable shot list; tap a shot for its full‑screen card. With WiFi on,
   the device also serves a **web page** at its local IP — browse and download
   your shots from a phone or computer, themed to match the device.
+- **Settings backup on the card** — replacing the hardware? Settings →
+  Apollo → **Backup** copies every preference onto the same microSD card the
+  shots live on, and restores it onto the new one — machine pairing, scale,
+  theme, chime, flush and brew settings and all. Explicit both ways, with the
+  WiFi password and pairing token each opt-out, since the file is plain text.
 - **Automatic time** — optionally join your home Wi‑Fi and the clock keeps itself
   correct over NTP, with a timezone picker that handles daylight saving. Time is
   saved to the on‑board RTC (where present) so it survives a power‑off.

@@ -6,7 +6,7 @@
 // NVS is initialized by the Arduino-ESP32 core at boot, so we just open the
 // namespace per call (cheap, and avoids holding the handle open).
 namespace {
-constexpr char kNamespace[] = "micra";
+constexpr const char* kNamespace = platform::kConfigNamespace;  // see config.h
 constexpr char kMacKey[] = "mac";
 constexpr char kNameKey[] = "name";
 constexpr char kTokenKey[] = "token";

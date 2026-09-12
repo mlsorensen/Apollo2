@@ -394,7 +394,14 @@ void setup() {
   });
   g_app.build(g_micra, g_provisioner, g_battery, g_display_settings, g_clock, g_history,
               g_scale, g_scale_provisioner, g_brew, g_network, platform::sound(), g_shots,
-              screen, &g_update_check);
+              screen, &g_update_check,
+#if defined(BOARD_HAS_SD_MMC)
+              // Settings backup/restore: the shot store implements it too — the
+              // settings file sits on the card its writer task already owns.
+              &g_shots);
+#else
+              nullptr);  // no card slot: no Backup page
+#endif
 
   // Settings "Restart display": on RGB boards this is a panel DMA resync, not
   // a reboot — the shifted/ghosted raster is a latched bounce-buffer underrun,
@@ -411,6 +418,14 @@ void setup() {
   // Critically-low battery -> deep sleep instead of brown-out thrashing. Kill the
   // backlight first (dominant load, can latch on in sleep), then park (~uA) until a
   // touch. The dark check above gates the next boot on actually being charged.
+  // Full reboot, used after a settings restore (set_restart_handler above
+  // deliberately heals an RGB panel in place instead of rebooting).
+  g_app.set_reboot_handler([] {
+    core::logf("Settings restored -> reboot\n");
+    Serial.flush();
+    esp_restart();
+  });
+
   g_app.set_low_battery_handler(board::kBatteryCutoffVolts, [] {
     core::logf("Battery critical -> deep sleep; charge, then touch to wake\n");
     Serial.flush();

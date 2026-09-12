@@ -11,6 +11,7 @@
 //               | Controls (Brew + Boiler) | Cleaning
 //   - Scale  -> Bluetooth (scan/save/connect/forget) | Settings (Target weight)
 //   - Device -> Display (brightness/theme/units) | Time & date | WiFi
+//               | Backup (settings to/from the card; card-capable boards)
 // ui::App owns it — builds the frame here, navigates pages, and (re)populates the
 // scan lists. lv_menu provides the page stack + back navigation so we don't
 // hand-roll it.
@@ -32,6 +33,7 @@ enum SettingsSection {
   kSectionDeviceDisplay,   // Device > Display (brightness/dim/theme/units/sound)
   kSectionDeviceTime,      // Device > Time & date (clock + calendar steppers)
   kSectionDeviceWifi,      // Device > WiFi (enable/setup/timezone/NTP)
+  kSectionDeviceBackup,    // Device > Backup (settings to/from the card)
   kSectionCount
 };
 
@@ -207,13 +209,22 @@ struct SettingsWidgets {
   lv_obj_t* beta_row = nullptr;             // "Beta updates" (hidden if cadence Off)
   lv_obj_t* beta_switch = nullptr;
   lv_obj_t* click_sound_switch = nullptr;  // button-press click (audio boards only)
+
+  // Device > Backup (storage-capable boards only; nullptr elsewhere). Settings
+  // travel to replacement hardware on the same card the shot history is on.
+  lv_obj_t* device_backup_page = nullptr;
+  lv_obj_t* backup_status = nullptr;  // what's on the card right now
+  lv_obj_t* backup_btn = nullptr;     // "Back up settings" -> confirm modal
+  lv_obj_t* restore_btn = nullptr;    // "Restore settings" -> confirm modal
 };
 
 // with_wired_paddle: build the Micra "Wired paddle" switch (paddle-capable
 // boards only — elsewhere unwired mode isn't a choice, it's all there is).
+// with_backup: build Device > Backup (boards with a card slot).
 void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
                         bool with_brightness, bool with_sound,
-                        bool with_wired_paddle, SettingsWidgets& out);
+                        bool with_wired_paddle, bool with_backup,
+                        SettingsWidgets& out);
 
 // Navigate to a section's page (kSectionMicra / kSectionScale / kSectionDevice).
 void settings_select_section(SettingsWidgets& w, int section);

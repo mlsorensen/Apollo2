@@ -25,6 +25,7 @@
 #include "platform_host/fake_provisioner.h"
 #include "platform_host/fake_scale.h"
 #include "platform_host/fake_scale_provisioner.h"
+#include "platform_host/fake_settings_backup.h"
 #include "platform_host/fake_shot_store.h"
 #include "platform_host/fake_sound.h"
 #include "platform_host/png_display.h"
@@ -76,7 +77,8 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             bool backflush = false, bool log_modal = false,
             bool unwired_midshot = false, bool toast = false,
             bool join_modal = false, bool screensaver = false,
-            bool update_modal = false, core::IUpdateSource* updates = nullptr) {
+            bool update_modal = false, core::IUpdateSource* updates = nullptr,
+            core::ISettingsBackup* backup = nullptr, int backup_modal = 0) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
@@ -85,7 +87,8 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   static host::FakeSound fake_sound;  // stateless; shared across renders
   ui::App app;
   app.build(machine, provisioner, battery, disp_settings, clock, history, scale,
-            scale_provisioner, brew, network, fake_sound, shots, screen, updates);
+            scale_provisioner, brew, network, fake_sound, shots, screen, updates,
+            backup);
   app.show_tab(tab);
   if (settings_section >= 0) app.select_settings_section(settings_section);
   if (stats_section >= 0) app.select_stats_section(stats_section);
@@ -102,6 +105,22 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
                    "Connect the scale or switch to Manual mode.");
   if (screensaver) app.pose_screensaver();  // bouncing-logo saver, start pose
   if (update_modal) app.open_update_modal();
+  // 1 = back-up confirm, 2 = the same with WiFi opted out, 3 = restore confirm
+  // (4 = its "backup is newer than this firmware" refusal, posed by the fake),
+  // 5 = backup done, 6 = restore done, 7 = no card in the slot.
+  if (backup_modal == 1 || backup_modal == 5 || backup_modal == 7)
+    app.open_backup_modal();
+  if (backup_modal == 2) {  // both credentials opted out
+    app.open_backup_modal();
+    app.set_backup_include_wifi(false);
+    app.set_backup_include_token(false);
+  }
+  if (backup_modal == 3 || backup_modal == 4) app.open_restore_modal();
+  if (backup_modal == 5) app.confirm_backup();
+  if (backup_modal == 6) {
+    app.open_restore_modal();
+    app.confirm_restore();  // no reboot handler in the sim: the modal stays up
+  }
   display.render_frame();
   if (screensaver && !check_saver_dirty_area(screen)) return false;
   if (!display.save_png(out_path)) {
@@ -127,6 +146,7 @@ int main() {
   host::FakeNetwork network;
   host::FakeUpdateSource updates;
   host::FakeShotStore shots;
+  host::FakeSettingsBackup backup;
 
   // One PNG per supported layout. Add a line here when a new form factor lands.
   auto r = [&](ui::ScreenProfile s, const char* path, int tab = 0, int sec = -1,
@@ -134,11 +154,12 @@ int main() {
                int shot_id = -1, int history_ym = 0, bool backflush = false,
                bool log_modal = false, bool unwired_midshot = false,
                bool toast = false, bool join_modal = false, bool screensaver = false,
-               bool update_modal = false) {
+               bool update_modal = false, int backup_modal = 0) {
     return render(machine, provisioner, battery, disp, clock, history, scale,
                   scale_provisioner, brew, network, shots, s, path, tab, sec, modal, theme,
                   stats, clean_lock, shot_id, history_ym, backflush, log_modal,
-                  unwired_midshot, toast, join_modal, screensaver, update_modal, &updates);
+                  unwired_midshot, toast, join_modal, screensaver, update_modal, &updates,
+                  &backup, backup_modal);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
@@ -264,6 +285,39 @@ int main() {
   ok &= r({800, 480}, "renders/device_display_800x480.png", 1, ui::kSectionDeviceDisplay);
   ok &= r({800, 480}, "renders/device_time_800x480.png", 1, ui::kSectionDeviceTime);
   ok &= r({800, 480}, "renders/device_wifi_800x480.png", 1, ui::kSectionDeviceWifi);
+
+  // Settings > Apollo > Backup: the page in its three card states, then the two
+  // confirmations (the whole point of the flow is what those two say).
+  backup.pose_empty_card();
+  ok &= r({800, 480}, "renders/device_backup_empty_800x480.png", 1, ui::kSectionDeviceBackup);
+  backup.pose_backup_present();
+  ok &= r({800, 480}, "renders/device_backup_800x480.png", 1, ui::kSectionDeviceBackup);
+  ok &= r({1280, 720, 1.5f}, "renders/device_backup_1280x720.png", 1, ui::kSectionDeviceBackup);
+  ok &= r({1280, 720, 1.5f}, "renders/backup_modal_1280x720.png", 1, ui::kSectionDeviceBackup,
+          false, 0, -1, false, -1, 0, false, false, false, false, false, false, false, 1);
+  ok &= r({800, 480}, "renders/backup_modal_800x480.png", 1, ui::kSectionDeviceBackup,
+          false, 0, -1, false, -1, 0, false, false, false, false, false, false, false, 1);
+  ok &= r({800, 480}, "renders/backup_modal_optout_800x480.png", 1, ui::kSectionDeviceBackup,
+          false, 0, -1, false, -1, 0, false, false, false, false, false, false, false, 2);
+  ok &= r({800, 480}, "renders/restore_modal_800x480.png", 1, ui::kSectionDeviceBackup,
+          false, 0, -1, false, -1, 0, false, false, false, false, false, false, false, 3);
+  ok &= r({1280, 720, 1.5f}, "renders/restore_modal_1280x720.png", 1, ui::kSectionDeviceBackup,
+          false, 0, -1, false, -1, 0, false, false, false, false, false, false, false, 3);
+  backup.pose_backup_present(/*with_wifi=*/false, /*newer=*/false, /*with_token=*/false);
+  ok &= r({800, 480}, "renders/restore_modal_optout_800x480.png", 1, ui::kSectionDeviceBackup,
+          false, 0, -1, false, -1, 0, false, false, false, false, false, false, false, 3);
+  backup.pose_backup_present();
+  ok &= r({800, 480}, "renders/backup_done_800x480.png", 1, ui::kSectionDeviceBackup,
+          false, 0, -1, false, -1, 0, false, false, false, false, false, false, false, 5);
+  ok &= r({800, 480}, "renders/restore_done_800x480.png", 1, ui::kSectionDeviceBackup,
+          false, 0, -1, false, -1, 0, false, false, false, false, false, false, false, 6);
+  backup.pose_no_card();
+  ok &= r({800, 480}, "renders/backup_no_card_800x480.png", 1, ui::kSectionDeviceBackup,
+          false, 0, -1, false, -1, 0, false, false, false, false, false, false, false, 7);
+  backup.pose_backup_present(/*with_wifi=*/false, /*newer=*/true);
+  ok &= r({800, 480}, "renders/restore_too_new_800x480.png", 1, ui::kSectionDeviceBackup,
+          false, 0, -1, false, -1, 0, false, false, false, false, false, false, false, 4);
+  backup.pose_backup_present();
 
   // 7" 1024x600 (ESP32-S3-Touch-LCD-7B): the XL tier.
   ok &= r({1024, 600}, "renders/home_1024x600.png");

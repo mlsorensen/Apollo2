@@ -499,13 +499,36 @@ void root_entry(lv_obj_t* menu, lv_obj_t* root_page, lv_obj_t* target,
       cont, [](lv_event_t*) { ui::play_button_press(); }, LV_EVENT_PRESSED, nullptr);
 }
 
+// Device > Backup: settings to/from the removable card. The card carries the
+// shot history already; NVS is what a hardware swap loses, so this is the one
+// place that copies it. Both directions are explicit — the status line says
+// what is actually on the card, and App greys Restore when there is nothing
+// to restore (or the backup is newer than this firmware).
+void build_device_backup_rows(lv_obj_t* page, const lv_font_t* text_font,
+                              int btn_h, ui::SettingsWidgets& out) {
+  section_label(page, "On the card", text_font);
+  out.backup_status = lv_label_create(page);
+  lv_label_set_text(out.backup_status, "");
+  lv_obj_set_width(out.backup_status, lv_pct(100));
+  lv_label_set_long_mode(out.backup_status, LV_LABEL_LONG_WRAP);
+  lv_obj_set_style_text_color(out.backup_status, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(out.backup_status, text_font, 0);
+
+  section_label(page, "Settings", text_font);
+  out.backup_btn =
+      action_row(page, "Back up to card", LV_SYMBOL_SD_CARD, text_font, btn_h);
+  out.restore_btn =
+      action_row(page, "Restore from card", LV_SYMBOL_DOWNLOAD, text_font, btn_h);
+}
+
 }  // namespace
 
 namespace ui {
 
 void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
                         bool with_brightness, bool with_sound,
-                        bool with_wired_paddle, SettingsWidgets& out) {
+                        bool with_wired_paddle, bool with_backup,
+                        SettingsWidgets& out) {
   const bool compact = is_compact(screen);
   const bool xl = is_xl(screen);
   const lv_font_t* font = ui::font_dp(compact ? 14 : xl ? 28 : 20);
@@ -599,6 +622,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   out.device_display_page = lv_menu_page_create(menu, "Display");
   out.device_time_page = lv_menu_page_create(menu, "Time & date");
   out.device_wifi_page = lv_menu_page_create(menu, "WiFi");
+  if (with_backup) out.device_backup_page = lv_menu_page_create(menu, "Backup");
   page_column(out.micra_bt_page, compact);
   page_column(out.micra_controls_page, compact);
   page_column(out.scale_bt_page, compact);
@@ -607,6 +631,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   page_column(out.device_display_page, compact);
   page_column(out.device_time_page, compact);
   page_column(out.device_wifi_page, compact);
+  if (out.device_backup_page != nullptr) page_column(out.device_backup_page, compact);
 
   // Micra > Bluetooth: connection, and the one preference about it
   lv_obj_t* micra_bt_prefs = nullptr;
@@ -802,6 +827,8 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
                             with_brightness, with_sound, out);
   build_device_time_rows(out.device_time_page, font, btn_size, compact, out);
   build_device_wifi_rows(out.device_wifi_page, font, btn_size, out);
+  if (out.device_backup_page != nullptr)
+    build_device_backup_rows(out.device_backup_page, font, btn_h, out);
 
   // --- Chooser pages: short nav lists under each root entry -----------------
   out.micra_page = lv_menu_page_create(menu, "Micra");
@@ -820,6 +847,8 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   root_entry(menu, out.device_page, out.device_display_page, "Display", font, btn_h);
   root_entry(menu, out.device_page, out.device_time_page, "Time & date", font, btn_h);
   root_entry(menu, out.device_page, out.device_wifi_page, "WiFi", font, btn_h);
+  if (out.device_backup_page != nullptr)
+    root_entry(menu, out.device_page, out.device_backup_page, "Backup", font, btn_h);
 
   // --- Root page: Micra / Scale / Device -----------------------------------
   out.root_page = lv_menu_page_create(menu, "Settings");
@@ -859,6 +888,7 @@ lv_obj_t* settings_section_page(const SettingsWidgets& w, int section) {
     case kSectionDeviceDisplay: return w.device_display_page;
     case kSectionDeviceTime:    return w.device_time_page;
     case kSectionDeviceWifi:    return w.device_wifi_page;
+    case kSectionDeviceBackup:  return w.device_backup_page;
     default:                    return w.root_page;
   }
 }

@@ -8,6 +8,11 @@
 
 namespace platform {
 
+// The one NVS namespace every setting lives in. Public because the settings
+// backup enumerates it wholesale (config_backup.cpp) rather than keeping a
+// second list of keys that could fall behind this one.
+inline constexpr char kConfigNamespace[] = "micra";
+
 class Config {
  public:
   void begin();               // create the NVS namespace on first boot (quiets logs)

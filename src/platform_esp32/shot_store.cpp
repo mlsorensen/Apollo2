@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 
 #include "core/shot_csv.h"
+#include "platform_esp32/config_backup.h"
 #include "core/system.h"
 #include "driver/sdmmc_host.h"
 #include "esp_heap_caps.h"
@@ -62,6 +63,11 @@ const char* shots_dir_path() {
 }
 const char* stats_since_path() {
   std::snprintf(g_path, sizeof(g_path), "%s/%s/stats_since.txt", kMount,
+                core::kShotDirName);
+  return g_path;
+}
+const char* settings_path() {
+  std::snprintf(g_path, sizeof(g_path), "%s/%s/settings.txt", kMount,
                 core::kShotDirName);
   return g_path;
 }
@@ -414,6 +420,7 @@ bool ShotStore::try_mount() {
   xSemaphoreGive(mutex_);
   available_ = true;
   refresh_storage();
+  refresh_backup_info();  // a card carrying a settings backup says so at once
   core::logf("ShotStore: SD mounted, %d shots, next id %lu\n",
              static_cast<int>(index_.size()),
              static_cast<unsigned long>(next_id_));
@@ -424,6 +431,7 @@ void ShotStore::unmount() {
   available_ = false;
   xSemaphoreTake(mutex_, portMAX_DELAY);
   storage_info_ = {};
+  backup_info_ = {};  // the file went with the card
   xSemaphoreGive(mutex_);
   if (card_ != nullptr) {
     esp_vfs_fat_sdcard_unmount(kMount, static_cast<sdmmc_card_t*>(card_));
@@ -434,6 +442,10 @@ void ShotStore::unmount() {
 }
 
 void ShotStore::write_job(SaveJob& job) {
+  if (job.kind != JobKind::kShot) {
+    settings_job(job);
+    return;
+  }
   if (!available_) return;
   if (job.rec == nullptr && job.remove_id != 0) {  // delete a shot's files
     remove_files(job.remove_id);
@@ -502,12 +514,105 @@ void ShotStore::save(const core::ShotRecord& record) {
   if (rec == nullptr) return;
   std::memcpy(rec, &record, sizeof(core::ShotRecord));
 
-  SaveJob job{rec, 0};
+  SaveJob job{rec, 0, JobKind::kShot};
   if (xQueueSend(queue_, &job, 0) != pdTRUE) {
     // Queue full (two shots mid-write?) — drop rather than block the UI.
     heap_caps_free(rec);
     core::logf("ShotStore: save queue full, shot dropped\n");
   }
+}
+
+
+// --- settings backup (core::ISettingsBackup) --------------------------------
+// The file lives beside the shot data on the same card, and all of its IO runs
+// here on the writer task — the UI only ever reads the cached info/state.
+
+core::BackupInfo ShotStore::info() const {
+  xSemaphoreTake(mutex_, portMAX_DELAY);
+  core::BackupInfo i = backup_info_;
+  xSemaphoreGive(mutex_);
+  i.medium_ready = available_;
+  return i;
+}
+
+std::string ShotStore::message() const {
+  xSemaphoreTake(mutex_, portMAX_DELAY);
+  std::string m = backup_msg_;
+  xSemaphoreGive(mutex_);
+  return m;
+}
+
+void ShotStore::request_backup(bool include_wifi, bool include_token) {
+  backup_wifi_ = include_wifi;
+  backup_token_ = include_token;
+  backup_op_ = core::BackupOp::kBackup;
+  backup_state_ = core::BackupState::kBusy;
+  SaveJob job{nullptr, 0, JobKind::kBackup};
+  if (xQueueSend(queue_, &job, 0) != pdTRUE) {
+    xSemaphoreTake(mutex_, portMAX_DELAY);
+    backup_msg_ = "The card is busy. Try again in a moment.";
+    xSemaphoreGive(mutex_);
+    backup_state_ = core::BackupState::kFailed;
+  }
+}
+
+void ShotStore::request_restore() {
+  backup_op_ = core::BackupOp::kRestore;
+  backup_state_ = core::BackupState::kBusy;
+  SaveJob job{nullptr, 0, JobKind::kRestore};
+  if (xQueueSend(queue_, &job, 0) != pdTRUE) {
+    xSemaphoreTake(mutex_, portMAX_DELAY);
+    backup_msg_ = "The card is busy. Try again in a moment.";
+    xSemaphoreGive(mutex_);
+    backup_state_ = core::BackupState::kFailed;
+  }
+}
+
+// Writer task: re-read the file's header into the cache. Called at mount (so a
+// card carrying a backup describes itself as soon as it is inserted) and after
+// either operation. Cheap — a handful of short lines off an open file.
+void ShotStore::refresh_backup_info() {
+  core::BackupInfo info;
+  if (available_) settings_backup_read(settings_path(), &info);
+  xSemaphoreTake(mutex_, portMAX_DELAY);
+  backup_info_ = info;
+  xSemaphoreGive(mutex_);
+}
+
+void ShotStore::settings_job(const SaveJob& job) {
+  const bool restore = job.kind == JobKind::kRestore;
+  std::string err, msg;
+  bool ok = false;
+  int n = 0;
+  if (!available_) {
+    err = "No card.";
+  } else if (restore) {
+    ok = settings_backup_restore(settings_path(), &n, &err);
+    if (ok) {
+      char buf[48];
+      std::snprintf(buf, sizeof(buf), "%d settings restored", n);
+      msg = buf;
+    }
+  } else {
+    ok = settings_backup_write(settings_path(), backup_wifi_, backup_token_, &n,
+                               &err);
+    if (ok) {
+      char buf[48];
+      std::snprintf(buf, sizeof(buf), "%d settings written", n);
+      msg = buf;
+    }
+  }
+  refresh_backup_info();
+
+  xSemaphoreTake(mutex_, portMAX_DELAY);
+  backup_msg_ = ok ? msg : err;
+  xSemaphoreGive(mutex_);
+  backup_state_ = ok ? core::BackupState::kDone : core::BackupState::kFailed;
+  // These are the deepest stdio+NVS paths this task runs; report the margin so
+  // the 5120-byte stack can be judged from a real device instead of guessed at.
+  core::logf("ShotStore: settings %s (%s), stack_free=%u\n",
+             restore ? "restore" : "backup", ok ? "ok" : "failed",
+             static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
 }
 
 void ShotStore::refresh_storage() {
@@ -597,7 +702,7 @@ bool ShotStore::remove(uint32_t id) {
   xSemaphoreGive(mutex_);
   if (!found) return false;
 
-  SaveJob job{nullptr, id};
+  SaveJob job{nullptr, id, JobKind::kShot};
   if (xQueueSend(queue_, &job, pdMS_TO_TICKS(250)) != pdTRUE) {
     // Writer jammed: put the summary back so RAM and card can't drift apart.
     xSemaphoreTake(mutex_, portMAX_DELAY);
@@ -671,7 +776,7 @@ void ShotStore::set_stats_since(int64_t t) {
   stats_since_ = t;
   xSemaphoreGive(mutex_);
   // Persist off-thread: a marker job is a SaveJob with no record attached.
-  SaveJob job{nullptr, 0};
+  SaveJob job{nullptr, 0, JobKind::kShot};
   xQueueSend(queue_, &job, 0);  // queue full -> marker lost until next reset; fine
 }
 
