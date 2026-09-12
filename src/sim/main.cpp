@@ -107,8 +107,10 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   if (update_modal) app.open_update_modal();
   // 1 = back-up confirm, 2 = the same with WiFi opted out, 3 = restore confirm
   // (4 = its "backup is newer than this firmware" refusal, posed by the fake),
-  // 5 = backup done, 6 = restore done, 7 = no card in the slot.
-  if (backup_modal == 1 || backup_modal == 5 || backup_modal == 7)
+  // 5 = backup done, 6 = restore done, 7 = no card in the slot, 8 = the
+  // "Backing up" notice itself (it now holds for kWorkingFloorMs).
+  if (backup_modal == 1 || backup_modal == 5 || backup_modal == 7 ||
+      backup_modal == 8)
     app.open_backup_modal();
   if (backup_modal == 2) {  // both credentials opted out
     app.open_backup_modal();
@@ -116,10 +118,15 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
     app.set_backup_include_token(false);
   }
   if (backup_modal == 3 || backup_modal == 4) app.open_restore_modal();
-  if (backup_modal == 5) app.confirm_backup();
+  if (backup_modal == 8) app.confirm_backup();  // stops at the working notice
+  if (backup_modal == 5) {
+    app.confirm_backup();
+    app.pose_backup_result();
+  }
   if (backup_modal == 6) {
     app.open_restore_modal();
-    app.confirm_restore();  // no reboot handler in the sim: the modal stays up
+    app.confirm_restore();
+    app.pose_backup_result();  // no reboot handler in the sim: the notice stays
   }
   display.render_frame();
   if (screensaver && !check_saver_dirty_area(screen)) return false;
@@ -307,6 +314,8 @@ int main() {
   ok &= r({800, 480}, "renders/restore_modal_optout_800x480.png", 1, ui::kSectionDeviceBackup,
           false, 0, -1, false, -1, 0, false, false, false, false, false, false, false, 3);
   backup.pose_backup_present();
+  ok &= r({800, 480}, "renders/backup_working_800x480.png", 1, ui::kSectionDeviceBackup,
+          false, 0, -1, false, -1, 0, false, false, false, false, false, false, false, 8);
   ok &= r({800, 480}, "renders/backup_done_800x480.png", 1, ui::kSectionDeviceBackup,
           false, 0, -1, false, -1, 0, false, false, false, false, false, false, false, 5);
   ok &= r({800, 480}, "renders/restore_done_800x480.png", 1, ui::kSectionDeviceBackup,

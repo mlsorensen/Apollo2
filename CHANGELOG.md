@@ -7,6 +7,17 @@ for someone reading the diff. These notes are also shown ON THE DEVICE, whose
 fonts are ASCII-only: stick to characters `sanitize_notes()` (src/ui/app.cpp)
 maps — plain ASCII plus `— – → … × ' "` — or they render as empty boxes.
 
+## v0.14.0-beta.3
+
+### Changes
+
+- **Settings backup: the notices can be read now.** Backing up and restoring
+  both finish in a fraction of a second, so the "Backing up" / "Restoring"
+  notice and the result that followed it went by in a single flash. Each one
+  now stays on screen long enough to read, and after a restore the "Settings
+  restored" notice holds for eight seconds before Apollo restarts.
+- The backup confirmation's wording is clearer about what ends up on the card.
+
 ## v0.14.0-beta.2
 
 ### Changes

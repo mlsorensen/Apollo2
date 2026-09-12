@@ -140,6 +140,8 @@ class App {
   void open_restore_modal();             // "Restore from card" -> confirm / refusal
   void confirm_restore();                // modal "Restore"
   void backup_result_poll();             // watch state(); swap in the outcome modal
+  void pose_backup_result();             // sim: skip the working notice's floor
+  void reboot_after_restore();           // the restore modal's hold timer fired
   void hour_select(int idx);             // Time & date dropdowns: selection ->
   void minute_select(int idx);           // clock/date write (hour idx == hour,
   void month_select(int idx);            // month/day 1-based, year offset from
@@ -267,6 +269,8 @@ class App {
   lv_obj_t* backup_wifi_switch_ = nullptr;   // "Include WiFi network" (modal-owned)
   lv_obj_t* backup_token_switch_ = nullptr;  // "Include pairing token"
   lv_obj_t* backup_note_ = nullptr;          // what an opted-out backup leaves out
+  lv_timer_t* reboot_timer_ = nullptr;       // holds the restored notice on screen
+  uint32_t backup_started_ms_ = 0;           // when the working modal went up
   void update_backup_note();                 // rewrite that line from the switches
   int update_last_seq_ = -1;         // last seen check_seq(); -1 = not baselined
   bool manual_check_pending_ = false;  // a user-initiated check awaits its result

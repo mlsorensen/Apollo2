@@ -208,6 +208,20 @@ constexpr const char* kMonthNames[12] = {"Jan", "Feb", "Mar", "Apr",
                                          "May", "Jun", "Jul", "Aug",
                                          "Sep", "Oct", "Nov", "Dec"};
 
+// How long "Settings restored" stays up before the reboot takes the screen.
+// Without a hold the notice is painted and gone inside a frame — the reboot
+// follows immediately — so the one message telling you what just happened is
+// unreadable. The overlay swallows touch for its duration, which also stops a
+// stray tap writing a stale setting over the freshly restored NVS.
+constexpr uint32_t kRestoreHoldMs = 8000;
+
+// Minimum time the "Backing up" / "Restoring" notice stays up. Both operations
+// finish in a fraction of a second on a healthy card, so without a floor the
+// whole sequence is one flash and you cannot tell what ran — or that anything
+// ran at all. Holding the working notice makes the result that follows read as
+// the OUTCOME of something rather than as an unexplained dialog.
+constexpr uint32_t kWorkingFloorMs = 1500;
+
 // "12 Sep 2026 08:14" — a card can outlive several firmwares, so the stamp is
 // written long-form rather than in the numeric style the Stats cards use.
 void format_stamp(char* out, size_t n, int64_t unix_time) {
@@ -270,6 +284,9 @@ void on_restore_confirm(lv_event_t* e) {
 }
 void on_backup_cancel(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->dismiss_modal();
+}
+void on_restore_hold_done(lv_timer_t* t) {
+  static_cast<ui::App*>(lv_timer_get_user_data(t))->reboot_after_restore();
 }
 
 void on_reset_stats_confirm(lv_event_t* e) {
@@ -2628,6 +2645,10 @@ void App::close_modal() {
   }
   log_box_ = nullptr;
   log_label_ = nullptr;
+  // NOTE: reboot_timer_ is deliberately NOT torn down here. Once a restore has
+  // replaced NVS the reboot is mandatory — the running app still holds the old
+  // values in RAM — so the hold must survive anything that closes the notice
+  // early (another modal opening over it, a theme rebuild).
   backup_wifi_switch_ = nullptr;  // all three live on the backup modal's card
   backup_token_switch_ = nullptr;
   backup_note_ = nullptr;
@@ -3363,6 +3384,21 @@ void App::open_backup_modal() {
   modal_button(brow, "Cancel", ui::theme::rail(), on_backup_cancel, this);
 }
 
+// Sim only: age the working notice past its floor so a render can show the
+// outcome dialog without ticks having to pass.
+void App::pose_backup_result() {
+  backup_started_ms_ = lv_tick_get() - kWorkingFloorMs - 1;
+  backup_result_poll();
+}
+
+// Hold expired: paint one last frame (the reboot can land mid-refresh
+// otherwise) and go. A REAL reboot — the restored values are read at boot.
+void App::reboot_after_restore() {
+  reboot_timer_ = nullptr;  // one-shot: LVGL deletes it after this callback
+  lv_refr_now(nullptr);
+  reboot_device();
+}
+
 void App::set_backup_include_wifi(bool on) {
   backup_include_wifi_ = on;
   // Sync the switch too: this is also how the sim poses an opted-out state
@@ -3410,8 +3446,8 @@ void App::confirm_backup() {
   if (backup_ == nullptr) return;
   backup_->request_backup(backup_include_wifi_, backup_include_token_);
   backup_pending_ = true;
+  backup_started_ms_ = lv_tick_get();
   open_modal("Backing up", "Writing settings to the card...");
-  backup_result_poll();  // a fast card finishes before the next refresh tick
 }
 
 void App::open_restore_modal() {
@@ -3466,17 +3502,18 @@ void App::confirm_restore() {
   if (backup_ == nullptr) return;
   backup_->request_restore();
   backup_pending_ = true;
+  backup_started_ms_ = lv_tick_get();
   open_modal("Restoring", "Reading settings from the card...");
-  backup_result_poll();
 }
 
 // Watches the port for the outcome of a request and swaps the working modal for
-// the result. Called from refresh() (and once straight after the request, so a
-// fast card doesn't flash a spinner nobody can read).
+// the result. Called from refresh(), and not before the working notice has had
+// its kWorkingFloorMs on screen.
 void App::backup_result_poll() {
   if (!backup_pending_ || backup_ == nullptr) return;
   const core::BackupState st = backup_->state();
   if (st == core::BackupState::kBusy || st == core::BackupState::kIdle) return;
+  if (lv_tick_elaps(backup_started_ms_) < kWorkingFloorMs) return;  // let it be read
   backup_pending_ = false;
   const bool restore = backup_->last_op() == core::BackupOp::kRestore;
   const std::string detail = backup_->message();
@@ -3491,16 +3528,19 @@ void App::backup_result_poll() {
 
   if (restore) {
     // No button: the restart IS the acknowledgement, and a settings-restored
-    // device must not keep running with the old values in RAM.
+    // device must not keep running with the old values in RAM. It waits
+    // kRestoreHoldMs first so the notice can actually be read.
     open_modal("Settings restored", "Apollo is restarting...");
-    lv_refr_now(nullptr);  // paint before the reboot takes the screen
-    reboot_device();       // a REAL reboot: the restored values are read at boot
+    if (reboot_timer_ == nullptr) {
+      reboot_timer_ = lv_timer_create(on_restore_hold_done, kRestoreHoldMs, this);
+      lv_timer_set_repeat_count(reboot_timer_, 1);
+    }
     return;
   }
   char body[192];
   std::snprintf(body, sizeof(body),
-                "%s%sKeep the card with the machine - it now holds your "
-                "settings as well as your shots.",
+                "%s%sCard contains settings specific to this Micra, and can "
+                "be moved to another Apollo device to restore settings.",
                 detail.c_str(), detail.empty() ? "" : ".\n");
   lv_obj_t* card = open_modal("Settings backed up", body);
   modal_button(modal_button_row(card), "OK", ui::theme::rail(), on_backup_cancel, this);
