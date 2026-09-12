@@ -1,0 +1,23 @@
+
+### Changes
+
+- **Back up your settings to the memory card.** Settings > Apollo > **Backup**
+  writes every preference — paired machine, scale, theme, chime, target weight,
+  flush and brew settings, timezone — to `/Apollo2/settings.txt` on the same
+  card your shots are on, and restores it onto another Apollo. Replacing the
+  hardware no longer means setting everything up again: move the card across
+  and tap **Restore from card**.
+
+  The page says what the inserted card holds (when the backup was taken, and on
+  which firmware and board), and a restore replaces every setting and restarts
+  to apply it. Anything the backup doesn't carry returns to its default, so an
+  older backup lands exactly as an upgrade would. Restoring between different
+  boards works and is the point. A backup written by newer firmware than the
+  machine you're restoring onto is refused — update it first.
+
+  The file is plain text, so anyone with the card can read it. Your **WiFi
+  network** and your **Micra pairing token** are each a switch on the backup
+  confirmation: both on by default, because the point is a replacement that
+  just works — turn one off and you set that up by hand on the new machine
+  instead. Nothing is ever backed up or restored on its own.
+
