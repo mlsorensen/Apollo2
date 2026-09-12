@@ -573,8 +573,9 @@ void set_dim_label(ui::SettingsWidgets& s) {
 // Idle-screen style (IDisplaySettings::screensaver_style): what the screen
 // timeout shows. Order matches the persisted index (see Config's migration --
 // "Dim" was inserted at 1, so the old Blank=1 maps to the new Off=2).
-//   Logo — backlight at the per-board dim floor, bouncing lion
-//   Dim  — backlight at the same dim floor, black screen, no lion
+//   Logo — backlight at the per-board dim floor, bouncing lion on black
+//   Dim  — backlight at the same dim floor, the live UI stays on screen (the
+//          original screensaver, from before the lion existed)
 //   Off  — backlight fully off (set_brightness(0) is a true off, not a minimum)
 constexpr const char* kSaverName[] = {"Logo", "Dim", "Off"};
 constexpr int kSaverCount = static_cast<int>(sizeof(kSaverName) / sizeof(kSaverName[0]));
@@ -1777,16 +1778,15 @@ void App::screensaver_tick() {
   if (idle == screensaver_on_) return;  // touch resets LVGL's inactivity clock
   screensaver_on_ = idle;
   if (idle) {
-    // 0 = Logo, 1 = Dim, 2 = Off. Dim and Off both show a black screen (no
-    // lion); they differ only in whether the backlight stays at the per-board
-    // dim floor or goes fully off. So the lion is suppressed for anything but
-    // Logo, and only Off drops the backlight to zero.
+    // 0 = Logo, 1 = Dim, 2 = Off. Logo and Dim both keep the backlight at the
+    // per-board dim floor; only Off drops it to zero. What covers the screen
+    // is start_screensaver's business (black + lion, nothing, or black).
     const int style = settings_.screensaver_style;
     const bool lights_out = style == 2;
     display_->set_screensaver(lights_out
                                   ? core::IDisplaySettings::SaverMode::kBlank
                                   : core::IDisplaySettings::SaverMode::kDim);
-    start_screensaver(/*blank=*/style != 0);
+    start_screensaver(style);
   } else {
     display_->set_screensaver(core::IDisplaySettings::SaverMode::kOff);
     stop_screensaver();
@@ -1799,10 +1799,16 @@ void App::screensaver_tick() {
   }
 }
 
-void App::start_screensaver(bool blank) {
+void App::start_screensaver(int style) {
   stop_screensaver();
-  // Opaque black cover over everything (also swallows the waking tap so it
-  // can't press whatever control happens to sit under the finger).
+  // A full-screen cover on the top layer. Its first job in every style is to
+  // swallow the waking tap so it can't press whatever control happens to sit
+  // under the finger. Logo and Off paint it opaque black; Dim (style 1) leaves
+  // it fully transparent so the live UI stays readable at the dimmed
+  // backlight -- that IS the screensaver as it was before the lion, and a
+  // black screen with the backlight still burning would buy nothing over Off.
+  const bool dim_only = style == 1;
+  const bool blank = style == 2;
   // DEAD END, do not retry: hiding the screen underneath with
   // LV_OBJ_FLAG_HIDDEN. It looks tempting -- render drops 26ms -> 11ms, since
   // what remains is LVGL compositing the home widgets beneath the lion's own
@@ -1816,10 +1822,10 @@ void App::start_screensaver(bool blank) {
   lv_obj_remove_style_all(saver_layer_);
   lv_obj_set_size(saver_layer_, lv_pct(100), lv_pct(100));
   lv_obj_set_style_bg_color(saver_layer_, lv_color_black(), 0);
-  lv_obj_set_style_bg_opa(saver_layer_, LV_OPA_COVER, 0);
+  lv_obj_set_style_bg_opa(saver_layer_, dim_only ? LV_OPA_TRANSP : LV_OPA_COVER, 0);
   lv_obj_add_flag(saver_layer_, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_remove_flag(saver_layer_, LV_OBJ_FLAG_SCROLLABLE);
-  if (blank) return;  // backlight is off; nothing to draw
+  if (blank || dim_only) return;  // nothing to draw: lights out, or the UI shows through
 
   saver_img_ = lv_image_create(saver_layer_);
   // Size the lion to ~40% of the screen height. img_lion.h carries one

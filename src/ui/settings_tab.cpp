@@ -258,8 +258,9 @@ void build_device_display_rows(lv_obj_t* page, const lv_font_t* text_font,
   lv_obj_set_style_text_font(out.dim_value, text_font, 0);
   lv_obj_center(out.dim_value);
 
-  // Screensaver style: what the dim timeout shows — bouncing logo or a blank
-  // screen. Hidden while Screen dim is Off (see App's sync of saver_row).
+  // Idle-screen style: what the timeout shows — bouncing logo, the dimmed UI,
+  // or lights out. Hidden while Screen timeout is Off (see App's sync of
+  // saver_row).
   out.saver_row = make_setting_row(page, "Idle screen", text_font);
   out.saver_btn = ui::make_button(out.saver_row);
   lv_obj_set_height(out.saver_btn, btn_size);

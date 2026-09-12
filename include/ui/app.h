@@ -276,14 +276,15 @@ class App {
   // rebuilds — it belongs to the app, not the widget tree.
   lv_timer_t* screensaver_timer_ = nullptr;
   bool screensaver_on_ = false;
-  // Bouncing-logo saver (style 0): a black layer on lv_layer_top with the
-  // recolored lion image drifting DVD-style; torn down on wake.
+  // Saver cover on lv_layer_top (swallows the waking tap): black + the
+  // recolored lion drifting DVD-style (Logo), transparent (Dim), black (Off);
+  // torn down on wake.
   lv_obj_t* saver_layer_ = nullptr;
   lv_obj_t* saver_img_ = nullptr;       // null in Blank style
   lv_timer_t* saver_anim_ = nullptr;
   int saver_vx_ = 0, saver_vy_ = 0;     // px per anim tick
   int saver_color_i_ = 0;               // palette index; advances on bounce
-  void start_screensaver(bool blank);
+  void start_screensaver(int style);  // 0 Logo, 1 Dim (UI stays), 2 Off
   void stop_screensaver();
   // Cleaning lock: a full-screen opaque overlay on the top layer swallows all
   // touch input for kCleanLockSecs while a countdown shows time remaining.

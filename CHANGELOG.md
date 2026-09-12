@@ -5,6 +5,17 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
+## v0.13.1
+
+### Changes
+
+- **The Dim idle screen keeps the screen on.** It now does what it did before
+  the lion arrived: the backlight drops to the low level and the normal screen
+  stays visible, so you can still read the machine's state from across the
+  room. (It had been blanking the screen while leaving the backlight on, which
+  gained nothing over Off.) The first touch still only wakes it. The dim level
+  is set per board and will be tuned as each one is checked.
+
 ## v0.13.0
 
 ### Changes
