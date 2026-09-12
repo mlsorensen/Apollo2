@@ -75,6 +75,8 @@ class Config {
   void set_skipped_update(const std::string& version);
   int update_check_mode() const;   // 0 = off, 1 = on boot (default), 2 = daily
   void set_update_check_mode(int mode);
+  bool beta_channel() const;       // offer pre-releases too (default false)
+  void set_beta_channel(bool on);
   // Boot-flag OTA install: "Install now" writes the target version here and
   // reboots; the early-boot install mode reads it, installs, and clears it.
   std::string pending_install() const;  // "" = no install pending

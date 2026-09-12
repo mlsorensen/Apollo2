@@ -5,9 +5,22 @@ Release's notes (see `.github/workflows/firmware-release.yml`), so keep the
 heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff.
 
-## v0.13.1
+## v0.14.0-beta.1
 
 ### Changes
+
+- **Beta updates.** Settings › Apollo › WiFi has a new **Beta updates** switch
+  (under "Check for updates"). With it on, Apollo also offers pre-release
+  builds — versions like `0.14.0-beta.1` — so a release can be tried on real
+  machines before it goes out to everyone. Everything else works the same: the
+  notice shows what changed, **Install now** installs it, and a build that
+  won't boot rolls back on its own. With the switch off you only ever see
+  normal releases, which is still the default.
+
+  Turning it off while running a beta doesn't move you back by itself — the
+  device stays on that build until a normal release is newer than it. The
+  [web flasher](https://mlsorensen.github.io/Apollo2/) has a matching **Include
+  pre-releases** box for flashing one over USB.
 
 - **The Dim idle screen keeps the screen on.** It now does what it did before
   the lion arrived: the backlight drops to the low level and the normal screen

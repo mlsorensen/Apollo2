@@ -102,6 +102,12 @@ Wi‑Fi and settings (unless you choose "Erase device"). Prebuilt images also li
 on the [Releases](https://github.com/mlsorensen/Apollo2/releases) page — those
 are full images, so flashing one with `esptool` *does* clear saved settings.
 
+After the first flash Apollo updates itself over WiFi: it checks for new
+firmware, shows what changed, and installs on a tap. Tick **Include
+pre-releases** on the flasher (or turn on **Settings → Apollo → WiFi → Beta
+updates** on the device) to run beta builds instead — testing welcome, and a
+build that won't boot rolls back on its own.
+
 Building from source requires [PlatformIO](https://platformio.org/) (`pio`) and
 a USB cable.
 
@@ -368,7 +374,11 @@ That makes the board *buildable*, not *supported*. Releasing one is a separate,
 deliberate step: a row in the `.github/workflows/firmware-release.yml` matrix
 (whose `board` value must equal the block's `kUpdateSlug`, since the
 self‑updater fetches `<site>/<tag>/firmware/app/<slug>.bin`), a card in
-`site/index.html`, and a row in the tables above. Several envs stay on the
+`site/index.html`, and a row in the tables above. Releases are tagged `vX.Y.Z`;
+a `vX.Y.Z-beta.N` tag publishes the same images as a pre-release, listed only in
+`releases-beta.json` (the stable `releases.json` every device reads stays
+releases-only) — promoting one to stable is a rebuild at the real tag, never a
+copy of the artifacts, because `fw::kVersion` is compiled into the image. Several envs stay on the
 buildable side on purpose.
 
 ### Repository layout

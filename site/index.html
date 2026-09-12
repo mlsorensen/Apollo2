@@ -58,6 +58,9 @@
     border-radius: 8px; padding: 6px 10px; font-size: 0.95rem;
   }
   #oldwarn { color: #e6b04c; font-size: 0.9rem; }
+  #betawarn { color: #e6b04c; font-size: 0.9rem; }
+  .verbar label.beta { color: var(--muted); font-size: 0.9rem; display: flex;
+                       align-items: center; gap: 5px; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -81,6 +84,13 @@
     <label for="version">Firmware version:</label>
     <select id="version"><option>loading…</option></select>
     <span id="oldwarn" hidden>&#9888; older release — latest is <span id="latestver"></span></span>
+    <label class="beta"><input type="checkbox" id="showbeta"> Include pre-releases</label>
+  </div>
+  <div class="note warn" id="betawarn" hidden>
+    <b>&#9888; You have a pre-release selected.</b> Betas are for testing and
+    can be rough. To keep receiving them over the air, also turn on
+    <b>Settings &rsaquo; Apollo &rsaquo; WiFi &rsaquo; Beta updates</b> on the
+    device — otherwise it stays on this build until a stable release passes it.
   </div>
 
   <ol>
@@ -193,21 +203,50 @@
       b.setAttribute('manifest', `${version}/manifests/${b.dataset.board}.json`);
     });
     badge.textContent = version;
-    warn.hidden = version === latest;
+    // A pre-release isn't an "older release" — it's newer than latest stable.
+    // Its own banner below says what it is, so don't show both.
+    betawarn.hidden = !version.includes('-');
+    warn.hidden = version === latest || version.includes('-');
   }
 
   if (latest) {
     sel.innerHTML = `<option value="${latest}">${latest} (latest)</option>`;
     apply(latest);
   }
-  fetch('releases.json').then((r) => r.json()).then((versions) => {
-    latest = versions[0];
-    document.getElementById('latestver').textContent = latest;
-    sel.innerHTML = versions.map((v, i) =>
-      `<option value="${v}">${v}${i === 0 ? ' (latest)' : ''}</option>`).join('');
-    sel.value = latest;
-    apply(latest);
-  }).catch(() => {});
+
+  // Two indexes: releases.json is stable-only (what version.js's default comes
+  // from), releases-beta.json merges pre-releases in. The board cards, their
+  // manifests and the detect logic are identical either way — a version
+  // directory is a version directory — so the channel is just which list feeds
+  // this dropdown. ?beta=1 opens the page with pre-releases already shown, for
+  // handing a tester a link.
+  const betabox = document.getElementById('showbeta');
+  const betawarn = document.getElementById('betawarn');
+  if (new URLSearchParams(location.search).get('beta') === '1') betabox.checked = true;
+
+  function loadVersions(keepSelection) {
+    const file = betabox.checked ? 'releases-beta.json' : 'releases.json';
+    return fetch(file)
+      .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .catch(() => fetch('releases.json').then((r) => r.json()))  // no beta index yet
+      .then((versions) => {
+        // "latest" stays the newest STABLE release, so the "older release"
+        // warning keeps meaning the same thing on both lists.
+        const newestStable = versions.find((v) => !v.includes('-'));
+        if (newestStable) latest = newestStable;
+        document.getElementById('latestver').textContent = latest;
+        sel.innerHTML = versions.map((v) =>
+          `<option value="${v}">${v}${v === latest ? ' (latest)' :
+             v.includes('-') ? ' (pre-release)' : ''}</option>`).join('');
+        const want = keepSelection && versions.includes(keepSelection)
+                     ? keepSelection : versions[0];
+        sel.value = want;
+        apply(want);
+      }).catch(() => {});
+  }
+
+  loadVersions();
+  betabox.addEventListener('change', () => loadVersions(sel.value));
   sel.addEventListener('change', () => apply(sel.value));
 
   // Last line of defense against flashing the wrong board's image (the boards

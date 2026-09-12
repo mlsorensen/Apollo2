@@ -18,6 +18,12 @@ constexpr char kSkippedUpdateKey[] = "skipver";
 constexpr char kPendingInstallKey[] = "otainst";  // boot-flag install target version
 constexpr char kUpdateCheckKey[] = "updchk";   // legacy bool (pre-mode)
 constexpr char kUpdateModeKey[] = "updmode";
+// Beta channel opt-in. A NEW key rather than a new update_check_mode value on
+// purpose: an older firmware (an OTA rollback puts one back unattended) indexes
+// its stored cadence straight into a fixed array, so widening that key's range
+// would be an out-of-bounds read in a binary we can no longer patch. An unknown
+// key, by contrast, is simply never read. Only ever ADD keys here.
+constexpr char kBetaChannelKey[] = "updbeta";
 constexpr char kClock24Key[] = "clock24";
 constexpr char kThemeKey[] = "theme";
 constexpr char kFahrenheitKey[] = "fahr";
@@ -434,6 +440,21 @@ void Config::set_update_check_mode(int mode) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putInt(kUpdateModeKey, mode);
+  p.end();
+}
+
+bool Config::beta_channel() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
+  const bool v = p.getBool(kBetaChannelKey, false);
+  p.end();
+  return v;
+}
+
+void Config::set_beta_channel(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kBetaChannelKey, on);
   p.end();
 }
 

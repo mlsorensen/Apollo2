@@ -34,6 +34,8 @@ class UpdateCheck : public core::IUpdateSource {
   void skip_current() override;
   int check_cadence() const override;
   void set_check_cadence(int mode) override;
+  bool beta_channel() const override;
+  void set_beta_channel(bool on) override;
   void request_check() override { check_req_.store(true); }
   bool checking() const override { return check_req_.load() || in_flight_.load(); }
   int check_seq() const override { return seq_.load(); }

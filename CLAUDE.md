@@ -57,6 +57,31 @@ display isn't up.
   flash write. No-op only on the SPI 2-inch dev board (no real update UI there).
   Clock only needed for the cert dates: install mode inherits the RTC and only
   NTP-syncs as a failsafe.
+- BETA CHANNEL (v0.14+): two indexes on the site. `releases.json` is
+  RELEASES ONLY and its format is frozen — every fielded device reads it, and
+  firmware older than the pre-release-aware parser reads "0.14.0-beta.1" as
+  0.14.0 (plain sscanf takes the numbers and ignores the tail), so a beta in
+  that file installs itself on stable devices. `releases-beta.json` merges
+  releases + pre-releases, newest first, and is what a device with
+  Config::beta_channel ("updbeta") fetches instead — ONE fetch either way, and
+  a stable release newer than the last beta still wins. 404 on it falls back to
+  the stable list. Ordering lives in two places that must agree:
+  semver_newer() in update_check.cpp and order_key() in the workflow's pages
+  job (a release outranks every beta of the same number; beta.2 outranks
+  beta.1). Only `-beta.N` is understood — any other pre-release form parses as
+  "not newer" and is ignored. PROMOTING a beta is a REBUILD at the real tag,
+  never a copy of the artifacts: kVersion is compiled in and CI asserts it
+  equals the tag, so a copied binary reports the beta version forever and
+  re-prompts (the v0.12.3 failure). Betas accumulate on gh-pages (keep_files);
+  prune by hand if the list ever gets silly.
+- NVS RULE (settings compatibility): a release may only ADD keys to the `micra`
+  namespace — never change the meaning, type or value RANGE of a key an older
+  shipped build already reads. Every getter is isKey()-guarded with a default,
+  so an unknown key is inert; but stored enums index fixed arrays (kCadence[]),
+  so a widened value is an out-of-bounds read in a binary that can no longer be
+  patched. This is not hypothetical for betas: rollback puts an older image
+  back UNATTENDED. New semantics = new key + read the old one as a fallback
+  (updchk->updmode, ssstyle->ssstyle2, rdychimev->rdychimeu).
 - Rollback: BOOTLOADER_APP_ROLLBACK_ENABLE=y in all cores. main.cpp overrides
   `verifyRollbackLater()` -> true and marks the image valid after 60 s of
   healthy loop() — an image that bootloops is auto-reverted. Consequence:
@@ -103,6 +128,15 @@ existing buffer) over adding memory. Applies to fixes as much as features.
 3. `make build-release` green (or `make build-all` for a platform change).
 4. Commit, push main, then `gh workflow run firmware-release.yml -f tag=vX.Y.Z`
    (CI creates the tag + Release; never build release binaries locally).
+
+**Pushing a beta** is the same four steps with the tag `vX.Y.Z-beta.N` and
+`fw::kVersion` set to `X.Y.Z-beta.N`. CI publishes it as a GitHub pre-release,
+keeps it out of `releases.json` (so only beta-channel devices and the flasher's
+"Include pre-releases" box see it), and falls back to the `## vX.Y.Z` CHANGELOG
+section if there is no `## vX.Y.Z-beta.N` one. **Promoting** it: on the same
+commit, set kVersion to `X.Y.Z`, roll the beta notes up under `## vX.Y.Z`, and
+run the workflow at `vX.Y.Z`. Devices on the beta see the release as newer
+(release > any beta of that number) and update once.
 
 ## Git conventions
 

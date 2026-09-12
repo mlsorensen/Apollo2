@@ -435,6 +435,13 @@ void build_device_wifi_rows(lv_obj_t* page, const lv_font_t* text_font,
   // than every neighbouring button.
   lv_obj_set_style_text_font(out.update_check_value, text_font, 0);
   lv_obj_center(out.update_check_value);
+
+  // Beta channel opt-in. Only meaningful when checks are on at all, so App
+  // hides this row whenever the cadence above reads Off (and when no update
+  // source is wired).
+  out.beta_row = make_setting_row(page, "Beta updates", text_font);
+  out.beta_switch = lv_switch_create(out.beta_row);
+  lv_obj_set_size(out.beta_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 }
 
 // A tappable card row "<label>   <glyph>" that runs an action instead of

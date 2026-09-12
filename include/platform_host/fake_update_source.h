@@ -22,6 +22,8 @@ class FakeUpdateSource : public core::IUpdateSource {
   void skip_current() override { available_ = false; }
   int check_cadence() const override { return cadence_; }
   void set_check_cadence(int mode) override { cadence_ = mode; }
+  bool beta_channel() const override { return beta_; }
+  void set_beta_channel(bool on) override { beta_ = on; }
   void request_check() override { ++seq_; }  // completes instantly in the sim
   bool checking() const override { return false; }
   int check_seq() const override { return seq_; }
@@ -32,6 +34,7 @@ class FakeUpdateSource : public core::IUpdateSource {
  private:
   bool available_ = false;  // renders stay update-free unless a pose asks
   int cadence_ = 1;
+  bool beta_ = false;
   int seq_ = 0;
 };
 

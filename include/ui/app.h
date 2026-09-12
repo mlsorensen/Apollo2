@@ -113,8 +113,10 @@ class App {
   void open_no_update_modal();           // "up to date" notice (forced check, boot)
   void skip_update();                    // modal "Skip this version"
   void cycle_update_cadence();           // "Check for updates": Off/Boot/Daily/Hourly
+  void set_beta_updates(bool on);        // "Beta updates" switch (pre-releases)
   void manual_update_check();            // Stats > Info button -> live check
   void update_result_poll();             // watch check_seq(); show the outcome
+  void sync_beta_row();                  // show/hide "Beta updates" with the cadence
   bool update_ui_active() const { return modal_ != nullptr; }
   // "Install now" -> device main stashes the version and reboots into the
   // early-boot install mode (the download can't run with the full display up).

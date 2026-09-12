@@ -6,6 +6,16 @@ name: firmware release
 # tab (supply the tag). The `v*` prefix is firmware's; the lmtoken tool
 # releases under `lmtoken-v*` (see lmtoken-release.yml).
 #
+# BETA CHANNEL: a tag of the form `vX.Y.Z-beta.N` publishes exactly the same way
+# but as a GitHub PRE-release, and lands only in `releases-beta.json` — the
+# stable `releases.json` that every fielded device reads stays releases-only.
+# (Firmware older than the pre-release-aware parser would read "0.14.0-beta.1"
+# as 0.14.0 and install a beta, so that separation is load-bearing, not tidiness.)
+# Promoting a beta to stable is a REBUILD, never a copy of the artifacts:
+# fw::kVersion is compiled into the image and asserted against the tag below, so
+# a promoted binary would keep reporting its beta version and re-prompt forever.
+# Bump include/version.h + CHANGELOG.md and tag the release proper.
+#
 # Each board's artifact is its PlatformIO `firmware.factory.bin` — a combined
 # image (bootloader + partition table + app at their proper offsets) flashed
 # at offset 0, which is exactly what ESP Web Tools wants: the Pages site
@@ -19,7 +29,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag to create (e.g. v0.1.0)'
+        description: 'Release tag to create (e.g. v0.1.0, or v0.1.0-beta.1)'
         required: true
 
 permissions:
@@ -210,14 +220,34 @@ jobs:
       # publishing binaries always wins over perfect prose.
       - name: Compose release notes
         run: |
-          awk -v tag="${RELEASE_TAG}" '
-            $0 == "## " tag { found = 1; next }
-            found && /^## / { exit }
-            found { print }
-          ' CHANGELOG.md > dist/NOTES.md
+          section() {
+            awk -v tag="$1" '
+              $0 == "## " tag { found = 1; next }
+              found && /^## / { exit }
+              found { print }
+            ' CHANGELOG.md
+          }
+          section "${RELEASE_TAG}" > dist/NOTES.md
+          # A beta usually documents itself under the version it is a beta OF,
+          # so fall back to that section rather than shipping a beta with no
+          # notes at all (the on-device modal shows this same text).
+          BASE_TAG="${RELEASE_TAG%%-beta.*}"
+          if [ ! -s dist/NOTES.md ] && [ "$BASE_TAG" != "$RELEASE_TAG" ]; then
+            section "${BASE_TAG}" > dist/NOTES.md
+          fi
           if [ ! -s dist/NOTES.md ]; then
             echo "::warning::CHANGELOG.md has no '## ${RELEASE_TAG}' section - publishing with install notes only"
           fi
+          case "${RELEASE_TAG}" in
+            *-beta.*)
+              cat >> dist/NOTES.md <<'EOF'
+
+          > **Pre-release.** Devices only see this if **Settings > Apollo > WiFi >
+          > Beta updates** is on, or if it is flashed deliberately from the web
+          > flasher with "Include pre-releases" ticked.
+          EOF
+              ;;
+          esac
           cat >> dist/NOTES.md <<EOF
 
           ---
@@ -248,6 +278,10 @@ jobs:
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           name: ${{ env.RELEASE_TAG }}
+          # A -beta.N tag publishes as a pre-release and must NOT take the
+          # "Latest" badge from the newest stable release.
+          prerelease: ${{ contains(env.RELEASE_TAG, '-beta.') }}
+          make_latest: ${{ !contains(env.RELEASE_TAG, '-beta.') }}
           files: |
             dist/*.bin
             dist/SHA256SUMS.txt
@@ -284,11 +318,18 @@ jobs:
           # notes.txt: this version's CHANGELOG section (same extraction as the
           # release notes). The on-device update check fetches it to show the
           # "what's new" text in its notification modal.
-          awk -v tag="${RELEASE_TAG}" '
-            $0 == "## " tag { found = 1; next }
-            found && /^## / { exit }
-            found { print }
-          ' CHANGELOG.md > "public/${RELEASE_TAG}/notes.txt"
+          section() {
+            awk -v tag="$1" '
+              $0 == "## " tag { found = 1; next }
+              found && /^## / { exit }
+              found { print }
+            ' CHANGELOG.md
+          }
+          section "${RELEASE_TAG}" > "public/${RELEASE_TAG}/notes.txt"
+          BASE_TAG="${RELEASE_TAG%%-beta.*}"   # beta notes fall back to vX.Y.Z's
+          if [ ! -s "public/${RELEASE_TAG}/notes.txt" ] && [ "$BASE_TAG" != "$RELEASE_TAG" ]; then
+            section "${BASE_TAG}" > "public/${RELEASE_TAG}/notes.txt"
+          fi
           cp fw/*.bin "public/${RELEASE_TAG}/firmware/"
           cp -r fw/parts "public/${RELEASE_TAG}/firmware/parts"
           # App-only images the on-device self-updater fetches.
@@ -318,21 +359,48 @@ jobs:
               with open(f"public/{tag}/manifests/{board}.json", "w") as f:
                   json.dump(manifest, f, indent=2)
 
-          # releases.json: every version directory already on the site + this
-          # one, newest first (semver sort). keep_files below preserves the old
-          # directories themselves.
+          # Release indexes: every version directory already on the site + this
+          # one, newest first. keep_files below preserves the old directories
+          # themselves.
+          #
+          # TWO files on purpose:
+          #   releases.json      - RELEASES ONLY. Every fielded device reads it,
+          #                        including firmware whose version parser reads
+          #                        "0.14.0-beta.1" as 0.14.0 (plain sscanf takes
+          #                        the numbers and ignores the tail). Put a beta
+          #                        in here and those devices install it. Frozen.
+          #   releases-beta.json - releases AND pre-releases, merged. A
+          #                        beta-channel device reads just this one file
+          #                        and still gets a stable release that lands
+          #                        newer than the last beta.
+          STABLE = re.compile(r"v\d+\.\d+\.\d+$")
+          BETA = re.compile(r"v\d+\.\d+\.\d+-beta\.\d+$")
+
+          def order_key(v):
+              # Sorts a release ABOVE every beta of the same number
+              # (0.14.0-beta.1 < 0.14.0-beta.2 < 0.14.0), matching the device's
+              # semver_newer() in update_check.cpp.
+              core, _, pre = v[1:].partition("-beta.")
+              return [int(x) for x in core.split(".")] + ([0, int(pre)] if pre
+                                                          else [1, 0])
+
           versions = {tag}
           if os.path.isdir("old"):
               for d in os.listdir("old"):
-                  if re.fullmatch(r"v\d+\.\d+\.\d+", d) and os.path.isdir(f"old/{d}"):
+                  if (STABLE.fullmatch(d) or BETA.fullmatch(d)) and os.path.isdir(f"old/{d}"):
                       versions.add(d)
-          ordered = sorted(versions,
-                           key=lambda v: [int(x) for x in v[1:].split(".")],
-                           reverse=True)
+          ordered = sorted(versions, key=order_key, reverse=True)
+          stable = [v for v in ordered if STABLE.fullmatch(v)]
           with open("public/releases.json", "w") as f:
+              json.dump(stable, f, indent=2)
+          with open("public/releases-beta.json", "w") as f:
               json.dump(ordered, f, indent=2)
+          # The flasher's default stays the newest STABLE release, so publishing
+          # a beta never changes what a first-time visitor flashes (the page's
+          # "include pre-releases" box is how you get one on purpose).
+          default = stable[0] if stable else ordered[0]
           with open("public/version.js", "w") as f:
-              f.write(f'window.APOLLO2_VERSION = "{ordered[0]}";\n')
+              f.write(f'window.APOLLO2_VERSION = "{default}";\n')
           EOF
 
       - name: Deploy to GitHub Pages (gh-pages branch)

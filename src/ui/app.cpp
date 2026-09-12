@@ -628,6 +628,11 @@ void on_ntp_switch(lv_event_t* e) {
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
   app->set_ntp_enabled(lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
+void on_beta_switch(lv_event_t* e) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  app->set_beta_updates(lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
 void on_update_check_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_update_cadence();
 }
@@ -1124,6 +1129,9 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   if (settings_.update_check_btn != nullptr)
     lv_obj_add_event_cb(settings_.update_check_btn, on_update_check_clicked,
                         LV_EVENT_CLICKED, this);
+  if (settings_.beta_switch != nullptr)
+    lv_obj_add_event_cb(settings_.beta_switch, on_beta_switch,
+                        LV_EVENT_VALUE_CHANGED, this);
   lv_obj_add_event_cb(settings_.menu, on_menu_page_changed, LV_EVENT_VALUE_CHANGED, this);
 
   build_stats_tab(stats, screen, stats_);
@@ -1187,8 +1195,13 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
       const int m = updates_->check_cadence();
       lv_label_set_text(settings_.update_check_value,
                         kCadence[(m >= 0 && m <= 3) ? m : 1]);
+      if (updates_->beta_channel())
+        lv_obj_add_state(settings_.beta_switch, LV_STATE_CHECKED);
+      sync_beta_row();
     } else {
       lv_obj_add_flag(settings_.update_check_row, LV_OBJ_FLAG_HIDDEN);
+      if (settings_.beta_row != nullptr)
+        lv_obj_add_flag(settings_.beta_row, LV_OBJ_FLAG_HIDDEN);
     }
     // Select the dropdown row whose POSIX string matches the saved timezone.
     const char* tz = network_->timezone();
@@ -2015,6 +2028,23 @@ void App::cycle_update_cadence() {
   updates_->set_check_cadence(m);
   static const char* kCadence[] = {"Off", "On boot", "Daily", "Hourly"};
   lv_label_set_text(settings_.update_check_value, kCadence[m]);
+  sync_beta_row();
+}
+
+// The beta switch only means anything while checks are running, so it follows
+// the cadence row: visible unless "Check for updates" reads Off. Turning checks
+// off does NOT clear the channel — it comes back as the user left it.
+void App::sync_beta_row() {
+  if (settings_.beta_row == nullptr || updates_ == nullptr) return;
+  if (updates_->check_cadence() == 0) {
+    lv_obj_add_flag(settings_.beta_row, LV_OBJ_FLAG_HIDDEN);
+  } else {
+    lv_obj_remove_flag(settings_.beta_row, LV_OBJ_FLAG_HIDDEN);
+  }
+}
+
+void App::set_beta_updates(bool on) {
+  if (updates_ != nullptr) updates_->set_beta_channel(on);
 }
 
 void App::manual_update_check() {

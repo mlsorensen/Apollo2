@@ -34,6 +34,13 @@ class IUpdateSource {
   virtual int check_cadence() const = 0;
   virtual void set_check_cadence(int mode) = 0;
 
+  // Settings -> Apollo -> WiFi "Beta updates". Off: only stable releases are
+  // offered. On: pre-releases too (the check reads a merged index that lists
+  // both, so a stable release newer than the last beta still wins). Switching
+  // it drops any cached result and re-checks, so the offer matches the channel.
+  virtual bool beta_channel() const = 0;
+  virtual void set_beta_channel(bool on) = 0;
+
   // Manual "Check for updates" (Stats → Info): request a live check. Watch
   // checking() and check_seq() (bumped when any check finishes) for the result.
   virtual void request_check() = 0;

@@ -58,7 +58,7 @@ Settings
 │  ├─ Time & date — Time · Date · 24-hour · Timezone
 │  └─ WiFi        — Enable · Status · Set up WiFi → QR portal · Forget
 │                  · Auto time (NTP) · Check for updates (Off/Boot/Daily/Hourly)
-│                    → notice → Install now
+│                    → notice → Install now · Beta updates
 └─ Lock display for cleaning  → 30 s touch lock
 
 Stats
@@ -490,6 +490,20 @@ page fits on screen with little to no scrolling.
   back to the old one automatically. The
   [web flasher](https://mlsorensen.github.io/Apollo2/) remains the fallback for
   recovery and for a board's very first flash.
+
+- ⑥ **Beta updates** *(default off; shown only while checks are on)* — also
+  offer pre-release builds, named like `0.14.0-beta.1`. Betas ship the next
+  release early so it can be tested on real machines; they are less proven than
+  a normal release, and the notice, the install and the automatic roll-back on
+  a firmware that won't boot all work exactly the same.
+
+  Switching the toggle re-checks straight away, so the next notice matches the
+  channel you picked. Turning it **off** while running a beta does not move you
+  back on its own — the device stays on that build until a stable release is
+  newer than it (`0.14.0` supersedes `0.14.0-beta.2`), which is usually days.
+  To go back sooner, reflash the stable release from the
+  [web flasher](https://mlsorensen.github.io/Apollo2/); your settings and
+  history are kept.
 
 ### Root page
 

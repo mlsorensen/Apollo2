@@ -204,6 +204,8 @@ struct SettingsWidgets {
   lv_obj_t* update_check_row = nullptr;     // "Check for updates" cadence row
   lv_obj_t* update_check_btn = nullptr;     // cycle: Off / On boot / Daily
   lv_obj_t* update_check_value = nullptr;   // its label (hidden if no source)
+  lv_obj_t* beta_row = nullptr;             // "Beta updates" (hidden if cadence Off)
+  lv_obj_t* beta_switch = nullptr;
   lv_obj_t* click_sound_switch = nullptr;  // button-press click (audio boards only)
 };
 
