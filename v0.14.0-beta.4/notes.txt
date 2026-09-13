@@ -1,0 +1,7 @@
+
+### Changes
+
+- **Memory failures now leave evidence.** When an allocation fails, Apollo
+  records who asked and what was filling memory, and prints it after the
+  reboot as `memfail:` lines in the on-device log.
+
