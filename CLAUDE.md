@@ -149,7 +149,7 @@ P4 hosted radio's `sdio_rx_get_buffer` assert, the S3's esp-aes/TLS failures —
 left no memory evidence. `platform::crash_record` hooks the heap's
 failed-allocation callback (runtime API), takes a census of the pool that
 refused the request (requested size + caps + function, totals, used blocks by
-EXACT size, largest free holes) into ~300 B of RTC/LP memory, and the next boot
+EXACT size, largest free holes) into <1 KB of RTC/LP memory (static_assert), and the next boot
 prints it as `memfail:` lines in the log ring. Attribution is by size
 signature (HEAP_TASK_TRACKING is unavailable), which names the big fixed-size
 buffers and not small generic blocks. Dev serial commands: `memfail` forces an
