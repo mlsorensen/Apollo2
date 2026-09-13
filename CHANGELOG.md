@@ -7,7 +7,23 @@ for someone reading the diff. These notes are also shown ON THE DEVICE, whose
 fonts are ASCII-only: stick to characters `sanitize_notes()` (src/ui/app.cpp)
 maps — plain ASCII plus `— – → … × ' "` — or they render as empty boxes.
 
-## Unreleased
+## v0.14.0
+
+Everything since v0.13.0, including what the four betas carried.
+
+### Changes
+
+- **Beta updates.** Settings > Apollo > WiFi has a **Beta updates** switch;
+  with it on, Apollo also offers pre-release builds. Off by default.
+- **Back up your settings to the memory card.** Settings > Apollo > **Backup**
+  writes every preference to the card and **Restore from card** puts them on
+  another Apollo, so replacing the hardware no longer means setting up again.
+  WiFi and the Micra token are each a switch on the confirmation.
+- **The Dim idle screen keeps the screen on.** The backlight drops to the low
+  level and the normal screen stays visible; the first touch still only wakes it.
+- **Memory failures now leave evidence.** When an allocation fails, Apollo
+  records who asked and what was filling memory, and prints it after the
+  reboot as `memfail:` lines in the on-device log.
 
 ### Fixes
 
@@ -16,6 +32,9 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
   network is up, which was starving it of radio time.
 - **The screen stays on during setup.** The idle screen no longer kicks in
   while the token or WiFi setup instructions are showing.
+- **The setup instructions cover the page not opening.** If the setup page
+  doesn't appear after scanning the QR code, the screen now says to open
+  the shown address.
 
 ## v0.14.0-beta.4
 

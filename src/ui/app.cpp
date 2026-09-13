@@ -2625,15 +2625,19 @@ lv_obj_t* App::open_join_modal(const char* title, const char* ssid,
 
   // No em-dash: the Montserrat builds only cover ASCII. Compact gets terse
   // copy — the full text wraps to ~8 lines beside the QR and overflows 240px.
-  char body[224];
+  char body[256];
   if (compact) {
     std::snprintf(body, sizeof(body), "Scan to join, or connect to:\n%s\n%s\n%s",
                   ssid, url, then_line);
   } else {
+    // The captive page usually pops up on its own after the QR join, but not
+    // always (phone-side probe timing), so the address is the fallback for
+    // BOTH paths, not just the manual-join one.
     std::snprintf(body, sizeof(body),
-                  "Scan with your phone's camera to join; the setup page "
-                  "opens by itself.\n\nOr join WiFi: %s\nand open: %s\n%s",
-                  ssid, url, then_line);
+                  "Scan with your phone's camera to join. If the setup page "
+                  "doesn't open by itself, open: %s\n\nOr join WiFi: %s\n"
+                  "and open the same address.\n%s",
+                  url, ssid, then_line);
   }
   lv_obj_t* b = lv_label_create(row);
   lv_label_set_text(b, body);
