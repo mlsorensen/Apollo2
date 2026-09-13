@@ -59,8 +59,16 @@ struct Record {
   uint32_t used_other_bytes;
   uint32_t free_top[kFreeTop];  // largest free holes, descending
   uint32_t walked_blocks;
+  // Investigation knob: the first bytes of up to kPeekN used blocks of exactly
+  // kPeekSize, to identify a size the signature can't (a task stack is 0xA5
+  // fill, an mbuf starts with a pool pointer, a queue with its header).
+  uint8_t peek[4][16];
+  uint8_t peek_n;
+  uint8_t pad2[3];
   uint32_t crc;
 };
+constexpr uint32_t kPeekSize = 2432;  // 2026-09-12: 12x during BLE connects, 8x streaming, 4x TLS
+constexpr int kPeekN = 4;
 
 // Bound the time spent inside the heap lock (interrupts are off on this core
 // while heap_caps_walk holds it): the S3's internal heap is ~500 blocks, the
@@ -83,6 +91,10 @@ bool walker(walker_heap_into_t, walker_block_info_t b, void* user) {
   }
   const uint32_t size = static_cast<uint32_t>(b.size);
   if (b.used) {
+    if (size == kPeekSize && r.peek_n < kPeekN && b.ptr != nullptr) {
+      std::memcpy(r.peek[r.peek_n], b.ptr, sizeof(r.peek[0]));
+      ++r.peek_n;
+    }
     if (size >= kSmallBlock) {
       // Exact-size table, kept as the LARGEST sizes seen: those are the
       // fixed-size buffers a size signature can name. A new larger size
@@ -155,6 +167,15 @@ void log_census(const Record& r, const char* tag) {
   }
   std::snprintf(line + n, sizeof(line) - n, "\n");
   core::logf("%s", line);
+  for (int i = 0; i < r.peek_n; ++i) {
+    n = std::snprintf(line, sizeof(line), "%s: %u-byte block #%d head:", tag,
+                      static_cast<unsigned>(kPeekSize), i);
+    for (int j = 0; j < 16; ++j) {
+      n += std::snprintf(line + n, sizeof(line) - n, " %02x", r.peek[i][j]);
+    }
+    std::snprintf(line + n, sizeof(line) - n, "\n");
+    core::logf("%s", line);
+  }
 }
 
 void census(Record& r, uint32_t caps) {
@@ -259,7 +280,12 @@ void watch_tick(void*) {
     g_watch_last_min = m;
     return;
   }
-  if (m + kStep > g_watch_last_min) return;
+  // Trip on a >= 4 KB step down, or on ANY new low once the pool is under
+  // 8 KB — that is the region where the next step is a failed allocation.
+  constexpr uint32_t kFloor = 8192;
+  const bool step = m + kStep <= g_watch_last_min;
+  const bool near_floor = m < kFloor && m < g_watch_last_min;
+  if (!step && !near_floor) return;
   g_watch_last_min = m;
   if (g_busy) return;  // a failed-alloc census is in flight; it wins
   WatchRecord& w = g_watch;
