@@ -588,6 +588,7 @@ void loop() {
     }
   }
   g_token_setup.handle();    // portal auto-close timeout
+  platform::crash_record::watch();  // DMA-pool low-water tripwire (logs a census)
   g_web_ui.poll();           // S3 boards serve here; no-op on the P4s (task)
 
 #if defined(BOARD_DISPLAY_RGB)

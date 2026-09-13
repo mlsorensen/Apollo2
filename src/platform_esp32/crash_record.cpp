@@ -8,6 +8,7 @@
 #include <esp_heap_caps.h>
 #include <esp_rom_crc.h>
 #include <esp_system.h>
+#include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -128,6 +129,47 @@ uint32_t g_seq = 0;            // failures this boot
 uint32_t g_last_log_ms = 0;    // rate limit for the live log line
 volatile bool g_busy = false;  // the hook must never re-enter itself
 
+void log_census(const Record& r, const char* tag) {
+  core::logf("%s: pool free=%u largest=%u minfree=%u | used %u blocks / %u B | "
+             "free %u blocks%s\n",
+             tag, static_cast<unsigned>(r.free_bytes), static_cast<unsigned>(r.largest_free),
+             static_cast<unsigned>(r.min_free), static_cast<unsigned>(r.used_blocks),
+             static_cast<unsigned>(r.used_bytes), static_cast<unsigned>(r.free_blocks),
+             r.truncated ? " (census truncated at 4096 blocks)" : "");
+  char line[256];
+  int n = std::snprintf(line, sizeof(line), "%s: used >=%uB by block size:", tag,
+                        static_cast<unsigned>(kSmallBlock));
+  for (int i = 0; i < kUsedSizes && r.used[i].count != 0 && n < 200; ++i) {
+    n += std::snprintf(line + n, sizeof(line) - n, " %ux%u",
+                       static_cast<unsigned>(r.used[i].size),
+                       static_cast<unsigned>(r.used[i].count));
+  }
+  std::snprintf(line + n, sizeof(line) - n, "; other %u blocks / %u B\n",
+                static_cast<unsigned>(r.used_other_count),
+                static_cast<unsigned>(r.used_other_bytes));
+  core::logf("%s", line);
+  n = std::snprintf(line, sizeof(line), "%s: largest free holes:", tag);
+  for (int i = 0; i < kFreeTop && r.free_top[i] != 0; ++i) {
+    n += std::snprintf(line + n, sizeof(line) - n, " %u",
+                       static_cast<unsigned>(r.free_top[i]));
+  }
+  std::snprintf(line + n, sizeof(line) - n, "\n");
+  core::logf("%s", line);
+}
+
+void census(Record& r, uint32_t caps) {
+  multi_heap_info_t info = {};
+  heap_caps_get_info(&info, caps);
+  r.free_bytes = info.total_free_bytes;
+  r.largest_free = info.largest_free_block;
+  r.min_free = info.minimum_free_bytes;
+  r.used_blocks = info.allocated_blocks;
+  r.free_blocks = info.free_blocks;
+  r.used_bytes = info.total_allocated_bytes;
+  heap_caps_walk(caps, walker, &r);
+  r.walked = 1;
+}
+
 void fill_failure(Failure& f, size_t size, uint32_t caps, const char* function) {
   std::memset(&f, 0, sizeof(f));
   f.uptime_ms = core::now_ms();
@@ -157,20 +199,9 @@ void on_alloc_failed(size_t size, uint32_t caps, const char* function) {
   r.seq = g_seq;
   r.first = first;
   fill_failure(r.last, size, caps, function);
-  if (!r.last.in_isr) {
-    // Walk the pool that actually refused the request. heap_caps_walk takes
-    // each heap's lock; the failed allocation has already released them.
-    multi_heap_info_t info = {};
-    heap_caps_get_info(&info, caps);
-    r.free_bytes = info.total_free_bytes;
-    r.largest_free = info.largest_free_block;
-    r.min_free = info.minimum_free_bytes;
-    r.used_blocks = info.allocated_blocks;
-    r.free_blocks = info.free_blocks;
-    r.used_bytes = info.total_allocated_bytes;
-    heap_caps_walk(caps, walker, &r);
-    r.walked = 1;
-  }
+  // Walk the pool that actually refused the request. heap_caps_walk takes
+  // each heap's lock; the failed allocation has already released them.
+  if (!r.last.in_isr) census(r, caps);
   r.magic = kMagic;   // covered by the CRC, so set it BEFORE computing
   r.crc = crc_of(r);  // (a torn write fails the CRC check instead)
   // One live line, rate-limited (a starving pool can fail many times a second
@@ -192,6 +223,68 @@ void on_alloc_failed(size_t size, uint32_t caps, const char* function) {
 
 }  // namespace
 
+// Low-water-mark tripwire. A 2 ms esp_timer reads the internal-DMA pool's
+// minimum-free (one counter under the heap lock — microseconds); when it has
+// dropped by >= 4 KB since the last trip, the census runs RIGHT THERE in the
+// esp_timer task (8 KB stack; the walk itself is small) so the transient
+// consumer is still holding its memory. The result goes into a second RTC
+// record — so it also survives if that dip is the one that crashes the board
+// — and loop() prints it (logf's frame stays off the timer task). The 60 s
+// telltale only shows "lowest" stepping down after the fact; on the 4.3C the
+// dips last less than one main-loop iteration.
+struct WatchRecord {
+  uint32_t magic;
+  uint32_t uptime_ms;
+  uint32_t new_low;
+  uint8_t pending;    // 1 = loop() has not printed this yet
+  uint8_t pad[3];
+  Record census;
+  uint32_t crc;
+};
+RTC_NOINIT_ATTR WatchRecord g_watch;
+static_assert(sizeof(WatchRecord) <= 1024, "keep the RTC footprint small");
+uint32_t g_watch_last_min = 0;
+esp_timer_handle_t g_watch_timer = nullptr;
+
+uint32_t watch_crc(const WatchRecord& w) {
+  return esp_rom_crc32_le(0, reinterpret_cast<const uint8_t*>(&w),
+                          sizeof(WatchRecord) - sizeof(w.crc));
+}
+
+void watch_tick(void*) {
+  constexpr uint32_t kCaps = MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA;
+  constexpr uint32_t kStep = 4096;
+  const uint32_t m = heap_caps_get_minimum_free_size(kCaps);
+  if (g_watch_last_min == 0) {
+    g_watch_last_min = m;
+    return;
+  }
+  if (m + kStep > g_watch_last_min) return;
+  g_watch_last_min = m;
+  if (g_busy) return;  // a failed-alloc census is in flight; it wins
+  WatchRecord& w = g_watch;
+  std::memset(&w, 0, sizeof(w));
+  w.uptime_ms = core::now_ms();
+  w.new_low = m;
+  census(w.census, kCaps);
+  w.pending = 1;
+  w.magic = kMagic;
+  w.crc = watch_crc(w);
+}
+
+void watch_start() {
+  const esp_timer_create_args_t args = {
+      .callback = watch_tick,
+      .arg = nullptr,
+      .dispatch_method = ESP_TIMER_TASK,
+      .name = "memwatch",
+      .skip_unhandled_events = true,
+  };
+  if (esp_timer_create(&args, &g_watch_timer) == ESP_OK) {
+    esp_timer_start_periodic(g_watch_timer, 2000);  // 2 ms
+  }
+}
+
 void install() {
   heap_caps_register_failed_alloc_callback(on_alloc_failed);
 }
@@ -206,6 +299,18 @@ void log_failure(const char* which, const Failure& f) {
 }
 
 void report_at_boot() {
+  watch_start();
+  {
+    WatchRecord& w = g_watch;
+    if (w.magic == kMagic && w.crc == watch_crc(w)) {
+      core::logf("memwatch: last new-low census from the previous boot (+%u.%us, %u B):\n",
+                 static_cast<unsigned>(w.uptime_ms / 1000),
+                 static_cast<unsigned>(w.uptime_ms % 1000 / 100),
+                 static_cast<unsigned>(w.new_low));
+      log_census(w.census, "memwatch");
+    }
+    w.magic = 0;
+  }
   Record& r = g_rec;
   if (r.magic != kMagic || r.crc != crc_of(r)) {
     r.magic = 0;
@@ -215,34 +320,19 @@ void report_at_boot() {
              static_cast<unsigned>(r.seq));
   if (r.seq > 1) log_failure("first", r.first);
   log_failure(r.seq > 1 ? "last" : "only one", r.last);
-  if (r.walked) {
-    core::logf("memfail: pool free=%u largest=%u minfree=%u | used %u blocks / %u B | "
-               "free %u blocks%s\n",
-               static_cast<unsigned>(r.free_bytes), static_cast<unsigned>(r.largest_free),
-               static_cast<unsigned>(r.min_free), static_cast<unsigned>(r.used_blocks),
-               static_cast<unsigned>(r.used_bytes), static_cast<unsigned>(r.free_blocks),
-               r.truncated ? " (census truncated at 4096 blocks)" : "");
-    char line[256];
-    int n = std::snprintf(line, sizeof(line), "memfail: used >=%uB by block size:",
-                          static_cast<unsigned>(kSmallBlock));
-    for (int i = 0; i < kUsedSizes && r.used[i].count != 0 && n < 200; ++i) {
-      n += std::snprintf(line + n, sizeof(line) - n, " %ux%u",
-                         static_cast<unsigned>(r.used[i].size),
-                         static_cast<unsigned>(r.used[i].count));
-    }
-    std::snprintf(line + n, sizeof(line) - n, "; other %u blocks / %u B\n",
-                  static_cast<unsigned>(r.used_other_count),
-                  static_cast<unsigned>(r.used_other_bytes));
-    core::logf("%s", line);
-    n = std::snprintf(line, sizeof(line), "memfail: largest free holes:");
-    for (int i = 0; i < kFreeTop && r.free_top[i] != 0; ++i) {
-      n += std::snprintf(line + n, sizeof(line) - n, " %u",
-                         static_cast<unsigned>(r.free_top[i]));
-    }
-    std::snprintf(line + n, sizeof(line) - n, "\n");
-    core::logf("%s", line);
-  }
+  if (r.walked) log_census(r, "memfail");
   r.magic = 0;  // reported once
+}
+
+void watch() {
+  WatchRecord& w = g_watch;
+  if (w.magic != kMagic || !w.pending || w.crc != watch_crc(w)) return;
+  w.pending = 0;
+  w.crc = watch_crc(w);
+  core::logf("memwatch: DMA pool new low %u B at +%u.%us\n", static_cast<unsigned>(w.new_low),
+             static_cast<unsigned>(w.uptime_ms / 1000),
+             static_cast<unsigned>(w.uptime_ms % 1000 / 100));
+  log_census(w.census, "memwatch");
 }
 
 void self_test() {

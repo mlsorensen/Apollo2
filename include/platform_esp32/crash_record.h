@@ -14,5 +14,6 @@ namespace platform::crash_record {
 void install();         // register the hook; call right after log_init()
 void report_at_boot();  // print + clear a record left by the previous boot
 void self_test();       // dev: force one impossible allocation to exercise it
+void watch();           // loop(): print the census the 2 ms sampler took at the last new low
 
 }  // namespace platform::crash_record
