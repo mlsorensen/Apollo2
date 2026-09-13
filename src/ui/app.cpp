@@ -1854,6 +1854,13 @@ void App::screensaver_tick() {
   if (brew_ != nullptr && core::shot_in_flight(brew_->snapshot())) {
     lv_display_trigger_activity(nullptr);
   }
+  // Nor is a setup portal: while the token or WiFi instructions modal is up
+  // the user is on their phone reading the screen's QR/SSID, not touching
+  // the glass, and the saver would blank exactly what they need. (The AP
+  // itself has its own 5 min auto-close in TokenSetup.)
+  if (wifi_setup_shown_ || wifi_portal_shown_) {
+    lv_display_trigger_activity(nullptr);
+  }
   const int mins = settings_.screen_timeout_min;
   const bool idle = mins > 0 && lv_display_get_inactive_time(nullptr) >=
                                     static_cast<uint32_t>(mins) * 60000u;

@@ -14,6 +14,8 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 - **Joining the Micra-Setup WiFi is quick again.** Apollo no longer keeps
   trying to reach the machine and scale over Bluetooth while the setup
   network is up, which was starving it of radio time.
+- **The screen stays on during setup.** The idle screen no longer kicks in
+  while the token or WiFi setup instructions are showing.
 
 ## v0.14.0-beta.4
 
