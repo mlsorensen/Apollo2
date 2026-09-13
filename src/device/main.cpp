@@ -732,19 +732,30 @@ void loop() {
   }
   g_network.poll();          // drive the WiFi station state machine + NTP->RTC
 
-  // Park BLE reconnect scanning while the machine is idle (screensaver on): it
-  // stops the pointless "connect failed" churn when nobody's using the machine
-  // AND frees the ~40 KB of internal RAM the radio's scanning holds — which is
-  // what lets the daily update check (fired only while idle, above) run reliably
-  // on the heap-tight S3. Only NEW (re)connect attempts are suppressed; an
-  // already-established Micra/scale link stays connected. Resumes on wake.
+  // Park BLE (re)connect attempts while the machine is idle (screensaver on)
+  // AND while the setup portal's AP is up. Idle: stops the pointless "connect
+  // failed" churn and frees the internal RAM the radio's connecting holds,
+  // which is what lets the daily update check run reliably on the heap-tight
+  // S3. Portal: every connect attempt is a multi-second radio hold that the
+  // AP's beacons and the phone's join/DHCP handshake must squeeze around —
+  // HW-observed on the 4.3C (2026-09-12): with the scale absent, 13 s
+  // attempts ran throughout a portal session and the phone took ~90 s to
+  // join. The Micra link is released the moment a token is submitted, since
+  // the portal closes on that connect. Only NEW attempts are suppressed; an
+  // established Micra/scale link stays connected.
   {
-    static bool saver_prev = false;
+    static bool micra_prev = false, scale_prev = false;
     const bool saver = g_app.screensaver_active();
-    if (saver != saver_prev) {
-      saver_prev = saver;
-      g_micra.pause_connects(saver);
-      g_scale.pause_connects(saver);
+    const bool portal = g_token_setup.active();
+    const bool park_scale = saver || portal;
+    const bool park_micra = saver || (portal && !g_token_setup.token_submitted());
+    if (park_micra != micra_prev) {
+      micra_prev = park_micra;
+      g_micra.pause_connects(park_micra);
+    }
+    if (park_scale != scale_prev) {
+      scale_prev = park_scale;
+      g_scale.pause_connects(park_scale);
     }
   }
 

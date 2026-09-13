@@ -108,6 +108,7 @@ TokenSetup::TokenSetup(Config& config, MicraLink& link)
 void TokenSetup::start(Mode mode) {
   mode_ = mode;      // an already-open portal switches pages on the next load
   if (active_) return;
+  token_submitted_ = false;
   // Cleanly drop any live station BEFORE switching to AP. Going STA->AP directly
   // (e.g. opening this portal while joined to home WiFi + serving the web app)
   // leaves the softAP's DHCP unable to hand out leases, so clients see the SSID
@@ -147,6 +148,7 @@ void TokenSetup::stop() {
   WiFi.mode(WIFI_OFF);
   active_ = false;
   stop_pending_ = false;
+  token_submitted_ = false;
   core::logf("TokenSetup: AP down\n");
 }
 
@@ -172,6 +174,7 @@ void TokenSetup::handle_save() {
   }
   const std::string t(token.c_str());
   config_.set_token(t);   // persist
+  token_submitted_ = true;  // lets main.cpp un-park the Micra link (see .h)
   link_.set_token(t);     // connect now (clears the bad-token latch)
   core::logf("TokenSetup: token saved\n");
   // Plain-text result for the async form; the AP stays up so a rejected token

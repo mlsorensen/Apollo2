@@ -39,6 +39,12 @@ class TokenSetup {
   void stop();
   void handle();  // pump from loop(); no-op when inactive
   bool active() const { return active_; }
+  // True once a token has been submitted on this portal session: main.cpp
+  // parks BLE connect attempts while the AP is up (they starve the AP of
+  // radio time), but the Micra link must be free to connect the moment a
+  // token arrives — the portal closes on that connect. Written on the
+  // web-server task, read from loop(), hence atomic like active_.
+  bool token_submitted() const { return token_submitted_; }
 
   // Route handlers, invoked by WebUi on the shared server.
   void handle_root();
@@ -66,6 +72,7 @@ class TokenSetup {
   // active_ is read by the web-server task (route dispatch) and written on
   // the main thread (portal lifecycle); wifi_saved_ the reverse. Atomics.
   std::atomic<bool> active_{false};
+  std::atomic<bool> token_submitted_{false};
   bool stop_pending_ = false;
   std::atomic<bool> wifi_saved_{false};
   uint32_t stop_at_ms_ = 0;

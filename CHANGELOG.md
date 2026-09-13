@@ -7,6 +7,14 @@ for someone reading the diff. These notes are also shown ON THE DEVICE, whose
 fonts are ASCII-only: stick to characters `sanitize_notes()` (src/ui/app.cpp)
 maps — plain ASCII plus `— – → … × ' "` — or they render as empty boxes.
 
+## Unreleased
+
+### Fixes
+
+- **Joining the Micra-Setup WiFi is quick again.** Apollo no longer keeps
+  trying to reach the machine and scale over Bluetooth while the setup
+  network is up, which was starving it of radio time.
+
 ## v0.14.0-beta.4
 
 ### Changes
