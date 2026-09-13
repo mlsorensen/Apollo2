@@ -457,19 +457,12 @@ void setup() {
   // See the [[s3-ipc0-nimble-wifi-crash]] notes. (P4 offloads the radio to the
   // C6 via hostedInitBLE() earlier, so this only bites the S3, but the ordering
   // is harmless everywhere.)
-  // Name every FAILED allocation. This is the instrument that was missing all
-  // along: when the DMA pool ran dry mid-TLS, the only trace was a downstream
-  // "esp-aes: Failed to allocate memory" from a vendor tag, and working back to
-  // WHICH pool and HOW MUCH was wanted took an afternoon. The hook fires only on
-  // failure, so it costs nothing in the normal case, and it reports the exact
-  // size, the caps mask (DMA vs 8BIT is the distinction that mattered) and the
-  // calling function. Registered before the radios come up so nothing is missed.
-  heap_caps_register_failed_alloc_callback(
-      [](size_t size, uint32_t caps, const char* fn) {
-        core::logf("ALLOC FAILED: %u bytes caps=0x%x in %s\n",
-                   static_cast<unsigned>(size), static_cast<unsigned>(caps),
-                   fn ? fn : "?");
-      });
+  // Every FAILED allocation is named in the log by the flight recorder
+  // (platform::crash_record, installed right after log_init above): size,
+  // caps mask (DMA vs 8BIT is the distinction that mattered when the DMA pool
+  // ran dry mid-TLS) and calling function, plus a census of the pool that
+  // survives a reboot. IDF keeps ONE failed-alloc callback — registering
+  // another here silently replaces it (that bit us on 2026-09-12).
 
   NimBLEDevice::init("micra-remote");
 

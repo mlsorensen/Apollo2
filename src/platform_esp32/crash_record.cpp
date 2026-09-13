@@ -17,7 +17,7 @@ namespace platform::crash_record {
 namespace {
 
 constexpr uint32_t kMagic = 0x4d454d46;  // "MEMF"
-constexpr int kUsedSizes = 16;  // distinct exact sizes tracked among used blocks
+constexpr int kUsedSizes = 24;  // distinct exact sizes tracked among used blocks (16 filled on the 4.3C)
 constexpr int kFreeTop = 8;     // largest free holes kept
 constexpr uint32_t kSmallBlock = 512;  // used blocks below this are lumped together
 
@@ -119,8 +119,8 @@ void on_alloc_failed(size_t size, uint32_t caps, const char* function) {
     heap_caps_walk(caps, walker, &r);
     r.walked = 1;
   }
-  r.crc = crc_of(r);
-  r.magic = kMagic;
+  r.magic = kMagic;   // covered by the CRC, so set it BEFORE computing
+  r.crc = crc_of(r);  // (a torn write fails the CRC check instead)
   // One live line, rate-limited: a starving pool can fail many times a second
   // and the record already holds the latest.
   if (!r.in_isr && (g_seq == 1 || r.uptime_ms - g_last_log_ms >= 5000u)) {
