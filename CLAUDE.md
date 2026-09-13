@@ -176,6 +176,9 @@ existing buffer) over adding memory. Applies to fixes as much as features.
    the old version and re-prompts forever (v0.12.3, 2026-09-10). CI now fails
    the build if the binary's kVersion != the tag, but bump it first anyway.
 2. `CHANGELOG.md` — real notes under `## vX.Y.Z` (the workflow extracts them).
+   **Concise (owner, 2026-09-12): a bolded lead-in plus one or two sentences
+   per bullet, ~50 words at the very most.** Say what the user sees.
+   Mechanism, history and measurements belong in the commit message.
    **NEVER invent a version heading for unreleased work.** Notes for work that
    isn't tagged yet go under `## Unreleased` at the top; the release commit
    renames that heading to the tag. A `## vX.Y.Z` heading with no matching

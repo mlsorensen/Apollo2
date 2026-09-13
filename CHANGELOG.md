@@ -7,6 +7,14 @@ for someone reading the diff. These notes are also shown ON THE DEVICE, whose
 fonts are ASCII-only: stick to characters `sanitize_notes()` (src/ui/app.cpp)
 maps — plain ASCII plus `— – → … × ' "` — or they render as empty boxes.
 
+## v0.14.0-beta.4
+
+### Changes
+
+- **Memory failures now leave evidence.** When an allocation fails, Apollo
+  records who asked and what was filling memory, and prints it after the
+  reboot as `memfail:` lines in the on-device log.
+
 ## v0.14.0-beta.3
 
 ### Changes
