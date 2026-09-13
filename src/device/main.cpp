@@ -29,6 +29,7 @@
 #include "platform_esp32/c6_update.h"
 #include "platform_esp32/clock.h"
 #include "platform_esp32/config.h"
+#include "platform_esp32/crash_record.h"
 #include "platform_esp32/display.h"
 #include "platform_esp32/display_settings.h"
 #include "platform_esp32/history.h"
@@ -163,6 +164,7 @@ void setup() {
   // Log ring before the first diagnostic, so the banner onward is replayable
   // from Stats > Info or http://<ip>/log after the fact.
   platform::log_init();
+  platform::crash_record::install();  // failed-allocation flight recorder
 
   delay(300);  // let USB-CDC enumerate
   core::logf("\n");
@@ -208,6 +210,7 @@ void setup() {
                  static_cast<unsigned>(cd_size));
   }
 #endif
+  platform::crash_record::report_at_boot();  // what the pool looked like when an alloc failed
   g_config.begin();  // create NVS namespace on first boot (quiets read errors)
 
 #if defined(BOARD_DISPLAY_DSI) || defined(BOARD_DISPLAY_RGB)
@@ -524,6 +527,10 @@ void poll_serial_id() {
         // right one from this. Appended field — existing parsers substring-match.
         core::logf("APOLLO2 BOARD=\"%s\" FW=%s REV=%u\n", board::kName, fw::kVersion,
                    static_cast<unsigned>(efuse_hal_chip_revision()));
+      } else if (n == 7 && std::strcmp(buf, "memfail") == 0) {
+        platform::crash_record::self_test();  // dev: exercise the flight recorder
+      } else if (n == 6 && std::strcmp(buf, "reboot") == 0) {
+        esp_restart();  // dev: soft reset (RTC memory survives, unlike a power cycle)
       } else if (std::strncmp(buf, "padsense=", 9) == 0 ||
                  std::strncmp(buf, "paddrive=", 9) == 0) {
         // Per-UNIT paddle GPIO overrides (NVS; survive reflashes). Repair

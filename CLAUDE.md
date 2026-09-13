@@ -141,6 +141,21 @@ is on — swap hardware and every shot survives while every preference is lost.
   reasoning as the NVS RULE below.
 - Boards without a card slot pass `nullptr` for the port and the page is absent.
 
+## Failed-allocation flight recorder (crash_record.*, 2026-09-12)
+
+Core dumps here hold task stacks only (CONFIG_ESP_COREDUMP_CAPTURE_DRAM is off
+in the prebuilt libs and can't be turned on), so a heap starvation crash — the
+P4 hosted radio's `sdio_rx_get_buffer` assert, the S3's esp-aes/TLS failures —
+left no memory evidence. `platform::crash_record` hooks the heap's
+failed-allocation callback (runtime API), takes a census of the pool that
+refused the request (requested size + caps + function, totals, used blocks by
+EXACT size, largest free holes) into ~300 B of RTC/LP memory, and the next boot
+prints it as `memfail:` lines in the log ring. Attribution is by size
+signature (HEAP_TASK_TRACKING is unavailable), which names the big fixed-size
+buffers and not small generic blocks. Dev serial commands: `memfail` forces an
+impossible allocation to exercise it, `reboot` soft-resets (RTC survives; a
+power cycle does not).
+
 ## Memory budget rule (owner, 2026-09-10)
 
 **Never introduce more RAM use without review and a full explanation.** That
