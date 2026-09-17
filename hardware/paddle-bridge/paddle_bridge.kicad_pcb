@@ -12812,7 +12812,7 @@
 		)
 	)
 	(gr_text "${TITLE} ^{${REVISION}}\n${ISSUE_DATE}\nM Sorensen"
-		(at 131.25 76 180)
+		(at 122.75 87 180)
 		(layer "B.SilkS")
 		(uuid "fa2f5a70-4310-4dbe-8d47-f89de38c2901")
 		(effects
