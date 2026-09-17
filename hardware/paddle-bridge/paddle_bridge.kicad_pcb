@@ -150,7 +150,7 @@
 		)
 		(property "Value" "APOLLO (P4 header GND,52,51,50)"
 			(at 3 7.95 270)
-			(layer "F.Fab")
+			(layer "F.SilkS")
 			(uuid "6fabb6f3-f7df-406b-befb-5325c58e22c1")
 			(effects
 				(font
@@ -2273,7 +2273,7 @@
 		)
 		(property "Value" "MACHINE: paddle + Micra white/black"
 			(at 3 8 90)
-			(layer "F.Fab")
+			(layer "F.SilkS")
 			(uuid "498d228a-4f1f-4ba6-acc7-9c9d5a854f29")
 			(effects
 				(font
