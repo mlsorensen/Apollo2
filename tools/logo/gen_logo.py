@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
-"""Regenerate include/ui/img_lion.h from la-marzocco-lion.svg.
+"""Regenerate the screensaver artwork headers (include/ui/img_*.h) from SVG.
 
-The screensaver's bouncing lion is an LVGL A8 alpha map (shape only, recolored
-at draw time — which is also what makes it the "inverted" light-on-dark logo).
-The header is COMMITTED because rasterizing needs rsvg-convert (brew install
-librsvg); re-run this only when the artwork changes:
+The bouncing screensaver artwork is an LVGL A8 alpha map (shape only,
+recolored at draw time — which is also what makes it the "inverted"
+light-on-dark logo). The headers are COMMITTED because rasterizing needs
+rsvg-convert (brew install librsvg); re-run this only when the artwork changes:
 
-    python3 tools/logo/gen_logo.py
+    python3 tools/logo/gen_logo.py            # every artwork in ARTWORKS
+    python3 tools/logo/gen_logo.py apollo     # just that one
 
 Do NOT substitute qlmanage: its thumbnails squash the tall artwork square
 (that shipped once — a visibly cut-off lion).
+
+Each header carries only the maps plus a `k<Name>Sizes[]` table; the shared
+descriptor builder that picks a tier lives in include/ui/saver_art.h, which
+is also where a new artwork gets its SaverArt enum entry.
 """
 
 import subprocess
@@ -20,62 +25,87 @@ from pathlib import Path
 from PIL import Image
 
 HERE = Path(__file__).resolve().parent
-SVG = HERE / "la-marzocco-lion.svg"
-OUT = HERE.parent.parent / "include/ui/img_lion.h"
+INCLUDE = HERE.parent.parent / "include/ui"
+
+# key -> (source SVG, generated header, symbol prefix)
+ARTWORKS = {
+    "lion": ("la-marzocco-lion.svg", "img_lion.h", "Lion"),
+    "apollo": ("apollo.svg", "img_apollo.h", "Apollo"),
+}
+
+# Every artwork is HEIGHT_TENTHS/10 of the screen height. MUST match
+# kSaverArtHeightTenths in include/ui/saver_art.h: the saver asks for that
+# height and expects a 1:1 tier. 6/10 (owner, 4.3C + P4-5 bench, 2026-09-17):
+# Apollo's hatching only reads at that size, and the lion grew to match.
+HEIGHT_TENTHS = 6
+# What rsvg renders before the LANCZOS downscale to each tier; 2048 keeps
+# Apollo's 1-3 px source hatching crisp at the 480 px tier.
+RASTER_HEIGHT = 2048
+
 # One PRESCALED variant per screen tier, keyed by the screensaver's target
-# height (2/5 of the screen height, see App::start_screensaver), so every board
-# draws its lion 1:1 with NO transform. That matters twice over: a scaled
-# lv_image is markedly more expensive per pixel (~0.77us vs ~0.39us for solid
-# fills, measured on the 4.3C), and LVGL pads a scaled image's invalidation
-# area by its box*(scale-1) -- 6-7x the lion's own area on the P4 panels, the
-# v0.12.0 saver regression there. A8 maps are small (all five together ~150KB
-# of flash), so every image carries the full set and the sim renders them all.
+# height (the artwork's fraction of the screen height, see App::set_saver_art),
+# so every board draws its artwork 1:1 with NO transform. That matters twice
+# over: a scaled lv_image is markedly more expensive per pixel (~0.77us vs
+# ~0.39us for solid fills, measured on the 4.3C), and LVGL pads a scaled
+# image's invalidation area by its box*(scale-1) -- 6-7x the lion's own area
+# on the P4 panels, the v0.12.0 saver regression there. A8 maps are small
+# (~340KB of flash for the lion's five, ~390KB for Apollo's), so every image
+# carries the full set and the sim renders them all.
 #
-#   screen height -> lion height   boards
-#   240           ->  96           S3 2-inch (internal)
-#   480           -> 192           S3 4.3B/4.3C, P4 4.3
-#   600           -> 240           S3 7B (internal)
-#   720           -> 288           P4-5, P4 X 7"
-#   800           -> 320           P4 X 8" / 10.1"
-HEIGHTS = [96, 192, 240, 288, 320]
+#   screen height   boards                       art height (6/10)
+#   240             S3 2-inch (internal)         144
+#   480             S3 4.3B/4.3C, P4 4.3         288
+#   600             S3 7B (internal)             360
+#   720             P4-5, P4 X 7"                432
+#   800             P4 X 8" / 10.1"              480
+SCREEN_HEIGHTS = [240, 480, 600, 720, 800]
 
 
-def main():
+def alpha_map(svg: Path) -> Image.Image:
     with tempfile.TemporaryDirectory() as td:
-        png = Path(td) / "lion.png"
+        png = Path(td) / "art.png"
         subprocess.run(
-            ["rsvg-convert", "--height", "1024", "--keep-aspect-ratio",
-             "-o", str(png), str(SVG)],
+            ["rsvg-convert", "--height", str(RASTER_HEIGHT), "--keep-aspect-ratio",
+             "-o", str(png), str(svg)],
             check=True, capture_output=True)
         im = Image.open(png).convert("RGBA")
     # Alpha map: use the alpha channel when present, else treat dark-on-light.
     a = im.getchannel("A")
     if a.getextrema() == (255, 255):  # opaque render: shape is the dark ink
         a = Image.eval(im.convert("L"), lambda v: 255 - v)
-    # Crop to content, then scale to each target height.
-    a = a.crop(a.getbbox())
+    return a.crop(a.getbbox())  # crop to content
+
+
+def generate(key: str) -> None:
+    svg_name, header, prefix = ARTWORKS[key]
+    svg = HERE / svg_name
+    out = INCLUDE / header
+    a = alpha_map(svg)
 
     lines = [
         "#pragma once",
         "",
-        "// GENERATED by tools/logo/gen_logo.py from tools/logo/la-marzocco-lion.svg",
+        f"// GENERATED by tools/logo/gen_logo.py from tools/logo/{svg_name}",
         "// (committed: regeneration needs rsvg-convert -- `brew install librsvg`;",
         "// NOT qlmanage, which squashes the tall artwork square). A8 alpha maps,",
         "// one prescaled per screen tier, recolored at draw time by the screensaver.",
+        f"// Heights are {HEIGHT_TENTHS}/10 of each screen tier (see kSaverArtHeightTenths in",
+        "// ui/saver_art.h, the descriptor builder).",
         "",
-        "#include <cstddef>",
+        "#include <cstdint>",
         "",
-        '#include "lvgl.h"',
+        '#include "ui/art_map.h"',
         "",
         "namespace ui {",
         "",
     ]
     variants = []
     total = 0
-    for h in HEIGHTS:
+    for screen_h in SCREEN_HEIGHTS:
+        h = screen_h * HEIGHT_TENTHS // 10  # same integer math as ui::saver_art_height
         w = round(a.width * h / a.height)
         data = a.resize((w, h), Image.LANCZOS).tobytes()
-        name = f"kLionMap{h}"
+        name = f"k{prefix}Map{h}"
         variants.append((w, h, name, len(data)))
         total += len(data)
         lines.append(f"inline const uint8_t {name}[{len(data)}] = {{  // {w}x{h}")
@@ -83,54 +113,28 @@ def main():
             lines.append("  " + ",".join(str(b) for b in data[i:i + 24]) + ",")
         lines += ["};", ""]
     lines += [
-        "struct LionSize {",
-        "  int w;",
-        "  int h;",
-        "  const uint8_t* map;",
-        "  size_t size;",
-        "};",
-        "",
-        f"inline constexpr int kLionSizeCount = {len(variants)};",
-        "inline constexpr LionSize kLionSizes[kLionSizeCount] = {",
+        f"inline constexpr int k{prefix}SizeCount = {len(variants)};",
+        f"inline constexpr ArtMap k{prefix}Sizes[k{prefix}SizeCount] = {{",
     ]
     for w, h, name, n in variants:
         lines.append(f"  {{{w}, {h}, {name}, {n}}},")
     lines += [
         "};",
         "",
-        "// The variant whose height is closest to target_h (exact for every board",
-        "// tier the generator lists). Descriptors are built at runtime: nested",
-        "// designated initializers are rejected by C++, and LVGL's struct layout",
-        "// makes them brittle to hardcode.",
-        "inline const lv_image_dsc_t* lion_logo(int target_h) {",
-        "  static lv_image_dsc_t dsc[kLionSizeCount];",
-        "  static bool ready = false;",
-        "  if (!ready) {",
-        "    for (int i = 0; i < kLionSizeCount; ++i) {",
-        "      dsc[i].header.magic = LV_IMAGE_HEADER_MAGIC;",
-        "      dsc[i].header.cf = LV_COLOR_FORMAT_A8;",
-        "      dsc[i].header.w = kLionSizes[i].w;",
-        "      dsc[i].header.h = kLionSizes[i].h;",
-        "      dsc[i].header.stride = kLionSizes[i].w;",
-        "      dsc[i].data_size = kLionSizes[i].size;",
-        "      dsc[i].data = kLionSizes[i].map;",
-        "    }",
-        "    ready = true;",
-        "  }",
-        "  int best = 0;",
-        "  for (int i = 1; i < kLionSizeCount; ++i) {",
-        "    const int d = kLionSizes[i].h - target_h, b = kLionSizes[best].h - target_h;",
-        "    if ((d < 0 ? -d : d) < (b < 0 ? -b : b)) best = i;",
-        "  }",
-        "  return &dsc[best];",
-        "}",
-        "",
         "}  // namespace ui",
     ]
-    OUT.write_text("\n".join(lines) + "\n")
+    out.write_text("\n".join(lines) + "\n")
     sizes = ", ".join(f"{w}x{h}" for w, h, _, _ in variants)
-    print(f"wrote {OUT.relative_to(HERE.parent.parent)} ({sizes}; {total} bytes)")
+    print(f"wrote {out.relative_to(HERE.parent.parent)} ({sizes}; {total} bytes)")
+
+
+def main(argv):
+    keys = argv[1:] or list(ARTWORKS)
+    for key in keys:
+        if key not in ARTWORKS:
+            sys.exit(f"unknown artwork {key!r}; known: {', '.join(ARTWORKS)}")
+        generate(key)
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv)

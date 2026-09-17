@@ -109,7 +109,7 @@ class App {
   void steam_set_enabled(bool on);       // steam boiler on/off switch
   void brightness_adjust(int dir);       // Display brightness +/-
   void cycle_screen_timeout();           // Device "Screen dim": Off / 1 / 5 / 15 / 30 min
-  void cycle_screensaver_style();        // Device "Screensaver": Logo / Blank
+  void cycle_screensaver_style();        // Device "Idle screen": Lion / Apollo / Alternate / Dim / Off
   void screensaver_tick();               // idle-dim poll (from an lv_timer, ~4 Hz)
   void saver_anim_tick();                // bouncing-logo step (from its lv_timer)
   void pose_screensaver();               // sim: force the saver on for a render
@@ -314,12 +314,18 @@ class App {
   // Saver cover on lv_layer_top (swallows the waking tap): black + the
   // recolored lion drifting DVD-style (Logo), transparent (Dim), black (Off);
   // torn down on wake.
-  lv_obj_t* saver_layer_ = nullptr;
-  lv_obj_t* saver_img_ = nullptr;       // null in Blank style
+  lv_obj_t* saver_layer_ = nullptr;     // top-layer cover: Dim (transparent) and Off (black)
+  lv_obj_t* saver_screen_ = nullptr;    // the artworks' own black screen (loaded in place of the UI)
+  lv_obj_t* saver_prev_screen_ = nullptr;  // the UI screen to load back on wake
+  lv_obj_t* saver_img_ = nullptr;       // null in the Dim and Off styles
   lv_timer_t* saver_anim_ = nullptr;
   int saver_vx_ = 0, saver_vy_ = 0;     // px per anim tick
   int saver_color_i_ = 0;               // palette index; advances on bounce
-  void start_screensaver(int style);  // 0 Logo, 1 Dim (UI stays), 2 Off
+  int saver_art_ = 0;                   // ui::SaverArt currently on screen
+  bool saver_alternate_ = false;        // Alternate style: swap the art on a timer
+  uint32_t saver_art_since_ = 0;        // lv_tick when saver_art_ went up
+  void start_screensaver(int style);  // core::IDisplaySettings::SaverStyle
+  void set_saver_art(int art);        // (re)size + source the bouncing image
   void stop_screensaver();
   // Cleaning lock: a full-screen opaque overlay on the top layer swallows all
   // touch input for kCleanLockSecs while a countdown shows time remaining.

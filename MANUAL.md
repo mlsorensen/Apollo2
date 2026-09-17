@@ -53,7 +53,7 @@ Settings
 │  │                    · Drop negative g/s · Oscilloscope graph
 │  └─ Device settings — the scale's own settings (Beep · Auto-off/sleep · Unit …)
 ├─ Apollo
-│  ├─ Display     — Brightness* · Screen timeout · Idle screen (Logo/Dim/Off)
+│  ├─ Display     — Brightness* · Screen timeout · Idle screen (Lion/Apollo/Alternate/Dim/Off)
 │  │               · Theme · Fahrenheit · Button sounds* · Performance overlay
 │  ├─ Time & date — Time · Date · 24-hour · Timezone
 │  ├─ WiFi        — Enable · Status · Set up WiFi → QR portal · Forget
@@ -406,16 +406,19 @@ page fits on screen with little to no scrolling.
   screen. A shot in progress never counts as idle, so the idle screen won't
   cover a live shot no matter how short the timeout — the countdown restarts
   when the shot ends.
-- ③ **Idle screen** *(Logo / Dim / Off, default Logo; shown while Screen
-  timeout is on)* — what the timeout shows. **Logo** turns the backlight down
-  (to 10 % on the S3 boards, 5 % on the P4s — low enough to read as asleep, high
-  enough that the panel isn't mistaken for switched off) and bounces a logo
-  around a black screen, changing color at every wall it hits.
+- ③ **Idle screen** *(Lion / Apollo / Alternate / Dim / Off, default Lion; shown
+  while Screen timeout is on)* — what the timeout shows. **Lion** and
+  **Apollo** turn the backlight down (to 10 % on the S3 boards, 5 % on the
+  P4s — low enough to read as asleep, high enough that the panel isn't
+  mistaken for switched off) and bounce that drawing around a black screen,
+  changing color at every wall it hits — the La Marzocco lion, or Apollo
+  sipping an espresso. **Alternate** does the same, starting on either one and
+  switching to the other every three minutes.
   **Dim** turns the backlight down the same way but leaves the normal screen
   showing, so you can still glance at the machine from across the kitchen.
   **Off** switches the backlight off entirely. On boards whose backlight can't
-  be turned down, Logo and Dim show at full brightness — choose Off there to go
-  dark.
+  be turned down, the drawings and Dim show at full brightness — choose Off
+  there to go dark.
 
 - ④ **Theme** — tap to cycle the color scheme: Midnight, Graphite, Espresso,
   Nord, Solarized, Plum, Forest, Rose, Mono (black & white), Contrast (high

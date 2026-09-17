@@ -1,5 +1,7 @@
 #include "platform_esp32/config.h"
 
+#include "core/display_settings.h"
+
 #include <Preferences.h>
 #include <cmath>
 
@@ -14,6 +16,7 @@ constexpr char kBrightnessKey[] = "bright";
 constexpr char kScreenTimeoutKey[] = "scrtimeout";
 constexpr char kSaverStyleKey[] = "ssstyle";   // legacy: 0=Logo, 1=Blank
 constexpr char kSaverStyle2Key[] = "ssstyle2";  // 0=Logo, 1=Dim, 2=Off
+constexpr char kSaverArtKey[] = "ssart";        // Logo artwork: 0=Lion, 1=Apollo, 2=Alternate
 constexpr char kSkippedUpdateKey[] = "skipver";
 constexpr char kPendingInstallKey[] = "otainst";  // boot-flag install target version
 constexpr char kUpdateCheckKey[] = "updchk";   // legacy bool (pre-mode)
@@ -468,26 +471,47 @@ void Config::set_pending_install(const std::string& version) {
 }
 
 int Config::screensaver_style() const {
-  // 0 = Logo, 1 = Dim, 2 = Off. "Dim" was inserted at 1 when the third style
-  // landed, which would have flipped existing "Blank" users (old index 1) to
-  // Dim. So the value moved to a new key and the old one migrates: old 1
-  // (Blank) -> new 2 (Off). Same pattern as update_check_mode's bool->int move.
+  // The UI's SaverStyle index (Lion/Apollo/Alternate/Dim/Off) is TWO keys here:
+  //   ssstyle2  0 = Logo, 1 = Dim, 2 = Off -- every shipped build reads this,
+  //             and its range is frozen (NVS add-only rule).
+  //   ssart     which Logo artwork: 0 = Lion, 1 = Apollo, 2 = Alternate. Added
+  //             with the artwork choice; an older build simply never reads it
+  //             and keeps bouncing the lion, so a rollback lands sensibly.
+  // "Dim" was inserted at ssstyle2's index 1 when the third style landed,
+  // which would have flipped existing "Blank" users (legacy ssstyle index 1)
+  // to Dim. So the value moved to ssstyle2 and the legacy key migrates: old 1
+  // (Blank) -> 2 (Off). Same pattern as update_check_mode's bool->int move.
+  using core::IDisplaySettings;
   Preferences p;
-  if (!p.begin(kNamespace, /*readOnly=*/true)) return 0;
-  int v = 0;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return IDisplaySettings::kSaverLion;
+  int style = 0;
   if (p.isKey(kSaverStyle2Key)) {
-    v = p.getInt(kSaverStyle2Key, 0);
+    style = p.getInt(kSaverStyle2Key, 0);
   } else if (p.isKey(kSaverStyleKey)) {
-    v = p.getInt(kSaverStyleKey, 0) == 1 ? 2 : 0;
+    style = p.getInt(kSaverStyleKey, 0) == 1 ? 2 : 0;
   }
+  int art = p.getInt(kSaverArtKey, IDisplaySettings::kSaverLion);
   p.end();
-  return v;
+  if (art < 0 || art >= IDisplaySettings::kSaverDim) art = IDisplaySettings::kSaverLion;
+  if (style == 1) return IDisplaySettings::kSaverDim;
+  if (style == 2) return IDisplaySettings::kSaverOff;
+  return art;
 }
 
 void Config::set_screensaver_style(int style) {
+  using core::IDisplaySettings;
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
-  p.putInt(kSaverStyle2Key, style);  // see screensaver_style() for the migration
+  if (style == IDisplaySettings::kSaverDim) {
+    p.putInt(kSaverStyle2Key, 1);
+  } else if (style == IDisplaySettings::kSaverOff) {
+    p.putInt(kSaverStyle2Key, 2);
+  } else {
+    // An artwork: Logo for the old key, and remember which one. Dim/Off leave
+    // ssart alone so the artwork choice survives a detour through them.
+    p.putInt(kSaverStyle2Key, 0);
+    p.putInt(kSaverArtKey, style);
+  }
   p.end();
 }
 

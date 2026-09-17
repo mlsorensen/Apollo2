@@ -7,6 +7,19 @@ for someone reading the diff. These notes are also shown ON THE DEVICE, whose
 fonts are ASCII-only: stick to characters `sanitize_notes()` (src/ui/app.cpp)
 maps — plain ASCII plus `— – → … × ' "` — or they render as empty boxes.
 
+## v0.14.1
+
+### Changes
+
+- **Apollo joins the idle screen.** Settings > Device > Display > **Idle
+  screen** now offers **Lion**, **Apollo** (a new drawing of Apollo sipping an
+  espresso) or **Alternate**, which switches between the two every three minutes,
+  alongside Dim and Off. Existing Logo setups become Lion.
+- **A bigger, smoother idle screen.** The bouncing drawing is half again as
+  tall, moves one pixel per frame, and no longer redraws the hidden Home
+  screen underneath itself, so it holds its frame rate at the larger size.
+  Waking is as quick as a tab switch.
+
 ## v0.14.0
 
 Everything since v0.13.0, including what the four betas carried.

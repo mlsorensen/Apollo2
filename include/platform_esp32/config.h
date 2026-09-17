@@ -74,7 +74,7 @@ class Config {
 
   int screen_timeout_min() const;  // dim after this many idle minutes (0 = off; default 30)
   void set_screen_timeout_min(int minutes);
-  int screensaver_style() const;   // 0 = bouncing logo (default), 1 = blank
+  int screensaver_style() const;   // core::IDisplaySettings::SaverStyle index
   void set_screensaver_style(int style);
   std::string skipped_update() const;  // version the user chose to skip ("" = none)
   void set_skipped_update(const std::string& version);

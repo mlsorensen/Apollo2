@@ -43,10 +43,11 @@ namespace {
 // its box*(scale-1) -- a 6-7x dirty area on the P4 panels that upscale; see
 // start_screensaver). Fails the sim run rather than silently rendering.
 bool check_saver_dirty_area(const ui::ScreenProfile& screen) {
-  lv_obj_t* layer = lv_obj_get_child(lv_layer_top(), -1);
-  lv_obj_t* img = layer != nullptr ? lv_obj_get_child(layer, 0) : nullptr;
+  // The artwork saver is its own loaded screen holding just the image.
+  lv_obj_t* scr = lv_screen_active();
+  lv_obj_t* img = lv_obj_get_child_count(scr) == 1 ? lv_obj_get_child(scr, 0) : nullptr;
   if (img == nullptr) {
-    std::fprintf(stderr, "error: screensaver image not found on the top layer\n");
+    std::fprintf(stderr, "error: screensaver image not found on the saver screen\n");
     return false;
   }
   const int w = lv_obj_get_width(img), h = lv_obj_get_height(img);
@@ -55,12 +56,12 @@ bool check_saver_dirty_area(const ui::ScreenProfile& screen) {
                       static_cast<int>(lv_image_get_scale_x(img)) / LV_SCALE_NONE;
   const int drawn_h = static_cast<int>(lv_image_get_src_height(img)) *
                       static_cast<int>(lv_image_get_scale_y(img)) / LV_SCALE_NONE;
-  std::printf("saver %dx%d: lion box %dx%d drawn %dx%d ext_draw %d -> %d px/frame\n",
+  std::printf("saver %dx%d: art box %dx%d drawn %dx%d ext_draw %d -> %d px/frame\n",
               screen.width, screen.height, w, h, drawn_w, drawn_h, ext,
               (w + 2 * ext) * (h + 2 * ext));
   const bool box_ok = drawn_w >= w - 1 && drawn_w <= w && drawn_h >= h - 1 && drawn_h <= h;
   if (!box_ok || ext != 0) {
-    std::fprintf(stderr, "error: screensaver lion invalidates more than it draws\n");
+    std::fprintf(stderr, "error: screensaver art invalidates more than it draws\n");
     return false;
   }
   return true;
@@ -103,7 +104,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   if (toast)
     app.show_toast("Shot not started: Auto shot is enabled. "
                    "Connect the scale or switch to Manual mode.");
-  if (screensaver) app.pose_screensaver();  // bouncing-logo saver, start pose
+  if (screensaver) app.pose_screensaver();  // bouncing-art saver, start pose
   if (update_modal) app.open_update_modal();
   // 1 = back-up confirm, 2 = the same with WiFi opted out, 3 = restore confirm
   // (4 = its "backup is newer than this firmware" refusal, posed by the fake),
@@ -235,6 +236,16 @@ int main() {
           false, -1, 0, false, false, false, false, false, true);
   ok &= r({800, 480}, "renders/screensaver_800x480.png", 0, -1, false, 0, -1,
           false, -1, 0, false, false, false, false, false, true);
+  // The Apollo artwork (Idle screen: Apollo) at the same tiers -- taller
+  // aspect than the lion, so its widths and dirty areas differ.
+  disp.set_screensaver_style(core::IDisplaySettings::kSaverApollo);
+  ok &= r({800, 480}, "renders/screensaver_apollo_800x480.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, false, false, false, true);
+  ok &= r({1280, 720, 1.5f}, "renders/screensaver_apollo_1280x720.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, false, false, false, true);
+  ok &= r({320, 240}, "renders/screensaver_apollo_320x240.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, false, false, false, true);
+  disp.set_screensaver_style(core::IDisplaySettings::kSaverLion);
   // Update-available modal (canned notes from FakeUpdateSource).
   updates.set_available(true);
   ok &= r({800, 480}, "renders/update_modal_800x480.png", 0, -1, false, 0, -1,

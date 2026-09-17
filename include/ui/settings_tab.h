@@ -165,7 +165,7 @@ struct SettingsWidgets {
   lv_obj_t* dim_value = nullptr;
   int screen_timeout_min = 0;
 
-  // Screensaver style cycle button (Logo / Blank); the whole row hides while
+  // Idle-screen style cycle button (Lion / Apollo / Alternate / Dim / Off); the whole row hides while
   // Screen dim is Off — no timeout, nothing to style.
   lv_obj_t* saver_row = nullptr;
   lv_obj_t* saver_btn = nullptr;

@@ -38,7 +38,7 @@ class FakeDisplaySettings : public core::IDisplaySettings {
  private:
   int brightness_ = 80;
   int screen_timeout_min_ = 30;  // matches the device default
-  int screensaver_style_ = 0;    // 0 = bouncing logo (device default)
+  int screensaver_style_ = 0;    // kSaverLion, the device default
   int theme_ = 0;
   bool fahrenheit_ = false;
   bool drop_negative_flow_ = true;
