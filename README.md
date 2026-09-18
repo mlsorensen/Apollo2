@@ -2,7 +2,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/apollo-logo-dark.png">
-  <img align="right" width="170" src="docs/img/apollo-logo.png"
+  <img align="left" width="96" src="docs/img/apollo-logo.png"
        alt="Apollo, laurel-crowned, sipping an espresso">
 </picture>
 
