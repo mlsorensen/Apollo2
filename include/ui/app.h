@@ -194,6 +194,7 @@ class App {
   void review_hold_adjust(int dir);  // Scale settings: review-hold stepper (5s steps)
   void detect_lead_in_adjust(int dir);  // Scale settings: detect lead-in stepper (1s steps)
   void cycle_flow_smooth();          // Scale settings: Off/Light/Medium/Strong
+  void cycle_shot_window_growth();   // Scale settings: Snap/Smooth/Continuous
   void cycle_flush();                // Micra settings "Auto flush": Off / 3 s / 6 s
   void cycle_flush_delay();          // Micra settings "Flush delay": 3 / 6 / 9 / 15 s
   void set_auto_connect(bool on) {   // Micra settings: connect to saved machine at boot
@@ -209,7 +210,7 @@ class App {
   // Sim-only pose: seed the unwired capture ring with a synthetic pre-shot
   // baseline + pour ramp and run the mid-shot handoff as if the detector just
   // confirmed — renders the back-filled live shot plot deterministically.
-  void pose_unwired_midshot();
+  void pose_unwired_midshot(uint32_t shot_ms = 9000);
   void zoom_step(int dir);                // Stats time-axis zoom: -1 in, +1 out
   void commit_temp_edits();              // write pending temp edits (on exit)
 

@@ -778,6 +778,16 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_t* rs = make_setting_row(out.scale_settings_page, "Oscilloscope graph", font);
     out.scope_graph_switch = lv_switch_create(rs);
     lv_obj_set_size(out.scope_graph_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
+    // Shot-graph X-window growth: tap cycles Snap / Smooth / Continuous.
+    lv_obj_t* rg = make_setting_row(out.scale_settings_page, "Window growth", font);
+    out.xgrow_btn = ui::make_button(rg);
+    lv_obj_set_height(out.xgrow_btn, btn_size);
+    lv_obj_set_style_pad_hor(out.xgrow_btn, ui::dp(14), 0);
+    lv_obj_set_style_bg_color(out.xgrow_btn, lv_color_hex(ui::theme::card()), 0);
+    out.xgrow_value = lv_label_create(out.xgrow_btn);
+    lv_obj_set_style_text_color(out.xgrow_value, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(out.xgrow_value, font, 0);
+    lv_obj_center(out.xgrow_value);
 
   }
 

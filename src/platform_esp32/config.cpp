@@ -75,6 +75,7 @@ constexpr char kPadDriveKey[] = "paddrive";  // per-UNIT paddle drive GPIO overr
 constexpr char kFlushDelayKey[] = "flushd";  // cup-off -> flush pause seconds
 constexpr char kLeadInKey[] = "leadin";      // detect-mode preinfusion lead-in seconds
 constexpr char kFlowSmoothKey[] = "flowsmth";
+constexpr char kShotXGrowKey[] = "shotxgrow";  // shot-graph X-window growth style
 constexpr char kWifiEnKey[] = "wifi_en";
 constexpr char kWifiSsidKey[] = "ssid";
 constexpr char kWifiPassKey[] = "wifipass";
@@ -224,6 +225,21 @@ void Config::set_flow_smooth(int level) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putInt(kFlowSmoothKey, level);
+  p.end();
+}
+
+int Config::shot_window_growth() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 2;
+  const int v = p.isKey(kShotXGrowKey) ? p.getInt(kShotXGrowKey, 2) : 2;
+  p.end();
+  return v;
+}
+
+void Config::set_shot_window_growth(int mode) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putInt(kShotXGrowKey, mode);
   p.end();
 }
 

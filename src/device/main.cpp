@@ -564,19 +564,26 @@ void poll_serial_id() {
 void loop() {
   poll_serial_id();          // web-flasher "which board is this?" responder
   g_brew.poll(millis());     // paddle relay + shot state machine (edge-critical)
-  g_app.pump_scale_chart();  // drain the scale's flow stream into the graph (fast)
   // Frame-cost telemetry, replacing LVGL's on-screen perf overlay (which is a
   // DEBUG tool that had been shipping enabled -- see lv_conf.h -- and which
-  // redraws every frame, inflating the very numbers it reports). This costs one
-  // micros() pair per iteration and reports over serial instead of on the glass.
+  // redraws every frame, inflating the very numbers it reports). This costs
+  // two micros() pairs per iteration and reports over serial instead of on
+  // the glass. The graph pump is timed separately: a shot plot's full-canvas
+  // repaints (window growth, Y rescale) land there, not in lv_timer_handler.
   {
+    const uint32_t tp0 = micros();
+    g_app.pump_scale_chart();  // drain the scale's flow stream into the graph
+    const uint32_t pump_dt = micros() - tp0;
     const uint32_t t0 = micros();
     lv_timer_handler();      // LVGL render/input
     const uint32_t dt = micros() - t0;
     static uint32_t acc = 0, iters = 0, worst = 0, last = 0;
+    static uint32_t pacc = 0, pworst = 0;
     acc += dt;
+    pacc += pump_dt;
     ++iters;
     if (dt > worst) worst = dt;
+    if (pump_dt > pworst) pworst = pump_dt;
     if (millis() - last >= 60000) {  // telltale cadence, matches the heap line
       last = millis();
       core::logf("lvgl: %u frames, avg %u us, worst %u us (%u%% of wall)\n",
@@ -584,7 +591,12 @@ void loop() {
                  static_cast<unsigned>(iters ? acc / iters : 0),
                  static_cast<unsigned>(worst),
                  static_cast<unsigned>(acc / 600000));  // % of the 60s window
+      core::logf("pump: avg %u us, worst %u us (%u%% of wall)\n",
+                 static_cast<unsigned>(iters ? pacc / iters : 0),
+                 static_cast<unsigned>(pworst),
+                 static_cast<unsigned>(pacc / 600000));
       acc = iters = worst = 0;
+      pacc = pworst = 0;
     }
   }
   g_token_setup.handle();    // portal auto-close timeout

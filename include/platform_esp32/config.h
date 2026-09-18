@@ -68,6 +68,8 @@ class Config {
   void set_flush_delay_s(int seconds);
   int flow_smooth() const;             // shot-graph smoothing level 0..3 (default 1)
   void set_flow_smooth(int level);
+  int shot_window_growth() const;      // shot-graph X growth 0..2 (default 2 = continuous)
+  void set_shot_window_growth(int mode);
 
   int brightness() const;     // screen brightness 0..100 (default 100)
   void set_brightness(int percent);

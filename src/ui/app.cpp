@@ -527,6 +527,9 @@ void on_wired_paddle_switch(lv_event_t* e) {
 void on_smooth_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_flow_smooth();
 }
+void on_xgrow_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_shot_window_growth();
+}
 void on_flush_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_flush();
 }
@@ -605,6 +608,9 @@ void set_flush_delay_label(ui::SettingsWidgets& s, int delay_s) {
 // Graph smoothing levels (IDisplaySettings::flow_smooth 0..3). The kernels
 // themselves live with the painters in home_tab.cpp (kSmoothLevels).
 constexpr const char* kSmoothName[] = {"Off", "Light", "Medium", "Strong"};
+// Shot-graph X-window growth (IDisplaySettings::shot_window_growth 0..2); the
+// mapping itself lives in home_tab.cpp (shot_live_mapping).
+constexpr const char* kWindowGrowthName[] = {"Snap", "Smooth", "Continuous"};
 
 // Screen-dim timeout choices (IDisplaySettings::screen_timeout_min).
 constexpr int kDimMinutes[] = {0, 1, 5, 15, 30};
@@ -1114,6 +1120,14 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
       lv_label_set_text(settings_.smooth_value, kSmoothName[level & 3]);
     ui::set_shot_smoothing(home_, level & 3);
     lv_obj_add_event_cb(settings_.smooth_btn, on_smooth_clicked, LV_EVENT_CLICKED, this);
+  }
+  if (settings_.xgrow_btn != nullptr) {
+    int mode = display_ != nullptr ? display_->shot_window_growth() : 2;
+    if (mode < 0 || mode > 2) mode = 2;
+    if (settings_.xgrow_value != nullptr)
+      lv_label_set_text(settings_.xgrow_value, kWindowGrowthName[mode]);
+    ui::set_shot_window_growth(home_, mode);
+    lv_obj_add_event_cb(settings_.xgrow_btn, on_xgrow_clicked, LV_EVENT_CLICKED, this);
   }
   lv_obj_add_event_cb(settings_.target_plus, on_target_plus, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.brew_minus, on_brew_minus, LV_EVENT_ALL, this);
@@ -1832,6 +1846,16 @@ void App::cycle_flow_smooth() {
   ui::set_shot_smoothing(home_, level);
 }
 
+void App::cycle_shot_window_growth() {
+  if (display_ == nullptr) return;
+  int mode = display_->shot_window_growth();
+  mode = (mode + 1) % 3;
+  display_->set_shot_window_growth(mode);
+  if (settings_.xgrow_value != nullptr)
+    lv_label_set_text(settings_.xgrow_value, kWindowGrowthName[mode]);
+  ui::set_shot_window_growth(home_, mode);
+}
+
 void App::cycle_screen_timeout() {
   if (display_ == nullptr) return;
   int i = 0;
@@ -2356,20 +2380,24 @@ void App::dismiss_toast() {
   }
 }
 
-void App::pose_unwired_midshot() {
+void App::pose_unwired_midshot(uint32_t shot_ms) {
   // Sim-only. Fill the ring exactly as unwired_ring_tick would have — absolute
-  // stamps, raw grams (cup on the untared scale) — covering a quiet baseline,
-  // then lever-on at now-9s, flow onset (first drip) at now-6s, a ~2 g/s pour
-  // since. Then run the handoff the entering-brew branch runs at detection.
+  // stamps, raw grams (cup on the untared scale) — covering an 11 s quiet
+  // baseline, then lever-on at now-shot_ms (9 s by default), flow onset (first
+  // drip) 3 s later, a ~2 g/s pour since. Then run the handoff the
+  // entering-brew branch runs at detection. A longer shot_ms parks the plot
+  // past the 15 s window so the growth styles render squeezed.
   // The sim's lv_tick is nearly 0 at render time, so these absolute stamps
   // wrap negative — fine: every consumer diffs them modularly, exactly like a
   // device tick rollover mid-ring.
   const uint32_t now = lv_tick_get();
   const float baseline = 315.2f;
-  const uint32_t t_lever = now - 9000, t_onset = now - 6000;
-  constexpr int kN = 200;  // 20 s at the ring's 100 ms cadence (< kShotCap)
+  const uint32_t t_lever = now - shot_ms, t_onset = t_lever + 3000;
+  const uint32_t span_ms = shot_ms + 11000;  // 20 s at the default
+  int kN = static_cast<int>(span_ms / 100);  // the ring's 100 ms cadence
+  if (kN > ui::HomeWidgets::kShotCap) kN = ui::HomeWidgets::kShotCap;
   for (int i = 0; i < kN; ++i) {
-    const uint32_t t = now - 20000 + static_cast<uint32_t>(i + 1) * 100;
+    const uint32_t t = now - span_ms + static_cast<uint32_t>(i + 1) * 100;
     const int32_t since_onset = static_cast<int32_t>(t - t_onset);
     home_.shot_ts[i] = t;
     home_.shot_weights[i] =

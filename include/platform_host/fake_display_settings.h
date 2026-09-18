@@ -26,6 +26,8 @@ class FakeDisplaySettings : public core::IDisplaySettings {
   void set_scope_graph(bool on) override { scope_graph_ = on; }
   int flow_smooth() const override { return flow_smooth_; }
   void set_flow_smooth(int level) override { flow_smooth_ = level; }
+  int shot_window_growth() const override { return shot_window_growth_; }
+  void set_shot_window_growth(int mode) override { shot_window_growth_ = mode; }
   bool perf_overlay() const override { return perf_overlay_; }
   void set_perf_overlay(bool on) override { perf_overlay_ = on; }
   bool click_sound() const override { return click_sound_; }
@@ -44,6 +46,7 @@ class FakeDisplaySettings : public core::IDisplaySettings {
   bool drop_negative_flow_ = true;
   bool scope_graph_ = true;  // matches the device default
   int flow_smooth_ = 1;      // light
+  int shot_window_growth_ = 2;  // continuous, the device default
   bool perf_overlay_ = false;
   bool click_sound_ = true;
   int ready_chime_volume_ = 50;  // matches the device default

@@ -78,6 +78,12 @@ class IDisplaySettings {
   virtual int flow_smooth() const = 0;
   virtual void set_flow_smooth(int level) = 0;
 
+  // Shot-graph X-window growth: 0 = snap (15 s steps), 1 = smooth (the same
+  // steps, each eased over ~1.5 s), 2 = continuous (the window tracks the
+  // shot's length once past 15 s; the default). Persisted.
+  virtual int shot_window_growth() const = 0;
+  virtual void set_shot_window_growth(int mode) = 0;
+
   // Performance overlay: LVGL's on-screen FPS / CPU / render-time monitor. Off by
   // default (it's a diagnostic and covers a screen corner); the UI shows/hides the
   // sysmon label at runtime to match this.

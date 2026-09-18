@@ -50,7 +50,7 @@ Settings
 ├─ Scale
 │  ├─ Bluetooth       — Scan · saved scale (Connect / Forget)
 │  ├─ Shot settings   — Target · Review hold · Detect lead-in · Smoothing
-│  │                    · Drop negative g/s · Oscilloscope graph
+│  │                    · Drop negative g/s · Oscilloscope graph · Window growth
 │  └─ Device settings — the scale's own settings (Beep · Auto-off/sleep · Unit …)
 ├─ Apollo
 │  ├─ Display     — Brightness* · Screen timeout · Idle screen (Lion/Apollo/Alternate/Dim/Off)
@@ -161,7 +161,8 @@ Plots the live flow rate (or weight) from the scale.
 
 - Tap the **g/s** chip ① to switch between flow rate (g/s) and weight (g);
   the caption ② names the time window in view.
-- During a shot the graph restarts and follows the shot; when the shot ends it
+- During a shot the graph restarts and follows the shot, widening its time
+  window as the shot runs on (see **Window growth**); when the shot ends it
   freezes for review (see **Review hold**) and then resumes.
 - The graph style (oscilloscope sweep vs scrolling) and smoothing are set under
   **Settings → Scale → Shot settings**.
@@ -320,6 +321,11 @@ needs the paddle harness, since that's what drives it.
   bumps, scale noise) to zero on the graph.
 - ⑥ **Oscilloscope graph** *(default on)* — the shot graph sweeps left→right and
   wraps, oscilloscope style. Off, it scrolls continuously instead.
+- ⑦ **Window growth** *(Snap / Smooth / Continuous, default Continuous)* — how
+  the shot graph's time window widens as a shot runs on past 15 s.
+  **Continuous** keeps the whole shot filling the width, squeezing the trace
+  as it lengthens. **Snap** jumps to 30, 45 and 60 s instead. **Smooth** makes
+  the same jumps but eases each one over a second or so. Purely visual.
 
 ### Device settings
 

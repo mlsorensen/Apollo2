@@ -170,8 +170,9 @@ struct HomeWidgets {
 
   // Shot plot (dynamic X): while a shot runs, the graph leaves the sweep and
   // plots time-stamped shot samples with x = t/window, the window growing from
-  // kShotMinWindow to the 45s cap as the shot lengthens — a 30s shot uses the
-  // full width at maximum resolution. Fully redrawn per new sample (~7Hz).
+  // kShotMinWindow to the 60s cap as the shot lengthens (in steps, eased steps
+  // or continuously — shot_xgrow) — a 30s shot uses the full width at maximum
+  // resolution.
   static constexpr int kShotCap = 600;  // 600 x 100ms = the 60s window cap
   float shot_weights[kShotCap] = {};    // g at each sample
   float shot_flows[kShotCap] = {};      // g/s at each sample (post drop-negative)
@@ -188,13 +189,25 @@ struct HomeWidgets {
   // full anyway, and the snapped window left a dead-grid tail). Set by
   // finish_shot_plot/review_shot_plot, cleared when the plot begins/ends.
   bool shot_exact_fit = false;
-  // Incremental painting state: while the time->x mapping is stable (window
-  // snaps in 5s steps), new samples only append right-edge columns; a full
-  // repaint happens only on a snap or Y rescale.
+  // Incremental painting state: while the time->x mapping is stable (Snap
+  // style: 15 s window steps), new samples only append right-edge columns; a
+  // full repaint happens only on a mapping change or Y rescale (the Smooth
+  // and Continuous styles change the mapping every frame while it moves).
   int shot_x_painted = -1;              // rightmost painted column
   int shot_si = 0;                      // sample cursor for the column sweep
   uint32_t shot_map_window_ms = 0;      // mapping of the painted columns
   uint32_t shot_map_tstart_ms = 0;
+  // X-window growth style (IDisplaySettings::shot_window_growth; see the
+  // kShotTweenMs comment in home_tab.cpp): 0 Snap, 1 Smooth, 2 Continuous.
+  // Smooth eases from the mapping in force when the snap target last changed
+  // (shot_tw_from_*) to that target (shot_tw_to_*), starting at shot_tw_t0;
+  // to_win == 0 means "no mapping yet this shot".
+  int shot_xgrow = 2;  // App overwrites from the setting at build
+  uint32_t shot_tw_from_win = 0, shot_tw_from_ts = 0;
+  uint32_t shot_tw_to_win = 0, shot_tw_to_ts = 0;
+  uint32_t shot_tw_t0 = 0;
+  uint32_t shot_remap_tick = 0;         // last mapping-driven full repaint (rate cap)
+  int shot_caption_s = -1;              // "N s window" as last written (-1 = rewrite)
   uint32_t shot_seq_seen = 0;           // event-locked sampling (snapshot.seq)
   uint32_t shot_stall_since = 0;        // frontier watchdog (0 = advancing)
   // Baseline subtracted from every stored weight sample while the live shot
@@ -343,6 +356,10 @@ void review_shot_plot(HomeWidgets& w, uint32_t t_start, uint32_t t_end,
 // if one is on screen (live or frozen in review) so the change shows at once.
 // Apply smoothing level 0..3 (Off / Light / Medium / Strong) to both graphs.
 void set_shot_smoothing(HomeWidgets& w, int level);
+
+// Apply the shot plot's X-window growth style 0..2 (Snap / Smooth /
+// Continuous). Takes effect from the next live tick; no repaint here.
+void set_shot_window_growth(HomeWidgets& w, int mode);
 
 // Pulse the shot button a few times in the warn color — "look here first".
 // Used when a paddle flip is swallowed during shot review (the button says

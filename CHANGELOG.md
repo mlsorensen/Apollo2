@@ -7,6 +7,15 @@ for someone reading the diff. These notes are also shown ON THE DEVICE, whose
 fonts are ASCII-only: stick to characters `sanitize_notes()` (src/ui/app.cpp)
 maps — plain ASCII plus `— – → … × ' "` — or they render as empty boxes.
 
+## v0.14.2-beta.1
+
+### Changes
+
+- **Shot graph grows smoothly.** Past 15 s the shot graph's window now widens
+  continuously, so the whole shot always fills the width — no more jumps to
+  30, 45 and 60 s. A new Settings → Scale → Shot settings row, Window growth,
+  brings back the jumps (Snap) or eases them (Smooth).
+
 ## v0.14.1
 
 ### Changes

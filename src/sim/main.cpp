@@ -76,7 +76,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             bool token_modal = false, int theme = 0, int stats_section = -1,
             bool clean_lock = false, int shot_modal_id = -1, int history_ym = 0,
             bool backflush = false, bool log_modal = false,
-            bool unwired_midshot = false, bool toast = false,
+            uint32_t unwired_midshot_ms = 0, bool toast = false,
             bool join_modal = false, bool screensaver = false,
             bool update_modal = false, core::IUpdateSource* updates = nullptr,
             core::ISettingsBackup* backup = nullptr, int backup_modal = 0) {
@@ -100,7 +100,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   if (backflush) app.open_backflush();
   if (shot_modal_id >= 0) app.open_shot_card(static_cast<uint32_t>(shot_modal_id));
   if (log_modal) app.open_log_modal();
-  if (unwired_midshot) app.pose_unwired_midshot();
+  if (unwired_midshot_ms != 0) app.pose_unwired_midshot(unwired_midshot_ms);
   if (toast)
     app.show_toast("Shot not started: Auto shot is enabled. "
                    "Connect the scale or switch to Manual mode.");
@@ -160,14 +160,14 @@ int main() {
   auto r = [&](ui::ScreenProfile s, const char* path, int tab = 0, int sec = -1,
                bool modal = false, int theme = 0, int stats = -1, bool clean_lock = false,
                int shot_id = -1, int history_ym = 0, bool backflush = false,
-               bool log_modal = false, bool unwired_midshot = false,
+               bool log_modal = false, uint32_t unwired_midshot_ms = 0,
                bool toast = false, bool join_modal = false, bool screensaver = false,
                bool update_modal = false, int backup_modal = 0) {
     return render(machine, provisioner, battery, disp, clock, history, scale,
                   scale_provisioner, brew, network, shots, s, path, tab, sec, modal, theme,
                   stats, clean_lock, shot_id, history_ym, backflush, log_modal,
-                  unwired_midshot, toast, join_modal, screensaver, update_modal, &updates,
-                  &backup, backup_modal);
+                  unwired_midshot_ms, toast, join_modal, screensaver, update_modal,
+                  &updates, &backup, backup_modal);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
@@ -200,7 +200,13 @@ int main() {
   brew.set_phase(core::ShotPhase::kBrewing);
   brew.set_shot_ms(9000);
   ok &= r({800, 480}, "renders/home_unwired_midshot_800x480.png", 0, -1, false, 0,
-          -1, false, -1, 0, false, false, true);
+          -1, false, -1, 0, false, false, 9000);
+  // The same shot at 24 s: under the default Continuous window growth the
+  // trace fills the width and the caption reads the elapsed seconds (Snap
+  // would show it at the 30 s step). Smooth's ease can't be caught in a still.
+  brew.set_shot_ms(24000);
+  ok &= r({800, 480}, "renders/home_shot_continuous_800x480.png", 0, -1, false, 0,
+          -1, false, -1, 0, false, false, 24000);
   brew.set_phase(core::ShotPhase::kIdle);
   brew.set_shot_ms(27000);
   brew.set_wired_paddle(true);

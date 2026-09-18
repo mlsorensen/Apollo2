@@ -41,6 +41,16 @@ constexpr uint32_t kShotWindowStepMs = 15000;  // window grows in snaps (stable 
                                                // that the rescale stays infrequent
 constexpr uint32_t kShotMaxWindowMs = 60000;   // then the window slides
 constexpr uint32_t kShotSlideStepMs = 2000;   // past the cap, the slide also snaps
+// Window-growth styles (IDisplaySettings::shot_window_growth): 0 = Snap (the
+// stepped windows above, painted incrementally), 1 = Smooth (the same steps,
+// each eased over kShotTweenMs), 2 = Continuous (the default: window ==
+// elapsed past the minimum, so the trace always fills the width; past the cap
+// the start slides continuously). ANY mapping change is a full canvas
+// repaint, so Smooth pays for ~kShotTweenMs per step and Continuous for the
+// whole shot past 15 s — both rate-capped to one remap per kShotRemapMinMs
+// (motion is sub-pixel per frame anyway; this is the perf knob).
+constexpr uint32_t kShotTweenMs = 1500;
+constexpr uint32_t kShotRemapMinMs = 50;
 // Oscilloscope mode: blank columns kept just ahead of the write head so the sweep
 // point reads clearly (fresh trace behind it, gap in front).
 constexpr int kFlowScopeGapPx = 4;
@@ -1596,6 +1606,68 @@ static uint32_t shot_tstart_of(uint32_t elapsed, uint32_t window) {
          kShotSlideStepMs;  // sliding (past the cap) also snaps
 }
 
+// Exact fit: window = elapsed (floored at min_window, capped), the start
+// sliding unsnapped past the cap. The frozen review's mapping (min 1 s) and
+// the Continuous growth style's (min kShotMinWindowMs) — so a shot that ends
+// in Continuous re-fits seamlessly into review.
+static void shot_fit_mapping(uint32_t elapsed, uint32_t min_window,
+                             uint32_t* window, uint32_t* t_start) {
+  uint32_t win = elapsed;
+  if (win < min_window) win = min_window;
+  if (win > kShotMaxWindowMs) win = kShotMaxWindowMs;
+  *window = win;
+  *t_start = elapsed > win ? elapsed - win : 0;
+}
+
+static uint32_t lerp_u32(uint32_t a, uint32_t b, float f) {
+  const float d = static_cast<float>(b >= a ? b - a : a - b) * f;
+  return b >= a ? a + static_cast<uint32_t>(d) : a - static_cast<uint32_t>(d);
+}
+
+// The Smooth style's eased mapping at `now`: smoothstep between the mapping in
+// force when the snap target last changed and that target.
+static void shot_tween_at(const HomeWidgets& w, uint32_t now, uint32_t* window,
+                          uint32_t* t_start) {
+  const uint32_t dt = now - w.shot_tw_t0;
+  float u = dt >= kShotTweenMs
+                ? 1.0f
+                : static_cast<float>(dt) / static_cast<float>(kShotTweenMs);
+  u = u * u * (3.0f - 2.0f * u);
+  *window = lerp_u32(w.shot_tw_from_win, w.shot_tw_to_win, u);
+  *t_start = lerp_u32(w.shot_tw_from_ts, w.shot_tw_to_ts, u);
+}
+
+// The LIVE plot's time->x mapping under the window-growth style (see
+// kShotTweenMs). Smooth keeps the snap targets but eases each change; a
+// retarget mid-ease restarts from the mapping currently displayed, which is
+// what turns the 2 s slide steps past the cap into a near-continuous scroll.
+// Idempotent for a given `now`, so tick and redraw_full may both call it.
+static void shot_live_mapping(HomeWidgets& w, uint32_t now, uint32_t* window,
+                              uint32_t* t_start) {
+  if (w.shot_xgrow == 2) {
+    shot_fit_mapping(w.shot_elapsed_ms, kShotMinWindowMs, window, t_start);
+    return;
+  }
+  const uint32_t win = shot_window_of(w.shot_elapsed_ms);
+  const uint32_t ts = shot_tstart_of(w.shot_elapsed_ms, win);
+  if (w.shot_xgrow != 1) {
+    *window = win;
+    *t_start = ts;
+    return;
+  }
+  if (w.shot_tw_to_win == 0) {  // first mapping of the shot: nothing to ease from
+    w.shot_tw_from_win = w.shot_tw_to_win = win;
+    w.shot_tw_from_ts = w.shot_tw_to_ts = ts;
+    w.shot_tw_t0 = now;
+  } else if (win != w.shot_tw_to_win || ts != w.shot_tw_to_ts) {
+    shot_tween_at(w, now, &w.shot_tw_from_win, &w.shot_tw_from_ts);
+    w.shot_tw_to_win = win;
+    w.shot_tw_to_ts = ts;
+    w.shot_tw_t0 = now;
+  }
+  shot_tween_at(w, now, window, t_start);
+}
+
 // Physical slot of logical shot sample i (0 = oldest stored, shot_n-1 =
 // newest). THE ring-index convention — every reader goes through this so a
 // layout change can't drift one code path out of sync with the others.
@@ -1738,13 +1810,9 @@ static void shot_plot_redraw_full(HomeWidgets& w, uint32_t t_limit) {
     // Frozen review: the window IS the shot (plus lead-in/settle), so the
     // trace fills the width — no snapping, no dead-grid tail. Past the ring's
     // coverage the window pins to the cap and the start slides, unsnapped.
-    window = w.shot_elapsed_ms;
-    if (window < 1000) window = 1000;
-    if (window > kShotMaxWindowMs) window = kShotMaxWindowMs;
-    t_start = w.shot_elapsed_ms > window ? w.shot_elapsed_ms - window : 0;
+    shot_fit_mapping(w.shot_elapsed_ms, 1000, &window, &t_start);
   } else {
-    window = shot_window_of(w.shot_elapsed_ms);
-    t_start = shot_tstart_of(w.shot_elapsed_ms, window);
+    shot_live_mapping(w, lv_tick_get(), &window, &t_start);
   }
   w.shot_map_window_ms = window;
   w.shot_map_tstart_ms = t_start;
@@ -1775,10 +1843,24 @@ static void shot_plot_redraw_full(HomeWidgets& w, uint32_t t_limit) {
   w.shot_x_painted = shot_col_of(w, t_edge, window, t_start);
   lv_obj_invalidate(w.flow_canvas);
 
-  if (w.flow_xspan_label != nullptr) {
+  // Caption only when the rounded seconds change: Smooth/Continuous remap
+  // (and land here) many times a second, and a label rewrite invalidates it.
+  const int secs = static_cast<int>((window + 500) / 1000);
+  if (w.flow_xspan_label != nullptr && secs != w.shot_caption_s) {
+    w.shot_caption_s = secs;
     lv_label_set_text_fmt(w.flow_xspan_label, "%u s window",
-                          static_cast<unsigned>((window + 500) / 1000));
+                          static_cast<unsigned>(secs));
   }
+}
+
+// Reset the growth-style state for a fresh live plot: the ease restarts from
+// nothing, the remap rate cap is open, the caption rewrites on first paint.
+static void shot_reset_growth(HomeWidgets& w) {
+  w.shot_tw_from_win = w.shot_tw_to_win = 0;
+  w.shot_tw_from_ts = w.shot_tw_to_ts = 0;
+  w.shot_tw_t0 = 0;
+  w.shot_remap_tick = 0;
+  w.shot_caption_s = -1;
 }
 
 void begin_shot_plot(HomeWidgets& w) {
@@ -1799,6 +1881,7 @@ void begin_shot_plot(HomeWidgets& w) {
   w.shot_map_window_ms = 0;
   w.shot_map_tstart_ms = 0;
   w.shot_stall_since = 0;
+  shot_reset_growth(w);
   // X labels: the shot plot's x maps time-from-shot-start, so the scroll
   // style's age ticks would lie — show the single window caption regardless
   // of the sweep style.
@@ -1806,8 +1889,9 @@ void begin_shot_plot(HomeWidgets& w) {
     if (l != nullptr) lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN);
   if (w.flow_xspan_label != nullptr) {
     lv_obj_remove_flag(w.flow_xspan_label, LV_OBJ_FLAG_HIDDEN);
+    w.shot_caption_s = static_cast<int>(kShotMinWindowMs / 1000);
     lv_label_set_text_fmt(w.flow_xspan_label, "%u s window",
-                          static_cast<unsigned>(kShotMinWindowMs / 1000));
+                          static_cast<unsigned>(w.shot_caption_s));
   }
 }
 
@@ -1863,12 +1947,25 @@ void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
   // display time, so it glides a column or two per frame instead of jumping a
   // whole event-interval span at once. Full repaint only when the mapping
   // snaps or the Y axis grew.
-  const uint32_t window = shot_window_of(w.shot_elapsed_ms);
-  const uint32_t t_start = shot_tstart_of(w.shot_elapsed_ms, window);
-  if (window != w.shot_map_window_ms || t_start != w.shot_map_tstart_ms) full = true;
+  uint32_t window, t_start;
+  shot_live_mapping(w, now, &window, &t_start);
+  if (window != w.shot_map_window_ms || t_start != w.shot_map_tstart_ms) {
+    // Snap remaps are rare (one per step) and always taken. Smooth and
+    // Continuous move the mapping every frame — a full repaint each — so they
+    // are rate-capped (kShotRemapMinMs); a capped frame paints incrementally
+    // under the painted, slightly stale mapping, which is harmless.
+    if (w.shot_xgrow == 0 || now - w.shot_remap_tick >= kShotRemapMinMs) {
+      full = true;
+    } else {
+      window = w.shot_map_window_ms;
+      t_start = w.shot_map_tstart_ms;
+    }
+  }
   const uint32_t t_disp = shot_display_time(w);
   if (full) {
     shot_plot_redraw_full(w, t_disp);
+    w.shot_remap_tick = now;
+    w.shot_stall_since = 0;  // a full repaint re-derives the frontier
     return;
   }
   const int x_new = shot_col_of(w, t_disp, window, t_start);
@@ -2001,6 +2098,7 @@ void enter_shot_plot_live(HomeWidgets& w, uint32_t t_start, uint32_t lead_in_ms,
   w.shot_map_window_ms = 0;
   w.shot_map_tstart_ms = 0;
   w.shot_stall_since = 0;
+  shot_reset_growth(w);
   for (lv_obj_t* l : w.flow_xlabels)
     if (l != nullptr) lv_obj_add_flag(l, LV_OBJ_FLAG_HIDDEN);
   if (w.flow_xspan_label != nullptr)
@@ -2094,6 +2192,15 @@ void set_shot_smoothing(HomeWidgets& w, int level) {
   // parallel raw rings would allow an instant repaint; that was considered and
   // rejected in favour of the side-by-side comparison.)
   if (w.flow_shot_plot) shot_plot_redraw_full(w, UINT32_MAX);
+}
+
+void set_shot_window_growth(HomeWidgets& w, int mode) {
+  w.shot_xgrow = mode < 0 ? 0 : (mode > 2 ? 2 : mode);
+  // A live plot re-derives its mapping on the next tick; the ease restarts
+  // from nothing so a mid-shot switch never interpolates between styles.
+  w.shot_tw_from_win = w.shot_tw_to_win = 0;
+  w.shot_tw_from_ts = w.shot_tw_to_ts = 0;
+  w.shot_tw_t0 = 0;
 }
 
 // Push one live sample pair into the delay line and return the kernel-weighted

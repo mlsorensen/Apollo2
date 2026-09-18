@@ -77,6 +77,12 @@ int DisplaySettings::flow_smooth() const { return config_.flow_smooth(); }
 
 void DisplaySettings::set_flow_smooth(int level) { config_.set_flow_smooth(level); }
 
+int DisplaySettings::shot_window_growth() const { return config_.shot_window_growth(); }
+
+void DisplaySettings::set_shot_window_growth(int mode) {
+  config_.set_shot_window_growth(mode);
+}
+
 bool DisplaySettings::perf_overlay() const { return config_.perf_overlay(); }
 
 bool DisplaySettings::click_sound() const { return config_.click_sound(); }
