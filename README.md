@@ -36,53 +36,33 @@ to the machine instead of a phone app.
 
 ## Features
 
-- **Micra control over Bluetooth (BLE)** — brew temperature set‑point, steam
-  boiler level + on/off, power / standby, and live status (connecting, ready,
-  disconnected) with the real brew and steam temperatures. On boards with a
-  speaker it **chimes once when the machine finishes warming up** — so you can
-  start it and walk away — and stays quiet through the reheats that follow;
-  the chime has its own volume setting (Off / 25 / 50 / 75 / 100 %).
-- **Bluetooth scale integration** — pair a supported scale (**Bookoo Themis**,
-  an **Acaia** — Umbra, Lunar, Prochef, or Pyxis — or a **Varia Aku**; Pyxis
-  and Aku untested) for a live weight readout, an automatic shot timer, a live
-  flow‑rate graph (g/s or g), and tare from the screen. Scales with on‑board
-  settings (beep, auto‑off) expose them under Settings → Scale.
-- **Brew by weight** — with a scale paired, pick a shot mode from the Home
-  screen: **Auto shot** (boards wired into the paddle circuit stop the shot at
-  your target weight, learning the drip overshoot per shot), **Shot detect**
-  (start/stop inferred from the weight stream alone — works on every board, no
-  wiring), or **Manual**. Finished shots freeze into a review graph, and wired
-  boards can **auto‑flush** the group after you lift the cup, flush it on
-  demand from Home, and run a **backflush cleaning** cycle (10 × 4 s on / 4 s
-  off) from Settings.
-- **Shot history on SD card** —
-  every finished shot is recorded to a FAT‑formatted microSD card (any size —
-  a shot is a few tens of KB, so a small old card holds decades): stats and
-  the full weight/flow series as CSV under `/Apollo2/` — a take‑away database
-  you can read on any computer. The Stats
-  tab's **History** section shows totals, lifetime/30‑day accuracy, and a
-  filterable shot list; tap a shot for its full‑screen card. With WiFi on,
-  the device also serves a **web page** at its local IP — browse and download
-  your shots from a phone or computer, themed to match the device.
-- **Settings backup on the card** — replacing the hardware? Settings →
-  Apollo → **Backup** copies every preference onto the same microSD card the
-  shots live on, and restores it onto the new one — machine pairing, scale,
-  theme, chime, flush and brew settings and all. Explicit both ways, with the
-  WiFi password and pairing token each opt-out, since the file is plain text.
-- **Automatic time** — optionally join your home Wi‑Fi and the clock keeps itself
-  correct over NTP, with a timezone picker that handles daylight saving. Time is
-  saved to the on‑board RTC (where present) so it survives a power‑off.
-- **Phone‑based setup, no app** — pairing and Wi‑Fi credentials are entered
-  through a tiny web page the device serves from its own Wi‑Fi access point.
-  Scan the QR code on the device's screen with your phone's camera and the
-  setup page pops up on its own (or join `Micra-Setup` and open it in a
-  browser).
-- **Made to live on the counter** — themes, °C/°F, 12/24‑hour clock, adjustable
-  brightness, and a temperature‑history view. Layouts scale from a 2" pocket
-  remote to an 8" panel.
+- **Local Micra control over Bluetooth** — brew and steam temperatures, steam
+  boiler on/off, standby, and live machine status. No cloud, no phone app.
+- **Bluetooth scales** — Bookoo Themis, Acaia (Umbra, Lunar, Prochef, Pyxis)
+  and Varia Aku: live weight, shot timer, flow graph, tare, and the scale's
+  own settings from the screen.
+- **Brew by weight** — stop the shot at a target weight on boards wired into
+  the paddle circuit, or detect shots from the weight stream alone on any
+  board. Finished shots freeze into a review graph.
+- **Group care** — auto‑flush after the cup lifts, flush on demand, and a
+  backflush cleaning cycle, on wired boards.
+- **Warm‑up chime** — boards with a speaker play a tune when the machine is
+  ready, so you can start it and walk away.
+- **Shot history** — every shot is saved to a microSD card as CSV, browsable on
+  the device's Stats tab or from a phone via the device's own web page.
+- **Settings backup** — preferences copy to the same card and restore onto
+  replacement hardware.
+- **Over‑the‑air updates** — the device checks for new firmware and installs
+  it on request, with an optional beta channel.
+- **Setup from your phone, no app** — pairing and Wi‑Fi credentials go in
+  through a page the device serves itself; scan the QR code on its screen.
+- **Automatic time** — NTP over your Wi‑Fi with a timezone picker, saved to
+  the on‑board RTC where present.
+- **Made to live on the counter** — themes, °C/°F, 12/24‑hour clock,
+  brightness, idle‑screen artwork; layouts from 4.3" to 8" panels.
 
-Everything is designed to keep working if the machine, the scale, or Wi‑Fi is
-absent — the UI just shows the relevant part as offline.
+Everything keeps working if the machine, the scale, or Wi‑Fi is absent — the
+UI just shows that part as offline.
 
 ---
 
