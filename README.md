@@ -6,7 +6,7 @@
        alt="Apollo, laurel-crowned, sipping an espresso">
 </picture>
 
-Firmware project that turns a small ESP32‑S3 touchscreen into a local
+Firmware project that turns a small ESP32 touchscreen into a local
 controller for a **La Marzocco Micra** espresso machine — over Bluetooth, with
 no cloud dependency for day‑to‑day use.
 
