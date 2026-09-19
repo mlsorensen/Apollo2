@@ -55,8 +55,10 @@ display isn't up.
   Per display: DSI uses the light panel above; RGB (native-WiFi S3, no DMA-pool
   problem) uses the normal full Display and just blanks the backlight for the
   flash write. No-op only on the SPI 2-inch dev board (no real update UI there).
-  Clock only needed for the cert dates: install mode inherits the RTC and only
-  NTP-syncs as a failsafe.
+  Install mode inherits the RTC and only NTP-syncs as a failsafe — NOT for
+  the certificate: the prebuilt core's mbedTLS has MBEDTLS_HAVE_TIME_DATE off,
+  so cert validity dates are never checked (verified 2026-09-19); the sync is
+  a "network really up" proof, like the check's SNTP gate.
 - BETA CHANNEL (v0.14+): two indexes on the site. `releases.json` is
   RELEASES ONLY and its format is frozen — every fielded device reads it, and
   firmware older than the pre-release-aware parser reads "0.14.0-beta.1" as
@@ -188,8 +190,19 @@ existing buffer) over adding memory. Applies to fixes as much as features.
 3. `make build-release` green (or `make build-all` for a platform change).
 4. Commit, push main, then `gh workflow run firmware-release.yml -f tag=vX.Y.Z`
    (CI creates the tag + Release; never build release binaries locally).
+5. **Approve the deploy.** The build runs unattended, then the `release` and
+   `pages` jobs wait in the `release` environment for the owner's click
+   ("Review deployments" on the run page; GitHub emails when it's waiting).
+   Nothing reaches gh-pages — where every device self-updates from — or the
+   Releases page until then. This is the OTA supply-chain gate (2026-09-19):
+   the workflow token is read-only, only the gated environment holds the
+   PAT that can write (secret `RELEASE_TOKEN`, fine-grained, this repo,
+   Contents read+write — rotate it before it expires), and repo rulesets let
+   only an admin push gh-pages or create a `v*` tag, so a workflow edit can't
+   grant itself a way around it. Applies to betas too, on purpose: beta
+   devices install straight from `releases-beta.json`.
 
-**Pushing a beta** is the same four steps with the tag `vX.Y.Z-beta.N` and
+**Pushing a beta** is the same five steps with the tag `vX.Y.Z-beta.N` and
 `fw::kVersion` set to `X.Y.Z-beta.N`. CI publishes it as a GitHub pre-release,
 keeps it out of `releases.json` (so only beta-channel devices and the flasher's
 "Include pre-releases" box see it), and falls back to the `## vX.Y.Z` CHANGELOG

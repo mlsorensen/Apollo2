@@ -389,7 +389,12 @@ self‑updater fetches `<site>/<tag>/firmware/app/<slug>.bin`), a card in
 a `vX.Y.Z-beta.N` tag publishes the same images as a pre-release, listed only in
 `releases-beta.json` (the stable `releases.json` every device reads stays
 releases-only) — promoting one to stable is a rebuild at the real tag, never a
-copy of the artifacts, because `fw::kVersion` is compiled into the image. Several envs stay on the
+copy of the artifacts, because `fw::kVersion` is compiled into the image.
+Publishing is gated: the workflow builds unattended, but the jobs that create
+the Release and push `gh-pages` (the OTA origin) run in a protected
+environment that holds the only write credential and waits for the owner's
+approval, and repository rulesets let only an admin touch `gh-pages` or a
+`v*` tag. Several envs stay on the
 buildable side on purpose.
 
 ### Repository layout

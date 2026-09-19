@@ -32,8 +32,18 @@ on:
         description: 'Release tag to create (e.g. v0.1.0, or v0.1.0-beta.1)'
         required: true
 
+# PUBLISHING IS GATED (2026-09-19). The workflow token is READ-ONLY; the two
+# jobs that publish (`release` creates the GitHub Release, `pages` pushes the
+# gh-pages branch every device self-updates from) run in the `release`
+# environment, which holds the only credential that can write (RELEASE_TOKEN,
+# a fine-grained PAT of the owner) and requires the owner's approval on every
+# run — betas included. Repository rulesets back this up: only a repo admin
+# can push gh-pages or create a `v*` tag, so a workflow edit that grants
+# itself `contents: write` still can't publish. Net effect: a stolen token or a
+# compromised dependency can build all it likes but ships nothing without a
+# click from the owner. Approve at the run page ("Review deployments").
 permissions:
-  contents: write  # create the Release + push the gh-pages branch
+  contents: read
 
 env:
   RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
@@ -190,6 +200,7 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
+    environment: release  # waits for the owner's approval; holds RELEASE_TOKEN
     steps:
       # Needed for CHANGELOG.md, which supplies the release notes below. (This
       # job used to be artifacts-only — no checkout — so leaving it out makes
@@ -279,8 +290,11 @@ jobs:
           EOF
 
       - name: Publish release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64  # v3
         with:
+          # Creating the tag + Release needs the gated PAT: the read-only
+          # workflow token can't, and the `v*` tag ruleset would refuse it.
+          token: ${{ secrets.RELEASE_TOKEN }}
           tag_name: ${{ env.RELEASE_TAG }}
           name: ${{ env.RELEASE_TAG }}
           # A -beta.N tag publishes as a pre-release and must NOT take the
@@ -302,6 +316,7 @@ jobs:
   pages:
     needs: build
     runs-on: ubuntu-latest
+    environment: release  # waits for the owner's approval; holds RELEASE_TOKEN
     steps:
       - uses: actions/checkout@v7
 
@@ -409,8 +424,9 @@ jobs:
           EOF
 
       - name: Deploy to GitHub Pages (gh-pages branch)
-        uses: peaceiris/actions-gh-pages@v4.1.0
+        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453  # v4.1.0
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # The gated PAT is the only thing the gh-pages ruleset lets push.
+          personal_token: ${{ secrets.RELEASE_TOKEN }}
           publish_dir: ./public
           keep_files: true  # past version directories stay flashable

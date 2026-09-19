@@ -180,8 +180,10 @@ void run(Config& config) {
   if (WiFi.status() != WL_CONNECTED) { fail_and_reboot(config, "WiFi failed"); return; }
   core::logf("InstallMode: WiFi up, IP=%s\n", WiFi.localIP().toString().c_str());
 
-  // --- Clock: inherited from the main session's RTC; NTP only as a failsafe
-  //     (TLS cert dates need a real time). ---
+  // --- Clock: inherited from the main session's RTC; NTP only as a failsafe.
+  //     Not for TLS — the core's mbedTLS is built without MBEDTLS_HAVE_TIME_DATE,
+  //     so cert dates aren't checked; a landed sync just proves DNS + UDP work
+  //     before the download is attempted. ---
   if (time(nullptr) < 1700000000) {
     ui_set(0, "Syncing time...");
     configTime(0, 0, "pool.ntp.org");
