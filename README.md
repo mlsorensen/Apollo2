@@ -242,7 +242,6 @@ Ready‑to‑print 3MF files live in [`hardware/3d-prints/`](hardware/3d-prints/
 | [`apollo2-stand.3mf`](hardware/3d-prints/apollo2-stand.3mf) | Counter‑top **stand**. Mounts the S3‑4.3C‑BOX directly (it has the matching holes), and every shell below mounts to it the same way. |
 | [`apollo2-magnet-mount.3mf`](hardware/3d-prints/apollo2-magnet-mount.3mf) | Optional **magnet mount** — attaches the device to the Micra's top corner instead of the counter. |
 | [`apollo2-wiring-gasket.3mf`](hardware/3d-prints/apollo2-wiring-gasket.3mf) | Optional **wiring gasket** — spaces the Micra's cover so the wiring can run underneath it. |
-| [`esp32-s3-4.3c-shell.3mf`](hardware/3d-prints/esp32-s3-4.3c-shell.3mf) | Shell for the bare **ESP32‑S3‑Touch‑LCD‑4.3C** (no‑enclosure variant). |
 | [`esp32-p4-5-shell.3mf`](hardware/3d-prints/esp32-p4-5-shell.3mf) | Shell for the **ESP32‑P4‑WIFI6‑Touch‑LCD‑5**. |
 | [`esp32-p4-5-shell-slim.3mf`](hardware/3d-prints/esp32-p4-5-shell-slim.3mf) | Slimmer shell for the **ESP32‑P4‑WIFI6‑Touch‑LCD‑5** — no battery compartment (USB‑power only). |
 | [`esp32-p4-4.3-shell.3mf`](hardware/3d-prints/esp32-p4-4.3-shell.3mf) | Shell for the **ESP32‑P4‑WIFI6‑Touch‑LCD‑4.3**. |
