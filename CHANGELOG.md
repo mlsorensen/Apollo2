@@ -7,7 +7,7 @@ for someone reading the diff. These notes are also shown ON THE DEVICE, whose
 fonts are ASCII-only: stick to characters `sanitize_notes()` (src/ui/app.cpp)
 maps — plain ASCII plus `— – → … × ' "` — or they render as empty boxes.
 
-## v0.14.2-beta.1
+## v0.14.2
 
 ### Changes
 
