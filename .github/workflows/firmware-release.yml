@@ -2,8 +2,12 @@ name: firmware release
 
 # Build the firmware for every supported board and publish the flashable
 # binaries to a GitHub Release + the web flasher on GitHub Pages.
-# Trigger by pushing a tag like `v0.1.0`, or run it manually from the Actions
-# tab (supply the tag). The `v*` prefix is firmware's; the lmtoken tool
+# Run it manually from the Actions tab or `gh workflow run` (supply the tag);
+# the `release` job creates the tag. There is deliberately NO `push: tags`
+# trigger: the tag is created with the owner's PAT (see below), which — unlike
+# the workflow token — DOES fire push events, so a tag trigger would start a
+# second, identical run of every release that then sat waiting for approval
+# (v0.14.2, 2026-09-21). The `v*` prefix is firmware's; the lmtoken tool
 # releases under `lmtoken-v*` (see lmtoken-release.yml).
 #
 # BETA CHANNEL: a tag of the form `vX.Y.Z-beta.N` publishes exactly the same way
@@ -23,9 +27,6 @@ name: firmware release
 # manifests) lets anyone flash a board from Chrome with no toolchain.
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       tag:
@@ -46,7 +47,7 @@ permissions:
   contents: read
 
 env:
-  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  RELEASE_TAG: ${{ inputs.tag }}
 
 jobs:
   build:
