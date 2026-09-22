@@ -4617,10 +4617,10 @@ void App::open_welcome_modal() {
   const bool scale_done = scale_provisioner_ != nullptr && !scale_provisioner_->saved_name().empty();
   char body[420];
   std::snprintf(body, sizeof(body),
-                "Three steps are recommended to get started:\n"
+                "Three steps are recommended to get started:\n\n"
                 "- Set up WiFi: sets the clock over NTP (and enables updates and the schedule)%s\n"
                 "- Pair Micra: have your Bluetooth token ready\n"
-                "- Pair scale: Acaia, Bookoo or Varia, for brew by weight%s\n"
+                "- Pair scale: Acaia, Bookoo or Varia, for brew by weight%s\n\n"
                 "Choose a starting point; the rest is under Settings. Any step can be "
                 "skipped -- Apollo works without it, just with less.",
                 wifi_done ? " -- done" : "", scale_done ? " -- done" : "");
