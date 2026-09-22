@@ -7,6 +7,16 @@ for someone reading the diff. These notes are also shown ON THE DEVICE, whose
 fonts are ASCII-only: stick to characters `sanitize_notes()` (src/ui/app.cpp)
 maps — plain ASCII plus `— – → … × ' "` — or they render as empty boxes.
 
+## v1.0.0
+
+### Changes
+
+- **Scheduled on and standby.** Settings → Micra → Schedule turns the machine
+  on and sends it to standby at set times — one window for every day or a
+  different one per weekday — with a warm-up lead (default 6 min) so it is at
+  temperature on time. Standby waits for a running shot; needs WiFi with Auto
+  time synced and a paired Micra.
+
 ## v0.14.2
 
 ### Changes

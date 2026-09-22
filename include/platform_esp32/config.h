@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 // Persistent device configuration in NVS flash: the saved machine (BLE MAC +
@@ -127,6 +128,23 @@ class Config {
   void set_ntp_server(const std::string& host);
   bool ntp_enabled() const;        // sync time from NTP when connected (default true)
   void set_ntp_enabled(bool on);
+
+  // Scheduled on/standby (core::ScheduleConfig; see core/schedule.h). The
+  // per-day windows are stored packed (core::pack_day), one i32 each:
+  // slot 0..6 = Monday..Sunday, any other slot = the "same every day" window.
+  // schedule_day_packed() returns false when the key was never written.
+  bool schedule_enabled() const;             // default false
+  void set_schedule_enabled(bool on);
+  bool schedule_same_daily() const;          // default true
+  void set_schedule_same_daily(bool on);
+  bool schedule_warmup() const;              // default true
+  void set_schedule_warmup(bool on);
+  int schedule_warmup_min() const;           // default 6
+  void set_schedule_warmup_min(int minutes);
+  bool schedule_warning_dismissed() const;   // cloud-app warning "don't show again"
+  void set_schedule_warning_dismissed(bool on);
+  bool schedule_day_packed(int slot, int32_t& out) const;
+  void set_schedule_day_packed(int slot, int32_t v);
 };
 
 }  // namespace platform

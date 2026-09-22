@@ -24,8 +24,11 @@ class FakeMachine : public core::IMachine {
     brew_temp_ = brew_c;
     boiler_temp_ = boiler_c;
   }
+  // Pose the link state (e.g. Unconfigured for the "pair a Micra first" gate).
+  void set_link(core::Link link) { link_ = link; }
 
  private:
+  core::Link link_ = core::Link::Connected;
   core::Power power_ = core::Power::On;
   float brew_temp_ = 93.0f;
   float boiler_temp_ = 123.0f;

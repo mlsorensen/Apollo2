@@ -8,7 +8,7 @@
 // Settings tab: an lv_menu drill-in, grouped by device with short leaf pages
 // under each (short = little to no scrolling, the whole point of the split):
 //   - Micra  -> Bluetooth (scan/save/connect/forget/auto-connect)
-//               | Controls (Brew + Boiler) | Cleaning
+//               | Controls (Brew + Boiler) | Cleaning | Schedule
 //   - Scale  -> Bluetooth (scan/save/connect/forget) | Settings (Target weight)
 //   - Device -> Display (brightness/theme/units) | Time & date | WiFi
 //               | Backup (settings to/from the card; card-capable boards)
@@ -21,10 +21,11 @@ namespace ui {
 // Navigation targets (a page each). select_settings_section() loads the page;
 // the sim + the post-theme-rebuild restore use these.
 enum SettingsSection {
-  kSectionMicra = 0,       // Micra chooser (Bluetooth | Controls | Cleaning)
+  kSectionMicra = 0,       // Micra chooser (Bluetooth | Controls | Cleaning | Schedule)
   kSectionMicraBt,         // Micra > Bluetooth (connection + auto connect)
   kSectionMicraControls,   // Micra > Controls (Brew + Steam Boiler)
   kSectionMicraCleaning,   // Micra > Cleaning (flush settings + backflush)
+  kSectionMicraSchedule,   // Micra > Schedule (scheduled on / standby)
   kSectionScale,           // Scale chooser
   kSectionScaleBt,         // Scale > Bluetooth
   kSectionScaleSettings,   // Scale > Shot settings (target/review/graph)
@@ -40,11 +41,39 @@ enum SettingsSection {
 struct SettingsWidgets {
   lv_obj_t* menu = nullptr;
   lv_obj_t* root_page = nullptr;
-  lv_obj_t* micra_page = nullptr;           // chooser: Bluetooth | Controls | Cleaning
+  lv_obj_t* micra_page = nullptr;           // chooser: Bluetooth | Controls | Cleaning | Schedule
   lv_obj_t* micra_bt_page = nullptr;        // connection + auto connect
   lv_obj_t* micra_controls_page = nullptr;  // brew + boiler
   lv_obj_t* micra_cleaning_page = nullptr;  // flush settings + backflush
                                             // (paddle-capable boards only)
+  lv_obj_t* micra_schedule_page = nullptr;  // scheduled on / standby
+
+  // --- Micra > Schedule (core::ScheduleConfig; App owns the values) --------
+  // Every control below dims + stops taking touches while the page is gated
+  // (no paired Micra, or no trusted NTP time); sched_status says why.
+  lv_obj_t* sched_status = nullptr;            // gate explanation (hidden when OK)
+  lv_obj_t* sched_enable_switch = nullptr;     // master on/off
+  lv_obj_t* sched_same_switch = nullptr;       // "Same every day"
+  lv_obj_t* sched_day_row = nullptr;           // the Mon..Sun chip strip (hidden
+  lv_obj_t* sched_day_chips[7] = {};           // while Same every day is on)
+  lv_obj_t* sched_day_labels[7] = {};
+  lv_obj_t* sched_day_enable_row = nullptr;    // "<Weekday>  [switch]" (hidden likewise)
+  lv_obj_t* sched_day_enable_label = nullptr;
+  lv_obj_t* sched_day_enable_switch = nullptr;
+  lv_obj_t* sched_on_hour_dd = nullptr;        // On at / Off at: hour + 5-min dropdowns
+  lv_obj_t* sched_on_min_dd = nullptr;
+  lv_obj_t* sched_off_hour_dd = nullptr;
+  lv_obj_t* sched_off_min_dd = nullptr;
+  lv_obj_t* sched_slider = nullptr;            // LV_SLIDER_MODE_RANGE, 0..287 (5-min slots)
+  lv_obj_t* sched_axis_labels[5] = {};         // hour axis under the slider (0/6/12/18/24)
+  lv_obj_t* sched_copy_row = nullptr;          // per-day: "Copy times to [day] [Copy]"
+  lv_obj_t* sched_copy_dd = nullptr;           // 0 = all days, 1..7 = Mon..Sun
+  lv_obj_t* sched_copy_btn = nullptr;
+  lv_obj_t* sched_warm_switch = nullptr;       // warm-up lead on/off
+  lv_obj_t* sched_warm_minus = nullptr;        // ...and its minutes stepper
+  lv_obj_t* sched_warm_value = nullptr;
+  lv_obj_t* sched_warm_plus = nullptr;
+  int sched_edit_day = 0;                      // chip selection, 0 = Monday (UI state only)
   lv_obj_t* scale_page = nullptr;           // chooser: Bluetooth | Settings
   lv_obj_t* scale_bt_page = nullptr;        // connection
   lv_obj_t* scale_settings_page = nullptr;  // shot settings (target/review/graph)

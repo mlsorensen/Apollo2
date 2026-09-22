@@ -32,10 +32,15 @@ class FakeNetwork : public core::INetwork {
   void set_ntp_server(const char* host) override { ntp_ = host; }
   bool ntp_enabled() const override { return ntp_en_; }
   void set_ntp_enabled(bool on) override { ntp_en_ = on; }
+  // "A real sync landed this boot" — the schedule page's gate. Off by default
+  // so the Stats > Info render keeps its honest "NTP synced: never".
+  int ntp_seconds_since_sync() const override { return synced_ ? 120 : -1; }
+  void set_synced(bool on) { synced_ = on; }
 
  private:
   bool enabled_ = true;
   bool ntp_en_ = true;
+  bool synced_ = false;
   std::string tz_ = "AEST-10AEDT,M10.1.0,M4.1.0";  // Sydney, for previews
   std::string ntp_ = "pool.ntp.org";
 };

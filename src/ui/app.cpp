@@ -375,12 +375,12 @@ void set_brightness_label(ui::SettingsWidgets& s) {
 // (Re)fill the hour dropdown's options for the active clock format. Option
 // index == hour 0-23 in BOTH formats ("12 AM" sits at index 0), so the
 // selection code never maps between them.
-void set_hour_dd_options(ui::SettingsWidgets& s) {
-  if (s.hour_dd == nullptr) return;
+void fill_hour_dd(lv_obj_t* dd, bool h24) {
+  if (dd == nullptr) return;
   std::string opts;
   char b[8];
   for (int h = 0; h < 24; ++h) {
-    if (s.clock_24h) {
+    if (h24) {
       std::snprintf(b, sizeof(b), "%02d", h);
     } else {
       const int h12 = (h % 12 == 0) ? 12 : h % 12;
@@ -389,7 +389,21 @@ void set_hour_dd_options(ui::SettingsWidgets& s) {
     if (h) opts += '\n';
     opts += b;
   }
-  lv_dropdown_set_options(s.hour_dd, opts.c_str());
+  lv_dropdown_set_options(dd, opts.c_str());
+}
+void set_hour_dd_options(ui::SettingsWidgets& s) { fill_hour_dd(s.hour_dd, s.clock_24h); }
+
+// Minutes on the schedule's 5-minute grid: index * 5 == minute.
+void fill_minute5_dd(lv_obj_t* dd) {
+  if (dd == nullptr) return;
+  std::string opts;
+  char b[4];
+  for (int m = 0; m < 60; m += core::kScheduleStepMin) {
+    std::snprintf(b, sizeof(b), "%02d", m);
+    if (m) opts += '\n';
+    opts += b;
+  }
+  lv_dropdown_set_options(dd, opts.c_str());
 }
 
 // Day options track the selected month's length (index = day - 1).
@@ -509,6 +523,64 @@ void on_chime_vol_slider(lv_event_t* e) {
 void on_chime_mel_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_ready_melody();
 }
+// --- Micra > Schedule ------------------------------------------------------
+bool sw_checked(lv_event_t* e) {
+  auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  return lv_obj_has_state(sw, LV_STATE_CHECKED);
+}
+void on_sched_enable_switch(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->set_schedule_enabled(sw_checked(e));
+}
+void on_sched_same_switch(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->set_schedule_same_daily(sw_checked(e));
+}
+void on_sched_day_enable_switch(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->set_schedule_day_enabled(sw_checked(e));
+}
+void on_sched_warm_switch(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->set_schedule_warmup(sw_checked(e));
+}
+// One thunk per weekday chip (the scale-device-setting table trick).
+template <int D>
+void on_sched_day_chip(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->schedule_pick_day(D);
+}
+void on_sched_on_hour_dd(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->schedule_time_select(false, true, dd_selected(e));
+}
+void on_sched_on_min_dd(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->schedule_time_select(false, false, dd_selected(e));
+}
+void on_sched_off_hour_dd(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->schedule_time_select(true, true, dd_selected(e));
+}
+void on_sched_off_min_dd(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->schedule_time_select(true, false, dd_selected(e));
+}
+// Drag mirrors the knobs into the pickers; the release is what persists.
+void on_sched_slider(lv_event_t* e) {
+  auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
+  if (lv_event_get_code(e) == LV_EVENT_RELEASED) app->schedule_slider_released();
+  else app->schedule_slider_changed();
+}
+void on_sched_warm_minus(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->schedule_warmup_adjust(-1);
+}
+void on_sched_warm_plus(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->schedule_warmup_adjust(+1);
+}
+void on_sched_copy_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->schedule_copy_times();
+}
+void on_sched_warn_ok(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->dismiss_schedule_warning(false);
+}
+void on_sched_warn_never(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->dismiss_schedule_warning(true);
+}
+constexpr const char* kDayNames[7] = {"Monday", "Tuesday", "Wednesday", "Thursday",
+                                      "Friday", "Saturday", "Sunday"};
+
 void on_wifi_switch(lv_event_t* e) {
   auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
@@ -895,7 +967,8 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                 core::IScaleProvisioner& scale_provisioner, core::IBrewController& brew,
                 core::INetwork& network, core::ISound& sound, core::IShotStore& shots,
                 const ScreenProfile& screen, core::IUpdateSource* updates,
-                core::ISettingsBackup* backup) {
+                core::ISettingsBackup* backup,
+                core::ISchedule& schedule) {
   machine_ = &machine;
   updates_ = updates;
   backup_ = backup;
@@ -1220,6 +1293,52 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   if (settings_.beta_switch != nullptr)
     lv_obj_add_event_cb(settings_.beta_switch, on_beta_switch,
                         LV_EVENT_VALUE_CHANGED, this);
+  // Micra > Schedule: the working copy is read from the port once; a rebuild
+  // keeps it (and the engine's latches — set_config is a no-op on an
+  // unchanged config).
+  schedule_ = &schedule;
+  if (!schedule_loaded_) {
+    schedule_cfg_ = schedule_->config();
+    schedule_loaded_ = true;
+  }
+  schedule_engine_.set_config(schedule_cfg_, schedule_inputs(machine_->snapshot()));
+  {
+    const bool h24 = clock_ != nullptr && clock_->use_24h();
+    fill_hour_dd(settings_.sched_on_hour_dd, h24);
+    fill_hour_dd(settings_.sched_off_hour_dd, h24);
+    fill_minute5_dd(settings_.sched_on_min_dd);
+    fill_minute5_dd(settings_.sched_off_min_dd);
+    lv_obj_add_event_cb(settings_.sched_enable_switch, on_sched_enable_switch,
+                        LV_EVENT_VALUE_CHANGED, this);
+    lv_obj_add_event_cb(settings_.sched_same_switch, on_sched_same_switch,
+                        LV_EVENT_VALUE_CHANGED, this);
+    lv_obj_add_event_cb(settings_.sched_day_enable_switch, on_sched_day_enable_switch,
+                        LV_EVENT_VALUE_CHANGED, this);
+    lv_obj_add_event_cb(settings_.sched_warm_switch, on_sched_warm_switch,
+                        LV_EVENT_VALUE_CHANGED, this);
+    static constexpr lv_event_cb_t kDayChipCbs[7] = {
+        on_sched_day_chip<0>, on_sched_day_chip<1>, on_sched_day_chip<2>,
+        on_sched_day_chip<3>, on_sched_day_chip<4>, on_sched_day_chip<5>,
+        on_sched_day_chip<6>};
+    for (int d = 0; d < 7; ++d)
+      lv_obj_add_event_cb(settings_.sched_day_chips[d], kDayChipCbs[d], LV_EVENT_CLICKED, this);
+    lv_obj_add_event_cb(settings_.sched_on_hour_dd, on_sched_on_hour_dd,
+                        LV_EVENT_VALUE_CHANGED, this);
+    lv_obj_add_event_cb(settings_.sched_on_min_dd, on_sched_on_min_dd,
+                        LV_EVENT_VALUE_CHANGED, this);
+    lv_obj_add_event_cb(settings_.sched_off_hour_dd, on_sched_off_hour_dd,
+                        LV_EVENT_VALUE_CHANGED, this);
+    lv_obj_add_event_cb(settings_.sched_off_min_dd, on_sched_off_min_dd,
+                        LV_EVENT_VALUE_CHANGED, this);
+    lv_obj_add_event_cb(settings_.sched_slider, on_sched_slider, LV_EVENT_VALUE_CHANGED, this);
+    lv_obj_add_event_cb(settings_.sched_slider, on_sched_slider, LV_EVENT_RELEASED, this);
+    lv_obj_add_event_cb(settings_.sched_warm_minus, on_sched_warm_minus, LV_EVENT_CLICKED, this);
+    lv_obj_add_event_cb(settings_.sched_warm_plus, on_sched_warm_plus, LV_EVENT_CLICKED, this);
+    lv_obj_add_event_cb(settings_.sched_copy_btn, on_sched_copy_clicked, LV_EVENT_CLICKED, this);
+    set_schedule_axis_labels(h24);
+    schedule_gate_ = -1;  // fresh widgets: restyle on the first refresh
+    sync_schedule_controls();
+  }
   lv_obj_add_event_cb(settings_.menu, on_menu_page_changed, LV_EVENT_VALUE_CHANGED, this);
 
   build_stats_tab(stats, screen, stats_);
@@ -1343,6 +1462,7 @@ void App::refresh() {
       }
     }
     update_temp_panels(snap);
+    schedule_tick(snap);
 
     // Machine seen in configuration/pairing mode (e.g. left there after setting up
     // a token): it can't be used until restarted. Nudge the user once per event
@@ -1501,9 +1621,16 @@ void App::seed_time_controls() {
 void App::on_settings_page_shown() {
   // Re-seed the Hour/Minute steppers from the live clock whenever the Time & date
   // page is opened, so they reflect the current time instead of the boot-time seed.
-  if (settings_.menu != nullptr &&
-      lv_menu_get_cur_main_page(settings_.menu) == settings_.device_time_page) {
+  if (settings_.menu == nullptr) return;
+  lv_obj_t* cur = lv_menu_get_cur_main_page(settings_.menu);
+  if (cur == settings_.device_time_page) {
     seed_time_controls();
+  } else if (cur == settings_.micra_schedule_page) {
+    sync_schedule_controls();
+    // Once per session (or never again, if they said so): the cloud app's own
+    // schedule would fight this one for the machine.
+    if (!schedule_warned_ && schedule_ != nullptr && !schedule_->cloud_warning_dismissed())
+      open_schedule_warning_modal();
   }
 }
 
@@ -1551,6 +1678,10 @@ void App::set_clock_24h(bool on) {
   set_hour_dd_options(settings_);  // relabel the hour options; index == hour
   if (settings_.hour_dd != nullptr)
     lv_dropdown_set_selected(settings_.hour_dd, settings_.set_hour);
+  fill_hour_dd(settings_.sched_on_hour_dd, on);   // the schedule's pickers follow too
+  fill_hour_dd(settings_.sched_off_hour_dd, on);
+  set_schedule_axis_labels(on);
+  sync_schedule_controls();
 }
 
 void App::set_use_fahrenheit(bool on) {
@@ -1692,7 +1823,7 @@ void App::rebuild() {
   // through g_update_check directly, not through the App.)
   build(*machine_, *provisioner_, *battery_, *display_, *clock_, *history_, *scale_,
         *scale_provisioner_, *brew_, *network_, *sound_, *shots_, screen_, updates_,
-        backup_);
+        backup_, *schedule_);
   show_tab(1);                       // back to Settings...
   select_settings_section(section);  // ...on the section that triggered the rebuild
 
@@ -1956,6 +2087,11 @@ void App::start_screensaver(int style) {
   // for a reason never pinned down. Both HW-observed on the 4.3C. The graph
   // pause in the flow tick (skipped while the saver is up) still matters: the
   // capture ring keeps being fed either way.
+  // A modal (a confirm, the schedule notice) lives on the TOP layer, which
+  // LVGL paints over whichever screen is active -- so it would sit on top of
+  // the artwork, static, and undo the point of a saver. Park it while the
+  // saver screen is up; wake puts it back exactly as it was.
+  if (modal_ != nullptr) lv_obj_add_flag(modal_, LV_OBJ_FLAG_HIDDEN);
   saver_prev_screen_ = lv_screen_active();
   saver_screen_ = lv_obj_create(nullptr);
   lv_obj_remove_style_all(saver_screen_);
@@ -2060,6 +2196,7 @@ void App::stop_screensaver() {
     lv_obj_delete(saver_screen_);
     saver_screen_ = nullptr;
     saver_prev_screen_ = nullptr;
+    if (modal_ != nullptr) lv_obj_remove_flag(modal_, LV_OBJ_FLAG_HIDDEN);  // parked above
   }
   saver_img_ = nullptr;
 }
@@ -3980,6 +4117,7 @@ void App::update_stats_view() {
 
 void App::update_settings_view() {
   update_scale_view();  // refresh the Scale page (independent change-detection)
+  sync_schedule_gate();  // Schedule page: paired + NTP (change-detected)
 
   // Backflush needs the drive line: grey the entry when the harness setting is
   // off (the screen itself explains why if they get there another way).
@@ -4305,6 +4443,305 @@ void App::detect_lead_in_adjust(int dir) {
   settings_.detect_lead_in_s = v;
   set_lead_in_label(settings_);
   if (brew_ != nullptr) brew_->set_detect_lead_in_s(v);
+}
+
+// --- Settings > Micra > Schedule -------------------------------------------
+
+bool App::ntp_ready() const {
+  return network_ != nullptr && network_->enabled() && network_->ntp_enabled() &&
+         network_->ntp_seconds_since_sync() >= 0;
+}
+
+core::ScheduleInputs App::schedule_inputs(const core::MachineSnapshot& snap) const {
+  return core::ScheduleInputs{
+      clock_ != nullptr ? clock_->now() : core::WallTime{},
+      ntp_ready(),
+      snap.link,
+      snap.power,
+      brew_ != nullptr ? brew_->snapshot().phase : core::ShotPhase::kIdle,
+      lv_tick_get()};
+}
+
+void App::schedule_tick(const core::MachineSnapshot& snap) {
+  if (schedule_ == nullptr) return;
+  switch (schedule_engine_.tick(schedule_inputs(snap))) {
+    case core::ScheduleAction::TurnOn:  apply_scheduled_power(true);  break;
+    case core::ScheduleAction::Standby: apply_scheduled_power(false); break;
+    case core::ScheduleAction::None:    break;
+  }
+}
+
+// The Home power button's own path minus the tap: same command, same
+// "Working..." hold while the machine's report catches up. The toast is
+// skipped under the screensaver — a 06:00 turn-on has nobody to read it, and a
+// notice deferred to the next touch would be hours stale.
+void App::apply_scheduled_power(bool on) {
+  if (machine_ == nullptr) return;
+  const core::Power prev = machine_->snapshot().power;
+  machine_->set_power(on);
+  home_.power_pending_from = prev;
+  home_.power_pending_until = lv_tick_get() + 8000;
+  core::logf("schedule: %s\n", on ? "turning the machine on" : "machine to standby");
+  if (!screensaver_on_) show_toast(on ? "Schedule: turning the machine on"
+                                     : "Schedule: machine to standby");
+}
+
+core::DaySchedule& App::sched_edit_day() {
+  return schedule_cfg_.same_every_day ? schedule_cfg_.daily
+                                      : schedule_cfg_.days[settings_.sched_edit_day];
+}
+
+void App::schedule_commit() {
+  if (machine_ != nullptr)
+    schedule_engine_.set_config(schedule_cfg_, schedule_inputs(machine_->snapshot()));
+  if (schedule_ != nullptr) schedule_->set_config(schedule_cfg_);
+}
+
+void App::set_schedule_enabled(bool on) {
+  schedule_cfg_.enabled = on;
+  schedule_commit();
+  sync_schedule_controls();
+}
+
+void App::set_schedule_same_daily(bool on) {
+  // Leaving "same every day" seeds the week from the daily window, so the
+  // per-day rows start from what was in force rather than the defaults.
+  if (!on && schedule_cfg_.same_every_day) {
+    for (core::DaySchedule& d : schedule_cfg_.days) d = schedule_cfg_.daily;
+  }
+  schedule_cfg_.same_every_day = on;
+  schedule_commit();
+  sync_schedule_controls();
+}
+
+void App::set_schedule_day_enabled(bool on) {
+  if (!schedule_cfg_.same_every_day) sched_edit_day().enabled = on;
+  schedule_commit();
+  sync_schedule_controls();
+}
+
+void App::set_schedule_warmup(bool on) {
+  schedule_cfg_.warmup_enabled = on;
+  schedule_commit();
+  sync_schedule_controls();
+}
+
+void App::schedule_pick_day(int weekday) {
+  if (weekday < 0 || weekday > 6) return;
+  settings_.sched_edit_day = weekday;  // UI state only, nothing to persist
+  sync_schedule_controls();
+}
+
+void App::schedule_warmup_adjust(int dir) {
+  int v = schedule_cfg_.warmup_min + dir;
+  if (v < 0) v = 0;
+  if (v > core::kWarmupMaxMin) v = core::kWarmupMaxMin;
+  schedule_cfg_.warmup_min = static_cast<uint8_t>(v);
+  schedule_commit();
+  sync_schedule_controls();
+}
+
+// One picker changed. Rebuild that time from its hour/minute halves, then keep
+// the window legal: the edited end pushes the other end ahead of it rather
+// than being refused (a refusal on a dropdown reads as a broken control).
+void App::schedule_time_select(bool off, bool hour, int idx) {
+  core::DaySchedule& d = sched_edit_day();
+  int on = d.on_min;
+  int off_m = d.off_min;
+  int& v = off ? off_m : on;
+  v = hour ? idx * 60 + (v % 60) : (v / 60) * 60 + idx * core::kScheduleStepMin;
+  if (!off && on >= off_m) {
+    off_m = on + core::kScheduleStepMin;
+    if (off_m > core::kScheduleMaxMin) {
+      off_m = core::kScheduleMaxMin;
+      on = off_m - core::kScheduleStepMin;
+    }
+  }
+  if (off && off_m <= on) {
+    on = off_m - core::kScheduleStepMin;
+    if (on < 0) {
+      on = 0;
+      off_m = core::kScheduleStepMin;
+    }
+  }
+  d.on_min = static_cast<uint16_t>(on);
+  d.off_min = static_cast<uint16_t>(off_m);
+  schedule_commit();
+  sync_schedule_controls();
+}
+
+// Range slider: VALUE_CHANGED says nothing about which knob moved, so both
+// are read every time. The drag only mirrors into the pickers (no NVS write
+// per pixel); the release sanitizes (the knobs can meet) and persists.
+void App::schedule_slider_changed() {
+  if (settings_.sched_slider == nullptr) return;
+  core::DaySchedule& d = sched_edit_day();
+  d.on_min = static_cast<uint16_t>(lv_slider_get_left_value(settings_.sched_slider) *
+                                   core::kScheduleStepMin);
+  d.off_min = static_cast<uint16_t>(lv_slider_get_value(settings_.sched_slider) *
+                                    core::kScheduleStepMin);
+  lv_dropdown_set_selected(settings_.sched_on_hour_dd, d.on_min / 60);
+  lv_dropdown_set_selected(settings_.sched_on_min_dd, (d.on_min % 60) / core::kScheduleStepMin);
+  lv_dropdown_set_selected(settings_.sched_off_hour_dd, d.off_min / 60);
+  lv_dropdown_set_selected(settings_.sched_off_min_dd, (d.off_min % 60) / core::kScheduleStepMin);
+}
+
+void App::schedule_slider_released() {
+  schedule_slider_changed();
+  core::sanitize_day(sched_edit_day());
+  schedule_commit();
+  sync_schedule_controls();
+}
+
+void App::open_schedule_warning_modal() {
+  lv_obj_t* card = open_modal(
+      "Disable app schedules",
+      "If the La Marzocco app has a schedule for this machine, turn it off "
+      "there. Two schedules will conflict and cause confusion.");
+  lv_obj_t* row = modal_button_row(card);
+  modal_button(row, "OK", ui::theme::rail(), on_sched_warn_ok, this);
+  modal_button(row, "Don't show again", ui::theme::accent(), on_sched_warn_never, this);
+}
+
+void App::dismiss_schedule_warning(bool forever) {
+  schedule_warned_ = true;
+  if (forever && schedule_ != nullptr) schedule_->set_cloud_warning_dismissed(true);
+  close_modal();
+}
+
+// "Copy times to": the edited day's window (not its enable flag) onto the
+// picked day, or every other day. Per-day mode only; the row is hidden
+// otherwise.
+void App::schedule_copy_times() {
+  if (schedule_cfg_.same_every_day || settings_.sched_copy_dd == nullptr) return;
+  const int target = static_cast<int>(lv_dropdown_get_selected(settings_.sched_copy_dd));
+  const int from = settings_.sched_edit_day;
+  const core::DaySchedule src = schedule_cfg_.days[from];
+  char msg[48];
+  if (target == 0) {
+    for (int d = 0; d < 7; ++d) {
+      schedule_cfg_.days[d].on_min = src.on_min;
+      schedule_cfg_.days[d].off_min = src.off_min;
+    }
+    std::snprintf(msg, sizeof(msg), "%s's times copied to every day", kDayNames[from]);
+  } else {
+    const int d = target - 1;
+    schedule_cfg_.days[d].on_min = src.on_min;
+    schedule_cfg_.days[d].off_min = src.off_min;
+    std::snprintf(msg, sizeof(msg), "%s's times copied to %s", kDayNames[from], kDayNames[d]);
+  }
+  schedule_commit();
+  sync_schedule_controls();
+  show_toast(msg);
+}
+
+void App::set_schedule_axis_labels(bool h24) {
+  static const char* const k12[5] = {"12 AM", "6 AM", "12 PM", "6 PM", "12 AM"};
+  static const char* const k24[5] = {"0:00", "6:00", "12:00", "18:00", "24:00"};
+  for (int i = 0; i < 5; ++i) ui::set_text(settings_.sched_axis_labels[i], h24 ? k24[i] : k12[i]);
+}
+
+// Widgets follow schedule_cfg_ + the chip selection. Programmatic switch,
+// dropdown and slider writes fire no VALUE_CHANGED, so nothing loops back.
+void App::sync_schedule_controls() {
+  ui::SettingsWidgets& s = settings_;
+  if (s.sched_slider == nullptr) return;
+  const core::ScheduleConfig& c = schedule_cfg_;
+  auto set_sw = [](lv_obj_t* sw, bool on) {
+    if (sw == nullptr || on == lv_obj_has_state(sw, LV_STATE_CHECKED)) return;
+    if (on) lv_obj_add_state(sw, LV_STATE_CHECKED);
+    else lv_obj_remove_state(sw, LV_STATE_CHECKED);
+  };
+  auto set_hidden = [](lv_obj_t* o, bool hidden) {
+    if (o == nullptr || hidden == lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) return;
+    if (hidden) lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_remove_flag(o, LV_OBJ_FLAG_HIDDEN);
+  };
+  set_sw(s.sched_enable_switch, c.enabled);
+  set_sw(s.sched_same_switch, c.same_every_day);
+  set_sw(s.sched_warm_switch, c.warmup_enabled);
+
+  // Per-day mode: the chip strip + the selected day's own switch.
+  set_hidden(s.sched_day_row, c.same_every_day);
+  set_hidden(s.sched_day_enable_row, c.same_every_day);
+  set_hidden(s.sched_copy_row, c.same_every_day);
+  const int edit = s.sched_edit_day;
+  if (!c.same_every_day) {
+    for (int d = 0; d < 7; ++d) {
+      const bool sel = d == edit;
+      ui::set_bg_color(s.sched_day_chips[d], sel ? ui::theme::accent() : ui::theme::card());
+      ui::set_text_color(s.sched_day_labels[d],
+                         sel || c.days[d].enabled ? ui::theme::text() : ui::theme::muted());
+    }
+    ui::set_text(s.sched_day_enable_label, kDayNames[edit]);
+    set_sw(s.sched_day_enable_switch, c.days[edit].enabled);
+  }
+
+  const core::DaySchedule& d = c.same_every_day ? c.daily : c.days[edit];
+  lv_dropdown_set_selected(s.sched_on_hour_dd, d.on_min / 60);
+  lv_dropdown_set_selected(s.sched_on_min_dd, (d.on_min % 60) / core::kScheduleStepMin);
+  lv_dropdown_set_selected(s.sched_off_hour_dd, d.off_min / 60);
+  lv_dropdown_set_selected(s.sched_off_min_dd, (d.off_min % 60) / core::kScheduleStepMin);
+  // lv_bar clamps each end against the other (value >= start, start <= value),
+  // so the order of the two writes depends on which way the window moved.
+  const int32_t on_slot = d.on_min / core::kScheduleStepMin;
+  const int32_t off_slot = d.off_min / core::kScheduleStepMin;
+  if (on_slot > lv_slider_get_value(s.sched_slider)) {
+    lv_slider_set_value(s.sched_slider, off_slot, LV_ANIM_OFF);
+    lv_slider_set_left_value(s.sched_slider, on_slot, LV_ANIM_OFF);
+  } else {
+    lv_slider_set_left_value(s.sched_slider, on_slot, LV_ANIM_OFF);
+    lv_slider_set_value(s.sched_slider, off_slot, LV_ANIM_OFF);
+  }
+
+  char buf[12];
+  std::snprintf(buf, sizeof(buf), "%d min", c.warmup_min);
+  ui::set_text(s.sched_warm_value, buf);
+  apply_schedule_clickable();
+}
+
+// The gate: a paired Micra AND trusted NTP time. Change-detected — this runs
+// from every refresh and restyling ~25 widgets at 2 Hz is real work on the S3.
+void App::sync_schedule_gate() {
+  if (settings_.sched_status == nullptr || machine_ == nullptr) return;
+  const core::Link link = machine_->snapshot().link;
+  const bool paired = link != core::Link::Unconfigured && link != core::Link::NeedsToken;
+  const int gate = (paired ? 1 : 0) | (ntp_ready() ? 2 : 0);
+  if (gate == schedule_gate_) return;
+  schedule_gate_ = gate;
+  const char* why = nullptr;
+  if (!paired) {
+    why = "Pair a Micra first (Settings > Micra > Bluetooth).";
+  } else if (gate != 3) {
+    why = "Needs WiFi with Auto time (NTP) synced: Settings > Apollo > WiFi.";
+  }
+  ui::set_text(settings_.sched_status, why != nullptr ? why : "");
+  if (why != nullptr) lv_obj_remove_flag(settings_.sched_status, LV_OBJ_FLAG_HIDDEN);
+  else lv_obj_add_flag(settings_.sched_status, LV_OBJ_FLAG_HIDDEN);
+  apply_schedule_clickable();
+}
+
+void App::apply_schedule_clickable() {
+  ui::SettingsWidgets& s = settings_;
+  if (s.sched_slider == nullptr) return;
+  const bool ok = schedule_gate_ == 3;
+  set_clickable(s.sched_enable_switch, ok);
+  set_clickable(s.sched_same_switch, ok);
+  set_clickable(s.sched_day_enable_switch, ok);
+  set_clickable(s.sched_warm_switch, ok);
+  for (lv_obj_t* chip : s.sched_day_chips) set_clickable(chip, ok);
+  set_clickable(s.sched_on_hour_dd, ok);
+  set_clickable(s.sched_on_min_dd, ok);
+  set_clickable(s.sched_off_hour_dd, ok);
+  set_clickable(s.sched_off_min_dd, ok);
+  set_clickable(s.sched_slider, ok);
+  set_clickable(s.sched_copy_dd, ok);
+  set_clickable(s.sched_copy_btn, ok);
+  const bool warm = ok && schedule_cfg_.warmup_enabled;
+  set_clickable(s.sched_warm_minus, warm && schedule_cfg_.warmup_min > 0);
+  set_clickable(s.sched_warm_plus, warm && schedule_cfg_.warmup_min < core::kWarmupMaxMin);
+  if (warm) lv_obj_remove_state(s.sched_warm_value, LV_STATE_DISABLED);
+  else lv_obj_add_state(s.sched_warm_value, LV_STATE_DISABLED);
 }
 
 }  // namespace ui

@@ -14,6 +14,7 @@
 #include "core/settings_backup.h"
 #include "core/update_check.h"
 #include "core/ready_chime.h"
+#include "core/schedule.h"
 #include "core/scale.h"
 #include "core/scale_provisioner.h"
 #include "core/shot_store.h"
@@ -42,7 +43,7 @@ class App {
              core::IScaleProvisioner& scale_provisioner, core::IBrewController& brew,
              core::INetwork& network, core::ISound& sound, core::IShotStore& shots,
              const ScreenProfile& screen, core::IUpdateSource* updates,
-             core::ISettingsBackup* backup);
+             core::ISettingsBackup* backup, core::ISchedule& schedule);
   // NOTE: `updates` is deliberately NOT defaulted. It used to be, and the
   // internal layout-rebuild call omitted it -- so every rebuild silently set
   // updates_ = nullptr, hiding the Info page's "Check for updates" button and
@@ -138,6 +139,20 @@ class App {
   void set_backup_include_token(bool on);
   void confirm_backup();                 // modal "Back up"
   void open_restore_modal();             // "Restore from card" -> confirm / refusal
+  // Settings > Micra > Schedule (core::ScheduleConfig; the engine ticks from
+  // refresh()). The page's controls all edit schedule_cfg_ and commit at once.
+  void set_schedule_enabled(bool on);
+  void set_schedule_same_daily(bool on);   // off seeds the seven days from the daily window
+  void set_schedule_day_enabled(bool on);  // the chip-selected day takes part
+  void set_schedule_warmup(bool on);
+  void schedule_pick_day(int weekday);     // chip tap: which day the rows edit
+  void schedule_time_select(bool off, bool hour, int idx);  // On at / Off at dropdowns
+  void schedule_slider_changed();          // range-slider drag: mirror into the pickers
+  void schedule_slider_released();         // ...and persist on release
+  void schedule_warmup_adjust(int dir);    // warm-up minutes [-]/[+]
+  void schedule_copy_times();              // "Copy times to" [Copy]: edited day -> target
+  void open_schedule_warning_modal();      // "turn off the cloud app's schedule" notice
+  void dismiss_schedule_warning(bool forever);
   void confirm_restore();                // modal "Restore"
   void backup_result_poll();             // watch state(); swap in the outcome modal
   void pose_backup_result();             // sim: skip the working notice's floor
@@ -228,6 +243,17 @@ class App {
   void sync_home_setpoints(bool connected);  // mirror set-points to the Home steppers
   void update_battery_runtime(const core::BatteryState& b);  // track drain for the estimate
   void seed_time_controls();   // load the clock into the time/date dropdowns
+  // Schedule: engine feed + page state.
+  bool ntp_ready() const;      // WiFi on + NTP on + a real sync landed this boot
+  core::ScheduleInputs schedule_inputs(const core::MachineSnapshot& snap) const;
+  void schedule_tick(const core::MachineSnapshot& snap);
+  void apply_scheduled_power(bool on);
+  core::DaySchedule& sched_edit_day();
+  void schedule_commit();          // engine + persisted copy follow schedule_cfg_
+  void sync_schedule_controls();   // widgets follow schedule_cfg_ (and the chip)
+  void sync_schedule_gate();       // paired + NTP -> status line + greyed controls
+  void apply_schedule_clickable();
+  void set_schedule_axis_labels(bool h24);  // the hour axis under the slider
   void apply_date_selection(); // clamp day, resize its options, write set_date
   // Re-derive the inferred Heating state (hysteresis bit = heating_) and
   // start/stop the status-dot pulse. Call once per machine-snapshot pass,
@@ -390,6 +416,15 @@ class App {
   // it survives refreshes AND theme rebuilds — its whole job is remembering
   // that this warm-up has already been announced.
   core::ReadyChime ready_chime_;
+  // Scheduled on/standby. The engine is a member for the same reason: its
+  // consumed-slot latches must outlive refreshes and theme rebuilds. ~80 B of
+  // internal .bss for the engine + the working config copy; no heap, no task.
+  core::ISchedule* schedule_ = nullptr;
+  core::ScheduleEngine schedule_engine_;
+  core::ScheduleConfig schedule_cfg_;      // the page's working copy
+  bool schedule_loaded_ = false;           // schedule_cfg_ read from the port once
+  bool schedule_warned_ = false;           // cloud-app notice shown this session
+  int schedule_gate_ = -1;                 // change-detect: bit0 paired, bit1 NTP; -1 unknown
 
   // Shot-history view state. shot_view_ backs the open shot-card modal (the
   // card's graph paints from it on every redraw, so it must outlive the

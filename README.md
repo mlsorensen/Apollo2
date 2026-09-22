@@ -48,6 +48,9 @@ to the machine instead of a phone app.
   backflush cleaning cycle, on wired boards.
 - **Warm‑up chime** — boards with a speaker play a tune when the machine is
   ready, so you can start it and walk away.
+- **Schedule** — switch the machine on (with a warm‑up lead) and back to
+  standby at set times, the same every day or per weekday, from the device's
+  own NTP clock.
 - **Shot history** — every shot is saved to a microSD card as CSV, browsable on
   the device's Stats tab or from a phone via the device's own web page.
 - **Settings backup** — preferences copy to the same card and restore onto

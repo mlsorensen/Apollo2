@@ -25,6 +25,7 @@
 #include "platform_host/fake_provisioner.h"
 #include "platform_host/fake_scale.h"
 #include "platform_host/fake_scale_provisioner.h"
+#include "platform_host/fake_schedule.h"
 #include "platform_host/fake_settings_backup.h"
 #include "platform_host/fake_shot_store.h"
 #include "platform_host/fake_sound.h"
@@ -79,7 +80,8 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             uint32_t unwired_midshot_ms = 0, bool toast = false,
             bool join_modal = false, bool screensaver = false,
             bool update_modal = false, core::IUpdateSource* updates = nullptr,
-            core::ISettingsBackup* backup = nullptr, int backup_modal = 0) {
+            core::ISettingsBackup* backup = nullptr, int backup_modal = 0,
+            core::ISchedule* schedule = nullptr) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
@@ -87,9 +89,10 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   host::PngDisplay display(screen.width, screen.height);
   static host::FakeSound fake_sound;  // stateless; shared across renders
   ui::App app;
+  static host::FakeSchedule fallback_schedule;  // renders that don't pose one
   app.build(machine, provisioner, battery, disp_settings, clock, history, scale,
             scale_provisioner, brew, network, fake_sound, shots, screen, updates,
-            backup);
+            backup, schedule != nullptr ? *schedule : fallback_schedule);
   app.show_tab(tab);
   if (settings_section >= 0) app.select_settings_section(settings_section);
   if (stats_section >= 0) app.select_stats_section(stats_section);
@@ -155,6 +158,7 @@ int main() {
   host::FakeUpdateSource updates;
   host::FakeShotStore shots;
   host::FakeSettingsBackup backup;
+  host::FakeSchedule schedule;
 
   // One PNG per supported layout. Add a line here when a new form factor lands.
   auto r = [&](ui::ScreenProfile s, const char* path, int tab = 0, int sec = -1,
@@ -167,7 +171,7 @@ int main() {
                   scale_provisioner, brew, network, shots, s, path, tab, sec, modal, theme,
                   stats, clean_lock, shot_id, history_ym, backflush, log_modal,
                   unwired_midshot_ms, toast, join_modal, screensaver, update_modal,
-                  &updates, &backup, backup_modal);
+                  &updates, &backup, backup_modal, &schedule);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
@@ -284,6 +288,30 @@ int main() {
   brew.set_flush_s(3);
   ok &= r({800, 480}, "renders/micra_cleaning_on_800x480.png", 1, ui::kSectionMicraCleaning);
   brew.set_flush_s(0);
+  // Micra > Schedule. The gate needs a synced clock, which the fake network
+  // only reports while posed (so Stats > Info keeps its honest "never").
+  network.set_synced(true);
+  schedule.pose_daily();
+  ok &= r({800, 480}, "renders/micra_schedule_800x480.png", 1, ui::kSectionMicraSchedule);
+  ok &= r({320, 240}, "renders/micra_schedule_320x240.png", 1, ui::kSectionMicraSchedule);
+  schedule.pose_per_day();
+  ok &= r({800, 480}, "renders/micra_schedule_days_800x480.png", 1, ui::kSectionMicraSchedule);
+  ok &= r({320, 240}, "renders/micra_schedule_days_320x240.png", 1, ui::kSectionMicraSchedule);
+  schedule.pose_daily();
+  // First visit: the "turn off the cloud app's schedule" notice (opened from
+  // the page-shown hook, so no extra pose is needed).
+  schedule.set_warning_dismissed(false);
+  ok &= r({800, 480}, "renders/schedule_warn_modal_800x480.png", 1, ui::kSectionMicraSchedule);
+  ok &= r({320, 240}, "renders/schedule_warn_modal_320x240.png", 1, ui::kSectionMicraSchedule);
+  schedule.set_warning_dismissed(true);
+  // Gated: no trusted time, then no paired machine.
+  network.set_synced(false);
+  ok &= r({800, 480}, "renders/micra_schedule_nontp_800x480.png", 1, ui::kSectionMicraSchedule);
+  network.set_synced(true);
+  machine.set_link(core::Link::Unconfigured);
+  ok &= r({800, 480}, "renders/micra_schedule_unpaired_800x480.png", 1, ui::kSectionMicraSchedule);
+  machine.set_link(core::Link::Connected);
+  network.set_synced(false);
   ok &= r({320, 240}, "renders/scale_settings_320x240.png", 1, ui::kSectionScaleSettings);
   ok &= r({800, 480}, "renders/scale_settings_800x480.png", 1, ui::kSectionScaleSettings);
   // Scale > Device settings (stored on the scale): live values, and the
@@ -362,6 +390,10 @@ int main() {
   ok &= r(p5, "renders/micra_bt_1280x720.png", 1, ui::kSectionMicraBt);
   ok &= r(p5, "renders/device_1280x720.png", 1, ui::kSectionDevice);
   ok &= r(p5, "renders/device_display_1280x720.png", 1, ui::kSectionDeviceDisplay);
+  network.set_synced(true);
+  schedule.pose_per_day();
+  ok &= r(p5, "renders/micra_schedule_days_1280x720.png", 1, ui::kSectionMicraSchedule);
+  network.set_synced(false);
   ok &= r(p5, "renders/stats_brew_1280x720.png", 2, -1, false, 0, ui::kStatsBrew);
   // Token modal over Home (modal over Settings hits a known LVGL draw loop).
   ok &= r(p5, "renders/token_modal_1280x720.png", 0, -1, true);

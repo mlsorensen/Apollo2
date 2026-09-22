@@ -10,7 +10,7 @@ core::MachineSnapshot FakeMachine::snapshot() const {
       .serial = "MR000000",
       .firmware = "1.40",
       .software = "v5.0.9",
-      .link = core::Link::Connected,  // the fake is always "connected"
+      .link = link_,
       .power = power_,
       .brew_temp_c = brew_temp_,
       .brew_target_c = brew_target_,

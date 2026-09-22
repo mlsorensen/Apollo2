@@ -287,6 +287,91 @@
     ]
   },
   {
+    "src": "renders/micra_schedule_800x480.png",
+    "out": "micra-schedule.png",
+    "size": [
+      800,
+      480
+    ],
+    "callouts": [
+      {
+        "n": 1,
+        "x": 100,
+        "y": 84,
+        "w": 342,
+        "h": 50
+      },
+      {
+        "n": 2,
+        "x": 452,
+        "y": 84,
+        "w": 343,
+        "h": 50
+      },
+      {
+        "n": 3,
+        "x": 100,
+        "y": 128,
+        "w": 695,
+        "h": 56
+      },
+      {
+        "n": 4,
+        "x": 100,
+        "y": 186,
+        "w": 695,
+        "h": 66
+      },
+      {
+        "n": 5,
+        "x": 100,
+        "y": 254,
+        "w": 695,
+        "h": 60
+      }
+    ]
+  },
+  {
+    "src": "renders/micra_schedule_days_800x480.png",
+    "out": "micra-schedule-days.png",
+    "size": [
+      800,
+      480
+    ],
+    "callouts": [
+      {
+        "n": 1,
+        "x": 100,
+        "y": 128,
+        "w": 695,
+        "h": 48
+      },
+      {
+        "n": 2,
+        "x": 100,
+        "y": 176,
+        "w": 695,
+        "h": 42
+      },
+      {
+        "n": 3,
+        "x": 100,
+        "y": 400,
+        "w": 695,
+        "h": 58
+      }
+    ]
+  },
+  {
+    "src": "renders/schedule_warn_modal_800x480.png",
+    "out": "schedule-warn-modal.png",
+    "size": [
+      800,
+      480
+    ],
+    "callouts": []
+  },
+  {
     "src": "renders/scale_bt_800x480.png",
     "out": "scale-bluetooth.png",
     "size": [

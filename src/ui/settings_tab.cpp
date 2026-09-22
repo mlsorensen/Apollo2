@@ -2,6 +2,8 @@
 
 #include <string>
 
+#include "core/schedule.h"
+
 #include "ui/theme.h"
 #include "ui/timezones.h"
 #include "ui/widgets.h"
@@ -444,6 +446,232 @@ void build_device_wifi_rows(lv_obj_t* page, const lv_font_t* text_font,
   lv_obj_set_size(out.beta_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 }
 
+// Controls the App greys out (set_clickable) read at 40 % while disabled — the
+// action_row idiom, applied per widget rather than to a container, which would
+// make the S3's renderer blend the whole subtree as a layer every frame.
+void dim_when_disabled(lv_obj_t* obj) {
+  lv_obj_set_style_opa(obj, LV_OPA_40, LV_STATE_DISABLED);
+}
+
+lv_obj_t* make_switch(lv_obj_t* row, int btn_size) {
+  lv_obj_t* sw = lv_switch_create(row);
+  lv_obj_set_size(sw, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
+  dim_when_disabled(sw);
+  return sw;
+}
+
+// A full-width row holding two setting rows side by side (48 % each), so two
+// short settings share one line on the wide tiers. Compact stacks them: the
+// caller passes the page itself and each half becomes a normal 100 % row.
+lv_obj_t* split_row(lv_obj_t* page, bool compact) {
+  if (compact) return page;
+  lv_obj_t* row = lv_obj_create(page);
+  lv_obj_remove_style_all(row);
+  lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_width(row, lv_pct(100));
+  lv_obj_set_height(row, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  return row;
+}
+lv_obj_t* split_half(lv_obj_t* split, const char* label, const lv_font_t* font,
+                     bool compact) {
+  lv_obj_t* half = make_setting_row(split, label, font);
+  if (!compact) lv_obj_set_width(half, lv_pct(48));
+  return half;
+}
+
+// Micra > Schedule: scheduled on / standby (core::ScheduleConfig). The layout
+// is a form, not a list: master + "same every day" switches on one line, the
+// weekday chip strip and the day's own enable (per-day mode only), the On at /
+// Off at pickers, a range slider that shows the same window, and the warm-up
+// lead. Everything fits without scrolling at 800x480; the compact tier stacks
+// the paired rows and scrolls a little. App fills the dropdowns (the hour
+// list follows the 12/24 h preference, like Time & date) and keeps the pickers
+// and the slider agreeing.
+void build_micra_schedule_rows(lv_obj_t* page, const lv_font_t* font,
+                               const lv_font_t* symbol_font, int btn_size,
+                               bool compact, ui::SettingsWidgets& out) {
+  // One more row than the other pages: a slightly tighter column keeps the
+  // per-day form on one screen at 800x480.
+  lv_obj_set_style_pad_row(page, ui::dp(compact ? 6 : 8), 0);
+
+  // Why the page is greyed out, when it is.
+  out.sched_status = lv_label_create(page);
+  lv_obj_set_width(out.sched_status, lv_pct(100));
+  lv_label_set_long_mode(out.sched_status, LV_LABEL_LONG_WRAP);
+  lv_obj_set_style_text_color(out.sched_status, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(out.sched_status, font, 0);
+  lv_label_set_text(out.sched_status, "");
+  lv_obj_add_flag(out.sched_status, LV_OBJ_FLAG_HIDDEN);
+
+  // Schedule [sw]        Same every day [sw]
+  {
+    lv_obj_t* split = split_row(page, compact);
+    lv_obj_t* ra = split_half(split, "Enabled", font, compact);
+    out.sched_enable_switch = make_switch(ra, btn_size);
+    lv_obj_t* rb = split_half(split, "Same every day", font, compact);
+    out.sched_same_switch = make_switch(rb, btn_size);
+  }
+
+  // [Mon][Tue]...[Sun]: which day the rows below edit. Equal widths, one line.
+  {
+    static const char* const kShort[7] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
+    static const char* const kTiny[7] = {"Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"};
+    lv_obj_t* strip = lv_obj_create(page);
+    lv_obj_remove_style_all(strip);
+    lv_obj_remove_flag(strip, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_width(strip, lv_pct(100));
+    lv_obj_set_height(strip, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(strip, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(strip, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(strip, ui::dp(compact ? 4 : 8), 0);
+    out.sched_day_row = strip;
+    for (int d = 0; d < 7; ++d) {
+      lv_obj_t* chip = ui::make_button(strip);
+      lv_obj_set_flex_grow(chip, 1);
+      lv_obj_set_height(chip, ui::dp(compact ? 30 : 40));
+      lv_obj_set_style_pad_hor(chip, ui::dp(4), 0);
+      lv_obj_set_style_bg_color(chip, lv_color_hex(ui::theme::card()), 0);
+      dim_when_disabled(chip);
+      lv_obj_t* l = lv_label_create(chip);
+      lv_label_set_text(l, compact ? kTiny[d] : kShort[d]);
+      lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::text()), 0);
+      lv_obj_set_style_text_font(l, font, 0);
+      lv_obj_center(l);
+      out.sched_day_chips[d] = chip;
+      out.sched_day_labels[d] = l;
+    }
+  }
+
+  // <Weekday> [sw]: the selected day takes part in the schedule.
+  out.sched_day_enable_row = make_setting_row(page, "Monday", font);
+  out.sched_day_enable_label = lv_obj_get_child(out.sched_day_enable_row, 0);
+  out.sched_day_enable_switch = make_switch(out.sched_day_enable_row, btn_size);
+
+  // On at [hh][mm]      Off at [hh][mm]
+  {
+    lv_obj_t* split = split_row(page, compact);
+    const int hour_w = ui::dp(compact ? 92 : 128);
+    const int min_w = ui::dp(compact ? 66 : 84);
+    lv_obj_t* ron = split_half(split, "On at", font, compact);
+    lv_obj_t* gon = make_field_group(ron);
+    out.sched_on_hour_dd = make_field_dropdown(gon, font, hour_w, compact);
+    out.sched_on_min_dd = make_field_dropdown(gon, font, min_w, compact);
+    lv_obj_t* roff = split_half(split, "Off at", font, compact);
+    lv_obj_t* goff = make_field_group(roff);
+    out.sched_off_hour_dd = make_field_dropdown(goff, font, hour_w, compact);
+    out.sched_off_min_dd = make_field_dropdown(goff, font, min_w, compact);
+    for (lv_obj_t* dd : {out.sched_on_hour_dd, out.sched_on_min_dd, out.sched_off_hour_dd,
+                         out.sched_off_min_dd}) {
+      dim_when_disabled(dd);
+    }
+  }
+
+  // The window as a bar across the day: both ends drag. Wrapped so the knobs
+  // at 00:00 / 23:55 stay inside the page instead of clipping at its edge.
+  {
+    lv_obj_t* wrap = lv_obj_create(page);
+    lv_obj_remove_style_all(wrap);
+    lv_obj_remove_flag(wrap, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_width(wrap, lv_pct(100));
+    lv_obj_set_height(wrap, LV_SIZE_CONTENT);
+    lv_obj_set_style_pad_hor(wrap, ui::dp(12), 0);
+    lv_obj_set_style_pad_ver(wrap, ui::dp(compact ? 6 : 10), 0);
+    lv_obj_t* sl = lv_slider_create(wrap);
+    // RANGE mode must be set BEFORE the range/values: lv_bar ignores a start
+    // value (and resets it on set_range) in any other mode.
+    lv_slider_set_mode(sl, LV_SLIDER_MODE_RANGE);
+    lv_slider_set_range(sl, 0, core::kScheduleSlotsPerDay - 1);
+    lv_obj_set_width(sl, lv_pct(100));
+    lv_obj_set_height(sl, ui::dp(10));
+    lv_obj_set_ext_click_area(sl, ui::dp(14));
+    lv_obj_set_style_bg_color(sl, lv_color_hex(ui::theme::rail()), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(sl, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(sl, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(sl, lv_color_hex(ui::theme::accent()), LV_PART_INDICATOR);
+    lv_obj_set_style_radius(sl, LV_RADIUS_CIRCLE, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(sl, lv_color_hex(ui::theme::text()), LV_PART_KNOB);
+    lv_obj_set_style_pad_all(sl, ui::dp(6), LV_PART_KNOB);
+    dim_when_disabled(sl);
+    out.sched_slider = sl;
+
+    // Hour axis under the bar: a tick every 3 h, labelled every 6 h, so noon
+    // has a place. Same side padding as the bar so 0 % and 100 % line up
+    // with the track's ends (percent x is of the parent's content width).
+    lv_obj_t* axis = lv_obj_create(page);
+    lv_obj_remove_style_all(axis);
+    lv_obj_remove_flag(axis, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_width(axis, lv_pct(100));
+    lv_obj_set_height(axis, LV_SIZE_CONTENT);
+    lv_obj_set_style_pad_hor(axis, ui::dp(12), 0);
+    const lv_font_t* axis_font = ui::font_dp(14);
+    for (int i = 0; i <= 8; ++i) {  // every 3 h
+      const bool major = i % 2 == 0;
+      lv_obj_t* tick = lv_obj_create(axis);
+      lv_obj_remove_style_all(tick);
+      lv_obj_set_size(tick, ui::dp(2), ui::dp(major ? 8 : 5));
+      lv_obj_set_style_bg_color(tick, lv_color_hex(ui::theme::muted()), 0);
+      lv_obj_set_style_bg_opa(tick, LV_OPA_COVER, 0);
+      lv_obj_set_pos(tick, lv_pct(i * 25 / 2), 0);
+      lv_obj_set_style_translate_x(tick, lv_pct(-50), 0);
+      if (major) {
+        lv_obj_t* l = lv_label_create(axis);
+        lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::muted()), 0);
+        lv_obj_set_style_text_font(l, axis_font, 0);
+        lv_obj_set_pos(l, lv_pct(i * 25 / 2), ui::dp(9));
+        // Centre on the tick, except the ends, which hug the edges.
+        lv_obj_set_style_translate_x(l, lv_pct(i == 0 ? 0 : i == 8 ? -100 : -50), 0);
+        out.sched_axis_labels[i / 2] = l;  // App fills the text (12/24 h)
+      }
+    }
+  }
+
+  // Warm-up [sw] [-] 6 min [+]: start early so the boilers are there on time.
+  {
+    lv_obj_t* rw = make_setting_row(page, "Warm-up", font);
+    lv_obj_t* grp = lv_obj_create(rw);
+    lv_obj_remove_style_all(grp);
+    lv_obj_remove_flag(grp, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_size(grp, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(grp, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(grp, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(grp, ui::dp(12), 0);
+    out.sched_warm_switch = make_switch(grp, btn_size);
+    make_inline_stepper(grp, font, symbol_font, btn_size, &out.sched_warm_minus,
+                        &out.sched_warm_value, &out.sched_warm_plus, nullptr);
+    dim_when_disabled(out.sched_warm_minus);
+    dim_when_disabled(out.sched_warm_plus);
+    dim_when_disabled(out.sched_warm_value);
+  }
+
+  // Copy times to [All days v] [Copy]: the edited day's window onto another
+  // day (or all of them). Per-day mode only; App shows/hides it.
+  {
+    out.sched_copy_row = make_setting_row(page, "Copy times to", font);
+    lv_obj_t* grp = make_field_group(out.sched_copy_row);
+    lv_obj_set_style_pad_column(grp, ui::dp(10), 0);
+    out.sched_copy_dd = make_field_dropdown(grp, font, ui::dp(compact ? 110 : 160), compact);
+    lv_dropdown_set_options(out.sched_copy_dd,
+                            "All days\nMonday\nTuesday\nWednesday\nThursday\nFriday"
+                            "\nSaturday\nSunday");
+    dim_when_disabled(out.sched_copy_dd);
+    out.sched_copy_btn = ui::make_button(grp);
+    lv_obj_set_height(out.sched_copy_btn, btn_size);
+    lv_obj_set_style_pad_hor(out.sched_copy_btn, ui::dp(14), 0);
+    lv_obj_set_style_bg_color(out.sched_copy_btn, lv_color_hex(ui::theme::card()), 0);
+    dim_when_disabled(out.sched_copy_btn);
+    lv_obj_t* l = lv_label_create(out.sched_copy_btn);
+    lv_label_set_text(l, "Copy");
+    lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(l, font, 0);
+    lv_obj_center(l);
+  }
+}
+
 // A tappable card row "<label>   <glyph>" that runs an action instead of
 // drilling into a page (Restart display, Lock for cleaning, Backflush). The
 // caller adds the CLICKED handler; App greys it via set_clickable where the
@@ -616,6 +844,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   // --- Leaf pages (the actual content) -------------------------------------
   out.micra_bt_page = lv_menu_page_create(menu, "Bluetooth");
   out.micra_controls_page = lv_menu_page_create(menu, "Controls");
+  out.micra_schedule_page = lv_menu_page_create(menu, "Schedule");
   out.scale_bt_page = lv_menu_page_create(menu, "Bluetooth");
   out.scale_settings_page = lv_menu_page_create(menu, "Shot settings");
   out.scale_device_page = lv_menu_page_create(menu, "Device settings");
@@ -625,6 +854,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   if (with_backup) out.device_backup_page = lv_menu_page_create(menu, "Backup");
   page_column(out.micra_bt_page, compact);
   page_column(out.micra_controls_page, compact);
+  page_column(out.micra_schedule_page, compact);
   page_column(out.scale_bt_page, compact);
   page_column(out.scale_settings_page, compact);
   page_column(out.scale_device_page, compact);
@@ -725,6 +955,11 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     out.flush_delay_row = out.flush_delay_btn = out.flush_delay_value = nullptr;
     out.backflush_btn = nullptr;
   }
+
+  // Micra > Schedule: scheduled on / standby (every board: it needs only the
+  // clock and the link).
+  build_micra_schedule_rows(out.micra_schedule_page, font, symbol_font, btn_size,
+                            compact, out);
 
   section_label(out.micra_controls_page, "Brew", font);
   {
@@ -851,6 +1086,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   root_entry(menu, out.micra_page, out.micra_controls_page, "Controls", font, btn_h);
   if (out.micra_cleaning_page != nullptr)
     root_entry(menu, out.micra_page, out.micra_cleaning_page, "Cleaning", font, btn_h);
+  root_entry(menu, out.micra_page, out.micra_schedule_page, "Schedule", font, btn_h);
   root_entry(menu, out.scale_page, out.scale_bt_page, "Bluetooth", font, btn_h);
   root_entry(menu, out.scale_page, out.scale_settings_page, "Shot settings", font, btn_h);
   root_entry(menu, out.scale_page, out.scale_device_page, "Device settings", font, btn_h);
@@ -890,6 +1126,7 @@ lv_obj_t* settings_section_page(const SettingsWidgets& w, int section) {
     case kSectionMicraBt:       return w.micra_bt_page;
     case kSectionMicraControls: return w.micra_controls_page;
     case kSectionMicraCleaning: return w.micra_cleaning_page;
+    case kSectionMicraSchedule: return w.micra_schedule_page;
     case kSectionScale:         return w.scale_page;
     case kSectionScaleBt:       return w.scale_bt_page;
     case kSectionScaleSettings: return w.scale_settings_page;

@@ -32,6 +32,7 @@
 #include "platform_esp32/crash_record.h"
 #include "platform_esp32/display.h"
 #include "platform_esp32/display_settings.h"
+#include "platform_esp32/schedule_settings.h"
 #include "platform_esp32/history.h"
 #include "platform_esp32/install_mode.h"
 #include "platform_esp32/io_extension.h"
@@ -68,6 +69,7 @@ platform::TokenSetup g_token_setup{g_config, g_micra};
 platform::Provisioner g_provisioner{g_micra, g_config, g_token_setup};
 platform::Battery g_battery;
 platform::DisplaySettings g_display_settings{g_display, g_config};
+platform::ScheduleSettings g_schedule{g_config};  // Settings > Micra > Schedule (NVS)
 platform::Clock g_clock{g_config};
 platform::Network g_network{g_config, g_clock, g_token_setup};  // WiFi station + NTP
 platform::UpdateCheck g_update_check{g_config, g_network};  // daily release check
@@ -401,10 +403,11 @@ void setup() {
 #if defined(BOARD_HAS_SD_MMC)
               // Settings backup/restore: the shot store implements it too — the
               // settings file sits on the card its writer task already owns.
-              &g_shots);
+              &g_shots,
 #else
-              nullptr);  // no card slot: no Backup page
+              nullptr,  // no card slot: no Backup page
 #endif
+              g_schedule);
 
   // Settings "Restart display": on RGB boards this is a panel DMA resync, not
   // a reboot — the shifted/ghosted raster is a latched bounce-buffer underrun,

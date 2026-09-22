@@ -12,7 +12,7 @@ your board.
 
 - [Where everything lives](#nav-map) — a map of every screen and setting
 - [Home](#home) — MICRA card · SCALE card · Flow graph · Shot lifecycle
-- [Settings → Micra](#settings-micra) — Bluetooth · Controls · Cleaning
+- [Settings → Micra](#settings-micra) — Bluetooth · Controls · Cleaning · Schedule
 - [Settings → Scale](#settings-scale) — Bluetooth · Shot settings · Device
   settings · Per‑scale nuances
 - [Settings → Apollo](#settings-device) — Display · Time & date · WiFi ·
@@ -46,7 +46,9 @@ Settings
 │  ├─ Bluetooth — Scan · saved machine (Setup / Connect / Forget) · Auto connect
 │  ├─ Controls  — Wired paddle* · Chime melody* · Chime volume*
 │  │             · Brew Temperature · Steam Enable + Temperature
-│  └─ Cleaning* — Auto flush · Flush delay · Backflush cleaning  → cleaning mode
+│  ├─ Cleaning* — Auto flush · Flush delay · Backflush cleaning  → cleaning mode
+│  └─ Schedule  — Schedule · Same every day · day chips + per-day enable
+│                · On at / Off at · range slider · Warm-up
 ├─ Scale
 │  ├─ Bluetooth       — Scan · saved scale (Connect / Forget)
 │  ├─ Shot settings   — Target · Review hold · Detect lead-in · Smoothing
@@ -103,7 +105,8 @@ Without a scale, the MICRA card fills the screen as a single hero:
 - ④ **Power button** — `Standby` / `Turn on` when connected. After a tap it
   briefly reads `Working...` (disabled) until the machine reports the change —
   the Micra's answer trails the command by a couple of seconds, and the button
-  would otherwise look like it did nothing. When the machine is configured but
+  would otherwise look like it did nothing (a command sent by the
+  [Schedule](#schedule) shows the same). When the machine is configured but
   disconnected it becomes **Connect** and starts the Bluetooth link.
 - ⑤ **Flush** *(paddle‑wired boards, screens 4.3" and larger)* — runs the group
   for a quick rinse, for the same time as **Auto flush** (3 s when Auto flush
@@ -281,6 +284,70 @@ needs the paddle harness, since that's what drives it.
     you backflush.
 
   <img src="docs/img/manual/backflush.png" width="70%" alt="Backflush cleaning mode">
+
+<a id="schedule"></a>
+
+### Schedule
+
+![Micra Schedule](docs/img/manual/micra-schedule.png)
+
+Turns the machine on and sends it to standby at set times, from the device's
+own clock, so it is warm when you walk up and asleep when you don't. The page
+needs a paired Micra and a clock it can trust: WiFi on with **Auto time (NTP)**
+synced since the last power‑up (see [Settings → Apollo → WiFi](#wifi)). Until
+both hold, the rows are greyed out and the line at the top says which is
+missing. The first time you open the page a notice asks you to turn off any
+schedule in the La Marzocco app — two schedules for one machine conflict and
+confuse. **OK** dismisses it until the next restart; **Don't show again**, for
+good.
+
+- ① **Enabled** *(default off)* — the master switch. Off keeps the times you
+  set.
+- ② **Same every day** *(default on)* — one window for the whole week. Turn it
+  off for per‑day times: a row of day chips appears (below) and each day has
+  its own On at / Off at plus an enable switch, so a day can sit the schedule
+  out. **Turning it off copies the daily window onto all seven days** as the
+  starting point, so you only edit the days that differ.
+- ③ **On at / Off at** *(5‑minute steps; default 6:30 → 9:00)* — the window.
+  Off is always later than On on the same day (a window never crosses
+  midnight); moving one end past the other pushes the other along.
+- ④ **Slider** — the same window as a bar across the day, midnight at the
+  left edge and 23:55 at the right, with an hour axis underneath (a tick every
+  three hours, labelled at 6 AM, noon and 6 PM). Drag either end; the pickers
+  follow, and vice versa.
+- ⑤ **Warm‑up** *(default on, 6 min; 0–30)* — starts the machine this many
+  minutes *before* On at, so the boilers are at temperature by the scheduled
+  time. One setting for every day. A lead that reaches past midnight simply
+  starts the evening before.
+
+  <img src="docs/img/manual/micra-schedule-days.png" width="70%" alt="Per-day schedule">
+
+  ① the day chips pick which day the rows below edit (a greyed name is a day
+  that is switched off); ② that day's own enable switch; ③ **Copy times to**
+  copies the shown day's On at / Off at onto the picked day, or onto **All
+  days**, without touching any day's enable switch.
+
+How it behaves:
+
+- **The times are triggers, not a period.** On at switches the machine on
+  once; Off at sends it to standby once. Between them do as you like — switch
+  it off by hand and it stays off; switch it on early and On at simply finds
+  it already on.
+- **Standby waits for the shot.** If Off at lands while a shot is running or
+  still under review, standby holds until the device has been idle for about
+  two minutes (long enough for the auto‑flush and the cup to come off), then
+  goes ahead if the machine is still on.
+- **Only while connected.** A trigger fires only if the Micra is connected at
+  that minute (a two‑minute window covers hiccups). If the link is down —
+  disconnected on purpose, or the machine off at its switch — that trigger is
+  skipped, not queued. Likewise nothing fires while WiFi is off, Auto time is
+  off, or no Micra is paired; the times you set are kept for when they are
+  back.
+- The Home **Power** button reads `Working...` while a scheduled command is in
+  flight, and a short notice says what the schedule just did (unless the idle
+  screen is up).
+
+  <img src="docs/img/manual/schedule-warn-modal.png" width="70%" alt="The one-schedule notice">
 
 ---
 
@@ -535,7 +602,8 @@ copies the settings onto that same card, so a replacement can pick them up.
   on by default — the point of a backup is a replacement that just works — and
   turning one off means setting that up by hand later, which is the trade worth
   making if the card won't stay with the machine. Everything else (theme,
-  chime, target weight, flush settings, timezone, and the rest) always travels.
+  chime, target weight, flush settings, schedule, timezone, and the rest)
+  always travels.
 - ③ **Restore from card** — replaces every setting on this Apollo with the
   backup, then restarts to apply it. Anything the backup doesn't carry — a
   setting added in a later firmware, or a credential you left out — goes back

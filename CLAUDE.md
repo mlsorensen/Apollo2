@@ -143,6 +143,43 @@ is on — swap hardware and every shot survives while every preference is lost.
   reasoning as the NVS RULE below.
 - Boards without a card slot pass `nullptr` for the port and the page is absent.
 
+## Scheduled on/standby (v1.0, issue #3)
+
+`Settings > Micra > Schedule`: one "on" window per day, the same every day or
+per weekday, with a global warm-up lead. Shape of it:
+
+- Pure engine `core::ScheduleEngine` (include/core/schedule.h, src/core/
+  schedule.cpp) owned by `ui::App` like `ReadyChime` and fed from the 500 ms
+  `App::refresh()` (clock, machine link/power, `BrewSnapshot::phase`,
+  `lv_tick_get()`). ~80 B of internal .bss, no task, no heap. `make
+  test-schedule` (tools/schedule_test.cpp, plain g++) checks it — keep it green.
+- RULES the engine encodes (owner's decisions, don't drift): times are ONE-SHOT
+  edges, never a held period; a trigger fires only if the link is Connected
+  inside a 2-min window (`kScheduleFireWindowMin`) and is otherwise dropped, no
+  catch-up; each slot latches by minute-of-week so it fires once; an edit
+  pre-latches anything already in-window (dragging a time across "now" never
+  switches the machine); "on" when already on is a no-op; "off" during a shot
+  or review DEFERS until the phase has been idle for `kStandbyGraceMs` (2 min,
+  covers the auto-flush), then fires if still on; nothing fires unless
+  `App::ntp_ready()` (WiFi enabled + NTP enabled + `ntp_seconds_since_sync()
+  >= 0`, i.e. a real sync THIS boot) and the date is real. The warm-up lead
+  may wrap into the previous evening (minute-of-week arithmetic).
+- Gate on the page (`sync_schedule_gate`, change-detected): paired Micra AND
+  ntp_ready; otherwise every control is DISABLED (per-widget 40 % opa, not a
+  container) with the reason in `sched_status`. `MachineSnapshot::brewing` is
+  NEVER set by the link — use `ShotPhase`.
+- NVS keys (all ADDs): `schen`, `schsame`, `schwarm`, `schwarmm`, `schwarn`
+  (cloud-app notice dismissed), `schall` (daily window) and `schd0`..`schd6`
+  (Mon..Sun), the windows packed by `core::pack_day` (bits 0-10 on, 11-21 off,
+  22 enabled; `unpack_day` sanitizes so garbage degrades to a legal window).
+  `platform::ScheduleSettings::set_config` writes only changed keys.
+- UI: hour dropdowns share `fill_hour_dd` with Time & date (index == hour in
+  both clock formats); the range slider is `LV_SLIDER_MODE_RANGE` (mode BEFORE
+  range; programmatic writes are order-aware because lv_bar clamps each end
+  against the other; VALUE_CHANGED names no knob, read both). The slider
+  persists on RELEASED only. The toast for a scheduled command is skipped
+  under the screensaver on purpose.
+
 ## Failed-allocation flight recorder (crash_record.*, 2026-09-12)
 
 Core dumps here hold task stacks only (CONFIG_ESP_COREDUMP_CAPTURE_DRAM is off

@@ -25,6 +25,7 @@
 #   make build-p4-x-10-1    compile the P4-WIFI6 X 10.1" box (DSI 1280x800) firmware
 #   make monitor            open the serial monitor
 #   make sim                build + run the host simulator (writes renders/*.png)
+#   make test-schedule      host check of the schedule engine (plain g++, <1 s)
 #   make docs-img           regenerate the manual's annotated screenshots
 #                           (docs/img/manual/) from the sim renders
 #   make webapp             rebuild the embedded web app (needs node; every
@@ -65,7 +66,7 @@ webapp: $(WEBAPP_HDR)
         build-p4-x-7 build-p4-x-8 build-p4-x-10-1 \
         build-7b build-4-3b build-4-3c build-p4 \
         build-release build-all \
-        webapp monitor padsense paddrive sim docs-img lmtoken lmtoken-release lmtoken-publish clean
+        webapp monitor padsense paddrive sim test-schedule docs-img lmtoken lmtoken-release lmtoken-publish clean
 
 flash: $(WEBAPP_HDR)
 	@tools/flash.sh $(BOARD)
@@ -162,6 +163,13 @@ paddrive:
 
 sim:
 	$(PIO) run -e sim && ./.pio/build/sim/program
+
+# The schedule engine (core/schedule.cpp) is pure logic, so it gets a real
+# check: a host binary of asserts, no PlatformIO test env needed.
+test-schedule:
+	@mkdir -p .pio/build
+	g++ -std=c++20 -Wall -Wextra -Iinclude tools/schedule_test.cpp src/core/schedule.cpp \
+	    -o .pio/build/schedule_test && ./.pio/build/schedule_test
 
 # Regenerate the manual's annotated screenshots from the sim renders. The
 # manifest (docs/img/manual/manifest.json) holds the callout coordinates; see

@@ -1,6 +1,7 @@
 #include "platform_esp32/config.h"
 
 #include "core/display_settings.h"
+#include "core/schedule.h"
 
 #include <Preferences.h>
 #include <cmath>
@@ -82,6 +83,16 @@ constexpr char kWifiPassKey[] = "wifipass";
 constexpr char kTzKey[] = "tz";
 constexpr char kNtpKey[] = "ntp";
 constexpr char kNtpEnKey[] = "ntp_en";
+// Scheduled on/standby (v1.0). One i32 per day, packed by core::pack_day, so a
+// value an older build never reads is inert and a corrupt one sanitizes.
+constexpr char kSchedEnKey[] = "schen";
+constexpr char kSchedSameKey[] = "schsame";
+constexpr char kSchedWarmKey[] = "schwarm";
+constexpr char kSchedWarmMinKey[] = "schwarmm";
+constexpr char kSchedWarnKey[] = "schwarn";    // cloud-app warning: don't show again
+constexpr char kSchedDailyKey[] = "schall";    // the "same every day" window
+// "schd0".."schd6" = Monday..Sunday, built in schedule_day_key().
+constexpr char kSchedDayPrefix[] = "schd";
 }  // namespace
 
 namespace platform {
@@ -751,6 +762,115 @@ void Config::set_ntp_enabled(bool on) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putBool(kNtpEnKey, on);
+  p.end();
+}
+
+
+// --- Schedule ----------------------------------------------------------------
+
+namespace {
+// Key for one weekday's packed window: "schd0".."schd6"; anything else
+// (the wrapper passes -1) is the daily template.
+const char* schedule_day_key(int slot, char* buf, size_t len) {
+  if (slot < 0 || slot > 6) return kSchedDailyKey;
+  snprintf(buf, len, "%s%d", kSchedDayPrefix, slot);
+  return buf;
+}
+}  // namespace
+
+bool Config::schedule_enabled() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
+  const bool v = p.isKey(kSchedEnKey) ? p.getBool(kSchedEnKey, false) : false;
+  p.end();
+  return v;
+}
+
+void Config::set_schedule_enabled(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kSchedEnKey, on);
+  p.end();
+}
+
+bool Config::schedule_same_daily() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return true;
+  const bool v = p.isKey(kSchedSameKey) ? p.getBool(kSchedSameKey, true) : true;
+  p.end();
+  return v;
+}
+
+void Config::set_schedule_same_daily(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kSchedSameKey, on);
+  p.end();
+}
+
+bool Config::schedule_warmup() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return true;
+  const bool v = p.isKey(kSchedWarmKey) ? p.getBool(kSchedWarmKey, true) : true;
+  p.end();
+  return v;
+}
+
+void Config::set_schedule_warmup(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kSchedWarmKey, on);
+  p.end();
+}
+
+int Config::schedule_warmup_min() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return core::kWarmupDefaultMin;
+  const int v = p.isKey(kSchedWarmMinKey) ? p.getInt(kSchedWarmMinKey, core::kWarmupDefaultMin)
+                                          : core::kWarmupDefaultMin;
+  p.end();
+  return v;
+}
+
+void Config::set_schedule_warmup_min(int minutes) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putInt(kSchedWarmMinKey, minutes);
+  p.end();
+}
+
+bool Config::schedule_warning_dismissed() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
+  const bool v = p.isKey(kSchedWarnKey) ? p.getBool(kSchedWarnKey, false) : false;
+  p.end();
+  return v;
+}
+
+void Config::set_schedule_warning_dismissed(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kSchedWarnKey, on);
+  p.end();
+}
+
+bool Config::schedule_day_packed(int slot, int32_t& out) const {
+  char buf[12];
+  const char* key = schedule_day_key(slot, buf, sizeof(buf));
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
+  const bool present = p.isKey(key);
+  if (present) out = p.getInt(key, 0);
+  p.end();
+  return present;
+}
+
+void Config::set_schedule_day_packed(int slot, int32_t v) {
+  char buf[12];
+  const char* key = schedule_day_key(slot, buf, sizeof(buf));
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putInt(key, v);
   p.end();
 }
 
