@@ -406,12 +406,16 @@ constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-4.3";
 // field (CI asserts it against the built binary): the self-updater
 // fetches firmware/app/<slug>.bin.
 //
-// As with the LCD-5, this slug means the rev v1.x ("es") silicon image and
-// must keep meaning that — fielded units self-update from it. A rev v3
-// board becomes a SECOND block + env with slug
-// "p4-wifi6-touch-lcd-4.3-rev3" (chip_variant "esp32p4",
-// BOARD_P4_SILICON_REV3), never a rename of this one.
+// TWO images for one product: the plain slug means the rev v1.x ("es")
+// silicon image and must keep meaning that — fielded units self-update from
+// it. The esp32-p4-micra-43-rev3 env (chip_variant "esp32p4", defines
+// BOARD_P4_SILICON_REV3) is the rev v3.0+ image with its own slug, so a
+// rev3 unit self-updates from the image that boots on it.
+#if defined(BOARD_P4_SILICON_REV3)
+inline constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-4.3-rev3";
+#else
 inline constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-4.3";
+#endif
 #define BOARD_DISPLAY_DSI     // MIPI-DSI panel via Arduino_GFX
 #define BOARD_DSI_PANEL_ST7701  // panel controller (selects the DCS init table)
 #define BOARD_TOUCH_GT911     // GT911, 16-bit registers
@@ -552,12 +556,18 @@ constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-5";
 // field (CI asserts it against the built binary): the self-updater
 // fetches firmware/app/<slug>.bin.
 //
-// This slug means the rev v1.x ("es") silicon image, and must keep meaning
-// that: every LCD-5 in the field self-updates from it. When a rev v3
-// production-silicon sample lands it becomes a SECOND board block + env with
-// slug "p4-wifi6-touch-lcd-5-rev3" (chip_variant "esp32p4", and
-// BOARD_P4_SILICON_REV3 defined) — never a rename of this one.
+// TWO images for one product: the plain slug means the rev v1.x ("es")
+// silicon image and must keep meaning that — every LCD-5 in the field
+// self-updates from it. The esp32-p4-micra-5-rev3 env (chip_variant
+// "esp32p4", defines BOARD_P4_SILICON_REV3) is the rev v3.0+ image with its
+// own slug. kName is deliberately the SAME for both: the identify banner
+// names the product and carries REV= separately, and that is how the web
+// flasher's Detect picks the image.
+#if defined(BOARD_P4_SILICON_REV3)
+inline constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-5-rev3";
+#else
 inline constexpr char kUpdateSlug[] = "p4-wifi6-touch-lcd-5";
+#endif
 #define BOARD_DISPLAY_DSI
 #define BOARD_DSI_PANEL_HX8394  // panel controller (selects the DCS init table)
 #define BOARD_TOUCH_GT911
@@ -707,9 +717,11 @@ constexpr int  kDsiVsyncPulse = 30, kDsiVsyncBack = 20,  kDsiVsyncFront = 2;
 #else
 // Rev v3.0+ silicon (both the 8" and the 10.1"): 400 MHz, and the DSI PHY's
 // PLL reference mux changed, so display.cpp must pick the XTAL source. Keyed
-// on silicon, NOT on panel — a rev3 build of any other P4 board defines this
-// too (see the reserved p4-wifi6-touch-lcd-5-rev3 note above).
+// on silicon, NOT on panel — the 4.3/5 -rev3 envs define the same macro from
+// their build_flags (see platformio.ini).
+#if !defined(BOARD_P4_SILICON_REV3)
 #define BOARD_P4_SILICON_REV3
+#endif
 #if defined(BOARD_WAVESHARE_P4_WIFI6_X_8)
 constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-X-8";
 // RELEASED: this board is in the firmware-release.yml matrix, the web

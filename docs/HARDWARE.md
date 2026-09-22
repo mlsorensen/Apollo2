@@ -13,6 +13,17 @@ short version — and the buying advice — lives in the README's
 | **ESP32‑S3‑Touch‑LCD‑4.3C / 4.3C‑BOX** | Mounting on the Micra with nothing to build | 4.3" 800×480, RGB parallel | **Yes — built‑in.** Isolated DI/DO screw terminals (opto‑isolators on board), so there is no cable to assemble | **The no‑DIY pick:** the only supported board that is both a finished box *and* pre‑isolated. Slower than the P4s (ESP32‑S3R8, 16 MB flash / 8 MB octal PSRAM). Dimmable backlight, battery monitoring, PCF85063 RTC, speaker, microSD. |
 | **ESP32‑P4‑WIFI6‑Touch‑LCD‑X 8"** | Counter‑top companion | 8" 1280×800, MIPI‑DSI (JD9365) | **Yes — external opto.** Same wiring as the P4‑5 | Finished box, biggest screen, same P4 electronics as the LCD‑5. UI scaled 1.6×. Its panel and silicon are verified, but the Apollo image itself is not yet confirmed on one. |
 
+**Two ESP32‑P4 chip revisions.** The P4‑5 and P4‑4.3 have shipped with two
+generations of ESP32‑P4 silicon under the same product name: rev v1.x
+(engineering‑sample silicon, sold in volume until about August 2026, 360 MHz)
+and rev v3.x (production silicon since then, 400 MHz). The two are
+binary‑incompatible, so each has its own firmware image (`…-rev3` for v3),
+and the device updates itself along the right line once flashed. There is no
+user‑visible difference in Apollo. The [web flasher](https://mlsorensen.github.io/Apollo2/)
+reads the revision off a board already running Apollo; on a blank board pick it
+on the card (`esptool chip-id` tells you: "revision v1.3" or "v3.2"). The X 8"
+has only ever shipped with v3 silicon.
+
 Auto‑shot wiring is optional on every board: without it you still get the full
 brew‑by‑weight experience via **Shot detect**, and only the automatic stop at
 target weight needs the wire. Step‑by‑step wiring instructions (with photos of

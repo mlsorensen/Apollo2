@@ -16,6 +16,10 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
   different one per weekday — with a warm-up lead (default 6 min) so it is at
   temperature on time. Standby waits for a running shot; needs WiFi with Auto
   time synced and a paired Micra.
+- **P4-5 and P4-4.3 on the newer ESP32-P4 chip.** Boards shipping since about
+  August 2026 carry v3 silicon that needs its own image; both are now built and
+  published. The web flasher's Detect reads the chip revision off a running
+  device and picks the right one; on a blank board choose it on the card.
 
 ## v0.14.2
 

@@ -303,24 +303,28 @@ markers in platformio.ini + board_config.h.
   install 404s and rolls back harmlessly. Accepted because none of these boards
   are expected to be in anyone's hands — they get flashed over USB. Revisit only
   if one actually sees use. No `kOtaPublished` flag, no UI gating.
-- **Coming: rev v3 production silicon for the P4 boards (BOTH the 5 and the
-  4.3).** Samples are expected; the owner will buy a v3 P4-4.3 to test at least
-  once, and the v3 P4-5 is expected to validate the pattern for the family.
-  **The product list stays FOUR — the silicon split doubles the IMAGES, not the
-  boards.** Waveshare does not change the SKU, so a buyer cannot tell which
-  silicon they got, and surfacing it as a separate product in the README/board
-  table would be wrong. Call it out in the DEVELOPER docs only; the flasher
-  handles selection. Shape of it, per P4 product:
-    * a SECOND board block + env + board json (`chip_variant "esp32p4"`,
-      `BOARD_P4_SILICON_REV3` defined — already the macro display.cpp uses for
-      the DSI PHY's XTAL PLL reference), slug `<plain-slug>-rev3`.
+- **Rev v3 production silicon for the P4 boards — DONE on feat/v1.0 (issue
+  #2, 2026-09-22).** Waveshare does not change the SKU, so a buyer cannot tell
+  which silicon they got; **the product list stays FOUR — the silicon split
+  doubles the IMAGES, not the boards** (six images in CI). Never surface it as a
+  separate product in the README/board table; the flasher handles selection.
+  Shape of it, per P4 product (the 4.3 and the 5; the X 8" is rev3-only):
+    * a SECOND env + board json: `esp32-p4-micra-5-rev3` /
+      `esp32-p4-micra-43-rev3` (`boards/esp32-p4-wifi6-{5,43}-rev3.json`,
+      `chip_variant "esp32p4"`), which define `BOARD_P4_SILICON_REV3` from
+      build_flags — the macro display.cpp keys the DSI PHY's XTAL PLL
+      reference on, and which board_config.h now uses to pick the slug
+      `<plain-slug>-rev3`. `kName` is the SAME for both revisions on purpose.
     * the PLAIN slug keeps meaning rev v1.x ("es") — never rename it, fielded
-      units self-update from that path.
-    * the flasher keeps ONE card per product and chooses the image: Detect
-      reads the `REV=` field the identify banner already emits
-      (`src/device/main.cpp`, efuse major*100+minor, >= 300 = rev3). A first
-      install on a blank board can't be probed, so the card needs an explicit
-      silicon choice there.
+      units self-update from that path. A rev3 unit self-updates from the
+      -rev3 slug: one product, two OTA lines.
+    * the flasher keeps ONE card per product: a "Chip revision" radio (v1.x /
+      v3, default v1.x) picks the manifest, and Detect reads the `REV=` field
+      the identify banner has carried since v0.11.0 (efuse major*100+minor,
+      >= 300 = rev3) and sets the radio itself. A blank board can't be probed
+      over Web Serial, so the radio is the explicit choice there.
+    * `make flash-p4-5` auto-detect: tools/flash.sh asks `id?` and appends
+      `-rev3` when REV >= 300; `make flash-p4-5-rev3` forces it.
   **Picking wrong is recoverable and that is fine** — the board just won't come
   up until the other image is flashed; nothing is damaged. Don't over-engineer
   the guard-rails for it.
@@ -328,7 +332,8 @@ markers in platformio.ini + board_config.h.
 ## Boards / build
 
 Board targets are `<chip>-<panel>` after the Waveshare product names.
-Released: `build-p4-5`, `build-s3-4-3c`, `build-p4-x-8`. Internal-only:
+Released: `build-p4-5`, `build-p4-4-3`, their `-rev3` siblings (rev v3.0+
+silicon), `build-s3-4-3c`, `build-p4-x-8`. Internal-only:
 `make build` (default, the 2-inch S3), `build-s3-7b`, `build-s3-4-3b`,
 `build-p4-4-3`, `build-p4-x-7`, `build-p4-x-10-1`. Matching `flash-*` targets
 auto-detect the port and can probe a running board's serial banner (pre-rename

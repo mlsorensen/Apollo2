@@ -71,9 +71,16 @@ jobs:
           # the artifact filename; env = the PlatformIO environment.
           - { env: esp32-p4-micra-5,     board: p4-wifi6-touch-lcd-5,    chip: ESP32-P4 }
           - { env: esp32-p4-micra-43,    board: p4-wifi6-touch-lcd-4.3,  chip: ESP32-P4 }
+          # The same two boards on rev v3.0+ production silicon (shipping since
+          # ~Aug 2026, same SKU): binary-incompatible with rev v1.x, so each is
+          # its own image + update slug. The flasher keeps ONE card per product
+          # and picks the image from the device's REV= (or the user's choice on
+          # a blank board). The X 8" below is rev3-only already.
+          - { env: esp32-p4-micra-5-rev3,  board: p4-wifi6-touch-lcd-5-rev3,   chip: ESP32-P4 }
+          - { env: esp32-p4-micra-43-rev3, board: p4-wifi6-touch-lcd-4.3-rev3, chip: ESP32-P4 }
           - { env: esp32-s3-micra-4-3c,  board: s3-touch-lcd-4.3c,       chip: ESP32-S3 }
           - { env: esp32-p4-micra-x-8,   board: p4-wifi6-touch-lcd-x-8,  chip: ESP32-P4 }
-          # THIS LIST IS THE SUPPORT MATRIX. Four products are released and
+          # THIS LIST IS THE SUPPORT MATRIX. Four PRODUCTS (six images) are released and
           # advertised: the P4-5 (mount-on-Micra, the default pick), the P4-4.3
           # (same board, smaller glass), the S3-4.3C BOX (mount-on-Micra with
           # nothing to build) and the X 8" (counter-top). platformio.ini

@@ -11,12 +11,15 @@
 #   make flash              build + flash the connected board (auto-detect; see below)
 #   make flash BOARD=p4-5   flash a specific board (p4-5 | p4-4-3 | s3-4-3c | p4-x-8 | s3-2 | s3-7b | s3-4-3b | p4-x-7 | p4-x-10-1)
 #   make flash-p4-5 / flash-p4-4-3 / flash-s3-4-3c / flash-p4-x-8   [rel]
+#   make flash-p4-5-rev3 / flash-p4-4-3-rev3   the same boards on rev v3.0+ silicon [rel]
+#                           (auto-detect reads REV= off a running board and picks these itself)
 #   make flash-s3-2 / flash-s3-7b / flash-s3-4-3b / flash-p4-x-7 / flash-p4-x-10-1
 #   make build-p4-5         compile the P4-WIFI6 5" (DSI 1280x720) firmware      [rel]
 #   make build-p4-4-3       compile the P4-WIFI6 4.3" (DSI 800x480) firmware     [rel]
+#   make build-p4-5-rev3 / build-p4-4-3-rev3   rev v3.0+ silicon images of the two [rel]
 #   make build-s3-4-3c      compile the S3 4.3C (800x480, dimmable + battery)    [rel]
 #   make build-p4-x-8       compile the P4-WIFI6 X 8" box (DSI 1280x800)         [rel]
-#   make build-release      compile all four released firmwares + the sim
+#   make build-release      compile all six released firmwares + the sim
 #   make build-all          compile EVERY device env (released + internal) + sim
 #   make build              compile the default (s3-2, 2" 320x240) firmware
 #   make build-s3-7b        compile the S3 7" (1024x600) firmware
@@ -61,6 +64,7 @@ webapp: $(WEBAPP_HDR)
 .DEFAULT_GOAL := build
 .PHONY: flash flash-s3-2 flash-s3-7b flash-s3-4-3b flash-s3-4-3c flash-p4-4-3 \
         flash-p4-5 flash-p4-x-7 flash-p4-x-8 flash-p4-x-10-1 \
+        flash-p4-4-3-rev3 flash-p4-5-rev3 build-p4-4-3-rev3 build-p4-5-rev3 \
         flash-2inch flash-7b flash-4-3b flash-4-3c flash-p4 \
         build build-s3-7b build-s3-4-3b build-s3-4-3c build-p4-4-3 build-p4-5 \
         build-p4-x-7 build-p4-x-8 build-p4-x-10-1 \
@@ -89,6 +93,12 @@ flash-p4-4-3: $(WEBAPP_HDR)
 flash-p4-5: $(WEBAPP_HDR)
 	@tools/flash.sh p4-5
 
+flash-p4-4-3-rev3: $(WEBAPP_HDR)
+	@tools/flash.sh p4-4-3-rev3
+
+flash-p4-5-rev3: $(WEBAPP_HDR)
+	@tools/flash.sh p4-5-rev3
+
 flash-p4-x-7: $(WEBAPP_HDR)
 	@tools/flash.sh p4-x-7
 
@@ -116,6 +126,12 @@ build-p4-4-3: $(WEBAPP_HDR)
 build-p4-5: $(WEBAPP_HDR)
 	$(PIO) run -e esp32-p4-micra-5
 
+build-p4-4-3-rev3: $(WEBAPP_HDR)
+	$(PIO) run -e esp32-p4-micra-43-rev3
+
+build-p4-5-rev3: $(WEBAPP_HDR)
+	$(PIO) run -e esp32-p4-micra-5-rev3
+
 build-p4-x-7: $(WEBAPP_HDR)
 	$(PIO) run -e esp32-p4-micra-x-7
 
@@ -126,11 +142,13 @@ build-p4-x-10-1: $(WEBAPP_HDR)
 	$(PIO) run -e esp32-p4-micra-x-10-1
 
 # --- Sweeps ------------------------------------------------------------------
-# build-release compiles exactly what CI publishes (the four released images)
-# plus the sim - run it before pushing a platform change or cutting a release.
+# build-release compiles exactly what CI publishes (the six released images:
+# four products, the two P4 boards in both silicon revisions) plus the sim -
+# run it before pushing a platform change or cutting a release.
 # build-all adds the internal-only boards, so a refactor that touches shared
 # driver/board code can be proven against every env we keep.
-build-release: build-p4-5 build-p4-4-3 build-s3-4-3c build-p4-x-8 sim
+build-release: build-p4-5 build-p4-4-3 build-p4-5-rev3 build-p4-4-3-rev3 \
+               build-s3-4-3c build-p4-x-8 sim
 
 build-all: build-release build build-s3-7b build-s3-4-3b \
            build-p4-x-7 build-p4-x-10-1

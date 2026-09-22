@@ -23,6 +23,8 @@ board_to_env() {
     s3-4-3c|4-3c|4.3c|43c|esp32-s3-micra-4-3c)            echo "esp32-s3-micra-4-3c" ;;
     p4-4-3|p4|p4-43|p4-wifi6|esp32-p4-micra-43)           echo "esp32-p4-micra-43" ;;
     p4-5|p45|esp32-p4-micra-5)                            echo "esp32-p4-micra-5" ;;
+    p4-4-3-rev3|p4-43-rev3|esp32-p4-micra-43-rev3)        echo "esp32-p4-micra-43-rev3" ;;
+    p4-5-rev3|p45-rev3|esp32-p4-micra-5-rev3)             echo "esp32-p4-micra-5-rev3" ;;
     p4-x-7|p4x7|esp32-p4-micra-x-7)                       echo "esp32-p4-micra-x-7" ;;
     p4-x-8|p4x8|esp32-p4-micra-x-8)                       echo "esp32-p4-micra-x-8" ;;
     p4-x-10-1|p4-x-10|p4x101|esp32-p4-micra-x-10-1)       echo "esp32-p4-micra-x-10-1" ;;
@@ -39,7 +41,11 @@ detect_port() {
   return 0  # none found -> empty (PlatformIO can still try to auto-detect)
 }
 
-# Probe a running board's boot banner ("Micra remote — <board name>") for the env.
+# Probe a running board for the env: its boot banner ("Micra remote — <board
+# name>") names the product, and the "id?" reply's REV= field names the
+# silicon (efuse major*100+minor; >= 300 = rev v3.0+), which picks the -rev3
+# image for the two P4 boards that ship in both generations. The probe asks
+# "id?" itself, so a board that is already up (no reset on open) answers too.
 probe_env() {
   local port="$1"
   command -v python3 >/dev/null 2>&1 || return 0
@@ -53,19 +59,33 @@ try:
     s = serial.Serial(sys.argv[1], 115200, timeout=0.5)
 except Exception:
     sys.exit(0)
+import re
 deadline = time.time() + 3.0
 buf = b""
+env = None
 while time.time() < deadline:
     buf += s.read(256)
-    if b"P4-WIFI6-Touch-LCD-X-10.1" in buf: print("esp32-p4-micra-x-10-1"); break  # X boards before the generic P4 match
-    if b"P4-WIFI6-Touch-LCD-X-7" in buf: print("esp32-p4-micra-x-7"); break
-    if b"P4-WIFI6-Touch-LCD-X-8" in buf: print("esp32-p4-micra-x-8"); break
-    if b"P4-WIFI6-Touch-LCD-5" in buf: print("esp32-p4-micra-5"); break  # before the generic P4 match
-    if b"P4-WIFI6" in buf: print("esp32-p4-micra-43");  break  # before LCD-4: its banner has "LCD-4.3" too
-    if b"LCD-7" in buf:   print("esp32-s3-micra-7b");   break
-    if b"LCD-4.3C" in buf: print("esp32-s3-micra-4-3c"); break  # before the generic LCD-4 match
-    if b"LCD-4" in buf:   print("esp32-s3-micra-4-3b"); break
-    if b"LCD-2" in buf:   print("esp32-s3-micra");      break
+    if env is None:
+        if b"P4-WIFI6-Touch-LCD-X-10.1" in buf: env = "esp32-p4-micra-x-10-1"  # X boards before the generic P4 match
+        elif b"P4-WIFI6-Touch-LCD-X-7" in buf: env = "esp32-p4-micra-x-7"
+        elif b"P4-WIFI6-Touch-LCD-X-8" in buf: env = "esp32-p4-micra-x-8"
+        elif b"P4-WIFI6-Touch-LCD-5" in buf: env = "esp32-p4-micra-5"  # before the generic P4 match
+        elif b"P4-WIFI6" in buf: env = "esp32-p4-micra-43"  # before LCD-4: its banner has "LCD-4.3" too
+        elif b"LCD-7" in buf:   env = "esp32-s3-micra-7b"
+        elif b"LCD-4.3C" in buf: env = "esp32-s3-micra-4-3c"  # before the generic LCD-4 match
+        elif b"LCD-4" in buf:   env = "esp32-s3-micra-4-3b"
+        elif b"LCD-2" in buf:   env = "esp32-s3-micra"
+        if env is not None and env not in ("esp32-p4-micra-5", "esp32-p4-micra-43"):
+            break  # only the 4.3 and 5 come in two silicon revisions
+        if env is not None:
+            try: s.write(b"id?\n")
+            except Exception: pass
+    else:
+        m = re.search(rb"REV=(\d+)", buf)
+        if m:
+            if int(m.group(1)) >= 300: env += "-rev3"
+            break
+if env: print(env)
 s.close()
 PY
 }
@@ -77,7 +97,7 @@ ENV=""
 if [ -n "$BOARD" ]; then
   ENV="$(board_to_env "$BOARD")"
   if [ -z "$ENV" ]; then
-    echo "flash: unknown board '$BOARD' (use p4-5 | p4-4-3 | s3-4-3c | p4-x-8 | s3-2 | s3-7b | s3-4-3b | p4-x-7 | p4-x-10-1)" >&2
+    echo "flash: unknown board '$BOARD' (use p4-5 | p4-4-3 | p4-5-rev3 | p4-4-3-rev3 | s3-4-3c | p4-x-8 | s3-2 | s3-7b | s3-4-3b | p4-x-7 | p4-x-10-1)" >&2
     exit 2
   fi
 elif [ -n "$PORT" ]; then

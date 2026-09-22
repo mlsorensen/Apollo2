@@ -91,7 +91,11 @@ later — see the [wiring guide](docs/WIRING.md).
 
 **No-toolchain option:** the [web flasher](https://mlsorensen.github.io/Apollo2/)
 flashes any supported board straight from Chrome, Edge, or Firefox over USB —
-pick your board, click Install. Upgrading this way keeps your paired machine,
+pick your board, click Install. (The P4‑5 and P4‑4.3 exist with two ESP32‑P4
+chip revisions that need different images; boards bought before about August
+2026 are v1.x, newer ones v3. **Detect board** reads it off a device already
+running Apollo; on a blank board pick it on the card. A wrong pick just won't
+boot until the other image is flashed.) Upgrading this way keeps your paired machine,
 Wi‑Fi and settings (unless you choose "Erase device"). Prebuilt images also live
 on the [Releases](https://github.com/mlsorensen/Apollo2/releases) page — those
 are full images, so flashing one with `esptool` *does* clear saved settings.
@@ -108,6 +112,8 @@ a USB cable.
 ```sh
 make flash            # print selection of flash options
 make flash-p4-5       # or target a board: p4-5 | p4-4-3 | s3-4-3c | p4-x-8
+                      # (P4-5 / P4-4.3 on the newer v3 chip: p4-5-rev3 | p4-4-3-rev3;
+                      #  auto-detect reads the chip off a board already running Apollo)
 make monitor          # open the serial console (115200 baud)
 ```
 
@@ -341,6 +347,8 @@ handle it.
 ```sh
 pio run -e esp32-p4-micra-5       # 5"   1280x720 (P4, MIPI-DSI, WiFi6/BLE via C6)
 pio run -e esp32-p4-micra-43      # 4.3"  800x480 (P4, MIPI-DSI, same board as the 5)
+pio run -e esp32-p4-micra-5-rev3  # the same two boards on the v3 ESP32-P4 silicon
+pio run -e esp32-p4-micra-43-rev3 #   (shipping since ~Aug 2026; a separate image)
 pio run -e esp32-s3-micra-4-3c    # 4.3"  800x480 (S3, RGB panel)
 pio run -e esp32-p4-micra-x-8     # X-series 8" box (P4, 1280x800)
 pio run -e sim                    # native simulator
