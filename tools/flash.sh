@@ -142,15 +142,21 @@ case "$ENV" in
   esp32-p4-micra-43|esp32-p4-micra-43-rev3|esp32-p4-micra-5|esp32-p4-micra-5-rev3)
     if [ -n "$PORT" ]; then
       BASE="${ENV%-rev3}"
-      ESPTOOL=""
-      for c in esptool esptool.py "$HOME/.platformio/packages/tool-esptoolpy/esptool.py" \
-               "$HOME/.platformio/penv/bin/esptool.py"; do
-        if command -v "$c" >/dev/null 2>&1 || [ -x "$c" ]; then ESPTOOL="$c"; break; fi
-      done
+      # esptool as PlatformIO ships it: the penv's own entry point first (a
+      # non-interactive shell has no `esptool` on PATH, and the bundled
+      # esptool.py needs the penv's python for its deps, not the system one).
+      PENV="$HOME/.platformio/penv/bin"
+      read_rev() {  # prints "major.minor" or nothing
+        "$@" --port "$PORT" chip-id 2>/dev/null \
+          | sed -n 's/.*revision v\([0-9]*\)\.\([0-9]*\).*/\1.\2/p' | head -1
+      }
       REV=""
-      if [ -n "$ESPTOOL" ]; then
-        REV="$("$ESPTOOL" --port "$PORT" chip-id 2>/dev/null | sed -n 's/.*revision v\([0-9]*\)\.\([0-9]*\).*/\1.\2/p' | head -1)"
-        [ -n "$REV" ] || REV="$("$ESPTOOL" --port "$PORT" chip_id 2>/dev/null | sed -n 's/.*revision v\([0-9]*\)\.\([0-9]*\).*/\1.\2/p' | head -1)"
+      if [ -x "$PENV/esptool" ]; then
+        REV="$(read_rev "$PENV/esptool")"
+      elif [ -x "$PENV/python" ] && [ -f "$HOME/.platformio/packages/tool-esptoolpy/esptool.py" ]; then
+        REV="$(read_rev "$PENV/python" "$HOME/.platformio/packages/tool-esptoolpy/esptool.py")"
+      elif command -v esptool >/dev/null 2>&1; then
+        REV="$(read_rev esptool)"
       fi
       if [ -n "$REV" ]; then
         if [ "${REV%%.*}" -ge 3 ]; then WANT="${BASE}-rev3"; else WANT="$BASE"; fi
