@@ -117,6 +117,11 @@ void Network::poll() {
     if (token_setup_.take_wifi_saved()) {
       token_setup_.stop();
       from_portal_ = true;
+      // The portal form may have carried a time zone; apply it now so the
+      // clock reads in local time at once (NTP re-applies it on connect).
+      const std::string tz = config_.timezone();
+      setenv("TZ", tz.c_str(), 1);
+      tzset();
       start_station();
     }
     return;

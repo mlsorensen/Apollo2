@@ -47,6 +47,12 @@ class IProvisioner {
   virtual bool auto_connect() const = 0;
   virtual void set_auto_connect(bool on) = 0;
 
+  // First-boot welcome screen: shown once on a unit with no machine and no
+  // WiFi saved, until dismissed (persisted). A restored backup carries the
+  // saved machine/WiFi along, so a replacement unit never sees it.
+  virtual bool welcome_seen() const = 0;
+  virtual void set_welcome_seen(bool on) = 0;
+
   // --- Token setup (WiFi portal) ---
   virtual bool has_token() const = 0;          // is a token saved for the machine?
   virtual void start_token_setup() = 0;        // bring up the WiFi paste page

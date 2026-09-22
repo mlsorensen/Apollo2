@@ -1352,10 +1352,12 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
       // Setup incomplete: make the button the WAY IN, not a greyed-out verb.
       // It previously read a disabled "Connect", which names an action the user
       // can't take and doesn't say what to do instead. Tapping now opens
-      // Settings > Micra > Bluetooth (see App::toggle_power).
+      // Settings > Micra > Bluetooth (see App::toggle_power). It says WHAT it
+      // sets up: a bare "Set up" read as the first thing to do, when WiFi is
+      // the better first step (the welcome screen says so).
       lv_obj_remove_state(w.power_btn, LV_STATE_DISABLED);
       ui::set_bg_color(w.power_btn, ui::theme::accent());
-      ui::set_text(w.power_label, LV_SYMBOL_SETTINGS "  Set up");
+      ui::set_text(w.power_label, LV_SYMBOL_BLUETOOTH "  Pair Micra");
       break;
     case core::Link::Connecting:
     default:

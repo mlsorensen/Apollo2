@@ -100,6 +100,11 @@ Wi‑Fi and settings (unless you choose "Erase device"). Prebuilt images also li
 on the [Releases](https://github.com/mlsorensen/Apollo2/releases) page — those
 are full images, so flashing one with `esptool` *does* clear saved settings.
 
+On first boot a welcome screen suggests the order: **Set up WiFi** first
+(network and time zone from your phone; that sets the clock and enables
+updates), then **Pair Micra**. Tap **Later** to skip it — every step is in
+Settings too.
+
 After the first flash Apollo updates itself over WiFi: it checks for new
 firmware, shows what changed, and installs on a tap. Tick **Include
 pre-releases** on the flasher (or turn on **Settings → Apollo → WiFi → Beta

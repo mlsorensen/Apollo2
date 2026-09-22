@@ -41,6 +41,8 @@ void Provisioner::set_connect_enabled(bool enabled) { link_.set_connect_enabled(
 
 bool Provisioner::auto_connect() const { return config_.auto_connect(); }
 void Provisioner::set_auto_connect(bool on) { config_.set_auto_connect(on); }
+bool Provisioner::welcome_seen() const { return config_.welcome_seen(); }
+void Provisioner::set_welcome_seen(bool on) { config_.set_welcome_seen(on); }
 
 bool Provisioner::has_token() const { return !config_.token().empty(); }
 

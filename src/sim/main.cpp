@@ -81,7 +81,8 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             bool join_modal = false, bool screensaver = false,
             bool update_modal = false, core::IUpdateSource* updates = nullptr,
             core::ISettingsBackup* backup = nullptr, int backup_modal = 0,
-            int schedule_day = -1, core::ISchedule* schedule = nullptr) {
+            int schedule_day = -1, core::ISchedule* schedule = nullptr,
+            bool welcome_modal = false) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
@@ -95,6 +96,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             backup, schedule != nullptr ? *schedule : fallback_schedule);
   app.show_tab(tab);
   if (settings_section >= 0) app.select_settings_section(settings_section);  if (schedule_day >= 0) app.schedule_pick_day(schedule_day);  // per-day chip pose
+  if (welcome_modal) app.open_welcome_modal();
   if (stats_section >= 0) app.select_stats_section(stats_section);
   if (history_ym != 0) app.set_history_filter(history_ym);
   if (token_modal) app.open_token_setup();
@@ -166,12 +168,13 @@ int main() {
                int shot_id = -1, int history_ym = 0, bool backflush = false,
                bool log_modal = false, uint32_t unwired_midshot_ms = 0,
                bool toast = false, bool join_modal = false, bool screensaver = false,
-               bool update_modal = false, int backup_modal = 0, int schedule_day = -1) {
+               bool update_modal = false, int backup_modal = 0, int schedule_day = -1,
+               bool welcome_modal = false) {
     return render(machine, provisioner, battery, disp, clock, history, scale,
                   scale_provisioner, brew, network, shots, s, path, tab, sec, modal, theme,
                   stats, clean_lock, shot_id, history_ym, backflush, log_modal,
                   unwired_midshot_ms, toast, join_modal, screensaver, update_modal,
-                  &updates, &backup, backup_modal, schedule_day, &schedule);
+                  &updates, &backup, backup_modal, schedule_day, &schedule, welcome_modal);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
@@ -407,6 +410,11 @@ int main() {
   // Token modal over Home (modal over Settings hits a known LVGL draw loop).
   ok &= r(p5, "renders/token_modal_1280x720.png", 0, -1, true);
   ok &= r({800, 480}, "renders/token_modal_800x480.png", 0, -1, true);
+  // First boot: the welcome over Home (the button row stacks on compact).
+  ok &= r({800, 480}, "renders/welcome_modal_800x480.png", 0, -1, false, 0, -1, false, -1, 0,
+          false, false, 0, false, false, false, false, 0, -1, true);
+  ok &= r({320, 240}, "renders/welcome_modal_320x240.png", 0, -1, false, 0, -1, false, -1, 0,
+          false, false, 0, false, false, false, false, 0, -1, true);
   // Portal-join modal: WIFI: QR + manual instructions (token flow; the WiFi
   // flow shows the same layout with different copy).
   ok &= r({800, 480}, "renders/join_modal_800x480.png", 0, -1, false, 0, -1,

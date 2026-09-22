@@ -20,6 +20,8 @@ class FakeProvisioner : public core::IProvisioner {
   void set_connect_enabled(bool enabled) override { connect_enabled_ = enabled; }
   bool auto_connect() const override { return auto_connect_; }
   void set_auto_connect(bool on) override { auto_connect_ = on; }
+  bool welcome_seen() const override { return welcome_seen_; }
+  void set_welcome_seen(bool on) override { welcome_seen_ = on; }
 
   bool has_token() const override { return true; }
   void start_token_setup() override {}
@@ -31,6 +33,7 @@ class FakeProvisioner : public core::IProvisioner {
  private:
   bool connect_enabled_ = true;
   bool auto_connect_ = true;  // mirrors the device default (Config::auto_connect)
+  bool welcome_seen_ = true;  // renders never pop the welcome unless posed
 };
 
 }  // namespace host

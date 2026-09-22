@@ -93,6 +93,7 @@ constexpr char kSchedWarnKey[] = "schwarn";    // cloud-app warning: don't show 
 constexpr char kSchedDailyKey[] = "schall";    // the "same every day" window
 // "schd0".."schd6" = Monday..Sunday, built in schedule_day_key().
 constexpr char kSchedDayPrefix[] = "schd";
+constexpr char kWelcomeKey[] = "welcome";  // first-boot welcome screen dismissed
 }  // namespace
 
 namespace platform {
@@ -777,6 +778,21 @@ const char* schedule_day_key(int slot, char* buf, size_t len) {
   return buf;
 }
 }  // namespace
+
+bool Config::welcome_seen() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
+  const bool v = p.isKey(kWelcomeKey) ? p.getBool(kWelcomeKey, false) : false;
+  p.end();
+  return v;
+}
+
+void Config::set_welcome_seen(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kWelcomeKey, on);
+  p.end();
+}
 
 bool Config::schedule_enabled() const {
   Preferences p;

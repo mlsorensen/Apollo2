@@ -569,6 +569,10 @@ void on_sched_warm_plus(lv_event_t* e) {
 void on_sched_copy_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->schedule_copy_times();
 }
+template <int C>
+void on_welcome_choice(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->welcome_choose(C);
+}
 void on_sched_warn_ok(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->dismiss_schedule_warning(false);
 }
@@ -1458,6 +1462,16 @@ void App::refresh() {
     }
     update_temp_panels(snap);
     schedule_tick(snap);
+
+    // First boot: nothing configured and never dismissed -> the welcome,
+    // once, on the first refresh (build() is too early for a modal).
+    if (!welcome_checked_) {
+      welcome_checked_ = true;
+      const bool fresh = snap.link == core::Link::Unconfigured && provisioner_ != nullptr &&
+                         !provisioner_->welcome_seen() &&
+                         (network_ == nullptr || network_->ssid()[0] == '\0');
+      if (fresh && modal_ == nullptr) open_welcome_modal();
+    }
 
     // Machine seen in configuration/pairing mode (e.g. left there after setting up
     // a token): it can't be used until restarted. Nudge the user once per event
@@ -4588,6 +4602,33 @@ void App::schedule_slider_released() {
   core::sanitize_day(sched_edit_day());
   schedule_commit();
   sync_schedule_controls();
+}
+
+// The first thing a new unit shows. WiFi goes first on purpose: it sets the
+// clock (and the time zone, from the same phone page), and updates and the
+// schedule need it. Pairing the Micra is the other step; "Later" just gets
+// out of the way. Any choice marks it seen -- it never nags.
+void App::open_welcome_modal() {
+  lv_obj_t* card = open_modal(
+      "Welcome to Apollo 2",
+      "Two short steps. First, WiFi: it sets the clock and time zone and "
+      "enables updates and the schedule -- you enter the network from your "
+      "phone. Then pair your Micra over Bluetooth.");
+  lv_obj_t* row = modal_button_row(card);
+  modal_button(row, "Set up WiFi", ui::theme::accent(), on_welcome_choice<0>, this);
+  modal_button(row, "Pair Micra", ui::theme::rail(), on_welcome_choice<1>, this);
+  modal_button(row, "Later", ui::theme::rail(), on_welcome_choice<2>, this);
+}
+
+void App::welcome_choose(int choice) {
+  if (provisioner_ != nullptr) provisioner_->set_welcome_seen(true);
+  close_modal();
+  if (choice == 0) {
+    start_wifi_setup();  // the portal + its QR modal
+  } else if (choice == 1) {
+    show_tab(1);
+    select_settings_section(kSectionMicraBt);
+  }
 }
 
 void App::open_schedule_warning_modal() {

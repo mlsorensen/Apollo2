@@ -1,5 +1,7 @@
 #include "platform_esp32/token_setup.h"
 
+#include "core/timezones.h"
+
 #include <Arduino.h>
 #include <WiFi.h>
 
@@ -69,19 +71,29 @@ const char kWifiPage[] =
     "autocapitalize='off' spellcheck='false' "
     "style='width:100%;padding:10px;box-sizing:border-box;margin-bottom:8px'>"
     "<input id=pass name='pass' type='password' placeholder='Password' "
-    "autocomplete='off' style='width:100%;padding:10px;box-sizing:border-box'>"
+    "autocomplete='off' style='width:100%;padding:10px;box-sizing:border-box;"
+    "margin-bottom:8px'>"
+    // Time zone: optional, and the natural place for it -- a long list is
+    // comfortable on a phone and it belongs with "automatic time". handle_root
+    // splices the <option>s in from core::kTimezones (the Settings picker's
+    // table), so the two stay one list.
+    "<select id=tz name='tz' style='width:100%;padding:10px;box-sizing:border-box'>"
+    "<option value=''>Time zone (optional \u2014 set later under Settings)</option>";
+const char kWifiPageAfterTz[] =
+    "</select>"
     "<p id=wmsg style='font-size:.9em'></p>"
     "<p><button style='padding:10px 24px;font-size:1em'>Save WiFi</button></p>"
     "</form>"
     "<script>function submitWifi(){"
     "var s=document.getElementById('ssid').value.trim();"
     "var p=document.getElementById('pass').value;"
+    "var z=document.getElementById('tz').value;"
     "var m=document.getElementById('wmsg');"
     "if(!s){m.style.color='#c00';m.textContent='Enter a network name.';return false;}"
     "m.style.color='#888';m.textContent='Saving\\u2026';"
     "fetch('/wifi',{method:'POST',headers:{'Content-Type':"
     "'application/x-www-form-urlencoded'},body:'ssid='+encodeURIComponent(s)+"
-    "'&pass='+encodeURIComponent(p)})"
+    "'&pass='+encodeURIComponent(p)+(z?'&tz='+encodeURIComponent(z):'')})"
     ".then(function(r){return r.text();})"
     ".then(function(t){m.style.color='#0a0';m.textContent=t;})"
     ".catch(function(){m.style.color='#c00';"
@@ -159,7 +171,23 @@ void TokenSetup::handle() {
 
 void TokenSetup::handle_root() {
   String page(kPageHead);
-  page += (mode_ == Mode::Token) ? kTokenPage : kWifiPage;
+  if (mode_ == Mode::Token) {
+    page += kTokenPage;
+  } else {
+    page += kWifiPage;
+    // One <option> per zone; the currently stored zone is preselected so a
+    // revisit shows what is set (the default "UTC0" reads as unset).
+    const std::string cur = config_.timezone();
+    for (int i = 0; i < core::kTimezoneCount; ++i) {
+      const core::Timezone& z = core::kTimezones[i];
+      page += "<option value='";
+      page += z.posix;
+      page += (cur == z.posix && cur != "UTC0") ? "' selected>" : "'>";
+      page += z.label;
+      page += "</option>";
+    }
+    page += kWifiPageAfterTz;
+  }
   page += kPageTail;
   server_->send(200, "text/html", page);
 }
@@ -196,6 +224,18 @@ void TokenSetup::handle_wifi() {
   }
   config_.save_wifi(std::string(ssid.c_str()), std::string(pass.c_str()));
   config_.set_wifi_enabled(true);
+  // Optional time zone from the same form. Only values from our own table are
+  // accepted (the page offers nothing else; this guards a hand-made POST).
+  const String tz = server_->arg("tz");
+  if (tz.length() > 0) {
+    for (int i = 0; i < core::kTimezoneCount; ++i) {
+      if (tz == core::kTimezones[i].posix) {
+        config_.set_timezone(std::string(tz.c_str()));  // Network applies TZ on reconnect
+        core::logf("TokenSetup: time zone set to %s\n", core::kTimezones[i].label);
+        break;
+      }
+    }
+  }
   wifi_saved_ = true;  // Network tears down the AP + connects from loop() context
   core::logf("TokenSetup: WiFi credentials saved for '%s'\n", ssid.c_str());
   // Reply before the AP is torn down (next loop) so the phone gets this message.

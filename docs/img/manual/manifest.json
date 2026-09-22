@@ -801,5 +801,14 @@
       480
     ],
     "callouts": []
+  },
+  {
+    "src": "renders/welcome_modal_800x480.png",
+    "out": "welcome-modal.png",
+    "size": [
+      800,
+      480
+    ],
+    "callouts": []
   }
 ]

@@ -78,6 +78,15 @@ Stats
 
 ## Home
 
+**First boot.** A unit with nothing set up yet opens on a welcome screen that
+suggests the order: **Set up WiFi** first (it starts the phone setup page,
+where you enter the network and, optionally, your time zone — that sets the
+clock and enables updates and the schedule), then **Pair Micra** (Settings →
+Micra → Bluetooth). **Later** just closes it; the same steps are always
+reachable from Settings, and the screen never comes back once dismissed.
+
+  <img src="docs/img/manual/welcome-modal.png" width="70%" alt="The first-boot welcome">
+
 The Home screen adapts to the screen size and to whether a scale is paired.
 Without a scale, the MICRA card fills the screen as a single hero:
 
@@ -89,7 +98,7 @@ Without a scale, the MICRA card fills the screen as a single hero:
 
 - ① **Status** — `Not set up` (no machine chosen yet), `Setup unfinished`
   (a machine is chosen but pairing never completed — in both of these the Power
-  button reads **Set up** and takes you straight to Settings > Micra >
+  button reads **Pair Micra** and takes you straight to Settings > Micra >
   Bluetooth), `Disconnected`, `Connecting...`, `Heating` (powered on, boilers still coming
   up to temperature — the dot pulses amber), `Ready` (at temperature), or
   `Standby`. The Micra itself doesn't report a warm‑up state; `Heating` is
@@ -535,7 +544,9 @@ page fits on screen with little to no scrolling.
 - ③ **Set up WiFi** — starts the device's own access point (`Micra-Setup`) and
   setup page for entering credentials (same flow as token entry: scan the
   QR code on the screen with your phone's camera and the page pops up on its
-  own, or join the network and open the shown address):
+  own, or join the network and open the shown address). The page also offers
+  your **time zone** (optional — the same list as Time & date), so one phone
+  visit sets up WiFi and the clock:
 
   <img src="docs/img/manual/join-modal.png" width="70%" alt="The QR join modal">
 
