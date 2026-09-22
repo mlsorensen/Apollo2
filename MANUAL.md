@@ -82,8 +82,12 @@ Stats
 suggests the order: **Set up WiFi** first (it starts the phone setup page,
 where you enter the network and, optionally, your time zone — that sets the
 clock and enables updates and the schedule), then **Pair Micra** (Settings →
-Micra → Bluetooth). **Later** just closes it; the same steps are always
-reachable from Settings, and the screen never comes back once dismissed.
+Micra → Bluetooth). Both steps are optional: skip WiFi and Apollo still works,
+without automatic time, updates and the schedule. **Later** closes it until
+the next power‑up; it keeps coming back at boot while nothing is set up, so a
+power cycle mid‑setup loses nothing. **Don't show again** stops it for good,
+and setting up either WiFi or the Micra stops it on its own. Every step stays
+reachable from Settings.
 
   <img src="docs/img/manual/welcome-modal.png" width="70%" alt="The first-boot welcome">
 

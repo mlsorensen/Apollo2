@@ -1463,8 +1463,8 @@ void App::refresh() {
     update_temp_panels(snap);
     schedule_tick(snap);
 
-    // First boot: nothing configured and never dismissed -> the welcome,
-    // once, on the first refresh (build() is too early for a modal).
+    // Fresh unit (nothing configured, not opted out) -> the welcome, on the
+    // first refresh of every boot (build() is too early for a modal).
     if (!welcome_checked_) {
       welcome_checked_ = true;
       const bool fresh = snap.link == core::Link::Unconfigured && provisioner_ != nullptr &&
@@ -4604,24 +4604,28 @@ void App::schedule_slider_released() {
   sync_schedule_controls();
 }
 
-// The first thing a new unit shows. WiFi goes first on purpose: it sets the
-// clock (and the time zone, from the same phone page), and updates and the
-// schedule need it. Pairing the Micra is the other step; "Later" just gets
-// out of the way. Any choice marks it seen -- it never nags.
+// The first thing a new unit shows, on EVERY boot while nothing is set up
+// (no machine, no WiFi): a power cycle mid-setup must not lose it. WiFi goes
+// first on purpose: it sets the clock (and the time zone, from the same
+// phone page), and updates and the schedule need it. Every step is optional
+// and the text says what skipping costs. "Later" is this boot only; only
+// "Don't show again" persists, and configuring either thing ends it anyway.
 void App::open_welcome_modal() {
   lv_obj_t* card = open_modal(
       "Welcome to Apollo 2",
-      "Two short steps. First, WiFi: it sets the clock and time zone and "
-      "enables updates and the schedule -- you enter the network from your "
-      "phone. Then pair your Micra over Bluetooth.");
+      "Two short steps, both optional. WiFi first: it sets the clock and time "
+      "zone and enables updates and the schedule -- you enter the network from "
+      "your phone. Then pair your Micra over Bluetooth. Skip either and Apollo "
+      "still works, just without what that step brings.");
   lv_obj_t* row = modal_button_row(card);
   modal_button(row, "Set up WiFi", ui::theme::accent(), on_welcome_choice<0>, this);
   modal_button(row, "Pair Micra", ui::theme::rail(), on_welcome_choice<1>, this);
   modal_button(row, "Later", ui::theme::rail(), on_welcome_choice<2>, this);
+  modal_button(row, "Don't show again", ui::theme::rail(), on_welcome_choice<3>, this);
 }
 
 void App::welcome_choose(int choice) {
-  if (provisioner_ != nullptr) provisioner_->set_welcome_seen(true);
+  if (choice == 3 && provisioner_ != nullptr) provisioner_->set_welcome_seen(true);
   close_modal();
   if (choice == 0) {
     start_wifi_setup();  // the portal + its QR modal

@@ -102,8 +102,9 @@ are full images, so flashing one with `esptool` *does* clear saved settings.
 
 On first boot a welcome screen suggests the order: **Set up WiFi** first
 (network and time zone from your phone; that sets the clock and enables
-updates), then **Pair Micra**. Tap **Later** to skip it — every step is in
-Settings too.
+updates), then **Pair Micra**. Both are optional — **Later** skips it for now
+(it returns at the next power‑up until something is set up), **Don't show
+again** for good; every step is in Settings too.
 
 After the first flash Apollo updates itself over WiFi: it checks for new
 firmware, shows what changed, and installs on a tap. Tick **Include

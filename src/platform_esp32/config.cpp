@@ -93,7 +93,7 @@ constexpr char kSchedWarnKey[] = "schwarn";    // cloud-app warning: don't show 
 constexpr char kSchedDailyKey[] = "schall";    // the "same every day" window
 // "schd0".."schd6" = Monday..Sunday, built in schedule_day_key().
 constexpr char kSchedDayPrefix[] = "schd";
-constexpr char kWelcomeKey[] = "welcome";  // first-boot welcome screen dismissed
+constexpr char kWelcomeKey[] = "wlcmoff";  // welcome screen: "Don't show again"
 }  // namespace
 
 namespace platform {

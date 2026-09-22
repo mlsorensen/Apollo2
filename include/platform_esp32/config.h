@@ -51,7 +51,7 @@ class Config {
   void set_review_hold_s(int seconds);
   int detect_lead_in_s() const;        // detect-mode preinfusion lead-in seconds (default 3)
   void set_detect_lead_in_s(int seconds);
-  bool welcome_seen() const;           // first-boot welcome screen dismissed (default false)
+  bool welcome_seen() const;           // welcome screen opted out ("Don't show again"; default false)
   void set_welcome_seen(bool on);
   bool auto_connect() const;           // connect to the saved Micra at boot (default true)
   void set_auto_connect(bool on);

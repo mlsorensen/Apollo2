@@ -150,11 +150,11 @@ class App {
   void schedule_slider_released();         // ...and persist on release
   void schedule_warmup_adjust(int dir);    // warm-up minutes [-]/[+]
   void schedule_copy_times();              // "Copy times to" [Copy]: edited day -> target
-  // First boot: "Welcome" with the setup order (WiFi + time zone first, then
-  // the Micra). Shown once by refresh() on a unit with nothing configured;
-  // also a sim pose.
+  // Fresh unit: "Welcome" with the setup order (WiFi + time zone first, then
+  // the Micra). refresh() shows it each boot while nothing is configured and
+  // the user hasn't opted out; also a sim pose.
   void open_welcome_modal();
-  void welcome_choose(int choice);         // 0 = Set up WiFi, 1 = Pair Micra, 2 = Later
+  void welcome_choose(int choice);         // 0 Set up WiFi, 1 Pair Micra, 2 Later (this boot), 3 never again
   void open_schedule_warning_modal();      // "turn off the cloud app's schedule" notice
   void dismiss_schedule_warning(bool forever);
   void confirm_restore();                // modal "Restore"
