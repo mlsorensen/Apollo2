@@ -87,6 +87,17 @@ jobs:
           # between them. Never rename a plain slug: fielded units self-update
           # from it.
     steps:
+      # A STABLE tag is cut from main only. Betas may come from a feature
+      # branch (the 1.0 line lives on feat/v1.0 and ships as v1.0.0-beta.N
+      # from there). This is a footgun guard, not the security gate: publishing
+      # still needs the owner's approval in the `release` environment, and
+      # that review page shows the ref the run came from.
+      - name: Stable releases come from main
+        if: ${{ !contains(inputs.tag, '-beta.') && github.ref != 'refs/heads/main' }}
+        run: |
+          echo "::error::${{ inputs.tag }} is a stable tag but this run is on ${{ github.ref }}; stable releases are cut from main only"
+          exit 1
+
       - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v7

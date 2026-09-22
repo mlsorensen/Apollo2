@@ -227,6 +227,14 @@ existing buffer) over adding memory. Applies to fixes as much as features.
 3. `make build-release` green (or `make build-all` for a platform change).
 4. Commit, push main, then `gh workflow run firmware-release.yml -f tag=vX.Y.Z`
    (CI creates the tag + Release; never build release binaries locally).
+   **Stable tags are cut from main ONLY** — the workflow's first step fails
+   any non-beta tag dispatched from another ref. **Betas may be cut from a
+   branch**: `--ref feat/v1.0 -f tag=v1.0.0-beta.N` (every job checks out the
+   dispatched ref and the tag lands on that branch's head, so never rebase or
+   squash a branch after tagging it; merge main INTO it). Notes for a branch
+   line accumulate under ONE `## vX.Y.Z` heading (the workflow falls back to
+   it for -beta.N tags); promotion = merge to main, bump kVersion, run at the
+   stable tag from main.
 5. **Approve the deploy.** The build runs unattended, then the `release` and
    `pages` jobs wait in the `release` environment for the owner's click
    ("Review deployments" on the run page; GitHub emails when it's waiting).
