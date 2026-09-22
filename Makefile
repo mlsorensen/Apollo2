@@ -12,7 +12,8 @@
 #   make flash BOARD=p4-5   flash a specific board (p4-5 | p4-4-3 | s3-4-3c | p4-x-8 | s3-2 | s3-7b | s3-4-3b | p4-x-7 | p4-x-10-1)
 #   make flash-p4-5 / flash-p4-4-3 / flash-s3-4-3c / flash-p4-x-8   [rel]
 #   make flash-p4-5-rev3 / flash-p4-4-3-rev3   the same boards on rev v3.0+ silicon [rel]
-#                           (auto-detect reads REV= off a running board and picks these itself)
+#                           (rarely needed: flash-p4-5 / flash-p4-4-3 read the chip revision
+#                            off the chip and pick the right image themselves)
 #   make flash-s3-2 / flash-s3-7b / flash-s3-4-3b / flash-p4-x-7 / flash-p4-x-10-1
 #   make build-p4-5         compile the P4-WIFI6 5" (DSI 1280x720) firmware      [rel]
 #   make build-p4-4-3       compile the P4-WIFI6 4.3" (DSI 800x480) firmware     [rel]

@@ -112,8 +112,8 @@ a USB cable.
 ```sh
 make flash            # print selection of flash options
 make flash-p4-5       # or target a board: p4-5 | p4-4-3 | s3-4-3c | p4-x-8
-                      # (P4-5 / P4-4.3 on the newer v3 chip: p4-5-rev3 | p4-4-3-rev3;
-                      #  auto-detect reads the chip off a board already running Apollo)
+                      # (P4-5 / P4-4.3 come with two chip revisions needing different
+                      #  images; these targets read the chip and pick the right one)
 make monitor          # open the serial console (115200 baud)
 ```
 

@@ -110,6 +110,8 @@ if [ -z "$ENV" ]; then
   echo "       Re-run with the board so we don't flash the wrong build:" >&2
   echo "         make flash-p4-5      (P4-WIFI6 5\" 1280x720)      [released]" >&2
   echo "         make flash-p4-4-3    (P4-WIFI6 4.3\" 800x480)      [released]" >&2
+  echo "           (both P4s: the chip revision, v1.x or v3, is read off the chip" >&2
+  echo "            and the matching image picked for you)" >&2
   echo "         make flash-s3-4-3c   (S3 4.3C 800x480, dimmable)  [released]" >&2
   echo "         make flash-p4-x-8    (P4-WIFI6 X 8\" box 1280x800) [released]" >&2
   echo "       internal-only boards (build fine, never published):" >&2
@@ -128,6 +130,44 @@ if [ -z "$PORT" ]; then
   echo "  - for a first flash, try download mode: hold BOOT, tap RESET, release BOOT" >&2
   echo "  letting PlatformIO try to auto-detect anyway..." >&2
 fi
+
+# The P4-5 and P4-4.3 ship with two binary-incompatible silicon generations
+# (rev v1.x "es" vs rev v3.x) under one product name, and need different
+# images. The ROM loader reports the revision even on a BLANK board, so for
+# those two envs ask esptool and pick the right sibling ourselves -- whichever
+# spelling the user typed. (P4 only: an S3 has one silicon, and its native
+# USB-CDC port must not see a scripted reset dance -- see CLAUDE.md.) The
+# ask is one extra ROM handshake before the flash; the flash resets anyway.
+case "$ENV" in
+  esp32-p4-micra-43|esp32-p4-micra-43-rev3|esp32-p4-micra-5|esp32-p4-micra-5-rev3)
+    if [ -n "$PORT" ]; then
+      BASE="${ENV%-rev3}"
+      ESPTOOL=""
+      for c in esptool esptool.py "$HOME/.platformio/packages/tool-esptoolpy/esptool.py" \
+               "$HOME/.platformio/penv/bin/esptool.py"; do
+        if command -v "$c" >/dev/null 2>&1 || [ -x "$c" ]; then ESPTOOL="$c"; break; fi
+      done
+      REV=""
+      if [ -n "$ESPTOOL" ]; then
+        REV="$("$ESPTOOL" --port "$PORT" chip-id 2>/dev/null | sed -n 's/.*revision v\([0-9]*\)\.\([0-9]*\).*/\1.\2/p' | head -1)"
+        [ -n "$REV" ] || REV="$("$ESPTOOL" --port "$PORT" chip_id 2>/dev/null | sed -n 's/.*revision v\([0-9]*\)\.\([0-9]*\).*/\1.\2/p' | head -1)"
+      fi
+      if [ -n "$REV" ]; then
+        if [ "${REV%%.*}" -ge 3 ]; then WANT="${BASE}-rev3"; else WANT="$BASE"; fi
+        if [ "$WANT" != "$ENV" ]; then
+          echo "flash: the chip on $PORT is ESP32-P4 rev v$REV -> flashing $WANT instead of $ENV" >&2
+          ENV="$WANT"
+        else
+          echo "flash: ESP32-P4 rev v$REV confirmed for $ENV" >&2
+        fi
+      else
+        echo "flash: couldn't read the chip revision on $PORT; flashing $ENV as asked" >&2
+        echo "       (a rev v3 chip needs the -rev3 image and vice versa -- the wrong one" >&2
+        echo "        just won't boot until the other is flashed; nothing is damaged)" >&2
+      fi
+    fi
+    ;;
+esac
 
 echo "flash: env=$ENV port=${PORT:-auto}" >&2
 exec pio run -e "$ENV" -t upload ${PORT:+--upload-port "$PORT"}

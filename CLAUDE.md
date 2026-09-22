@@ -323,8 +323,12 @@ markers in platformio.ini + board_config.h.
       the identify banner has carried since v0.11.0 (efuse major*100+minor,
       >= 300 = rev3) and sets the radio itself. A blank board can't be probed
       over Web Serial, so the radio is the explicit choice there.
-    * `make flash-p4-5` auto-detect: tools/flash.sh asks `id?` and appends
-      `-rev3` when REV >= 300; `make flash-p4-5-rev3` forces it.
+    * `make flash-p4-5` / `flash-p4-4-3` (and bare `make flash` auto-detect,
+      which asks a running board `id?` for its REV=) read the chip revision
+      off the ROM loader with esptool — works on a BLANK board — and pick the
+      sibling env themselves, announcing the switch; the explicit `-rev3`
+      targets exist but are rarely needed. P4 only: no scripted resets on an
+      S3's USB-CDC port.
   **Picking wrong is recoverable and that is fine** — the board just won't come
   up until the other image is flashed; nothing is damaged. Don't over-engineer
   the guard-rails for it.
