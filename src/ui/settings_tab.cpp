@@ -493,10 +493,6 @@ lv_obj_t* split_half(lv_obj_t* split, const char* label, const lv_font_t* font,
 void build_micra_schedule_rows(lv_obj_t* page, const lv_font_t* font,
                                const lv_font_t* symbol_font, int btn_size,
                                bool compact, ui::SettingsWidgets& out) {
-  // One more row than the other pages: a slightly tighter column keeps the
-  // per-day form on one screen at 800x480.
-  lv_obj_set_style_pad_row(page, ui::dp(compact ? 6 : 8), 0);
-
   // Why the page is greyed out, when it is.
   out.sched_status = lv_label_create(page);
   lv_obj_set_width(out.sched_status, lv_pct(100));
@@ -549,6 +545,9 @@ void build_micra_schedule_rows(lv_obj_t* page, const lv_font_t* font,
     lv_obj_set_flex_align(strip, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(strip, ui::dp(compact ? 4 : 8), 0);
+    // Extra air above the per-day block, and again above the time row and
+    // the bar: the three groups (week / day / window) read as groups.
+    lv_obj_set_style_pad_top(strip, ui::dp(compact ? 4 : 10), 0);
     out.sched_day_row = strip;
     for (int d = 0; d < 7; ++d) {
       lv_obj_t* chip = ui::make_button(strip);
@@ -575,6 +574,7 @@ void build_micra_schedule_rows(lv_obj_t* page, const lv_font_t* font,
   // On at [hh][mm]      Off at [hh][mm]
   {
     lv_obj_t* split = split_row(page, compact);
+    if (!compact) lv_obj_set_style_pad_top(split, ui::dp(10), 0);
     const int hour_w = ui::dp(compact ? 92 : 128);
     const int min_w = ui::dp(compact ? 66 : 84);
     lv_obj_t* ron = split_half(split, "On at", font, compact);
@@ -600,7 +600,8 @@ void build_micra_schedule_rows(lv_obj_t* page, const lv_font_t* font,
     lv_obj_set_width(wrap, lv_pct(100));
     lv_obj_set_height(wrap, LV_SIZE_CONTENT);
     lv_obj_set_style_pad_hor(wrap, ui::dp(12), 0);
-    lv_obj_set_style_pad_ver(wrap, ui::dp(compact ? 6 : 10), 0);
+    lv_obj_set_style_pad_top(wrap, ui::dp(compact ? 8 : 18), 0);
+    lv_obj_set_style_pad_bottom(wrap, ui::dp(compact ? 6 : 10), 0);
     lv_obj_t* sl = lv_slider_create(wrap);
     // RANGE mode must be set BEFORE the range/values: lv_bar ignores a start
     // value (and resets it on set_range) in any other mode.

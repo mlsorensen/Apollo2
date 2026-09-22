@@ -323,8 +323,9 @@ good.
   <img src="docs/img/manual/micra-schedule-days.png" width="70%" alt="Per-day schedule">
 
   With **Same every day** off: ① the day chips pick which day the rows below
-  edit. **Tap the selected chip again to switch that day off** (its name goes
-  grey and the schedule skips it); tap once more to switch it back on. ② **Copy
+  edit. **Tap the selected chip again to switch that day off**: the chip fades,
+  the time controls grey out, and the schedule skips that day. Tap once more
+  to switch it back on. ② **Copy
   times to** copies the shown day's On at / Off at onto the picked day, or onto
   **All days**, without changing which days are switched on.
 

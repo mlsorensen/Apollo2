@@ -4664,14 +4664,17 @@ void App::sync_schedule_controls() {
   const int edit = s.sched_edit_day;
   if (!c.same_every_day) {
     // Selected: accent outline. Day on: accent fill (when selected) + normal
-    // text. Day off: card fill + muted text, so a selected-but-off day is an
-    // outlined chip with grey text.
+    // text. Day off: the whole chip at half opacity with muted text, so a
+    // selected-but-off day is a faded, outlined chip.
     for (int d = 0; d < 7; ++d) {
       const bool sel = d == edit;
       const bool on = c.days[d].enabled;
-      ui::set_border_color(s.sched_day_chips[d], sel ? ui::theme::accent() : ui::theme::card());
-      ui::set_bg_color(s.sched_day_chips[d], sel && on ? ui::theme::accent() : ui::theme::card());
+      lv_obj_t* chip = s.sched_day_chips[d];
+      ui::set_border_color(chip, sel ? ui::theme::accent() : ui::theme::card());
+      ui::set_bg_color(chip, sel && on ? ui::theme::accent() : ui::theme::card());
       ui::set_text_color(s.sched_day_labels[d], on ? ui::theme::text() : ui::theme::muted());
+      const lv_opa_t opa = on ? LV_OPA_COVER : LV_OPA_50;
+      if (lv_obj_get_style_opa(chip, LV_PART_MAIN) != opa) lv_obj_set_style_opa(chip, opa, 0);
     }
   }
 
@@ -4722,20 +4725,24 @@ void App::sync_schedule_gate() {
 void App::apply_schedule_clickable() {
   ui::SettingsWidgets& s = settings_;
   if (s.sched_slider == nullptr) return;
-  // The gate greys everything; Enabled = off greys everything but itself.
+  // The gate greys everything; Enabled = off greys everything but itself;
+  // a selected day that is switched off greys its own window controls.
   const bool gate = schedule_gate_ == 3;
   const bool ok = gate && schedule_cfg_.enabled;
+  const bool day_on = schedule_cfg_.same_every_day ||
+                      schedule_cfg_.days[s.sched_edit_day].enabled;
+  const bool win = ok && day_on;
   set_clickable(s.sched_enable_switch, gate);
   set_clickable(s.sched_same_switch, ok);
   set_clickable(s.sched_warm_switch, ok);
   for (lv_obj_t* chip : s.sched_day_chips) set_clickable(chip, ok);
-  set_clickable(s.sched_on_hour_dd, ok);
-  set_clickable(s.sched_on_min_dd, ok);
-  set_clickable(s.sched_off_hour_dd, ok);
-  set_clickable(s.sched_off_min_dd, ok);
-  set_clickable(s.sched_slider, ok);
-  set_clickable(s.sched_copy_dd, ok);
-  set_clickable(s.sched_copy_btn, ok);
+  set_clickable(s.sched_on_hour_dd, win);
+  set_clickable(s.sched_on_min_dd, win);
+  set_clickable(s.sched_off_hour_dd, win);
+  set_clickable(s.sched_off_min_dd, win);
+  set_clickable(s.sched_slider, win);
+  set_clickable(s.sched_copy_dd, win);
+  set_clickable(s.sched_copy_btn, win);
   const bool warm = ok && schedule_cfg_.warmup_enabled;
   set_clickable(s.sched_warm_minus, warm && schedule_cfg_.warmup_min > 0);
   set_clickable(s.sched_warm_plus, warm && schedule_cfg_.warmup_min < core::kWarmupMaxMin);
