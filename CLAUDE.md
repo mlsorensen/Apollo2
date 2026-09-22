@@ -304,7 +304,9 @@ markers in platformio.ini + board_config.h.
   are expected to be in anyone's hands — they get flashed over USB. Revisit only
   if one actually sees use. No `kOtaPublished` flag, no UI gating.
 - **Rev v3 production silicon for the P4 boards — DONE on feat/v1.0 (issue
-  #2, 2026-09-22).** Waveshare does not change the SKU, so a buyer cannot tell
+  #2, 2026-09-22). HW-CONFIRMED on a rev v3.2 P4-4.3 the same day (boot,
+  DSI panel, touch, welcome flow, WiFi portal); the rev3 P4-5 image is built
+  but not yet booted on a rev3 5".** Waveshare does not change the SKU, so a buyer cannot tell
   which silicon they got; **the product list stays FOUR — the silicon split
   doubles the IMAGES, not the boards** (six images in CI). Never surface it as a
   separate product in the README/board table; the flasher handles selection.
