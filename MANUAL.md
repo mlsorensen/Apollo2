@@ -47,8 +47,8 @@ Settings
 │  ├─ Controls  — Wired paddle* · Chime melody* · Chime volume*
 │  │             · Brew Temperature · Steam Enable + Temperature
 │  ├─ Cleaning* — Auto flush · Flush delay · Backflush cleaning  → cleaning mode
-│  └─ Schedule  — Schedule · Same every day · day chips + per-day enable
-│                · On at / Off at · range slider · Warm-up
+│  └─ Schedule  — Enabled · Same every day · Smart Warm-up · day chips (tap again = day off)
+│                · On at / Off at · range slider · Copy times to
 ├─ Scale
 │  ├─ Bluetooth       — Scan · saved scale (Connect / Forget)
 │  ├─ Shot settings   — Target · Review hold · Detect lead-in · Smoothing
@@ -302,30 +302,31 @@ confuse. **OK** dismisses it until the next restart; **Don't show again**, for
 good.
 
 - ① **Enabled** *(default off)* — the master switch. Off keeps the times you
-  set.
+  set and greys out the rest of the page.
 - ② **Same every day** *(default on)* — one window for the whole week. Turn it
-  off for per‑day times: a row of day chips appears (below) and each day has
-  its own On at / Off at plus an enable switch, so a day can sit the schedule
-  out. **Turning it off copies the daily window onto all seven days** as the
-  starting point, so you only edit the days that differ.
-- ③ **On at / Off at** *(5‑minute steps; default 6:30 → 9:00)* — the window.
+  off for per‑day times: a row of day chips appears (below) and each day gets
+  its own On at / Off at. **Turning it off copies the daily window onto all
+  seven days** as the starting point, so you only edit the days that differ.
+- ③ **Smart Warm‑up** *(default on, 6 min; 0–30)* — starts the machine this
+  many minutes *before* On at, so the boilers are at temperature by the
+  scheduled time. One setting for the whole week, which is why it sits above
+  the day chips. A lead that reaches past midnight simply starts the evening
+  before.
+- ④ **On at / Off at** *(5‑minute steps; default 6:30 → 9:00)* — the window.
   Off is always later than On on the same day (a window never crosses
   midnight); moving one end past the other pushes the other along.
-- ④ **Slider** — the same window as a bar across the day, midnight at the
+- ⑤ **Slider** — the same window as a bar across the day, midnight at the
   left edge and 23:55 at the right, with an hour axis underneath (a tick every
   three hours, labelled at 6 AM, noon and 6 PM). Drag either end; the pickers
   follow, and vice versa.
-- ⑤ **Warm‑up** *(default on, 6 min; 0–30)* — starts the machine this many
-  minutes *before* On at, so the boilers are at temperature by the scheduled
-  time. One setting for every day. A lead that reaches past midnight simply
-  starts the evening before.
 
   <img src="docs/img/manual/micra-schedule-days.png" width="70%" alt="Per-day schedule">
 
-  ① the day chips pick which day the rows below edit (a greyed name is a day
-  that is switched off); ② that day's own enable switch; ③ **Copy times to**
-  copies the shown day's On at / Off at onto the picked day, or onto **All
-  days**, without touching any day's enable switch.
+  With **Same every day** off: ① the day chips pick which day the rows below
+  edit. **Tap the selected chip again to switch that day off** (its name goes
+  grey and the schedule skips it); tap once more to switch it back on. ② **Copy
+  times to** copies the shown day's On at / Off at onto the picked day, or onto
+  **All days**, without changing which days are switched on.
 
 How it behaves:
 

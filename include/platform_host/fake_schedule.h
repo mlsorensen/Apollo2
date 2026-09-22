@@ -29,6 +29,7 @@ class FakeSchedule : public core::ISchedule {
     }
     cfg_.days[2].enabled = false;
   }
+  void pose_disabled() { cfg_.enabled = false; }
   void set_warning_dismissed(bool on) { warned_ = on; }
 
  private:

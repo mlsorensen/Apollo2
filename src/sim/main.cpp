@@ -304,6 +304,11 @@ int main() {
   ok &= r({800, 480}, "renders/schedule_warn_modal_800x480.png", 1, ui::kSectionMicraSchedule);
   ok &= r({320, 240}, "renders/schedule_warn_modal_320x240.png", 1, ui::kSectionMicraSchedule);
   schedule.set_warning_dismissed(true);
+  // Enabled off: everything but the switch greys.
+  schedule.pose_daily();
+  schedule.pose_disabled();
+  ok &= r({800, 480}, "renders/micra_schedule_off_800x480.png", 1, ui::kSectionMicraSchedule);
+  schedule.pose_daily();
   // Gated: no trusted time, then no paired machine.
   network.set_synced(false);
   ok &= r({800, 480}, "renders/micra_schedule_nontp_800x480.png", 1, ui::kSectionMicraSchedule);

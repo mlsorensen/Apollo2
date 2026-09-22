@@ -515,7 +515,28 @@ void build_micra_schedule_rows(lv_obj_t* page, const lv_font_t* font,
     out.sched_same_switch = make_switch(rb, btn_size);
   }
 
-  // [Mon][Tue]...[Sun]: which day the rows below edit. Equal widths, one line.
+  // Smart Warm-up [sw] [-] 6 min [+]: start early so the boilers are there on
+  // time. One setting for the week, hence above the per-day chips.
+  {
+    lv_obj_t* rw = make_setting_row(page, "Smart Warm-up", font);
+    lv_obj_t* grp = lv_obj_create(rw);
+    lv_obj_remove_style_all(grp);
+    lv_obj_remove_flag(grp, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_size(grp, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(grp, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(grp, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(grp, ui::dp(12), 0);
+    out.sched_warm_switch = make_switch(grp, btn_size);
+    make_inline_stepper(grp, font, symbol_font, btn_size, &out.sched_warm_minus,
+                        &out.sched_warm_value, &out.sched_warm_plus, nullptr);
+    dim_when_disabled(out.sched_warm_minus);
+    dim_when_disabled(out.sched_warm_plus);
+    dim_when_disabled(out.sched_warm_value);
+  }
+
+  // [Mon][Tue]...[Sun]: which day the rows below edit (tap the selected one
+  // again to switch that day off/on). Equal widths, one line.
   {
     static const char* const kShort[7] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
     static const char* const kTiny[7] = {"Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"};
@@ -535,6 +556,11 @@ void build_micra_schedule_rows(lv_obj_t* page, const lv_font_t* font,
       lv_obj_set_height(chip, ui::dp(compact ? 30 : 40));
       lv_obj_set_style_pad_hor(chip, ui::dp(4), 0);
       lv_obj_set_style_bg_color(chip, lv_color_hex(ui::theme::card()), 0);
+      // The selected chip is outlined; App colors the outline/fill/text for
+      // the four states (selected x day on/off).
+      lv_obj_set_style_border_width(chip, ui::dp(2), 0);
+      lv_obj_set_style_border_color(chip, lv_color_hex(ui::theme::card()), 0);
+      lv_obj_set_style_border_opa(chip, LV_OPA_COVER, 0);
       dim_when_disabled(chip);
       lv_obj_t* l = lv_label_create(chip);
       lv_label_set_text(l, compact ? kTiny[d] : kShort[d]);
@@ -545,11 +571,6 @@ void build_micra_schedule_rows(lv_obj_t* page, const lv_font_t* font,
       out.sched_day_labels[d] = l;
     }
   }
-
-  // <Weekday> [sw]: the selected day takes part in the schedule.
-  out.sched_day_enable_row = make_setting_row(page, "Monday", font);
-  out.sched_day_enable_label = lv_obj_get_child(out.sched_day_enable_row, 0);
-  out.sched_day_enable_switch = make_switch(out.sched_day_enable_row, btn_size);
 
   // On at [hh][mm]      Off at [hh][mm]
   {
@@ -629,32 +650,13 @@ void build_micra_schedule_rows(lv_obj_t* page, const lv_font_t* font,
     }
   }
 
-  // Warm-up [sw] [-] 6 min [+]: start early so the boilers are there on time.
-  {
-    lv_obj_t* rw = make_setting_row(page, "Warm-up", font);
-    lv_obj_t* grp = lv_obj_create(rw);
-    lv_obj_remove_style_all(grp);
-    lv_obj_remove_flag(grp, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_size(grp, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(grp, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(grp, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(grp, ui::dp(12), 0);
-    out.sched_warm_switch = make_switch(grp, btn_size);
-    make_inline_stepper(grp, font, symbol_font, btn_size, &out.sched_warm_minus,
-                        &out.sched_warm_value, &out.sched_warm_plus, nullptr);
-    dim_when_disabled(out.sched_warm_minus);
-    dim_when_disabled(out.sched_warm_plus);
-    dim_when_disabled(out.sched_warm_value);
-  }
-
   // Copy times to [All days v] [Copy]: the edited day's window onto another
   // day (or all of them). Per-day mode only; App shows/hides it.
   {
     out.sched_copy_row = make_setting_row(page, "Copy times to", font);
     lv_obj_t* grp = make_field_group(out.sched_copy_row);
     lv_obj_set_style_pad_column(grp, ui::dp(10), 0);
-    out.sched_copy_dd = make_field_dropdown(grp, font, ui::dp(compact ? 110 : 160), compact);
+    out.sched_copy_dd = make_field_dropdown(grp, font, ui::dp(compact ? 130 : 190), compact);
     lv_dropdown_set_options(out.sched_copy_dd,
                             "All days\nMonday\nTuesday\nWednesday\nThursday\nFriday"
                             "\nSaturday\nSunday");

@@ -534,9 +534,6 @@ void on_sched_enable_switch(lv_event_t* e) {
 void on_sched_same_switch(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->set_schedule_same_daily(sw_checked(e));
 }
-void on_sched_day_enable_switch(lv_event_t* e) {
-  static_cast<ui::App*>(lv_event_get_user_data(e))->set_schedule_day_enabled(sw_checked(e));
-}
 void on_sched_warm_switch(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->set_schedule_warmup(sw_checked(e));
 }
@@ -1311,8 +1308,6 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     lv_obj_add_event_cb(settings_.sched_enable_switch, on_sched_enable_switch,
                         LV_EVENT_VALUE_CHANGED, this);
     lv_obj_add_event_cb(settings_.sched_same_switch, on_sched_same_switch,
-                        LV_EVENT_VALUE_CHANGED, this);
-    lv_obj_add_event_cb(settings_.sched_day_enable_switch, on_sched_day_enable_switch,
                         LV_EVENT_VALUE_CHANGED, this);
     lv_obj_add_event_cb(settings_.sched_warm_switch, on_sched_warm_switch,
                         LV_EVENT_VALUE_CHANGED, this);
@@ -4514,21 +4509,23 @@ void App::set_schedule_same_daily(bool on) {
   sync_schedule_controls();
 }
 
-void App::set_schedule_day_enabled(bool on) {
-  if (!schedule_cfg_.same_every_day) sched_edit_day().enabled = on;
-  schedule_commit();
-  sync_schedule_controls();
-}
-
 void App::set_schedule_warmup(bool on) {
   schedule_cfg_.warmup_enabled = on;
   schedule_commit();
   sync_schedule_controls();
 }
 
+// A chip tap selects that day for editing; a tap on the already-selected
+// chip toggles whether the day takes part (the chip reads muted while it
+// doesn't). One control, two questions, no extra row.
 void App::schedule_pick_day(int weekday) {
   if (weekday < 0 || weekday > 6) return;
-  settings_.sched_edit_day = weekday;  // UI state only, nothing to persist
+  if (weekday == settings_.sched_edit_day && !schedule_cfg_.same_every_day) {
+    schedule_cfg_.days[weekday].enabled = !schedule_cfg_.days[weekday].enabled;
+    schedule_commit();
+  } else {
+    settings_.sched_edit_day = weekday;  // UI state only, nothing to persist
+  }
   sync_schedule_controls();
 }
 
@@ -4663,18 +4660,19 @@ void App::sync_schedule_controls() {
 
   // Per-day mode: the chip strip + the selected day's own switch.
   set_hidden(s.sched_day_row, c.same_every_day);
-  set_hidden(s.sched_day_enable_row, c.same_every_day);
   set_hidden(s.sched_copy_row, c.same_every_day);
   const int edit = s.sched_edit_day;
   if (!c.same_every_day) {
+    // Selected: accent outline. Day on: accent fill (when selected) + normal
+    // text. Day off: card fill + muted text, so a selected-but-off day is an
+    // outlined chip with grey text.
     for (int d = 0; d < 7; ++d) {
       const bool sel = d == edit;
-      ui::set_bg_color(s.sched_day_chips[d], sel ? ui::theme::accent() : ui::theme::card());
-      ui::set_text_color(s.sched_day_labels[d],
-                         sel || c.days[d].enabled ? ui::theme::text() : ui::theme::muted());
+      const bool on = c.days[d].enabled;
+      ui::set_border_color(s.sched_day_chips[d], sel ? ui::theme::accent() : ui::theme::card());
+      ui::set_bg_color(s.sched_day_chips[d], sel && on ? ui::theme::accent() : ui::theme::card());
+      ui::set_text_color(s.sched_day_labels[d], on ? ui::theme::text() : ui::theme::muted());
     }
-    ui::set_text(s.sched_day_enable_label, kDayNames[edit]);
-    set_sw(s.sched_day_enable_switch, c.days[edit].enabled);
   }
 
   const core::DaySchedule& d = c.same_every_day ? c.daily : c.days[edit];
@@ -4724,10 +4722,11 @@ void App::sync_schedule_gate() {
 void App::apply_schedule_clickable() {
   ui::SettingsWidgets& s = settings_;
   if (s.sched_slider == nullptr) return;
-  const bool ok = schedule_gate_ == 3;
-  set_clickable(s.sched_enable_switch, ok);
+  // The gate greys everything; Enabled = off greys everything but itself.
+  const bool gate = schedule_gate_ == 3;
+  const bool ok = gate && schedule_cfg_.enabled;
+  set_clickable(s.sched_enable_switch, gate);
   set_clickable(s.sched_same_switch, ok);
-  set_clickable(s.sched_day_enable_switch, ok);
   set_clickable(s.sched_warm_switch, ok);
   for (lv_obj_t* chip : s.sched_day_chips) set_clickable(chip, ok);
   set_clickable(s.sched_on_hour_dd, ok);

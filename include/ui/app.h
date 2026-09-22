@@ -143,9 +143,8 @@ class App {
   // refresh()). The page's controls all edit schedule_cfg_ and commit at once.
   void set_schedule_enabled(bool on);
   void set_schedule_same_daily(bool on);   // off seeds the seven days from the daily window
-  void set_schedule_day_enabled(bool on);  // the chip-selected day takes part
   void set_schedule_warmup(bool on);
-  void schedule_pick_day(int weekday);     // chip tap: which day the rows edit
+  void schedule_pick_day(int weekday);     // chip tap: select; again = toggle that day
   void schedule_time_select(bool off, bool hour, int idx);  // On at / Off at dropdowns
   void schedule_slider_changed();          // range-slider drag: mirror into the pickers
   void schedule_slider_released();         // ...and persist on release

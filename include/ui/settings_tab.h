@@ -55,11 +55,9 @@ struct SettingsWidgets {
   lv_obj_t* sched_enable_switch = nullptr;     // master on/off
   lv_obj_t* sched_same_switch = nullptr;       // "Same every day"
   lv_obj_t* sched_day_row = nullptr;           // the Mon..Sun chip strip (hidden
-  lv_obj_t* sched_day_chips[7] = {};           // while Same every day is on)
-  lv_obj_t* sched_day_labels[7] = {};
-  lv_obj_t* sched_day_enable_row = nullptr;    // "<Weekday>  [switch]" (hidden likewise)
-  lv_obj_t* sched_day_enable_label = nullptr;
-  lv_obj_t* sched_day_enable_switch = nullptr;
+  lv_obj_t* sched_day_chips[7] = {};           // while Same every day is on). Tap
+  lv_obj_t* sched_day_labels[7] = {};          // selects; tap the selected chip
+                                               // again to toggle that day on/off
   lv_obj_t* sched_on_hour_dd = nullptr;        // On at / Off at: hour + 5-min dropdowns
   lv_obj_t* sched_on_min_dd = nullptr;
   lv_obj_t* sched_off_hour_dd = nullptr;
