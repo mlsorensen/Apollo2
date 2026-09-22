@@ -26,6 +26,11 @@ name: firmware release
 # (site/, deployed to the gh-pages branch with the binaries + generated
 # manifests) lets anyone flash a board from Chrome with no toolchain.
 
+# The run's title says WHAT is being built and from WHERE, because the
+# approval step shows nothing else: the tag is only an input, and the review
+# dialog names the environment, not the version.
+run-name: ${{ contains(inputs.tag, '-beta.') && 'BETA' || 'RELEASE' }} ${{ inputs.tag }} from ${{ github.ref_name }}
+
 on:
   workflow_dispatch:
     inputs:
@@ -51,6 +56,7 @@ env:
 
 jobs:
   build:
+    name: build ${{ matrix.board }} ${{ inputs.tag }}
     runs-on: ubuntu-latest
     strategy:
       # One board's transient failure must not cancel the other seven and skip
@@ -209,7 +215,25 @@ jobs:
           name: fw-${{ matrix.board }}
           path: out/*
 
+      # What the owner is about to approve, on the run's summary page.
+      - name: Summary
+        run: |
+          {
+            if [[ "$RELEASE_TAG" == *-beta.* ]]; then
+              echo "### BETA \`$RELEASE_TAG\` — ${{ matrix.board }}"
+              echo "Publishes as a GitHub PRE-release; lands in \`releases-beta.json\` only (beta-channel devices)."
+            else
+              echo "### RELEASE \`$RELEASE_TAG\` — ${{ matrix.board }}"
+              echo "Publishes as the Latest release; lands in \`releases.json\` (EVERY device self-updates from it)."
+            fi
+            echo
+            echo "- ref: \`${{ github.ref_name }}\` @ \`${GITHUB_SHA::7}\`"
+            echo "- artifact: \`apollo2-${{ matrix.board }}-${RELEASE_TAG}.bin\`"
+            echo "- image fw::kVersion asserted == \`${RELEASE_TAG#v}\` (the step above)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   release:
+    name: ${{ contains(inputs.tag, '-beta.') && 'release (PRE-RELEASE)' || 'release' }} ${{ inputs.tag }}
     needs: build
     runs-on: ubuntu-latest
     environment: release  # waits for the owner's approval; holds RELEASE_TOKEN
@@ -326,6 +350,7 @@ jobs:
   # every deploy; version.js always names the NEWEST version present (not this
   # run's tag), so re-running an old tag can't roll the page's default back.
   pages:
+    name: ${{ contains(inputs.tag, '-beta.') && 'pages (beta index only)' || 'pages' }} ${{ inputs.tag }}
     needs: build
     runs-on: ubuntu-latest
     environment: release  # waits for the owner's approval; holds RELEASE_TOKEN
