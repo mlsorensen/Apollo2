@@ -304,9 +304,9 @@ markers in platformio.ini + board_config.h.
   are expected to be in anyone's hands — they get flashed over USB. Revisit only
   if one actually sees use. No `kOtaPublished` flag, no UI gating.
 - **Rev v3 production silicon for the P4 boards — DONE on feat/v1.0 (issue
-  #2, 2026-09-22). HW-CONFIRMED on a rev v3.2 P4-4.3 the same day (boot,
-  DSI panel, touch, welcome flow, WiFi portal); the rev3 P4-5 image is built
-  but not yet booted on a rev3 5".** Waveshare does not change the SKU, so a buyer cannot tell
+  #2, 2026-09-22). HW-CONFIRMED the same day on a rev v3.2 P4-4.3 AND a rev
+  v3.2 P4-5 (boot, DSI panel, touch, welcome flow); both flashed by the plain
+  make target's chip-revision auto-pick.** Waveshare does not change the SKU, so a buyer cannot tell
   which silicon they got; **the product list stays FOUR — the silicon split
   doubles the IMAGES, not the boards** (six images in CI). Never surface it as a
   separate product in the README/board table; the flasher handles selection.
@@ -361,7 +361,7 @@ that needs **node** (a real dev dependency; `make sim` does not need it). Bare
 `pio run` does NOT generate it: run `make webapp` first. Never commit the
 header or hand-edit `tools/webapp/dist/`.
 
-### ESP32-P4-WIFI6-Touch-LCD-5 (env `esp32-p4-micra-5`) — HW-VERIFIED, the owner's daily-driver board and the default recommendation
+### ESP32-P4-WIFI6-Touch-LCD-5 (env `esp32-p4-micra-5`, rev3 sibling `esp32-p4-micra-5-rev3`) — HW-VERIFIED on both silicon revisions, the owner's daily-driver board and the default recommendation
 
 Electronically the P4 4.3 (same radio/audio/battery/paddle wiring — everything
 in that section applies, including the rev v1.x chip_variant); only the panel
