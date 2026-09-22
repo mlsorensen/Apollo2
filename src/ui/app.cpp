@@ -4621,8 +4621,7 @@ void App::open_welcome_modal() {
                 "- Set up WiFi: sets the clock over NTP (and enables updates and the schedule)%s\n"
                 "- Pair Micra: have your Bluetooth token ready\n"
                 "- Pair scale: Acaia, Bookoo or Varia, for brew by weight%s\n\n"
-                "Choose a starting point; the rest is under Settings. Any step can be "
-                "skipped -- Apollo works without it, just with less.",
+                "Choose a starting point; the rest is under Settings.",
                 wifi_done ? " -- done" : "", scale_done ? " -- done" : "");
   lv_obj_t* card = open_modal("Welcome to Apollo 2", body);
   // A list reads left-aligned; open_modal's body is centred for prose.
