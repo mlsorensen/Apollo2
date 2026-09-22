@@ -48,9 +48,9 @@ class IProvisioner {
   virtual void set_auto_connect(bool on) = 0;
 
   // Welcome screen opt-out ("Don't show again", persisted). The screen shows
-  // on every boot while no machine and no WiFi are saved; configuring either
-  // ends it, and a restored backup carries them along, so a replacement unit
-  // never sees it.
+  // on every boot while no machine is saved; pairing one ends it, and a
+  // restored backup carries the machine along, so a replacement unit never
+  // sees it.
   virtual bool welcome_seen() const = 0;
   virtual void set_welcome_seen(bool on) = 0;
 

@@ -78,16 +78,16 @@ Stats
 
 ## Home
 
-**First boot.** A unit with nothing set up yet opens on a welcome screen that
-suggests the order: **Set up WiFi** first (it starts the phone setup page,
-where you enter the network and, optionally, your time zone — that sets the
-clock and enables updates and the schedule), then **Pair Micra** (Settings →
-Micra → Bluetooth). Both steps are optional: skip WiFi and Apollo still works,
-without automatic time, updates and the schedule. **Later** closes it until
-the next power‑up; it keeps coming back at boot while nothing is set up, so a
-power cycle mid‑setup loses nothing. **Don't show again** stops it for good,
-and setting up either WiFi or the Micra stops it on its own. Every step stays
-reachable from Settings.
+**First boot.** Until a Micra is paired, the device opens on a welcome screen
+listing the three recommended steps, each with a button: **Set up WiFi**
+(starts the phone setup page, where you enter the network and, optionally,
+your time zone — that sets the clock over NTP and enables updates and the
+schedule), **Pair Micra** (Settings → Micra → Bluetooth; have your token
+ready) and **Pair scale** (Settings → Scale → Bluetooth). A step already done
+drops its button. Every step is optional — skip one and Apollo still works,
+just without what it brings. **Later** closes the screen until the next
+power‑up, so a power cycle mid‑setup loses nothing; **Don't show again** stops
+it for good, and pairing the Micra stops it on its own.
 
   <img src="docs/img/manual/welcome-modal.png" width="70%" alt="The first-boot welcome">
 

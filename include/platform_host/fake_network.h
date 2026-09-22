@@ -14,7 +14,8 @@ class FakeNetwork : public core::INetwork {
   core::NetState status() const override {
     return enabled_ ? core::NetState::Connected : core::NetState::Disabled;
   }
-  const char* ssid() const override { return "HomeWiFi"; }
+  const char* ssid() const override { return saved_ ? "HomeWiFi" : ""; }
+  void set_saved(bool on) { saved_ = on; }  // pose "no network saved yet"
   const char* ip() const override { return enabled_ ? "192.168.1.42" : ""; }
 
   bool enabled() const override { return enabled_; }
@@ -41,6 +42,7 @@ class FakeNetwork : public core::INetwork {
   bool enabled_ = true;
   bool ntp_en_ = true;
   bool synced_ = false;
+  bool saved_ = true;
   std::string tz_ = "AEST-10AEDT,M10.1.0,M4.1.0";  // Sydney, for previews
   std::string ntp_ = "pool.ntp.org";
 };

@@ -154,7 +154,7 @@ class App {
   // the Micra). refresh() shows it each boot while nothing is configured and
   // the user hasn't opted out; also a sim pose.
   void open_welcome_modal();
-  void welcome_choose(int choice);         // 0 Set up WiFi, 1 Pair Micra, 2 Later (this boot), 3 never again
+  void welcome_choose(int choice);         // 0 WiFi, 1 Pair Micra, 2 Pair scale, 3 Later (this boot), 4 never again
   void open_schedule_warning_modal();      // "turn off the cloud app's schedule" notice
   void dismiss_schedule_warning(bool forever);
   void confirm_restore();                // modal "Restore"

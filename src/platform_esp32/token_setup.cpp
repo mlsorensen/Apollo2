@@ -78,7 +78,7 @@ const char kWifiPage[] =
     // splices the <option>s in from core::kTimezones (the Settings picker's
     // table), so the two stay one list.
     "<select id=tz name='tz' style='width:100%;padding:10px;box-sizing:border-box'>"
-    "<option value=''>Time zone (optional \u2014 set later under Settings)</option>";
+    "<option value=''>Time zone (optional &mdash; set later under Settings)</option>";
 const char kWifiPageAfterTz[] =
     "</select>"
     "<p id=wmsg style='font-size:.9em'></p>"

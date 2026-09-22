@@ -1467,9 +1467,10 @@ void App::refresh() {
     // first refresh of every boot (build() is too early for a modal).
     if (!welcome_checked_) {
       welcome_checked_ = true;
+      // "Fresh" = no Micra paired: the one step every unit needs. WiFi or a
+      // scale alone don't end it, since the screen lists all three.
       const bool fresh = snap.link == core::Link::Unconfigured && provisioner_ != nullptr &&
-                         !provisioner_->welcome_seen() &&
-                         (network_ == nullptr || network_->ssid()[0] == '\0');
+                         !provisioner_->welcome_seen();
       if (fresh && modal_ == nullptr) open_welcome_modal();
     }
 
@@ -4604,34 +4605,47 @@ void App::schedule_slider_released() {
   sync_schedule_controls();
 }
 
-// The first thing a new unit shows, on EVERY boot while nothing is set up
-// (no machine, no WiFi): a power cycle mid-setup must not lose it. WiFi goes
-// first on purpose: it sets the clock (and the time zone, from the same
-// phone page), and updates and the schedule need it. Every step is optional
-// and the text says what skipping costs. "Later" is this boot only; only
-// "Don't show again" persists, and configuring either thing ends it anyway.
+// The first thing a new unit shows, on EVERY boot until a Micra is paired
+// (a power cycle mid-setup must not lose it). Three recommended steps, each
+// a button; nothing returns here afterwards, so it is framed as "choose a
+// starting point" and the rest lives under Settings. "Later" is this boot
+// only; only "Don't show again" persists.
 void App::open_welcome_modal() {
-  lv_obj_t* card = open_modal(
-      "Welcome to Apollo 2",
-      "Two short steps, both optional. WiFi first: it sets the clock and time "
-      "zone and enables updates and the schedule -- you enter the network from "
-      "your phone. Then pair your Micra over Bluetooth. Skip either and Apollo "
-      "still works, just without what that step brings.");
+  // A step already done drops its button and its line says so, so the screen
+  // narrows to what is left (it shows until the Micra is paired).
+  const bool wifi_done = network_ != nullptr && network_->ssid()[0] != '\0';
+  const bool scale_done = scale_provisioner_ != nullptr && !scale_provisioner_->saved_name().empty();
+  char body[420];
+  std::snprintf(body, sizeof(body),
+                "Three steps are recommended to get started:\n"
+                "- Set up WiFi: sets the clock over NTP (and enables updates and the schedule)%s\n"
+                "- Pair Micra: have your Bluetooth token ready\n"
+                "- Pair scale: Acaia, Bookoo or Varia, for brew by weight%s\n"
+                "Choose a starting point; the rest is under Settings. Any step can be "
+                "skipped -- Apollo works without it, just with less.",
+                wifi_done ? " -- done" : "", scale_done ? " -- done" : "");
+  lv_obj_t* card = open_modal("Welcome to Apollo 2", body);
+  // A list reads left-aligned; open_modal's body is centred for prose.
+  if (lv_obj_t* b = lv_obj_get_child(card, -1)) lv_obj_set_style_text_align(b, LV_TEXT_ALIGN_LEFT, 0);
   lv_obj_t* row = modal_button_row(card);
-  modal_button(row, "Set up WiFi", ui::theme::accent(), on_welcome_choice<0>, this);
-  modal_button(row, "Pair Micra", ui::theme::rail(), on_welcome_choice<1>, this);
-  modal_button(row, "Later", ui::theme::rail(), on_welcome_choice<2>, this);
-  modal_button(row, "Don't show again", ui::theme::rail(), on_welcome_choice<3>, this);
+  if (!wifi_done)
+    modal_button(row, "Set up WiFi", ui::theme::accent(), on_welcome_choice<0>, this);
+  modal_button(row, "Pair Micra", wifi_done ? ui::theme::accent() : ui::theme::rail(),
+               on_welcome_choice<1>, this);
+  if (!scale_done)
+    modal_button(row, "Pair scale", ui::theme::rail(), on_welcome_choice<2>, this);
+  modal_button(row, "Later", ui::theme::rail(), on_welcome_choice<3>, this);
+  modal_button(row, "Don't show again", ui::theme::rail(), on_welcome_choice<4>, this);
 }
 
 void App::welcome_choose(int choice) {
-  if (choice == 3 && provisioner_ != nullptr) provisioner_->set_welcome_seen(true);
+  if (choice == 4 && provisioner_ != nullptr) provisioner_->set_welcome_seen(true);
   close_modal();
   if (choice == 0) {
     start_wifi_setup();  // the portal + its QR modal
-  } else if (choice == 1) {
+  } else if (choice == 1 || choice == 2) {
     show_tab(1);
-    select_settings_section(kSectionMicraBt);
+    select_settings_section(choice == 1 ? kSectionMicraBt : kSectionScaleBt);
   }
 }
 

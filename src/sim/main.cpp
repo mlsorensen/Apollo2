@@ -410,11 +410,19 @@ int main() {
   // Token modal over Home (modal over Settings hits a known LVGL draw loop).
   ok &= r(p5, "renders/token_modal_1280x720.png", 0, -1, true);
   ok &= r({800, 480}, "renders/token_modal_800x480.png", 0, -1, true);
-  // First boot: the welcome over Home (the button row stacks on compact).
+  // First boot: the welcome over Home, nothing done yet (the fake network
+  // reports a saved SSID, so pose it away); then with WiFi done, which drops
+  // that button. The button row stacks on compact.
+  network.set_saved(false);
+  scale_provisioner.set_saved(false);
   ok &= r({800, 480}, "renders/welcome_modal_800x480.png", 0, -1, false, 0, -1, false, -1, 0,
           false, false, 0, false, false, false, false, 0, -1, true);
   ok &= r({320, 240}, "renders/welcome_modal_320x240.png", 0, -1, false, 0, -1, false, -1, 0,
           false, false, 0, false, false, false, false, 0, -1, true);
+  network.set_saved(true);
+  ok &= r({800, 480}, "renders/welcome_modal_wifi_800x480.png", 0, -1, false, 0, -1, false, -1, 0,
+          false, false, 0, false, false, false, false, 0, -1, true);
+  scale_provisioner.set_saved(true);
   // Portal-join modal: WIFI: QR + manual instructions (token flow; the WiFi
   // flow shows the same layout with different copy).
   ok &= r({800, 480}, "renders/join_modal_800x480.png", 0, -1, false, 0, -1,
