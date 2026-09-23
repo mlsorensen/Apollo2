@@ -7,7 +7,7 @@
 
 namespace fw {
 
-inline constexpr const char* kVersion = "1.0.0-beta.3";
+inline constexpr const char* kVersion = "1.0.0-beta.4";
 
 #ifdef FW_GIT_REV
 inline constexpr const char* kGitRev = FW_GIT_REV;
