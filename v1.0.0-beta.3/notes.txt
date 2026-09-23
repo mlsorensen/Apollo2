@@ -1,0 +1,26 @@
+
+### Changes
+
+- **Scheduled on and standby.** Settings → Micra → Schedule turns the machine
+  on and to standby at set times, daily or per weekday, with a Smart Warm-up
+  lead (default 8 min). Standby waits for a running shot. Needs WiFi with Auto
+  time and a paired Micra.
+- **P4-5 and P4-4.3 on the newer ESP32-P4 chip.** Boards shipping since about
+  August 2026 carry v3 silicon that needs its own image; both are now
+  published. The web flasher's Detect reads the chip revision and picks the
+  right one; on a blank board choose it on the card.
+- **Updates are only offered once they are really there.** The check confirms
+  your board's image is being served before showing the notice, so a release
+  still publishing can't send the device into a failing install. A first-boot
+  radio update no longer rolls the new firmware back.
+- **Cleaning page says when it can't act.** With Wired paddle off, Auto flush
+  and Flush delay are greyed like Backflush already was, with a line on top
+  saying what to switch on.
+- **Settings tab doubles as a home button.** Tapping the Settings tab while
+  already inside Settings jumps straight back to its root page, so crossing
+  from one section to another no longer takes several Backs.
+- **Welcome screen on a new unit.** Until a Micra is paired, each boot lists
+  the three recommended steps — WiFi, pair the Micra, pair a scale — with a
+  button for each, all optional. The WiFi setup page now offers the time zone
+  too.
+
