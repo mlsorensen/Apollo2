@@ -928,9 +928,22 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   if (with_wired_paddle) {
     out.micra_cleaning_page = lv_menu_page_create(menu, "Cleaning");
     page_column(out.micra_cleaning_page, compact);
+    // Every row here drives the group through the paddle relay, so without
+    // the harness switched on none of it can act: App shows this line and
+    // greys the rows (not just Backflush, which used to be the only one).
+    out.clean_status = lv_label_create(out.micra_cleaning_page);
+    lv_obj_set_width(out.clean_status, lv_pct(100));
+    lv_label_set_long_mode(out.clean_status, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_color(out.clean_status, lv_color_hex(ui::theme::muted()), 0);
+    lv_obj_set_style_text_font(out.clean_status, font, 0);
+    lv_label_set_text(out.clean_status,
+                      "Needs the wired paddle: turn on Settings > Micra > Controls > "
+                      "Wired paddle (with the harness fitted).");
+    lv_obj_add_flag(out.clean_status, LV_OBJ_FLAG_HIDDEN);
     // Post-shot auto-flush: tap cycles Off / 3 s / 6 s.
     lv_obj_t* rf = make_setting_row(out.micra_cleaning_page, "Auto flush", font);
     out.flush_btn = ui::make_button(rf);
+    lv_obj_set_style_opa(out.flush_btn, LV_OPA_40, LV_STATE_DISABLED);
     lv_obj_set_height(out.flush_btn, btn_size);
     lv_obj_set_style_pad_hor(out.flush_btn, ui::dp(14), 0);
     lv_obj_set_style_bg_color(out.flush_btn, lv_color_hex(ui::theme::card()), 0);
@@ -942,6 +955,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     // (and only shown — App manages the HIDDEN flag) while the flush is on.
     out.flush_delay_row = make_setting_row(out.micra_cleaning_page, "Flush delay", font);
     out.flush_delay_btn = ui::make_button(out.flush_delay_row);
+    lv_obj_set_style_opa(out.flush_delay_btn, LV_OPA_40, LV_STATE_DISABLED);
     lv_obj_set_height(out.flush_delay_btn, btn_size);
     lv_obj_set_style_pad_hor(out.flush_delay_btn, ui::dp(14), 0);
     lv_obj_set_style_bg_color(out.flush_delay_btn, lv_color_hex(ui::theme::card()), 0);
@@ -954,6 +968,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
                                    LV_SYMBOL_LOOP, font, btn_h);
   } else {
     out.micra_cleaning_page = nullptr;
+    out.clean_status = nullptr;
     out.flush_btn = out.flush_value = nullptr;
     out.flush_delay_row = out.flush_delay_btn = out.flush_delay_value = nullptr;
     out.backflush_btn = nullptr;

@@ -269,7 +269,9 @@ Plots the live flow rate (or weight) from the scale.
 ![Micra Cleaning](docs/img/manual/micra-cleaning.png)
 
 Everything that deliberately runs water through the group. The whole page
-needs the paddle harness, since that's what drives it.
+needs the paddle harness, since that's what drives it: with **Wired paddle**
+off (Settings → Micra → Controls) every row here is greyed out and a line at
+the top says so.
 
 - ① **Auto flush** *(Off / 3 / 6 / 9 / 15 s; default Off)* — after a finished
   shot, when the scale sees the cup lift off, the firmware waits (see **Flush

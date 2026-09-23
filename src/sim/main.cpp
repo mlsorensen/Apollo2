@@ -284,6 +284,10 @@ int main() {
   ok &= r({800, 480}, "renders/micra_controls_800x480.png", 1, ui::kSectionMicraControls);
   ok &= r({320, 240}, "renders/micra_cleaning_320x240.png", 1, ui::kSectionMicraCleaning);
   ok &= r({800, 480}, "renders/micra_cleaning_800x480.png", 1, ui::kSectionMicraCleaning);
+  // ...and with the wired paddle off: the page greys with the reason on top.
+  brew.set_wired_paddle(false);
+  ok &= r({800, 480}, "renders/micra_cleaning_unwired_800x480.png", 1, ui::kSectionMicraCleaning);
+  brew.set_wired_paddle(true);
   ok &= r({320, 240}, "renders/scale_bt_320x240.png", 1, ui::kSectionScaleBt);
   ok &= r({800, 480}, "renders/scale_bt_800x480.png", 1, ui::kSectionScaleBt);
   // Cleaning page with Auto flush on, so the Flush delay row is visible (the

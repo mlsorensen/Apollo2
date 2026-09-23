@@ -4129,10 +4129,20 @@ void App::update_settings_view() {
   update_scale_view();  // refresh the Scale page (independent change-detection)
   sync_schedule_gate();  // Schedule page: paired + NTP (change-detected)
 
-  // Backflush needs the drive line: grey the entry when the harness setting is
-  // off (the screen itself explains why if they get there another way).
-  if (settings_.backflush_btn != nullptr && brew_ != nullptr)
-    set_clickable(settings_.backflush_btn, brew_->snapshot().relay);
+  // Cleaning page: everything on it drives the group through the paddle
+  // relay, so with the harness setting off the whole page greys and the line
+  // at the top says why (change-detected: this runs every refresh).
+  if (settings_.backflush_btn != nullptr && brew_ != nullptr) {
+    const bool relay = brew_->snapshot().relay;
+    if (settings_.clean_status != nullptr &&
+        relay == !lv_obj_has_flag(settings_.clean_status, LV_OBJ_FLAG_HIDDEN)) {
+      if (relay) lv_obj_add_flag(settings_.clean_status, LV_OBJ_FLAG_HIDDEN);
+      else lv_obj_remove_flag(settings_.clean_status, LV_OBJ_FLAG_HIDDEN);
+      set_clickable(settings_.flush_btn, relay);
+      set_clickable(settings_.flush_delay_btn, relay);
+    }
+    set_clickable(settings_.backflush_btn, relay);
+  }
 
   // WiFi status line (Device page): reflect the live connection state.
   if (network_ != nullptr && settings_.wifi_status != nullptr) {

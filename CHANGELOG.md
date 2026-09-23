@@ -23,6 +23,9 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
   your board's image is being served before showing the notice, so a release
   still publishing can't send the device into a failing install. A first-boot
   radio update no longer rolls the new firmware back.
+- **Cleaning page says when it can't act.** With Wired paddle off, Auto flush
+  and Flush delay are greyed like Backflush already was, with a line on top
+  saying what to switch on.
 - **Welcome screen on a new unit.** Until a Micra is paired, each boot lists
   the three recommended steps — WiFi, pair the Micra, pair a scale — with a
   button for each, all optional. The WiFi setup page now offers the time zone
