@@ -13,8 +13,9 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 
 - **Scheduled on and standby.** Settings → Micra → Schedule turns the machine
   on and to standby at set times, daily or per weekday, with a Smart Warm-up
-  lead (default 8 min). Standby waits for a running shot. Needs WiFi with Auto
-  time and a paired Micra.
+  lead (default 8 min). The switches sit on one page and the times under
+  Configure schedule, so neither scrolls. Needs WiFi with Auto time and a
+  paired Micra.
 - **P4-5 and P4-4.3 on the newer ESP32-P4 chip.** Boards shipping since about
   August 2026 carry v3 silicon that needs its own image; both are now
   published. The web flasher's Detect reads the chip revision and picks the
@@ -26,6 +27,10 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 - **Cleaning page says when it can't act.** With Wired paddle off, Auto flush
   and Flush delay are greyed like Backflush already was, with a line on top
   saying what to switch on.
+- **Auto-standby after the last shot.** Settings → Micra → Schedule →
+  Auto-standby sends the machine to standby a set time after the last shot
+  (default 30 min, off by default). Every shot restarts the count; a machine
+  the schedule turned on and nobody used stays on.
 - **Settings tab doubles as a home button.** Tapping the Settings tab while
   already inside Settings jumps straight back to its root page, so crossing
   from one section to another no longer takes several Backs.

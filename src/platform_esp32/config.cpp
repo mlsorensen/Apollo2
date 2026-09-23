@@ -90,6 +90,8 @@ constexpr char kSchedSameKey[] = "schsame";
 constexpr char kSchedWarmKey[] = "schwarm";
 constexpr char kSchedWarmMinKey[] = "schwarmm";
 constexpr char kSchedWarnKey[] = "schwarn";    // cloud-app warning: don't show again
+constexpr char kSchedAsbKey[] = "schasb";      // auto-standby on/off (ADDED v1.0.0-beta.4)
+constexpr char kSchedAsbMinKey[] = "schasbm";  // ...its minutes after the last shot
 constexpr char kSchedDailyKey[] = "schall";    // the "same every day" window
 // "schd0".."schd6" = Monday..Sunday, built in schedule_day_key().
 constexpr char kSchedDayPrefix[] = "schd";
@@ -852,6 +854,37 @@ void Config::set_schedule_warmup_min(int minutes) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putInt(kSchedWarmMinKey, minutes);
+  p.end();
+}
+
+bool Config::schedule_auto_standby() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
+  const bool v = p.isKey(kSchedAsbKey) ? p.getBool(kSchedAsbKey, false) : false;
+  p.end();
+  return v;
+}
+
+void Config::set_schedule_auto_standby(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kSchedAsbKey, on);
+  p.end();
+}
+
+int Config::schedule_auto_standby_min() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return core::kAutoStandbyDefaultMin;
+  const int v = p.isKey(kSchedAsbMinKey) ? p.getInt(kSchedAsbMinKey, core::kAutoStandbyDefaultMin)
+                                         : core::kAutoStandbyDefaultMin;
+  p.end();
+  return v;
+}
+
+void Config::set_schedule_auto_standby_min(int minutes) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putInt(kSchedAsbMinKey, minutes);
   p.end();
 }
 

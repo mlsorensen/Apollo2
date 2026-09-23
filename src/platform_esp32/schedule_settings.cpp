@@ -13,6 +13,9 @@ core::ScheduleConfig ScheduleSettings::config() const {
   if (warm < 0) warm = 0;
   if (warm > core::kWarmupMaxMin) warm = core::kWarmupMaxMin;
   c.warmup_min = static_cast<uint8_t>(warm);
+  c.auto_standby_enabled = config_.schedule_auto_standby();
+  c.auto_standby_min =
+      static_cast<uint8_t>(core::sanitize_auto_standby_min(config_.schedule_auto_standby_min()));
   int32_t packed = 0;
   if (config_.schedule_day_packed(-1, packed)) c.daily = core::unpack_day(packed);
   for (int d = 0; d < 7; ++d) {
@@ -27,6 +30,10 @@ void ScheduleSettings::set_config(const core::ScheduleConfig& c) {
   if (c.same_every_day != was.same_every_day) config_.set_schedule_same_daily(c.same_every_day);
   if (c.warmup_enabled != was.warmup_enabled) config_.set_schedule_warmup(c.warmup_enabled);
   if (c.warmup_min != was.warmup_min) config_.set_schedule_warmup_min(c.warmup_min);
+  if (c.auto_standby_enabled != was.auto_standby_enabled)
+    config_.set_schedule_auto_standby(c.auto_standby_enabled);
+  if (c.auto_standby_min != was.auto_standby_min)
+    config_.set_schedule_auto_standby_min(c.auto_standby_min);
   if (c.daily != was.daily) config_.set_schedule_day_packed(-1, core::pack_day(c.daily));
   for (int d = 0; d < 7; ++d) {
     if (c.days[d] != was.days[d]) config_.set_schedule_day_packed(d, core::pack_day(c.days[d]));

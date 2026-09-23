@@ -5,7 +5,8 @@ namespace core {
 bool operator==(const ScheduleConfig& a, const ScheduleConfig& b) {
   if (a.enabled != b.enabled || a.same_every_day != b.same_every_day ||
       a.warmup_enabled != b.warmup_enabled || a.warmup_min != b.warmup_min ||
-      a.daily != b.daily) {
+      a.auto_standby_enabled != b.auto_standby_enabled ||
+      a.auto_standby_min != b.auto_standby_min || a.daily != b.daily) {
     return false;
   }
   for (int i = 0; i < 7; ++i) {
@@ -35,6 +36,12 @@ int snap(int minutes) {
   return (minutes / kScheduleStepMin) * kScheduleStepMin;
 }
 }  // namespace
+
+int sanitize_auto_standby_min(int minutes) {
+  if (minutes < kAutoStandbyMinMin) minutes = kAutoStandbyMinMin;
+  if (minutes > kAutoStandbyMaxMin) minutes = kAutoStandbyMaxMin;
+  return (minutes / kAutoStandbyStepMin) * kAutoStandbyStepMin;
+}
 
 bool sanitize_day(DaySchedule& d) {
   const DaySchedule was = d;
@@ -98,10 +105,14 @@ void ScheduleEngine::set_config(const ScheduleConfig& c, const ScheduleInputs& i
   sanitize_day(clean.daily);
   for (DaySchedule& d : clean.days) sanitize_day(d);
   if (clean.warmup_min > kWarmupMaxMin) clean.warmup_min = kWarmupMaxMin;
+  clean.auto_standby_min = static_cast<uint8_t>(sanitize_auto_standby_min(clean.auto_standby_min));
   if (loaded_ && clean == cfg_) return;  // a rebuild, not an edit: keep the latches
   cfg_ = clean;
   loaded_ = true;
   clear_latches();
+  // Switching auto-standby off drops a running count; a minutes edit keeps it
+  // (the deadline is computed from the shot's end each poll).
+  if (!cfg_.auto_standby_enabled) asb_armed_ = false;
   // Pre-latch anything already inside its window: the user just moved a time
   // onto (or the warm-up lead across) the current minute, and an edit must
   // never switch the machine.
@@ -116,11 +127,41 @@ void ScheduleEngine::set_config(const ScheduleConfig& c, const ScheduleInputs& i
   }
 }
 
+// Auto-standby: arm on a shot's end, fire when the count runs out. Needs no
+// clock and no master switch — see the header.
+ScheduleAction ScheduleEngine::tick_auto_standby(const ScheduleInputs& in) {
+  const bool shot = in.phase == ShotPhase::kBrewing || in.phase == ShotPhase::kSettling;
+  const bool ended = asb_shot_seen_ && !shot;
+  asb_shot_seen_ = shot;
+  if (!cfg_.auto_standby_enabled) {
+    asb_armed_ = false;
+    return ScheduleAction::None;
+  }
+  if (ended) {  // every shot (re)starts the count
+    asb_armed_ = true;
+    asb_since_ms_ = in.now_ms;
+  }
+  if (!asb_armed_) return ScheduleAction::None;
+  if (in.power != Power::On) {  // standby by anyone: nothing left to do
+    asb_armed_ = false;
+    return ScheduleAction::None;
+  }
+  const uint32_t wait_ms = static_cast<uint32_t>(cfg_.auto_standby_min) * 60000u;
+  if (in.now_ms - asb_since_ms_ < wait_ms) return ScheduleAction::None;
+  // Due. A shot in flight (or its review) restarts the count when it ends;
+  // a dropped link just waits — an unused machine is still unused.
+  if (shot || in.phase != ShotPhase::kIdle || in.link != Link::Connected)
+    return ScheduleAction::None;
+  asb_armed_ = false;
+  return ScheduleAction::AutoStandby;
+}
+
 ScheduleAction ScheduleEngine::tick(const ScheduleInputs& in) {
+  const ScheduleAction asb = tick_auto_standby(in);
   if (!cfg_.enabled || !in.time_trusted || !in.now.valid || !in.now.date_valid) {
     defer_ = false;  // latches stay: an NTP blip must not re-fire a consumed slot
     idle_timing_ = false;
-    return ScheduleAction::None;
+    return asb;
   }
   const int now_mow = minute_of_week(in.now);
 
@@ -159,6 +200,7 @@ ScheduleAction ScheduleEngine::tick(const ScheduleInputs& in) {
         on_latched_ = static_cast<int16_t>(on);
         defer_ = false;  // an "on" inside a pending standby wins
         idle_timing_ = false;
+        asb_armed_ = false;  // ...and so does the schedule over an auto-standby count
         fired_on_weekday_ = static_cast<int8_t>(w);
         if (in.power != Power::On) return ScheduleAction::TurnOn;
       }
@@ -176,7 +218,7 @@ ScheduleAction ScheduleEngine::tick(const ScheduleInputs& in) {
       }
     }
   }
-  return ScheduleAction::None;
+  return asb;
 }
 
 }  // namespace core

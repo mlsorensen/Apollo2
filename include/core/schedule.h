@@ -28,6 +28,22 @@
 //     kStandbyGraceMs, then fires if the machine is still on.
 //   - Nothing fires unless the caller vouches for the clock (time_trusted:
 //     NTP configured + a real sync landed this boot) and the date is real.
+//
+// Auto-standby (owner's spec, 2026-09-23) rides along in the same engine so
+// its one interaction with the schedule is in one place:
+//   - It is a COUNTDOWN FROM THE LAST SHOT, never from turn-on: the end of a
+//     shot arms it (and re-arms it — every later shot restarts the count), so
+//     a machine the schedule switched on and nobody used stays on until the
+//     scheduled off. The same holds for a hand turn-on with no shot (the
+//     literal reading of "the paddle flip arms it"; revisit if unwanted).
+//   - A scheduled "on" disarms it, even when the machine is already on: the
+//     schedule says stay up until used.
+//   - It fires only while connected, powered on and the shot machinery is
+//     idle; a shot straddling the deadline just restarts the count when it
+//     ends. Standby by any hand (user, schedule, this) disarms it.
+//   - It needs no clock and ignores the schedule's master switch: only the
+//     monotonic tick and a paired Micra. The scheduled off then finds the
+//     machine already in standby and is a no-op.
 
 namespace core {
 
@@ -47,6 +63,10 @@ constexpr int kScheduleFireWindowMin = 2;
 // the review starts, plus the drip and the cup coming off.
 constexpr uint32_t kStandbyGraceMs = 2u * 60u * 1000u;
 constexpr int kScheduleDefaultOnMin = 6 * 60 + 30;   // 06:30
+constexpr int kAutoStandbyDefaultMin = 30;  // the Micra's own default
+constexpr int kAutoStandbyMinMin = 10;
+constexpr int kAutoStandbyMaxMin = 240;     // fits the uint8_t
+constexpr int kAutoStandbyStepMin = 10;
 constexpr int kScheduleDefaultOffMin = 9 * 60;       // 09:00
 
 // One day's window. Minutes of the day on the 5-minute grid; on_min < off_min
@@ -68,6 +88,8 @@ struct ScheduleConfig {
   bool same_every_day = true;   // true: `daily` applies to every weekday
   bool warmup_enabled = true;
   uint8_t warmup_min = kWarmupDefaultMin;
+  bool auto_standby_enabled = false;  // standby N min after the last shot
+  uint8_t auto_standby_min = kAutoStandbyDefaultMin;
   DaySchedule daily{};
   DaySchedule days[7]{};        // 0 = Monday .. 6 = Sunday
 
@@ -96,6 +118,9 @@ int minute_of_week(const WallTime& t);
 // so a corrupt key can never index anything out of range.
 bool sanitize_day(DaySchedule& d);
 
+// Clamp to [kAutoStandbyMinMin, kAutoStandbyMaxMin] on the 10-minute grid.
+int sanitize_auto_standby_min(int minutes);
+
 // NVS packing (one i32 per day): bits 0-10 on_min, 11-21 off_min, 22 enabled.
 // unpack_day() sanitizes, so garbage degrades to a legal window.
 int32_t pack_day(const DaySchedule& d);
@@ -111,7 +136,8 @@ struct ScheduleInputs {
   uint32_t now_ms;      // monotonic; only the standby grace timer uses it
 };
 
-enum class ScheduleAction : uint8_t { None, TurnOn, Standby };
+// AutoStandby is a Standby too; it is its own value so the caller can say why.
+enum class ScheduleAction : uint8_t { None, TurnOn, Standby, AutoStandby };
 
 class ScheduleEngine {
  public:
@@ -128,6 +154,9 @@ class ScheduleEngine {
   // An off trigger is waiting for the shot machinery to go quiet.
   bool standby_deferred() const { return defer_; }
 
+  // Auto-standby is counting down from the last shot.
+  bool auto_standby_armed() const { return asb_armed_; }
+
   // Minute-of-week slots the engine acts on for `weekday` (for tests/logs).
   int on_trigger(int weekday) const;
   int off_trigger(int weekday) const;
@@ -140,6 +169,7 @@ class ScheduleEngine {
  private:
   static bool in_window(int now_mow, int trigger_mow);
   void clear_latches();
+  ScheduleAction tick_auto_standby(const ScheduleInputs& in);
 
   ScheduleConfig cfg_{};
   bool loaded_ = false;
@@ -149,6 +179,11 @@ class ScheduleEngine {
   bool idle_timing_ = false;   // the grace timer is running
   uint32_t idle_since_ms_ = 0;
   int8_t fired_on_weekday_ = -1;
+  // Auto-standby: armed by a shot's end, timed from it (so a minutes edit
+  // while armed simply moves the deadline).
+  bool asb_armed_ = false;
+  bool asb_shot_seen_ = false;   // the previous poll had a shot in flight
+  uint32_t asb_since_ms_ = 0;    // when the last shot ended
 };
 
 // The settings port: where the configuration lives (NVS on the device, a

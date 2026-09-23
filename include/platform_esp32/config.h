@@ -143,6 +143,10 @@ class Config {
   void set_schedule_warmup(bool on);
   int schedule_warmup_min() const;           // default 8 (core::kWarmupDefaultMin)
   void set_schedule_warmup_min(int minutes);
+  bool schedule_auto_standby() const;        // default false (v1.0.0-beta.4)
+  void set_schedule_auto_standby(bool on);
+  int schedule_auto_standby_min() const;     // default 30 (core::kAutoStandbyDefaultMin)
+  void set_schedule_auto_standby_min(int minutes);
   bool schedule_warning_dismissed() const;   // cloud-app warning "don't show again"
   void set_schedule_warning_dismissed(bool on);
   bool schedule_day_packed(int slot, int32_t& out) const;

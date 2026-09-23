@@ -50,7 +50,8 @@ to the machine instead of a phone app.
   ready, so you can start it and walk away.
 - **Schedule** — switch the machine on (with a warm‑up lead) and back to
   standby at set times, the same every day or per weekday, from the device's
-  own NTP clock.
+  own NTP clock. **Auto‑standby** sends it to standby a set time after the
+  last shot, independent of the schedule.
 - **Shot history** — every shot is saved to a microSD card as CSV, browsable on
   the device's Stats tab or from a phone via the device's own web page.
 - **Settings backup** — preferences copy to the same card and restore onto

@@ -301,12 +301,20 @@ int main() {
   schedule.pose_daily();
   ok &= r({800, 480}, "renders/micra_schedule_800x480.png", 1, ui::kSectionMicraSchedule);
   ok &= r({320, 240}, "renders/micra_schedule_320x240.png", 1, ui::kSectionMicraSchedule);
+  // Schedule > Configure schedule: the times page, daily and per weekday.
+  ok &= r({800, 480}, "renders/micra_schedule_times_800x480.png", 1,
+          ui::kSectionMicraScheduleTimes);
+  ok &= r({320, 240}, "renders/micra_schedule_times_320x240.png", 1,
+          ui::kSectionMicraScheduleTimes);
   schedule.pose_per_day();
-  ok &= r({800, 480}, "renders/micra_schedule_days_800x480.png", 1, ui::kSectionMicraSchedule);
-  ok &= r({320, 240}, "renders/micra_schedule_days_320x240.png", 1, ui::kSectionMicraSchedule);
+  ok &= r({800, 480}, "renders/micra_schedule_perday_800x480.png", 1, ui::kSectionMicraSchedule);
+  ok &= r({800, 480}, "renders/micra_schedule_days_800x480.png", 1,
+          ui::kSectionMicraScheduleTimes);
+  ok &= r({320, 240}, "renders/micra_schedule_days_320x240.png", 1,
+          ui::kSectionMicraScheduleTimes);
   schedule.pose_per_day();  // Wednesday off: selecting it greys its window
   ok &= r({800, 480}, "renders/micra_schedule_dayoff_800x480.png", 1,
-          ui::kSectionMicraSchedule, false, 0, -1, false, -1, 0, false, false, 0, false,
+          ui::kSectionMicraScheduleTimes, false, 0, -1, false, -1, 0, false, false, 0, false,
           false, false, false, 0, 2);
   schedule.pose_daily();
   // First visit: the "turn off the cloud app's schedule" notice (opened from
@@ -408,7 +416,7 @@ int main() {
   ok &= r(p5, "renders/device_display_1280x720.png", 1, ui::kSectionDeviceDisplay);
   network.set_synced(true);
   schedule.pose_per_day();
-  ok &= r(p5, "renders/micra_schedule_days_1280x720.png", 1, ui::kSectionMicraSchedule);
+  ok &= r(p5, "renders/micra_schedule_days_1280x720.png", 1, ui::kSectionMicraScheduleTimes);
   network.set_synced(false);
   ok &= r(p5, "renders/stats_brew_1280x720.png", 2, -1, false, 0, ui::kStatsBrew);
   // Token modal over Home (modal over Settings hits a known LVGL draw loop).

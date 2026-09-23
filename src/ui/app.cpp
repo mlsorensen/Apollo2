@@ -537,6 +537,18 @@ void on_sched_same_switch(lv_event_t* e) {
 void on_sched_warm_switch(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->set_schedule_warmup(sw_checked(e));
 }
+void on_sched_standby_switch(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->set_schedule_auto_standby(sw_checked(e));
+}
+void on_sched_standby_minus(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->schedule_auto_standby_adjust(-1);
+}
+void on_sched_standby_plus(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->schedule_auto_standby_adjust(+1);
+}
+void on_sched_day_enable_switch(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->set_schedule_day_enabled(sw_checked(e));
+}
 // One thunk per weekday chip (the scale-device-setting table trick).
 template <int D>
 void on_sched_day_chip(lv_event_t* e) {
@@ -1329,6 +1341,8 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                         LV_EVENT_VALUE_CHANGED, this);
     lv_obj_add_event_cb(settings_.sched_same_switch, on_sched_same_switch,
                         LV_EVENT_VALUE_CHANGED, this);
+    lv_obj_add_event_cb(settings_.sched_day_enable_switch, on_sched_day_enable_switch,
+                        LV_EVENT_VALUE_CHANGED, this);
     lv_obj_add_event_cb(settings_.sched_warm_switch, on_sched_warm_switch,
                         LV_EVENT_VALUE_CHANGED, this);
     static constexpr lv_event_cb_t kDayChipCbs[7] = {
@@ -1348,6 +1362,10 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     lv_obj_add_event_cb(settings_.sched_slider, on_sched_slider, LV_EVENT_VALUE_CHANGED, this);
     lv_obj_add_event_cb(settings_.sched_slider, on_sched_slider, LV_EVENT_RELEASED, this);
     lv_obj_add_event_cb(settings_.sched_warm_minus, on_sched_warm_minus, LV_EVENT_CLICKED, this);
+    lv_obj_add_event_cb(settings_.sched_standby_switch, on_sched_standby_switch,
+                        LV_EVENT_VALUE_CHANGED, this);
+    lv_obj_add_event_cb(settings_.sched_standby_minus, on_sched_standby_minus, LV_EVENT_CLICKED, this);
+    lv_obj_add_event_cb(settings_.sched_standby_plus, on_sched_standby_plus, LV_EVENT_CLICKED, this);
     lv_obj_add_event_cb(settings_.sched_warm_plus, on_sched_warm_plus, LV_EVENT_CLICKED, this);
     lv_obj_add_event_cb(settings_.sched_copy_btn, on_sched_copy_clicked, LV_EVENT_CLICKED, this);
     set_schedule_axis_labels(h24);
@@ -1657,6 +1675,8 @@ void App::on_settings_page_shown() {
     // schedule would fight this one for the machine.
     if (!schedule_warned_ && schedule_ != nullptr && !schedule_->cloud_warning_dismissed())
       open_schedule_warning_modal();
+  } else if (cur == settings_.micra_schedule_times_page) {
+    sync_schedule_controls();
   }
 }
 
@@ -4515,9 +4535,10 @@ core::ScheduleInputs App::schedule_inputs(const core::MachineSnapshot& snap) con
 void App::schedule_tick(const core::MachineSnapshot& snap) {
   if (schedule_ == nullptr) return;
   switch (schedule_engine_.tick(schedule_inputs(snap))) {
-    case core::ScheduleAction::TurnOn:  apply_scheduled_power(true);  break;
-    case core::ScheduleAction::Standby: apply_scheduled_power(false); break;
-    case core::ScheduleAction::None:    break;
+    case core::ScheduleAction::TurnOn:      apply_scheduled_power(true, false);  break;
+    case core::ScheduleAction::Standby:     apply_scheduled_power(false, false); break;
+    case core::ScheduleAction::AutoStandby: apply_scheduled_power(false, true);  break;
+    case core::ScheduleAction::None:        break;
   }
 }
 
@@ -4525,7 +4546,7 @@ void App::schedule_tick(const core::MachineSnapshot& snap) {
 // "Working..." hold while the machine's report catches up. The toast is
 // skipped under the screensaver — a 06:00 turn-on has nobody to read it, and a
 // notice deferred to the next touch would be hours stale.
-void App::apply_scheduled_power(bool on) {
+void App::apply_scheduled_power(bool on, bool auto_standby) {
   if (machine_ == nullptr) return;
   const core::Power prev = machine_->snapshot().power;
   machine_->set_power(on);
@@ -4537,17 +4558,13 @@ void App::apply_scheduled_power(bool on) {
   const core::ScheduleConfig& c = schedule_cfg_;
   const int wd = schedule_engine_.fired_on_weekday();
   if (on && c.warmup() > 0 && wd >= 0) {
-    const int on_min = c.day(wd).on_min;
-    const bool h24 = clock_ != nullptr && clock_->use_24h();
     char when[12];
-    if (h24) {
-      std::snprintf(when, sizeof(when), "%02d:%02d", on_min / 60, on_min % 60);
-    } else {
-      const int h = on_min / 60;
-      std::snprintf(when, sizeof(when), "%d:%02d %s", h % 12 == 0 ? 12 : h % 12, on_min % 60,
-                    h < 12 ? "AM" : "PM");
-    }
+    format_clock_min(when, sizeof(when), c.day(wd).on_min,
+                     clock_ != nullptr && clock_->use_24h());
     std::snprintf(msg, sizeof(msg), "Smart Warm-up: on %d min before %s", c.warmup(), when);
+  } else if (auto_standby) {
+    std::snprintf(msg, sizeof(msg), "Auto-standby: %d min since the last shot",
+                  c.auto_standby_min);
   } else {
     std::snprintf(msg, sizeof(msg), "%s", on ? "Schedule: turning the machine on"
                                              : "Schedule: machine to standby");
@@ -4590,17 +4607,33 @@ void App::set_schedule_warmup(bool on) {
   sync_schedule_controls();
 }
 
-// A chip tap selects that day for editing; a tap on the already-selected
-// chip toggles whether the day takes part (the chip reads muted while it
-// doesn't). One control, two questions, no extra row.
+// A chip tap selects that day for editing; the switch under the strip says
+// whether it takes part. (The chips were briefly tristate — tap the selected
+// one again to toggle the day — to save a row; the two-page layout has the
+// room, and one control per question is easier to discover.)
 void App::schedule_pick_day(int weekday) {
   if (weekday < 0 || weekday > 6) return;
-  if (weekday == settings_.sched_edit_day && !schedule_cfg_.same_every_day) {
-    schedule_cfg_.days[weekday].enabled = !schedule_cfg_.days[weekday].enabled;
-    schedule_commit();
-  } else {
-    settings_.sched_edit_day = weekday;  // UI state only, nothing to persist
-  }
+  settings_.sched_edit_day = weekday;  // UI state only, nothing to persist
+  sync_schedule_controls();
+}
+
+void App::set_schedule_day_enabled(bool on) {
+  if (schedule_cfg_.same_every_day) return;
+  schedule_cfg_.days[settings_.sched_edit_day].enabled = on;
+  schedule_commit();
+  sync_schedule_controls();
+}
+
+void App::set_schedule_auto_standby(bool on) {
+  schedule_cfg_.auto_standby_enabled = on;
+  schedule_commit();
+  sync_schedule_controls();
+}
+
+void App::schedule_auto_standby_adjust(int dir) {
+  schedule_cfg_.auto_standby_min = static_cast<uint8_t>(core::sanitize_auto_standby_min(
+      schedule_cfg_.auto_standby_min + dir * core::kAutoStandbyStepMin));
+  schedule_commit();
   sync_schedule_controls();
 }
 
@@ -4775,12 +4808,15 @@ void App::sync_schedule_controls() {
   set_sw(s.sched_enable_switch, c.enabled);
   set_sw(s.sched_same_switch, c.same_every_day);
   set_sw(s.sched_warm_switch, c.warmup_enabled);
+  set_sw(s.sched_standby_switch, c.auto_standby_enabled);
 
   // Per-day mode: the chip strip + the selected day's own switch.
   set_hidden(s.sched_day_row, c.same_every_day);
+  set_hidden(s.sched_day_enable_row, c.same_every_day);
   set_hidden(s.sched_copy_row, c.same_every_day);
   const int edit = s.sched_edit_day;
   if (!c.same_every_day) {
+    set_sw(s.sched_day_enable_switch, c.days[edit].enabled);
     // Selected: accent outline. Day on: accent fill (when selected) + normal
     // text. Day off: the whole chip at half opacity with muted text, so a
     // selected-but-off day is a faded, outlined chip.
@@ -4816,7 +4852,46 @@ void App::sync_schedule_controls() {
   char buf[12];
   std::snprintf(buf, sizeof(buf), "%d min", c.warmup_min);
   ui::set_text(s.sched_warm_value, buf);
+  std::snprintf(buf, sizeof(buf), "%d min", c.auto_standby_min);
+  ui::set_text(s.sched_standby_value, buf);
+
+  // The "Configure schedule" entry carries the window it leads to, so the
+  // switch page still says when the machine comes on without a tap. Per-day
+  // mode shows the window too while every day that is on shares it; "Per day"
+  // only once they differ.
+  if (s.sched_config_value != nullptr) {
+    const core::DaySchedule* win = nullptr;
+    bool same = true;
+    if (c.same_every_day) {
+      win = &c.daily;
+    } else {
+      for (const core::DaySchedule& d : c.days) {
+        if (!d.enabled) continue;
+        if (win == nullptr) win = &d;
+        else if (d.on_min != win->on_min || d.off_min != win->off_min) same = false;
+      }
+    }
+    if (win == nullptr) {
+      ui::set_text(s.sched_config_value, "No days on");
+    } else if (!same) {
+      ui::set_text(s.sched_config_value, "Per day");
+    } else {
+      const bool h24 = clock_ != nullptr && clock_->use_24h();
+      char on_s[12], off_s[12], text[28];
+      format_clock_min(on_s, sizeof(on_s), win->on_min, h24);
+      format_clock_min(off_s, sizeof(off_s), win->off_min, h24);
+      std::snprintf(text, sizeof(text), "%s - %s", on_s, off_s);
+      ui::set_text(s.sched_config_value, text);
+    }
+  }
   apply_schedule_clickable();
+}
+
+// "6:30 AM" / "06:30" for a minute of the day, following the clock preference.
+void App::format_clock_min(char* out, size_t n, int min_of_day, bool h24) {
+  const int h = min_of_day / 60, m = min_of_day % 60;
+  if (h24) std::snprintf(out, n, "%02d:%02d", h, m);
+  else std::snprintf(out, n, "%d:%02d %s", h % 12 == 0 ? 12 : h % 12, m, h < 12 ? "AM" : "PM");
 }
 
 // The gate: a paired Micra AND trusted NTP time. Change-detected — this runs
@@ -4853,7 +4928,18 @@ void App::apply_schedule_clickable() {
   set_clickable(s.sched_enable_switch, gate);
   set_clickable(s.sched_same_switch, ok);
   set_clickable(s.sched_warm_switch, ok);
+  set_clickable(s.sched_config_row, ok);
+  // Auto-standby counts from the last shot on the monotonic tick: it needs a
+  // paired Micra and nothing else — not the clock, not the master switch.
+  const bool paired = (schedule_gate_ & 1) != 0;
+  const bool asb = paired && schedule_cfg_.auto_standby_enabled;
+  set_clickable(s.sched_standby_switch, paired);
+  set_clickable(s.sched_standby_minus, asb && schedule_cfg_.auto_standby_min > core::kAutoStandbyMinMin);
+  set_clickable(s.sched_standby_plus, asb && schedule_cfg_.auto_standby_min < core::kAutoStandbyMaxMin);
+  if (asb) lv_obj_remove_state(s.sched_standby_value, LV_STATE_DISABLED);
+  else lv_obj_add_state(s.sched_standby_value, LV_STATE_DISABLED);
   for (lv_obj_t* chip : s.sched_day_chips) set_clickable(chip, ok);
+  set_clickable(s.sched_day_enable_switch, ok);
   set_clickable(s.sched_on_hour_dd, win);
   set_clickable(s.sched_on_min_dd, win);
   set_clickable(s.sched_off_hour_dd, win);

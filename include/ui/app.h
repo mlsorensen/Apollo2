@@ -146,11 +146,14 @@ class App {
   void set_schedule_enabled(bool on);
   void set_schedule_same_daily(bool on);   // off seeds the seven days from the daily window
   void set_schedule_warmup(bool on);
-  void schedule_pick_day(int weekday);     // chip tap: select; again = toggle that day
+  void schedule_pick_day(int weekday);     // chip tap: the day the times page edits
+  void set_schedule_day_enabled(bool on);  // the "<Weekday>" switch under the chips
   void schedule_time_select(bool off, bool hour, int idx);  // On at / Off at dropdowns
   void schedule_slider_changed();          // range-slider drag: mirror into the pickers
   void schedule_slider_released();         // ...and persist on release
   void schedule_warmup_adjust(int dir);    // warm-up minutes [-]/[+]
+  void set_schedule_auto_standby(bool on); // Auto-standby: standby N min after the last shot
+  void schedule_auto_standby_adjust(int dir);  // ...its minutes, 10-min steps
   void schedule_copy_times();              // "Copy times to" [Copy]: edited day -> target
   // Fresh unit: "Welcome" with the setup order (WiFi + time zone first, then
   // the Micra). refresh() shows it each boot while nothing is configured and
@@ -253,8 +256,9 @@ class App {
   bool ntp_ready() const;      // WiFi on + NTP on + a real sync landed this boot
   core::ScheduleInputs schedule_inputs(const core::MachineSnapshot& snap) const;
   void schedule_tick(const core::MachineSnapshot& snap);
-  void apply_scheduled_power(bool on);
+  void apply_scheduled_power(bool on, bool auto_standby);
   core::DaySchedule& sched_edit_day();
+  static void format_clock_min(char* out, size_t n, int min_of_day, bool h24);
   void schedule_commit();          // engine + persisted copy follow schedule_cfg_
   void sync_schedule_controls();   // widgets follow schedule_cfg_ (and the chip)
   void sync_schedule_gate();       // paired + NTP -> status line + greyed controls

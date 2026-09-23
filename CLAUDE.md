@@ -168,8 +168,27 @@ per weekday, with a global warm-up lead. Shape of it:
   ntp_ready; otherwise every control is DISABLED (per-widget 40 % opa, not a
   container) with the reason in `sched_status`. `MachineSnapshot::brewing` is
   NEVER set by the link — use `ShotPhase`.
+- AUTO-STANDBY (v1.0.0-beta.4, owner's spec 2026-09-23) lives in the SAME
+  engine (`tick_auto_standby`, `ScheduleAction::AutoStandby`): a countdown
+  from the END of the last shot (BrewSnapshot::phase leaving
+  kBrewing/kSettling), never from turn-on — so a machine the schedule (or a
+  hand) switched on and nobody used stays on; every shot restarts it; a
+  scheduled "on" (even onto a machine already on) DISARMS it; standby by
+  anyone disarms it; it fires only Connected + On + phase kIdle, and needs
+  NO clock and NOT the master `enabled` (UI gates it on "paired" only). A
+  minutes edit while armed moves the deadline (timed from the shot's end).
+  Range 10..240 in 10-min steps (`sanitize_auto_standby_min`), default 30.
+  UI: the Schedule page is TWO lv_menu pages — the switches (one per line;
+  Auto-standby FIRST under its own heading, then a "Schedule" heading, the
+  gate line and the master labelled "Enable schedules" — on purpose, so
+  Auto-standby never reads as being under the master)
+  + a "Configure schedule" entry whose value label summarises the window
+  ("Per day" only once the enabled days differ), and the times page (chips,
+  the day's own switch, pickers, range bar, Copy times to). The chips are
+  select-only again (the tristate tap was reverted 2026-09-23).
 - NVS keys (all ADDs): `schen`, `schsame`, `schwarm`, `schwarmm`, `schwarn`
-  (cloud-app notice dismissed), `schall` (daily window) and `schd0`..`schd6`
+  (cloud-app notice dismissed), `schasb` + `schasbm` (auto-standby on /
+  minutes), `schall` (daily window) and `schd0`..`schd6`
   (Mon..Sun), the windows packed by `core::pack_day` (bits 0-10 on, 11-21 off,
   22 enabled; `unpack_day` sanitizes so garbage degrades to a legal window).
   `platform::ScheduleSettings::set_config` writes only changed keys.

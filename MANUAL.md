@@ -47,8 +47,10 @@ Settings
 │  ├─ Controls  — Wired paddle* · Chime melody* · Chime volume*
 │  │             · Brew Temperature · Steam Enable + Temperature
 │  ├─ Cleaning* — Auto flush · Flush delay · Backflush cleaning  → cleaning mode
-│  └─ Schedule  — Enabled · Same every day · Smart Warm-up · day chips (tap again = day off)
-│                · On at / Off at · range slider · Copy times to
+│  └─ Schedule  — Auto-standby (after last shot) · Enable schedules
+│                · Same every day · Smart Warm-up
+│                └─ Configure schedule — day chips · Day enabled · On at / Off at
+│                                        · range slider · Copy times to
 ├─ Scale
 │  ├─ Bluetooth       — Scan · saved scale (Connect / Forget)
 │  ├─ Shot settings   — Target · Review hold · Detect lead-in · Smoothing
@@ -307,42 +309,56 @@ the top says so.
 ![Micra Schedule](docs/img/manual/micra-schedule.png)
 
 Turns the machine on and sends it to standby at set times, from the device's
-own clock, so it is warm when you walk up and asleep when you don't. The page
-needs a paired Micra and a clock it can trust: WiFi on with **Auto time (NTP)**
+own clock, so it is warm when you walk up and asleep when you don't. Two
+pages, neither of which scrolls: **Schedule** holds Auto‑standby and the
+schedule switches, one per line, and **Configure schedule** holds the times.
+The schedule rows need a paired Micra and a clock it can trust: WiFi on with **Auto time (NTP)**
 synced since the last power‑up (see [Settings → Apollo → WiFi](#wifi)). Until
-both hold, the rows are greyed out and the line at the top says which is
-missing. The first time you open the page a notice asks you to turn off any
+both hold, those rows are greyed out and a line above them says which is
+missing (Auto‑standby needs only the paired Micra). The first time you open the page a notice asks you to turn off any
 schedule in the La Marzocco app — two schedules for one machine conflict and
 confuse. **OK** dismisses it until the next restart; **Don't show again**, for
 good.
 
-- ① **Enabled** *(default off)* — the master switch. Off keeps the times you
-  set and greys out the rest of the page.
-- ② **Same every day** *(default on)* — one window for the whole week. Turn it
-  off for per‑day times: a row of day chips appears (below) and each day gets
-  its own On at / Off at. **Turning it off copies the daily window onto all
-  seven days** as the starting point, so you only edit the days that differ.
-- ③ **Smart Warm‑up** *(default on, 8 min; 0–30)* — starts the machine this
+- ① **Auto‑standby** *(default off, 30 min; 10–240 in 10‑minute steps)* — its
+  own group, independent of the schedule below: sends the machine to standby
+  this long after the **last shot**, like the Micra's own auto‑standby. Each
+  shot restarts the count; a machine that was switched on but never used is
+  left alone, so a scheduled turn‑on stays up until you use it (and a
+  scheduled turn‑on cancels a running count). It needs only a paired Micra —
+  no WiFi, no clock, and it works with the schedules switched off.
+- ② **Enable schedules** *(default off)* — the master switch for the timed on
+  and standby. Off keeps the times you set and greys out the rows below it;
+  Auto‑standby is not affected.
+- ③ **Same every day** *(default on)* — one window for the whole week. Turn it
+  off for per‑day times: the Configure schedule page grows a row of day chips
+  (below) and each day gets its own On at / Off at. **Turning it off copies
+  the daily window onto all seven days** as the starting point, so you only
+  edit the days that differ.
+- ④ **Smart Warm‑up** *(default on, 8 min; 0–30)* — starts the machine this
   many minutes *before* On at, so the boilers are at temperature by the
-  scheduled time. One setting for the whole week, which is why it sits above
-  the day chips. A lead that reaches past midnight simply starts the evening
-  before.
-- ④ **On at / Off at** *(5‑minute steps; default 6:30 → 9:00)* — the window.
+  scheduled time. One setting for the whole week. A lead that reaches past
+  midnight simply starts the evening before.
+- ⑤ **Configure schedule** — opens the times page below. The row shows the
+  current window at a glance, or *Per day* once the days differ.
+
+  <img src="docs/img/manual/micra-schedule-days.png" width="70%" alt="Configure schedule, per day">
+
+- ① **Day chips** *(Same every day off)* — pick which day the rows below edit.
+  A day that is switched off reads faded.
+- ② **Day enabled** *(Same every day off)* — whether the selected day takes
+  part. Off greys the time controls beneath and the schedule skips the day;
+  its times are kept.
+- ③ **On at / Off at** *(5‑minute steps; default 6:30 → 9:00)* — the window.
   Off is always later than On on the same day (a window never crosses
   midnight); moving one end past the other pushes the other along.
-- ⑤ **Slider** — the same window as a bar across the day, midnight at the
+- ④ **Slider** — the same window as a bar across the day, midnight at the
   left edge and 23:55 at the right, with an hour axis underneath (a tick every
   three hours, labelled at 6 AM, noon and 6 PM). Drag either end; the pickers
   follow, and vice versa.
-
-  <img src="docs/img/manual/micra-schedule-days.png" width="70%" alt="Per-day schedule">
-
-  With **Same every day** off: ① the day chips pick which day the rows below
-  edit. **Tap the selected chip again to switch that day off**: the chip fades,
-  the time controls grey out, and the schedule skips that day. Tap once more
-  to switch it back on. ② **Copy
-  times to** copies the shown day's On at / Off at onto the picked day, or onto
-  **All days**, without changing which days are switched on.
+- ⑤ **Copy times to** *(Same every day off)* — copies the shown day's On at /
+  Off at onto the picked day, or onto **All days**, without changing which
+  days are switched on.
 
 How it behaves:
 
@@ -350,6 +366,12 @@ How it behaves:
   once; Off at sends it to standby once. Between them do as you like — switch
   it off by hand and it stays off; switch it on early and On at simply finds
   it already on.
+- **Auto‑standby counts from the last shot, not from turn‑on.** Turn the
+  machine on by hand and pull nothing, and it stays on; pull a shot and the
+  count starts, restarting with every shot. If the count runs out mid‑shot
+  or during the review, it simply restarts when the shot ends. Standby by
+  any route — you, the schedule, this — ends the count, and a machine
+  already in standby makes the scheduled Off at a no‑op.
 - **Standby waits for the shot.** If Off at lands while a shot is running or
   still under review, standby holds until the device has been idle for about
   two minutes (long enough for the auto‑flush and the cup to come off), then

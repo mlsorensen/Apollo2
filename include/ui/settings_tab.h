@@ -25,7 +25,8 @@ enum SettingsSection {
   kSectionMicraBt,         // Micra > Bluetooth (connection + auto connect)
   kSectionMicraControls,   // Micra > Controls (Brew + Steam Boiler)
   kSectionMicraCleaning,   // Micra > Cleaning (flush settings + backflush)
-  kSectionMicraSchedule,   // Micra > Schedule (scheduled on / standby)
+  kSectionMicraSchedule,   // Micra > Schedule (the switches)
+  kSectionMicraScheduleTimes,  // Micra > Schedule > Configure schedule (the times)
   kSectionScale,           // Scale chooser
   kSectionScaleBt,         // Scale > Bluetooth
   kSectionScaleSettings,   // Scale > Shot settings (target/review/graph)
@@ -46,18 +47,30 @@ struct SettingsWidgets {
   lv_obj_t* micra_controls_page = nullptr;  // brew + boiler
   lv_obj_t* micra_cleaning_page = nullptr;  // flush settings + backflush
                                             // (paddle-capable boards only)
-  lv_obj_t* micra_schedule_page = nullptr;  // scheduled on / standby
+  lv_obj_t* micra_schedule_page = nullptr;  // scheduled on / standby: the switches
+  lv_obj_t* micra_schedule_times_page = nullptr;  // ...> Configure schedule: the times
 
   // --- Micra > Schedule (core::ScheduleConfig; App owns the values) --------
-  // Every control below dims + stops taking touches while the page is gated
-  // (no paired Micra, or no trusted NTP time); sched_status says why.
+  // Two pages so neither scrolls: the Schedule page holds one switch per line
+  // (Enabled, Same every day, Smart Warm-up, Auto-standby) and a "Configure
+  // schedule" entry; that page holds the day chips, the day's own switch, the
+  // On at / Off at pickers, the range bar and Copy times to. Every control
+  // below dims + stops taking touches while the page is gated (no paired
+  // Micra, or no trusted NTP time); sched_status says why.
   lv_obj_t* sched_status = nullptr;            // gate explanation (hidden when OK)
   lv_obj_t* sched_enable_switch = nullptr;     // master on/off
   lv_obj_t* sched_same_switch = nullptr;       // "Same every day"
+  lv_obj_t* sched_standby_switch = nullptr;    // Auto-standby: standby N min after the
+  lv_obj_t* sched_standby_minus = nullptr;     // last shot (needs only a paired Micra)
+  lv_obj_t* sched_standby_value = nullptr;
+  lv_obj_t* sched_standby_plus = nullptr;
+  lv_obj_t* sched_config_row = nullptr;        // "Configure schedule  <window>  >" entry
+  lv_obj_t* sched_config_value = nullptr;      // the window summary (nullptr on compact)
   lv_obj_t* sched_day_row = nullptr;           // the Mon..Sun chip strip (hidden
   lv_obj_t* sched_day_chips[7] = {};           // while Same every day is on). Tap
-  lv_obj_t* sched_day_labels[7] = {};          // selects; tap the selected chip
-                                               // again to toggle that day on/off
+  lv_obj_t* sched_day_labels[7] = {};          // selects the day the rows below edit
+  lv_obj_t* sched_day_enable_row = nullptr;    // "Day enabled  [switch]": the selected
+  lv_obj_t* sched_day_enable_switch = nullptr; // day takes part (hidden likewise)
   lv_obj_t* sched_on_hour_dd = nullptr;        // On at / Off at: hour + 5-min dropdowns
   lv_obj_t* sched_on_min_dd = nullptr;
   lv_obj_t* sched_off_hour_dd = nullptr;
