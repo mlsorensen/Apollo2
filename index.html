@@ -46,6 +46,9 @@
   .board.detect > button { background: #2c3542; }
   .board.matched { outline: 2px solid var(--accent); }
   #detect-status { margin-top: 6px; }
+  .rev { margin-top: 8px; font-size: 0.9em; display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
+  .rev label { cursor: pointer; }
+  .rev .hint { flex-basis: 100%; color: var(--muted, #8a94a3); font-size: 0.9em; }
   #detect-status.err { color: #e6b04c; }
   h2 { font-size: 1.2rem; margin-top: 40px; }
   a { color: var(--accent); }
@@ -137,16 +140,28 @@
     <div class="info">
       <div class="name">ESP32-P4-WIFI6-Touch-LCD-5</div>
       <div class="desc">5&quot; 1280&times;720, ESP32-P4 + WiFi 6. Two USB-C ports &mdash; use the one labeled <b>UART</b>.</div>
+      <div class="rev">
+        <span>Chip revision:</span>
+        <label><input type="radio" name="rev-p4-wifi6-touch-lcd-5" value="es" checked> v1.x (boards bought before ~Aug&nbsp;2026)</label>
+        <label><input type="radio" name="rev-p4-wifi6-touch-lcd-5" value="rev3"> v3 (newer boards)</label>
+        <span class="hint">Same product, two incompatible chips &mdash; <b>Detect board</b> above reads it off a running device. The wrong one just won't boot until reflashed.</span>
+      </div>
     </div>
-    <esp-web-install-button data-board="p4-wifi6-touch-lcd-5"><button slot="activate">Install</button></esp-web-install-button>
+    <esp-web-install-button data-board="p4-wifi6-touch-lcd-5" data-board-rev3="p4-wifi6-touch-lcd-5-rev3"><button slot="activate">Install</button></esp-web-install-button>
   </div>
 
   <div class="board">
     <div class="info">
       <div class="name">ESP32-P4-WIFI6-Touch-LCD-4.3</div>
       <div class="desc">4.3&quot; 800&times;480, ESP32-P4 + WiFi 6. Two USB-C ports &mdash; use the one labeled <b>UART</b>.</div>
+      <div class="rev">
+        <span>Chip revision:</span>
+        <label><input type="radio" name="rev-p4-wifi6-touch-lcd-4.3" value="es" checked> v1.x (boards bought before ~Aug&nbsp;2026)</label>
+        <label><input type="radio" name="rev-p4-wifi6-touch-lcd-4.3" value="rev3"> v3 (newer boards)</label>
+        <span class="hint">Same product, two incompatible chips &mdash; <b>Detect board</b> above reads it off a running device. The wrong one just won't boot until reflashed.</span>
+      </div>
     </div>
-    <esp-web-install-button data-board="p4-wifi6-touch-lcd-4.3"><button slot="activate">Install</button></esp-web-install-button>
+    <esp-web-install-button data-board="p4-wifi6-touch-lcd-4.3" data-board-rev3="p4-wifi6-touch-lcd-4.3-rev3"><button slot="activate">Install</button></esp-web-install-button>
   </div>
 
   <div class="board">
@@ -205,9 +220,16 @@
   const warn = document.getElementById('oldwarn');
   let latest = window.APOLLO2_VERSION || '';
 
+  // A P4 card carries two images (data-board = rev v1.x, data-board-rev3 =
+  // rev v3.0+ silicon); its radio picks which one Install flashes.
+  function imageFor(b) {
+    if (!b.dataset.boardRev3) return b.dataset.board;
+    const r = b.closest('.board').querySelector('input[type=radio][value=rev3]');
+    return r && r.checked ? b.dataset.boardRev3 : b.dataset.board;
+  }
   function apply(version) {
     document.querySelectorAll('esp-web-install-button').forEach((b) => {
-      b.setAttribute('manifest', `${version}/manifests/${b.dataset.board}.json`);
+      b.setAttribute('manifest', `${version}/manifests/${imageFor(b)}.json`);
     });
     badge.textContent = version;
     // A pre-release isn't an "older release" — it's newer than latest stable.
@@ -255,6 +277,8 @@
   loadVersions();
   betabox.addEventListener('change', () => loadVersions(sel.value));
   sel.addEventListener('change', () => apply(sel.value));
+  document.querySelectorAll('.rev input[type=radio]').forEach((r) =>
+    r.addEventListener('change', () => apply(sel.value || latest)));
 
   // Last line of defense against flashing the wrong board's image (the boards
   // are indistinguishable over USB, so there is no technical check within a
@@ -270,9 +294,12 @@
       e.stopPropagation();
       const name = host.closest('.board').querySelector('.name').textContent;
       const version = sel.value || latest;
-      if (confirm(`Flash ${name} — ${version}?\n\n` +
+      const rev = host.dataset.boardRev3
+        ? (imageFor(host) === host.dataset.boardRev3 ? ' (chip v3)' : ' (chip v1.x)') : '';
+      if (confirm(`Flash ${name}${rev} — ${version}?\n\n` +
                   `Check that "${name}" matches the model printed on your ` +
-                  `board. A mismatched image won't boot (black screen) until ` +
+                  `board${rev ? ', and the chip revision if you know it' : ''}. ` +
+                  `A mismatched image won't boot (black screen) until ` +
                   `the right one is flashed.`)) {
         host.dataset.ok = '1';
         e.target.closest('button').click();
@@ -289,8 +316,9 @@
   // Only the three PUBLISHED boards are listed: a device running one of the
   // unreleased board builds has no image here, so it correctly falls through
   // to "couldn't identify" rather than being offered someone else's firmware.
-  // The reply also carries REV= (silicon revision) — unused until the P4-5
-  // ships in two revisions and needs two images to choose between.
+  // The reply also carries REV= (silicon revision, efuse major*100+minor):
+  // >= 300 is rev v3.0+ silicon, which on the P4-5 / P4-4.3 selects the
+  // -rev3 image (the card's radio is set to match, so Install flashes it).
   const BOARD_PATTERNS = [
     ['P4-WIFI6-Touch-LCD-X-8', 'p4-wifi6-touch-lcd-x-8'],
     ['P4-WIFI6-Touch-LCD-5',   'p4-wifi6-touch-lcd-5'],
@@ -301,17 +329,26 @@
     for (const [pat, id] of BOARD_PATTERNS) if (text.includes(pat)) return id;
     return null;
   };
+  // The boot banner names the board but only the "id?" reply carries REV=,
+  // so a two-revision board waits for that line (bounded by the timeout).
+  const needsRev = (id) => !!document.querySelector(`esp-web-install-button[data-board="${id}"][data-board-rev3]`);
+  const matchRev = (text) => { const m = /REV=(\d+)/.exec(text); return m ? parseInt(m[1], 10) : null; };
 
   const status = document.getElementById('detect-status');
   const showallRow = document.getElementById('showall-row');
 
-  function selectBoard(id) {
+  function selectBoard(id, rev3) {
     document.querySelectorAll('.board:not(.detect)').forEach((card) => {
       const btn = card.querySelector('esp-web-install-button');
       const isMatch = btn && btn.dataset.board === id;
       card.classList.toggle('matched', isMatch);
       card.hidden = !isMatch;
+      if (isMatch && btn.dataset.boardRev3) {
+        const r = card.querySelector(`input[type=radio][value=${rev3 ? 'rev3' : 'es'}]`);
+        if (r) r.checked = true;
+      }
     });
+    apply(sel.value || latest);
     showallRow.hidden = false;
   }
   document.getElementById('showall').addEventListener('click', (e) => {
@@ -341,9 +378,10 @@
         if (done) break;
         text += dec.decode(value, { stream: true });
         const id = matchBoard(text);
-        if (id) return id;
+        if (id && (!needsRev(id) || matchRev(text) !== null)) return { id, rev: matchRev(text) };
       }
-      return matchBoard(text);
+      const id = matchBoard(text);
+      return id ? { id, rev: matchRev(text) } : null;
     } finally {
       clearInterval(poke);
       clearTimeout(timeout);
@@ -368,12 +406,18 @@
     }
     status.textContent = 'Asking the device which board it is…';
     try {
-      const id = await queryBoard(port);
-      if (id) {
-        selectBoard(id);
+      const found = await queryBoard(port);
+      if (found) {
+        const { id, rev } = found;
+        const rev3 = rev !== null && rev >= 300;
+        selectBoard(id, rev3);
         const name = document.querySelector(`esp-web-install-button[data-board="${id}"]`)
                        .closest('.board').querySelector('.name').textContent;
-        status.textContent = `Detected: ${name} — Install below flashes it.`;
+        const chip = needsRev(id)
+          ? (rev === null ? ' (chip revision unknown — firmware older than v0.11.0; pick it below)'
+                          : ` (chip v${Math.floor(rev / 100)}.${rev % 100})`)
+          : '';
+        status.textContent = `Detected: ${name}${chip} — Install below flashes it.`;
       } else {
         status.className = 'desc err';
         status.textContent = "Couldn't identify this device — it may be a first install, firmware older than v0.1.1, or a board with no published image. Choose from the list below.";

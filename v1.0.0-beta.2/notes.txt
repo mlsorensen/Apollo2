@@ -1,0 +1,18 @@
+
+### Changes
+
+- **Scheduled on and standby.** Settings → Micra → Schedule turns the machine
+  on and sends it to standby at set times — one window for every day or a
+  different one per weekday — with a warm-up lead (default 6 min) so it is at
+  temperature on time. Standby waits for a running shot; needs WiFi with Auto
+  time synced and a paired Micra.
+- **P4-5 and P4-4.3 on the newer ESP32-P4 chip.** Boards shipping since about
+  August 2026 carry v3 silicon that needs its own image; both are now built and
+  published. The web flasher's Detect reads the chip revision off a running
+  device and picks the right one; on a blank board choose it on the card.
+- **Welcome screen on a new unit.** Until a Micra is paired, each boot lists
+  the three recommended steps — WiFi, pair the Micra, pair a scale — with a
+  button for each (done steps drop theirs); all optional (Later, or Don't show
+  again). The WiFi setup page on your phone now offers the time zone too. The
+  Home button for an unpaired machine reads Pair Micra.
+
