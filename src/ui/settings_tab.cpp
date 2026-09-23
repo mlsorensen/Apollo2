@@ -1164,4 +1164,11 @@ void settings_select_section(SettingsWidgets& w, int section) {
   lv_menu_set_page(w.menu, page != nullptr ? page : w.root_page);
 }
 
+void settings_go_root(SettingsWidgets& w) {
+  if (w.menu == nullptr || w.root_page == nullptr) return;
+  if (lv_menu_get_cur_main_page(w.menu) == w.root_page) return;
+  lv_menu_clear_history(w.menu);
+  lv_menu_set_page(w.menu, w.root_page);  // depth 1 again: Back hides itself
+}
+
 }  // namespace ui

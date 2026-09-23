@@ -873,6 +873,16 @@ void set_theme_label(ui::SettingsWidgets& s) {
 void on_tab_changed(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->commit_temp_edits();
 }
+// The tabview only reports VALUE_CHANGED when the tab really changes, so a tap on
+// the Settings button while Settings is already up is silent. PRESSED runs before
+// the tabview's own CLICKED handler switches tabs, so it can still see which tab
+// was active; CLICKED then acts on that.
+void on_settings_tab_pressed(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->settings_tab_pressed();
+}
+void on_settings_tab_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->settings_tab_clicked();
+}
 
 float clampf(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -1094,6 +1104,12 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     // tray. Grow the buttons so they fill the bar (big touch targets) instead of
     // sitting small with dead space; the non-grow tray labels stay at the right.
     if (compact) lv_obj_set_flex_grow(tb, 1);
+  }
+  // Re-tapping the Settings tab jumps its drill-in back to the root page (one tap
+  // instead of Back, Back, Back to cross from Apollo > Display to Micra > Controls).
+  if (lv_obj_t* tb = lv_tabview_get_tab_button(tv, 1)) {
+    lv_obj_add_event_cb(tb, on_settings_tab_pressed, LV_EVENT_PRESSED, this);
+    lv_obj_add_event_cb(tb, on_settings_tab_clicked, LV_EVENT_CLICKED, this);
   }
 
   const bool scale_on =
@@ -3285,6 +3301,20 @@ void App::select_settings_section(int section) {
   commit_temp_edits();  // write pending edits from the section we're leaving
   settings_select_section(settings_, section);
   if (section == kSectionDeviceTime) seed_time_controls();  // show the current time
+}
+
+void App::settings_tab_pressed() {
+  settings_tab_was_active_ = tabview_ != nullptr && lv_tabview_get_tab_active(tabview_) == 1;
+}
+
+void App::settings_tab_clicked() {
+  if (!settings_tab_was_active_) return;  // arriving from another tab keeps its place
+  settings_tab_was_active_ = false;
+  if (settings_.menu == nullptr ||
+      lv_menu_get_cur_main_page(settings_.menu) == settings_.root_page)
+    return;
+  commit_temp_edits();  // leaving a leaf page, same as Back or a tab switch
+  settings_go_root(settings_);
 }
 
 void App::select_stats_section(int section) {

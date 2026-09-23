@@ -261,6 +261,11 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
 // Navigate to a section's page (kSectionMicra / kSectionScale / kSectionDevice).
 void settings_select_section(SettingsWidgets& w, int section);
 
+// Jump back to the root page from any depth and drop the page history, so the
+// header's Back button disappears (lv_menu_set_page alone PUSHES onto the
+// history). Tapping the Settings tab while already on it lands here.
+void settings_go_root(SettingsWidgets& w);
+
 // The lv_menu page a section navigates to (nullptr before build). App uses it
 // to save/restore a page's scroll position across a theme rebuild.
 lv_obj_t* settings_section_page(const SettingsWidgets& w, int section);

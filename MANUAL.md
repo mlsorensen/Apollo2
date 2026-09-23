@@ -654,6 +654,10 @@ A few things worth knowing:
 The rows ①–③ open the **Micra**, **Scale**, and **Device** pages above; one
 action lives directly on the root:
 
+> **Shortcut:** while you are anywhere inside Settings, tapping the Settings
+> tab again returns straight to this root page — one tap instead of several
+> Backs when crossing from, say, Apollo → Display to Micra → Controls.
+
 - ④ **Lock display for cleaning** — disables touch for 30 seconds so you can
   wipe the screen. A full‑screen countdown shows the time remaining; the lock
   ends on its own (touching the screen does nothing until then).

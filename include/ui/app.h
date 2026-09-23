@@ -105,6 +105,8 @@ class App {
   void dismiss_modal();        // token-modal "Cancel"
   void select_settings_section(int section);  // Settings segmented selector
   void on_settings_page_shown();  // lv_menu navigated; re-seed time on the Device page
+  void settings_tab_pressed();    // tab-bar Settings button: remember if it was already active
+  void settings_tab_clicked();    // ...and if so, jump the drill-in back to its root
   void brew_adjust(int dir, bool half);  // Brew +/- (half: 0.5 snap, long-press)
   void boiler_adjust(int dir);           // Boiler level +/-
   void steam_set_enabled(bool on);       // steam boiler on/off switch
@@ -428,6 +430,7 @@ class App {
   core::ScheduleConfig schedule_cfg_;      // the page's working copy
   bool schedule_loaded_ = false;           // schedule_cfg_ read from the port once
   bool schedule_warned_ = false;           // cloud-app notice shown this session
+  bool settings_tab_was_active_ = false;   // Settings tab already showing when its button was pressed
   bool welcome_checked_ = false;           // the first refresh decided about the welcome
   int schedule_gate_ = -1;                 // change-detect: bit0 paired, bit1 NTP; -1 unknown
 

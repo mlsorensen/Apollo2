@@ -26,6 +26,9 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 - **Cleaning page says when it can't act.** With Wired paddle off, Auto flush
   and Flush delay are greyed like Backflush already was, with a line on top
   saying what to switch on.
+- **Settings tab doubles as a home button.** Tapping the Settings tab while
+  already inside Settings jumps straight back to its root page, so crossing
+  from one section to another no longer takes several Backs.
 - **Welcome screen on a new unit.** Until a Micra is paired, each boot lists
   the three recommended steps — WiFi, pair the Micra, pair a scale — with a
   button for each, all optional. The WiFi setup page now offers the time zone
