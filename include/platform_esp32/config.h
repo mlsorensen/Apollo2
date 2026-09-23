@@ -141,7 +141,7 @@ class Config {
   void set_schedule_same_daily(bool on);
   bool schedule_warmup() const;              // default true
   void set_schedule_warmup(bool on);
-  int schedule_warmup_min() const;           // default 6
+  int schedule_warmup_min() const;           // default 8 (core::kWarmupDefaultMin)
   void set_schedule_warmup_min(int minutes);
   bool schedule_warning_dismissed() const;   // cloud-app warning "don't show again"
   void set_schedule_warning_dismissed(bool on);

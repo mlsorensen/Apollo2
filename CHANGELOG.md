@@ -13,7 +13,7 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 
 - **Scheduled on and standby.** Settings → Micra → Schedule turns the machine
   on and sends it to standby at set times — one window for every day or a
-  different one per weekday — with a warm-up lead (default 6 min) so it is at
+  different one per weekday — with a warm-up lead (default 8 min) so it is at
   temperature on time. Standby waits for a running shot; needs WiFi with Auto
   time synced and a paired Micra.
 - **P4-5 and P4-4.3 on the newer ESP32-P4 chip.** Boards shipping since about

@@ -36,7 +36,7 @@ constexpr int kMinutesPerWeek = 7 * kMinutesPerDay;
 constexpr int kScheduleStepMin = 5;  // the UI grid: 288 slots per day
 constexpr int kScheduleSlotsPerDay = kMinutesPerDay / kScheduleStepMin;
 constexpr int kScheduleMaxMin = kMinutesPerDay - kScheduleStepMin;  // 23:55
-constexpr int kWarmupDefaultMin = 6;   // "subject to change after testing"
+constexpr int kWarmupDefaultMin = 8;   // 6 at first; 8 after bench testing (owner, 2026-09-22)
 constexpr int kWarmupMaxMin = 30;
 // trigger <= now < trigger + window. Two minutes: the caller polls at 500 ms,
 // so one minute would do, but a stalled loop (an OTA check, a card write)

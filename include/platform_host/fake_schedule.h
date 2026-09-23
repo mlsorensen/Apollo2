@@ -14,7 +14,7 @@ class FakeSchedule : public core::ISchedule {
   bool cloud_warning_dismissed() const override { return warned_; }
   void set_cloud_warning_dismissed(bool on) override { warned_ = on; }
 
-  // Enabled, same every day, 06:30-09:00, warm-up on (6 min).
+  // Enabled, same every day, 06:30-09:00, warm-up on (8 min).
   void pose_daily() {
     cfg_ = core::ScheduleConfig{};
     cfg_.enabled = true;

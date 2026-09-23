@@ -320,7 +320,7 @@ good.
   off for per‑day times: a row of day chips appears (below) and each day gets
   its own On at / Off at. **Turning it off copies the daily window onto all
   seven days** as the starting point, so you only edit the days that differ.
-- ③ **Smart Warm‑up** *(default on, 6 min; 0–30)* — starts the machine this
+- ③ **Smart Warm‑up** *(default on, 8 min; 0–30)* — starts the machine this
   many minutes *before* On at, so the boilers are at temperature by the
   scheduled time. One setting for the whole week, which is why it sits above
   the day chips. A lead that reaches past midnight simply starts the evening
@@ -361,7 +361,7 @@ How it behaves:
 - The Home **Power** button reads `Working...` while a scheduled command is in
   flight, and a short notice says what the schedule just did (unless the idle
   screen is up). When Smart Warm‑up is what fired, the notice says so — for
-  example *Smart Warm‑up: on 6 min before 6:30 AM* — so an early start isn't
+  example *Smart Warm‑up: on 8 min before 6:30 AM* — so an early start isn't
   mistaken for a wrong time.
 
   <img src="docs/img/manual/schedule-warn-modal.png" width="70%" alt="The one-schedule notice">
