@@ -12,24 +12,21 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 ### Changes
 
 - **Scheduled on and standby.** Settings → Micra → Schedule turns the machine
-  on and sends it to standby at set times — one window for every day or a
-  different one per weekday — with a warm-up lead (default 8 min) so it is at
-  temperature on time. Standby waits for a running shot; needs WiFi with Auto
-  time synced and a paired Micra.
+  on and to standby at set times, daily or per weekday, with a Smart Warm-up
+  lead (default 8 min). Standby waits for a running shot. Needs WiFi with Auto
+  time and a paired Micra.
 - **P4-5 and P4-4.3 on the newer ESP32-P4 chip.** Boards shipping since about
-  August 2026 carry v3 silicon that needs its own image; both are now built and
-  published. The web flasher's Detect reads the chip revision off a running
-  device and picks the right one; on a blank board choose it on the card.
-- **Updates are only offered once they are really there.** The check now
-  confirms your board's image is being served before showing the notice, so a
-  release that is still publishing can't send the device into an install that
-  fails. A board whose radio co-processor gets updated on the first boot after
-  an update no longer rolls that update back.
+  August 2026 carry v3 silicon that needs its own image; both are now
+  published. The web flasher's Detect reads the chip revision and picks the
+  right one; on a blank board choose it on the card.
+- **Updates are only offered once they are really there.** The check confirms
+  your board's image is being served before showing the notice, so a release
+  still publishing can't send the device into a failing install. A first-boot
+  radio update no longer rolls the new firmware back.
 - **Welcome screen on a new unit.** Until a Micra is paired, each boot lists
   the three recommended steps — WiFi, pair the Micra, pair a scale — with a
-  button for each (done steps drop theirs); all optional (Later, or Don't show
-  again). The WiFi setup page on your phone now offers the time zone too. The
-  Home button for an unpaired machine reads Pair Micra.
+  button for each, all optional. The WiFi setup page now offers the time zone
+  too.
 
 ## v0.14.2
 

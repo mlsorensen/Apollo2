@@ -255,6 +255,26 @@ jobs:
           path: dist
           merge-multiple: true
 
+      # Release-note hygiene (CLAUDE.md release checklist): a bolded lead-in
+      # plus one or two sentences per bullet, ~50 words at most. A warning,
+      # not a failure — publishing binaries always wins over prose.
+      - name: Release-note bullet length
+        run: |
+          python3 - <<'EOF'
+          import os, re
+          tag = os.environ["RELEASE_TAG"]; base = tag.split("-beta.")[0]
+          text = open("CHANGELOG.md").read()
+          for head in (tag, base):
+              m = re.search(r"^## " + re.escape(head) + r"\n(.*?)(?=^## |\Z)", text, re.S | re.M)
+              if m: break
+          else:
+              raise SystemExit(0)
+          for b in re.split(r"^- ", m.group(1), flags=re.M)[1:]:
+              words = " ".join(b.split()).split()
+              if len(words) > 50:
+                  print(f"::warning::CHANGELOG bullet is {len(words)} words (rule: ~50 max): {' '.join(words[:8])}...")
+          EOF
+
       - name: Checksums
         run: (cd dist && rm -f *.chip && shasum -a 256 *.bin > SHA256SUMS.txt)
 
