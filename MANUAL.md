@@ -581,7 +581,13 @@ page fits on screen with little to no scrolling.
   **"screen goes dark for about 20 seconds — don't power off"** phase while it
   writes, then it restarts on the new version. Your settings, the paired
   machine, and shot history are kept, and a firmware that fails to boot rolls
-  back to the old one automatically. The
+  back to the old one automatically. **If an update fails partway** — a
+  download that can't complete, or a new build that doesn't boot — the device
+  simply comes back on the version it had, and the notice appears again at the
+  next check; **Remind me later** or **Skip this version** keeps it out of the
+  way while the cause is sorted out. (The check also won't offer a version
+  until that version's image for your board is actually being served, so a
+  release that is still publishing doesn't get offered early.) The
   [web flasher](https://mlsorensen.github.io/Apollo2/) remains the fallback for
   recovery and for a board's very first flash.
 

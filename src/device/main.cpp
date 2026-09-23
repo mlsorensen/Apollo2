@@ -306,7 +306,23 @@ void setup() {
     lv_timer_handler();
     Serial.flush();
     delay(1500);
-    if (ok) esp_restart();  // reboot P4 so the hosted link re-inits on new slave
+    if (ok) {
+      // An OTA-installed image boots PENDING_VERIFY and only confirms itself
+      // after 60 s of loop() (below). This restart would land inside that
+      // window and the bootloader would read it as a bootloop and roll the
+      // update back — on a board whose C6 was still factory, EVERY OTA would
+      // fail that way (X-8, beta.2, 2026-09-22). The image has brought up the
+      // display and the hosted link to get here, which is the proof the
+      // 60 s health check stands for, so confirm it now.
+      const esp_partition_t* run = esp_ota_get_running_partition();
+      esp_ota_img_states_t st;
+      if (esp_ota_get_state_partition(run, &st) == ESP_OK &&
+          st == ESP_OTA_IMG_PENDING_VERIFY) {
+        esp_ota_mark_app_valid_cancel_rollback();
+        core::logf("OTA: new image confirmed before the C6 restart\n");
+      }
+      esp_restart();  // reboot P4 so the hosted link re-inits on new slave
+    }
     lv_obj_delete(ov);      // failure: drop the overlay and boot normally
   }
 #endif

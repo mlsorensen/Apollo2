@@ -187,6 +187,30 @@ bool https_get(const std::string& url, std::string& out, size_t cap) {
   return ok;
 }
 
+// Does the URL answer 200 to a HEAD? Nothing is downloaded. Used to make sure
+// THIS board's image for the version the index names is actually being served
+// before the version is offered: GitHub Pages propagates per file, so the
+// index can go live minutes before a new version's images do, and a device
+// that checks in that gap would reboot into install mode only to 404
+// (beta.2, 2026-09-22: three units did exactly that).
+bool https_exists(const std::string& url) {
+  esp_http_client_config_t cfg = {};
+  cfg.url = url.c_str();
+  cfg.crt_bundle_attach = esp_crt_bundle_attach;
+  cfg.timeout_ms = 10000;
+  cfg.method = HTTP_METHOD_HEAD;
+  esp_http_client_handle_t h = esp_http_client_init(&cfg);
+  if (h == nullptr) return false;
+  bool ok = false;
+  if (esp_http_client_open(h, 0) == ESP_OK) {
+    esp_http_client_fetch_headers(h);
+    ok = esp_http_client_get_status_code(h) == 200;
+    esp_http_client_close(h);
+  }
+  esp_http_client_cleanup(h);
+  return ok;
+}
+
 // Retry wrapper: a `sock < 0` (Connection failed) from https_get is transient —
 // the previous fetch's TCP socket can still be in TIME_WAIT and the small LWIP
 // socket pool (shared with BLE, the web server and NTP) briefly has none free.
@@ -318,10 +342,28 @@ void UpdateCheck::run_check() {
     }
     core::logf("UpdateCheck: no beta index on the site; used the stable list\n");
   }
-  const std::string latest = first_version(body);
+  std::string latest = first_version(body);
   if (latest.empty()) {
     core::logf("UpdateCheck: no version in releases.json\n");
     return;
+  }
+  // Newer on paper: only offer it once its image for THIS board is served
+  // (see https_exists). Until then report "up to date"; the next check
+  // re-asks. Two tries: the first HEAD after a fresh index can hit the same
+  // socket-pool blip https_get_retry exists for.
+  if (semver_newer(latest.c_str(), fw::kVersion)) {
+    const std::string img =
+        std::string(kSiteBase) + "/" + latest + "/firmware/app/" + board::kUpdateSlug + ".bin";
+    bool served = https_exists(img);
+    if (!served) {
+      delay(700);
+      served = https_exists(img);
+    }
+    if (!served) {
+      core::logf("UpdateCheck: %s is listed but %s.bin isn't served yet; not offering\n",
+                 latest.c_str(), board::kUpdateSlug);
+      latest = fw::kVersion;  // reads as up to date until the files land
+    }
   }
 
   std::string notes;

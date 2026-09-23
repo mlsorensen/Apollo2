@@ -20,6 +20,11 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
   August 2026 carry v3 silicon that needs its own image; both are now built and
   published. The web flasher's Detect reads the chip revision off a running
   device and picks the right one; on a blank board choose it on the card.
+- **Updates are only offered once they are really there.** The check now
+  confirms your board's image is being served before showing the notice, so a
+  release that is still publishing can't send the device into an install that
+  fails. A board whose radio co-processor gets updated on the first boot after
+  an update no longer rolls that update back.
 - **Welcome screen on a new unit.** Until a Micra is paired, each boot lists
   the three recommended steps — WiFi, pair the Micra, pair a scale — with a
   button for each (done steps drop theirs); all optional (Later, or Don't show
