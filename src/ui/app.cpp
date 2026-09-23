@@ -4491,9 +4491,29 @@ void App::apply_scheduled_power(bool on) {
   machine_->set_power(on);
   home_.power_pending_from = prev;
   home_.power_pending_until = lv_tick_get() + 8000;
-  core::logf("schedule: %s\n", on ? "turning the machine on" : "machine to standby");
-  if (!screensaver_on_) show_toast(on ? "Schedule: turning the machine on"
-                                     : "Schedule: machine to standby");
+  // Say WHY when the warm-up lead is what fired: "on" minutes before the
+  // scheduled time looks like a bug unless the notice names it.
+  char msg[72];
+  const core::ScheduleConfig& c = schedule_cfg_;
+  const int wd = schedule_engine_.fired_on_weekday();
+  if (on && c.warmup() > 0 && wd >= 0) {
+    const int on_min = c.day(wd).on_min;
+    const bool h24 = clock_ != nullptr && clock_->use_24h();
+    char when[12];
+    if (h24) {
+      std::snprintf(when, sizeof(when), "%02d:%02d", on_min / 60, on_min % 60);
+    } else {
+      const int h = on_min / 60;
+      std::snprintf(when, sizeof(when), "%d:%02d %s", h % 12 == 0 ? 12 : h % 12, on_min % 60,
+                    h < 12 ? "AM" : "PM");
+    }
+    std::snprintf(msg, sizeof(msg), "Smart Warm-up: on %d min before %s", c.warmup(), when);
+  } else {
+    std::snprintf(msg, sizeof(msg), "%s", on ? "Schedule: turning the machine on"
+                                             : "Schedule: machine to standby");
+  }
+  core::logf("schedule: %s\n", msg);
+  if (!screensaver_on_) show_toast(msg);
 }
 
 core::DaySchedule& App::sched_edit_day() {

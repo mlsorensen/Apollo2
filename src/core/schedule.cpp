@@ -159,6 +159,7 @@ ScheduleAction ScheduleEngine::tick(const ScheduleInputs& in) {
         on_latched_ = static_cast<int16_t>(on);
         defer_ = false;  // an "on" inside a pending standby wins
         idle_timing_ = false;
+        fired_on_weekday_ = static_cast<int8_t>(w);
         if (in.power != Power::On) return ScheduleAction::TurnOn;
       }
     }

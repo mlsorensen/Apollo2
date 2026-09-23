@@ -360,7 +360,9 @@ How it behaves:
   back.
 - The Home **Power** button reads `Working...` while a scheduled command is in
   flight, and a short notice says what the schedule just did (unless the idle
-  screen is up).
+  screen is up). When Smart Warm‑up is what fired, the notice says so — for
+  example *Smart Warm‑up: on 6 min before 6:30 AM* — so an early start isn't
+  mistaken for a wrong time.
 
   <img src="docs/img/manual/schedule-warn-modal.png" width="70%" alt="The one-schedule notice">
 

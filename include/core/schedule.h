@@ -132,6 +132,11 @@ class ScheduleEngine {
   int on_trigger(int weekday) const;
   int off_trigger(int weekday) const;
 
+  // The weekday whose window the last TurnOn belonged to (0 = Monday), or -1.
+  // With a warm-up lead that crosses midnight this is TOMORROW's day, which
+  // is why the caller asks rather than looking at the clock.
+  int fired_on_weekday() const { return fired_on_weekday_; }
+
  private:
   static bool in_window(int now_mow, int trigger_mow);
   void clear_latches();
@@ -143,6 +148,7 @@ class ScheduleEngine {
   bool defer_ = false;         // an off trigger is waiting for kIdle + grace
   bool idle_timing_ = false;   // the grace timer is running
   uint32_t idle_since_ms_ = 0;
+  int8_t fired_on_weekday_ = -1;
 };
 
 // The settings port: where the configuration lives (NVS on the device, a

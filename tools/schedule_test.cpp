@@ -150,6 +150,7 @@ int test_triggers() {
   ScheduleConfig w = daily(0, 60, true, 6);
   e.set_config(w, in(quiet));
   CHECK(e.tick(in(at(2026, 9, kSun, 23, 54))) == ScheduleAction::TurnOn);
+  CHECK(e.fired_on_weekday() == 0);  // Monday's window, fired Sunday evening
   return 0;
 }
 
