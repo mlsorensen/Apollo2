@@ -588,9 +588,10 @@ const lcd_init_cmd_t kDsiPanelInit[] = {
 // (120 ms) + display-on (20 ms) + TE on.
 const lcd_init_cmd_t kDsiPanelInit[] = {
     {0xE0, (uint8_t[]){0x00}, 1, 0},  // page: user
-    // MADCTL GS|SS = 180°: the 8" box mounts its glass the opposite way up
-    // from the 7" (same finding, mirrored fix — both bits, so no mirroring).
-    {0x36, (uint8_t[]){0x03}, 1, 0},
+    // MADCTL: vendor value. The JD9365 ignores it in video mode (sister
+    // project, HW: neither GS|SS nor MY|MX moved the picture), so the 8"
+    // box's 180-degree mount is handled by kDsiRotate270 in the flush.
+    {0x36, (uint8_t[]){0x00}, 1, 0},
     {0x3A, (uint8_t[]){0x55}, 1, 0},  // COLMOD: RGB565
     {0x80, (uint8_t[]){0x01}, 1, 0},  // DSI: 2 data lanes
     // --- vendor table ---
@@ -1315,22 +1316,40 @@ void dsi_flush_cb(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map) {
     for (int tx = 0; tx < w; tx += kTile) {
       const int tw = (w - tx < kTile) ? w - tx : kTile;
       for (int i = 0; i < tw; ++i) {
-        // One portrait row per i: contiguous th-pixel run, walked backward
-        // (portrait col = fbw-1 - landscape y). Same mapping as the naive
-        // loop — equivalence host-verified pixel-exact. (Pairing adjacent
-        // columns into 32-bit stores was tried and measured IDENTICAL —
-        // this loop is PSRAM-bound, not cycle-bound; don't micro-optimize it.)
-        uint16_t* dst = fb + static_cast<size_t>(area->x1 + tx + i) * fbw +
-                        (fbw - 1 - (area->y1 + ty));
+        // One portrait row per i: contiguous th-pixel run. Same mapping as
+        // the naive loop — equivalence host-verified pixel-exact. (Pairing
+        // adjacent columns into 32-bit stores was tried and measured
+        // IDENTICAL — this loop is PSRAM-bound, not cycle-bound; don't
+        // micro-optimize it.)
+        //   90  (default): row = lx,        col = fbw-1-ly  (walked backward)
+        //   270 (X-8):     row = fbh-1-lx,  col = ly        (walked forward)
+        // — the two ways a landscape UI lands on a portrait panel; which
+        // one a box needs depends on which way up its glass is mounted.
+        const int lx = area->x1 + tx + i;
+        const int ly0 = area->y1 + ty;
         const uint16_t* s = src + static_cast<size_t>(ty) * w + tx + i;
-        for (int j = 0; j < th; ++j) dst[-j] = s[static_cast<size_t>(j) * w];
+        if constexpr (board::kDsiRotate270) {
+          uint16_t* dst = fb + static_cast<size_t>(fbh - 1 - lx) * fbw + ly0;
+          for (int j = 0; j < th; ++j) dst[j] = s[static_cast<size_t>(j) * w];
+        } else {
+          uint16_t* dst = fb + static_cast<size_t>(lx) * fbw + (fbw - 1 - ly0);
+          for (int j = 0; j < th; ++j) dst[-j] = s[static_cast<size_t>(j) * w];
+        }
       }
     }
   }
-  if (area->x1 < g_dirty_r1) g_dirty_r1 = area->x1;
-  if (area->x2 > g_dirty_r2) g_dirty_r2 = area->x2;
-  if (fbw - 1 - area->y2 < g_dirty_c1) g_dirty_c1 = fbw - 1 - area->y2;
-  if (fbw - 1 - area->y1 > g_dirty_c2) g_dirty_c2 = fbw - 1 - area->y1;
+  // Dirty box in panel space (rows = portrait rows, cols = portrait columns).
+  if constexpr (board::kDsiRotate270) {
+    if (fbh - 1 - area->x2 < g_dirty_r1) g_dirty_r1 = fbh - 1 - area->x2;
+    if (fbh - 1 - area->x1 > g_dirty_r2) g_dirty_r2 = fbh - 1 - area->x1;
+    if (area->y1 < g_dirty_c1) g_dirty_c1 = area->y1;
+    if (area->y2 > g_dirty_c2) g_dirty_c2 = area->y2;
+  } else {
+    if (area->x1 < g_dirty_r1) g_dirty_r1 = area->x1;
+    if (area->x2 > g_dirty_r2) g_dirty_r2 = area->x2;
+    if (fbw - 1 - area->y2 < g_dirty_c1) g_dirty_c1 = fbw - 1 - area->y2;
+    if (fbw - 1 - area->y1 > g_dirty_c2) g_dirty_c2 = fbw - 1 - area->y1;
+  }
 
   if (lv_display_flush_is_last(disp) && g_dirty_r2 >= g_dirty_r1) {
     const int r1 = g_dirty_r1, r2 = g_dirty_r2;

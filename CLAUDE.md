@@ -374,7 +374,7 @@ only), 58 MHz DPI / 700 Mbps lanes. UI: `BOARD_UI_SCALE 1.5f` renders the wide
 800x480 layout at 1.5x via ui::dp()/ui::font_dp() (see include/ui/screen.h) —
 scale 1.0 boards are bit-identical, verified against baseline renders.
 
-### ESP32-P4-WIFI6-Touch-LCD-X 7"/8"/10.1" (envs `esp32-p4-micra-x-7` / `-x-8` / `-x-10-1`) — 7" verified on HW (2026-08-29: boot, display, touch, hosted link, paddle sense); 8"/10.1" NOT yet
+### ESP32-P4-WIFI6-Touch-LCD-X 7"/8"/10.1" (envs `esp32-p4-micra-x-7` / `-x-8` / `-x-10-1`) — 7" verified on HW (2026-08-29: boot, display, touch, hosted link, paddle sense); 8" VERIFIED 2026-09-22 (boot, panel, touch, welcome; owner); 10.1" NOT yet
 
 RELEASE STATUS: the **8" is the released counter-top product**; the **7" is
 INTERNAL-ONLY** (the owner's desk/dev unit — de-listed 2026-09-10, not a
@@ -416,14 +416,27 @@ bsp/esp32_p4_wifi6_touch_lcd_x):
   major*100+minor) so the web flasher's Detect can pick the right variant, and
   display.cpp's PHY-clock branch already keys on `BOARD_P4_SILICON_REV3` — the
   new board block just defines it.
-  (3) The 8" box mounts its glass the OPPOSITE way up from the 7": same
-  table renders upside down — fix is rotating 270° instead of 90° in the
-  flush (a direction constant; touch mapping follows it). Our per-size touch
-  #if was the right structure. (4) GT911 at 0x5D like the others; TP_INT
-  unverified on the 8" (the 7" schematic routes it via R32 to GPIO33 —
-  relevant if wake-on-touch is ever wanted). (5) Rev3 pads hold state
-  through deep sleep (documented; untested) — the v1.x boards' pull-down
-  mods shouldn't be needed there.
+  (3) The 8" box mounts its glass the OPPOSITE way up from the 7", and the
+  JD9365 IGNORES MADCTL in video mode (sister project: neither GS|SS nor
+  MY|MX moved the picture) — so the fix is rotating 270° instead of 90° in
+  the flush: `kDsiRotate270` in the X-8 block, honoured by dsi_flush_cb AND
+  the install-mode rotate; touch keeps the both-mirrors-toggled mapping.
+  DONE + HW-verified 2026-09-22 (first Apollo boot on an 8": the earlier
+  "blank" report was before this fix + the pin fix below). (4) GT911 at
+  0x5D. **GPIO23 is TP_RST, NOT a backlight enable, and GPIO33 is TP_INT**
+  (X schematic; sister project found driving 23 low held the GT911 in
+  reset). The X-8 block now uses them as kTouchRst/kTouchInt with
+  kLcdBacklightEn = -1 (the X has no boost-enable GPIO; PWM on 26 only).
+  The 7"/10.1" branch still drives 23 high as "BL_EN" — which works only
+  because high = GT911 out of reset; left as the 7" was verified, fix when
+  one is on the bench. (5) Rev3 pads hold state through deep sleep
+  (documented; untested) — the v1.x boards' pull-down mods shouldn't be
+  needed there. (6) `APOLLO_SKIP_C6_UPDATE` (build flag, no env sets it):
+  a validation build that leaves the factory C6 slave alone, so a board can
+  be flash-dumped, tried and restored to factory in every respect
+  (`PLATFORMIO_BUILD_FLAGS="-D APOLLO_SKIP_C6_UPDATE" pio run -e ... -t
+  upload`). Used for the 8" first boot; a factory dump of that unit lives in
+  ~/firmware-backups/apollo/ with its RESTORE.md.
 - Panels (native portrait, rotated like the other P4 DSI boards): 7" =
   720x1280 ILI9881C (80 MHz DPI, 1000 Mbps), 8" and 10.1" = 800x1280 JD9365
   (80 MHz, 1500 Mbps) — but the 8" and 10.1" glasses take DIFFERENT vendor
@@ -438,8 +451,9 @@ bsp/esp32_p4_wifi6_touch_lcd_x):
   0x36 also appears as a page-1 GIP register mid-table — only the page-0
   writes are MADCTL. Expect the same 180° question on the 8"/10.1" at
   bring-up (check camera position; JD9365 has the same GS/SS bits).
-- Backlight: LEDC GPIO26 normal polarity + AP3032 boost-enable GPIO23
-  (kLcdBacklightEn — the 4.3 has one too, the 5 doesn't).
+- Backlight: LEDC GPIO26 normal polarity. NO boost-enable GPIO on the X
+  (GPIO23 is TP_RST — see (4) above; the 7" branch's "BL_EN = 23" is a
+  misreading that happens to work).
 - UI scale: 7" = 1.5 (same logical 853x480 as the 5); 8"/10.1" = 1.6 →
   logical 800x500 — exact 800 width, the extra height feeds the flex-grow
   regions (sim renders at 1280x800 cover it).
@@ -483,7 +497,7 @@ wiring detail, not as a to-do. No 4.3 hardware is kept here, so the P4-5
 
 First non-S3 board: P4NRW32, 480x800 ST7701 over 2-lane MIPI-DSI (rotated to
 landscape), GT911 touch, WiFi6/BLE via on-board ESP32-C6 over SDIO
-(esp-hosted). Compiles; NOT yet validated on hardware. Key facts:
+(esp-hosted). HW-verified (2026-09-11; rev3 unit 2026-09-22). Key facts:
 
 - NimBLE-Arduino does NOT support the P4 (maintainer statement, issue #906).
   This env uses `h2zero/esp-nimble-cpp` (same `NimBLE*` API) against the
@@ -540,7 +554,7 @@ GT911 all up; NimBLE host inits. Paddle/audio/ADC since confirmed, 2026-09-11):
    fall back to LVGL-side rotation if slow.
 2. Touch: GT911 detected at 0x5D. swap/mirror flags in board_config.h are
    best-guess; serial logs one line per press for calibration.
-3. BLE: host init verified; actual Micra/scale connections not yet tested.
+3. BLE: host init verified; Micra + scale connections confirmed on HW (2026-09-11).
    Known bug esp-hosted-mcu#180: scan results stall after ~60-90s of
    continuous scanning (our scans are short; reconnects are direct-by-MAC).
 4. Paddle (brew-by-weight): native GPIOs on the header corner — GND, GPIO52,

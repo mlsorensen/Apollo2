@@ -260,7 +260,16 @@ void setup() {
   // and this is the quiet window (WiFi/NimBLE not started yet). Host->slave TX
   // over SDIO, so it works on the stale slave. On success the C6 reboots and we
   // reboot the P4 to re-init the link. See c6_update.cpp.
+  // APOLLO_SKIP_C6_UPDATE (build flag, never set by any env): a validation
+  // build that leaves the factory C6 slave alone, so a board can be dumped,
+  // tried and restored to factory in every respect. The stale slave still
+  // works for the basics; only the on-device OTA download needs the update.
+#if defined(APOLLO_SKIP_C6_UPDATE)
+  core::logf("C6 update: SKIPPED (APOLLO_SKIP_C6_UPDATE build)\n");
+  if (false) {
+#else
   if (platform::c6_update_needed()) {
+#endif
     core::logf("C6 update: needed; applying embedded slave firmware\n");
     lv_obj_t* ov = lv_obj_create(lv_screen_active());
     lv_obj_remove_style_all(ov);

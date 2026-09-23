@@ -240,8 +240,7 @@ covers both styles.)
 
 **The X 8" box is the counter‑top companion** — the same P4 electronics behind
 the biggest screen, in a finished enclosure, for sitting beside the machine
-rather than on it. Its panel and silicon are verified; the Apollo image itself
-hasn't been confirmed on one yet.
+rather than on it. Verified on hardware.
 
 Power, battery and RTC notes live in
 **[docs/HARDWARE.md](docs/HARDWARE.md)**.

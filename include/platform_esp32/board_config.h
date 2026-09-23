@@ -399,7 +399,7 @@ constexpr int kSdD0 = 13;
 // via an on-board ESP32-C6 over SDIO (esp-hosted; SDIO pins match the esp-hosted
 // P4 defaults so no override is needed). No IO expander — reset/backlight are
 // native GPIOs. Pins traced from the board schematic + Waveshare's BSP
-// (esp32_p4_wifi6_touch_lcd_4_3.h). UNVERIFIED on hardware yet.
+// (esp32_p4_wifi6_touch_lcd_4_3.h). HW-verified (2026-09-11; rev3 silicon 2026-09-22).
 constexpr char kName[] = "Waveshare ESP32-P4-WIFI6-Touch-LCD-4.3";
 // RELEASED: this board is in the firmware-release.yml matrix, the web
 // flasher and the README. The slug MUST equal that matrix row's "board"
@@ -440,6 +440,7 @@ constexpr bool kLcdRstActiveHigh = false;  // ST7701 reset asserts LOW
 constexpr int  kLcdBacklight = 26;    // LEDC PWM (BSP uses 10-bit LEDC here)
 constexpr bool kBacklightActiveLow = true;  // BSP LEDC output_invert=1 (verified on HW)
 constexpr int  kLcdBacklightEn = 33;  // backlight boost enable — drive high
+constexpr bool kDsiRotate270 = false;      // flush rotates 90 (see the X-8 for the other way)
 // 33.4MHz over the 576x870 total raster ≈ 66Hz refresh (BSP default is 30MHz
 // ≈ 60Hz). Raised to shift the panel's faint VCOM/inversion shimmer away from
 // 60Hz; verdict on hardware was "can't tell" — kept because it's harmless and
@@ -597,6 +598,7 @@ constexpr bool kLcdRstActiveHigh = true;   // HX8394 reset asserts HIGH here
 constexpr int  kLcdBacklight = 26;         // LEDC PWM, normal polarity
 constexpr bool kBacklightActiveLow = false;
 constexpr int  kLcdBacklightEn = -1;       // no boost-enable pin in the BSP path
+constexpr bool kDsiRotate270 = false;      // flush rotates 90 (see the X-8 for the other way)
 // Vendor timing: 58 MHz ≈ 55Hz over the 800x1318 raster. A 45 MHz (~43Hz)
 // variant was profiled during the 5" perf hunt: the scanout-bandwidth saving
 // measured ZERO fps difference, but the sparser refresh boundaries directly
@@ -769,21 +771,44 @@ constexpr int  kLcdRst = 27;
 constexpr bool kLcdRstActiveHigh = false;
 constexpr int  kLcdBacklight = 26;         // LEDC PWM, normal polarity
 constexpr bool kBacklightActiveLow = false;
+#if defined(BOARD_WAVESHARE_P4_WIFI6_X_8)
+// 8" (from the sister project's HW-verified X-8 block, 2026-09): the X has NO
+// backlight boost-enable GPIO -- GPIO23 is TP_RST (driving it low holds the
+// GT911 in reset) and GPIO33 is TP_INT via R32. The 7"/10.1" branch below
+// still drives 23 as "BL_EN" (high = GT911 out of reset, so it works by
+// accident); untested there, so it is left as the 7" was verified.
+constexpr int  kLcdBacklightEn = -1;
+// The JD9365 IGNORES MADCTL in video mode (sister project: neither 0x03 nor
+// 0x99 moved the picture), so the box's 180-degree mount is handled by
+// rotating the flush the other way (270 instead of 90); touch follows below.
+constexpr bool kDsiRotate270 = true;
+#else
 constexpr int  kLcdBacklightEn = 23;       // backlight boost enable (BL_EN)
+constexpr bool kDsiRotate270 = false;
+#endif
 
 // --- Touch: GT911 on I2C, rst/int not wired (probe-only) — same deal as the
 //     P4-5 block. Orientation: the 7" AND 8" boxes mount their glass 180°
 //     from the P4-5's convention (7" HW-verified; 8" found in the sister
 //     project — MADCTL GS|SS flips in display.cpp), so their touch mapping
-//     toggles BOTH mirrors vs the P4-5 values (8" taps unverified). The
+//     toggles BOTH mirrors vs the P4-5 values (8" verified 2026-09-22). The
 //     10.1" keeps the P4-5 best-guess until hardware says otherwise. ---
 constexpr int  kTouchSda = 7;   // == kI2cSda (Touch reads these names)
 constexpr int  kTouchScl = 8;
 constexpr int  kTouchAddr = 0x5D;    // 0x5D (INT low at boot) or 0x14
+#if defined(BOARD_WAVESHARE_P4_WIFI6_X_8)
+constexpr int  kTouchRst = 23;       // TP_RST (X schematic; see the display note above)
+constexpr int  kTouchInt = 33;       // TP_INT via R32
+#else
 constexpr int  kTouchRst = -1;
 constexpr int  kTouchInt = -1;
+#endif
 constexpr bool kTouchSwapXY = true;
 #if defined(BOARD_WAVESHARE_P4_WIFI6_X_7) || defined(BOARD_WAVESHARE_P4_WIFI6_X_8)
+// 7": MADCTL 180 at the panel, touch not flipped with it. 8": flush rotated
+// 270 instead (kDsiRotate270), touch likewise not flipped with the glass
+// (sister project: picture 270, touch 90). Either way both mirrors toggle
+// vs the P4-5 values.
 constexpr bool kTouchMirrorX = true;   // P4-5 mapping + the 180° panel flip
 constexpr bool kTouchMirrorY = false;
 #else

@@ -46,11 +46,18 @@ uint16_t* g_land = nullptr;
 
 void flush_cb(lv_display_t* d, const lv_area_t* /*a*/, uint8_t* /*px*/) {
   if (!lv_display_flush_is_last(d)) { lv_display_flush_ready(d); return; }
+  // Same two mappings as the main display's flush (kDsiRotate270: the 8"
+  // box mounts its glass the other way up).
   for (int ly = 0; ly < kUiH; ++ly) {
-    const int px = board::kLcdNativeW - 1 - ly;
     const uint16_t* srow = g_land + (size_t)ly * kUiW;
-    for (int lx = 0; lx < kUiW; ++lx)
-      g_port[(size_t)lx * board::kLcdNativeW + px] = srow[lx];
+    if constexpr (board::kDsiRotate270) {
+      for (int lx = 0; lx < kUiW; ++lx)
+        g_port[(size_t)(board::kLcdNativeH - 1 - lx) * board::kLcdNativeW + ly] = srow[lx];
+    } else {
+      const int px = board::kLcdNativeW - 1 - ly;
+      for (int lx = 0; lx < kUiW; ++lx)
+        g_port[(size_t)lx * board::kLcdNativeW + px] = srow[lx];
+    }
   }
   install_panel_present(g_port);
   lv_display_flush_ready(d);
