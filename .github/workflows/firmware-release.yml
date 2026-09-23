@@ -359,6 +359,10 @@ jobs:
           # workflow token can't, and the `v*` tag ruleset would refuse it.
           token: ${{ secrets.RELEASE_TOKEN }}
           tag_name: ${{ env.RELEASE_TAG }}
+          # The commit the tag is created on. Without this GitHub tags the
+          # DEFAULT branch's head, so every beta cut from feat/v1.0 (beta.1-3)
+          # got a tag on main's head, not on the commit that was built.
+          target_commitish: ${{ github.sha }}
           name: ${{ env.RELEASE_TAG }}
           # A -beta.N tag publishes as a pre-release and must NOT take the
           # "Latest" badge from the newest stable release.
