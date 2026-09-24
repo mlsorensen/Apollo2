@@ -1,10 +1,14 @@
 Ref,Qty,Value,Package,Description,Manufacturer,MPN,Notes
 U2 U3,2,LH1502BB,DIP-8 THT,"Dual 1-Form-A/B solid-state relay, used as SPDT (350 V, 150 mA); 8/7 = NC to Micra, 6/5 = NO to remote",Vishay,LH1502BB,THT on purpose: Panasonic AQW612EH drops in if the NC/NO mapping proves wrong (then R2-R5 -> 270R). Meter 8-7 continuity unpowered before fab.
 U1,1,AQY212EH,DIP-4 THT,"1-Form-A PhotoMOS relay (60 V, 550 mA, 3 mA max LED); drives Micra W/B from GPIO52",Panasonic,AQY212EH,AQY212EHA is the SMD variant - board wants the DIP.
-J1 J2,2,JST PH 4-pin side-entry,THT,"JST PH 2.0 mm 4-pos side-entry header; J1 = Apollo (GND/52/51/50), J2 = machine (P1/P2/W/B)",JST,S4B-PH-K-S(LF)(SN),Same drills as vertical B4B-PH-K if side-entry is out of stock.
+J1,1,JST PH 5-pin side-entry,THT,"JST PH 2.0 mm 5-pos side-entry header; Apollo (GND_R/5V/DRIVE/SENSE/CTRL)",JST,S5B-PH-K-S(LF)(SN),Same drills as vertical B5B-PH-K if side-entry is out of stock.
+J2,1,JST PH 4-pin side-entry,THT,"JST PH 2.0 mm 4-pos side-entry header; machine (P1/P2/W/B)",JST,S4B-PH-K-S(LF)(SN),Same drills as vertical B4B-PH-K if side-entry is out of stock.
+J3,1,USB-C receptacle,THT,"USB 2.0 Type-C receptacle, through-hole; 5 V power in only (VBUS -> J1 5V, GND -> GND_R)",GCT,USB4085-GF-A,Power only: D+/D-/SBU unused. R9/R10 (5k1 Rd on CC1/CC2) make it a default-5 V sink so any USB-C source, PD or not, turns VBUS on.
 R1 R2 R3 R4 R5,5,330R,1206,"Thick film resistor 330 ohm 1% 0.25 W; R1 = U1 LED, R2-R5 = U2/U3 LEDs",Panasonic,ERJ-S08F3300V,Switch to 270R if AQW612EH is fitted.
 R6,1,1k,1206,Thick film resistor 1 kohm 1% 0.25 W; SENSE series protection,Panasonic,ERJ-S08F1001V,
 R7,1,10k,1206,Thick film resistor 10 kohm 1% 0.25 W; SENSE pull-up (with D1),Panasonic,ERJ-S08F1002V,
 R8,1,2k2,1206,Thick film resistor 2.2 kohm 1% 0.25 W; LED1 current limit,Panasonic,ERJ-S08F2201V,
 D1,1,1N4148W,1206 land (SOD-123 part),Small-signal diode; pull-up steering for R7,Diodes Inc,1N4148W-7-F,PCB pads are D_1206; 1N4148W is SOD-123 and sits on them - check fit or pick a 1206-bodied diode.
 LED1,1,green,1206,"Green indicator LED, lit while CTRL is high",Lite-On,LTST-C150KGKT,Suggestion only - any 1206 green LED.
+R9 R10,2,5k1,1206,Thick film resistor 5.1 kohm 1% 0.25 W; USB-C CC1/CC2 Rd pull-downs to GND_R,Panasonic,ERJ-S08F5101V,One per CC pin - never share one resistor between CC1 and CC2.
+F1,1,1.5A PTC,1812,"PTC resettable fuse, 1.5 A hold / 3.0 A trip, 12 V, 1812; in series with USB-C VBUS before J1 5V",Littelfuse,1812L150/12DR,"Bourns MF-MSMF150-2 is EOL. Alternate: TE MINISMDC150F-2 (6 V, same pads). Hold current derates roughly 1%/degC above 25 C (about 0.9 A at 85 C) - still 1.5x the remote's 0.6 A peak."
