@@ -77,6 +77,8 @@ constexpr char kFlushDelayKey[] = "flushd";  // cup-off -> flush pause seconds
 constexpr char kLeadInKey[] = "leadin";      // detect-mode preinfusion lead-in seconds
 constexpr char kFlowSmoothKey[] = "flowsmth";
 constexpr char kShotXGrowKey[] = "shotxgrow";  // shot-graph X-window growth style
+constexpr char kScaleBattKey[] = "sbattdisp";  // Home scale battery: icon / percent / both (ADDED v1.0.0-beta.5)
+constexpr char kStandbyTimerKey[] = "schasbt";  // Home MICRA card auto-standby countdown (ADDED v1.0.0-beta.5)
 constexpr char kWifiEnKey[] = "wifi_en";
 constexpr char kWifiSsidKey[] = "ssid";
 constexpr char kWifiPassKey[] = "wifipass";
@@ -254,6 +256,36 @@ void Config::set_shot_window_growth(int mode) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putInt(kShotXGrowKey, mode);
+  p.end();
+}
+
+int Config::scale_battery_style() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 0;
+  const int v = p.isKey(kScaleBattKey) ? p.getInt(kScaleBattKey, 0) : 0;
+  p.end();
+  return v;
+}
+
+void Config::set_scale_battery_style(int style) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putInt(kScaleBattKey, style);
+  p.end();
+}
+
+bool Config::show_standby_timer() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
+  const bool v = p.isKey(kStandbyTimerKey) ? p.getBool(kStandbyTimerKey, false) : false;
+  p.end();
+  return v;
+}
+
+void Config::set_show_standby_timer(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kStandbyTimerKey, on);
   p.end();
 }
 

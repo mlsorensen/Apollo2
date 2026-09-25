@@ -546,6 +546,12 @@ void on_sched_standby_minus(lv_event_t* e) {
 void on_sched_standby_plus(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->schedule_auto_standby_adjust(+1);
 }
+void on_sched_timer_switch(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->set_show_standby_timer(sw_checked(e));
+}
+void on_sbatt_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_scale_battery_style();
+}
 void on_sched_day_enable_switch(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->set_schedule_day_enabled(sw_checked(e));
 }
@@ -696,6 +702,7 @@ constexpr const char* kSmoothName[] = {"Off", "Light", "Medium", "Strong"};
 // Shot-graph X-window growth (IDisplaySettings::shot_window_growth 0..2); the
 // mapping itself lives in home_tab.cpp (shot_live_mapping).
 constexpr const char* kWindowGrowthName[] = {"Snap", "Smooth", "Continuous"};
+constexpr const char* kScaleBattName[] = {"Icon", "Percent", "Icon + %"};
 
 // Screen-dim timeout choices (IDisplaySettings::screen_timeout_min).
 constexpr int kDimMinutes[] = {0, 1, 5, 15, 30};
@@ -1127,6 +1134,8 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   const bool scale_on =
       scale_provisioner_ != nullptr && !scale_provisioner_->saved_name().empty();
   build_home_tab(home, screen, scale_on, home_);
+  home_.scale_batt_style = display_ != nullptr ? display_->scale_battery_style() : 0;
+  if (home_.scale_batt_style < 0 || home_.scale_batt_style > 2) home_.scale_batt_style = 0;
   // Every layout except large-no-scale drops the top bar and moves clock/battery to
   // a tray (visible on every tab). Compact -> a horizontal tray on the bottom tab
   // bar; large scale-aware -> the side rail (tabs spread via SPACE_BETWEEN so the
@@ -1222,6 +1231,12 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
       lv_label_set_text(settings_.smooth_value, kSmoothName[level & 3]);
     ui::set_shot_smoothing(home_, level & 3);
     lv_obj_add_event_cb(settings_.smooth_btn, on_smooth_clicked, LV_EVENT_CLICKED, this);
+  }
+  if (settings_.sbatt_btn != nullptr) {
+    int style = display_ != nullptr ? display_->scale_battery_style() : 0;
+    if (style < 0 || style > 2) style = 0;
+    lv_label_set_text(settings_.sbatt_value, kScaleBattName[style]);
+    lv_obj_add_event_cb(settings_.sbatt_btn, on_sbatt_clicked, LV_EVENT_CLICKED, this);
   }
   if (settings_.xgrow_btn != nullptr) {
     int mode = display_ != nullptr ? display_->shot_window_growth() : 2;
@@ -1366,6 +1381,10 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                         LV_EVENT_VALUE_CHANGED, this);
     lv_obj_add_event_cb(settings_.sched_standby_minus, on_sched_standby_minus, LV_EVENT_CLICKED, this);
     lv_obj_add_event_cb(settings_.sched_standby_plus, on_sched_standby_plus, LV_EVENT_CLICKED, this);
+    if (display_ != nullptr && display_->show_standby_timer())
+      lv_obj_add_state(settings_.sched_timer_switch, LV_STATE_CHECKED);
+    lv_obj_add_event_cb(settings_.sched_timer_switch, on_sched_timer_switch,
+                        LV_EVENT_VALUE_CHANGED, this);
     lv_obj_add_event_cb(settings_.sched_warm_plus, on_sched_warm_plus, LV_EVENT_CLICKED, this);
     lv_obj_add_event_cb(settings_.sched_copy_btn, on_sched_copy_clicked, LV_EVENT_CLICKED, this);
     set_schedule_axis_labels(h24);
@@ -1496,6 +1515,17 @@ void App::refresh() {
     }
     update_temp_panels(snap);
     schedule_tick(snap);
+    // The MICRA card's countdown: only while auto-standby is really counting
+    // (armed, connected, on) and the user asked to see it.
+    {
+      int remaining_s = -1;
+      if (display_ != nullptr && display_->show_standby_timer() &&
+          schedule_engine_.auto_standby_armed() && snap.link == core::Link::Connected &&
+          snap.power == core::Power::On) {
+        remaining_s = static_cast<int>(schedule_engine_.auto_standby_remaining_ms(lv_tick_get()) / 1000u);
+      }
+      ui::set_micra_standby_timer(home_, remaining_s);
+    }
 
     // Fresh unit (nothing configured, not opted out) -> the welcome, on the
     // first refresh of every boot (build() is too early for a modal).
@@ -2022,6 +2052,22 @@ void App::cycle_flow_smooth() {
     lv_label_set_text(settings_.smooth_value, kSmoothName[level]);
   ui::set_shot_smoothing(home_, level);
 }
+
+void App::cycle_scale_battery_style() {
+  if (display_ == nullptr) return;
+  int style = display_->scale_battery_style();
+  style = (style < 0 || style > 2) ? 0 : (style + 1) % 3;
+  display_->set_scale_battery_style(style);
+  if (settings_.sbatt_value != nullptr) lv_label_set_text(settings_.sbatt_value, kScaleBattName[style]);
+  home_.scale_batt_style = style;  // the next refresh redraws the card
+}
+
+void App::set_show_standby_timer(bool on) {
+  if (display_ != nullptr) display_->set_show_standby_timer(on);
+  if (!on) ui::set_micra_standby_timer(home_, -1);
+}
+
+void App::pose_standby_timer(int remaining_s) { ui::set_micra_standby_timer(home_, remaining_s); }
 
 void App::cycle_shot_window_growth() {
   if (display_ == nullptr) return;
@@ -4897,21 +4943,25 @@ void App::format_clock_min(char* out, size_t n, int min_of_day, bool h24) {
 // The gate: a paired Micra AND trusted NTP time. Change-detected — this runs
 // from every refresh and restyling ~25 widgets at 2 Hz is real work on the S3.
 void App::sync_schedule_gate() {
-  if (settings_.sched_status == nullptr || machine_ == nullptr) return;
+  if (settings_.sched_enable_switch == nullptr || machine_ == nullptr) return;
   const core::Link link = machine_->snapshot().link;
   const bool paired = link != core::Link::Unconfigured && link != core::Link::NeedsToken;
-  const int gate = (paired ? 1 : 0) | (ntp_ready() ? 2 : 0);
+  // Auto-standby needs a shot source: the wired paddle, or a paired scale
+  // (whose detector sees shots in Shot detect mode).
+  bool shots = true;
+  if (brew_ != nullptr) {
+    const core::BrewSnapshot b = brew_->snapshot();
+    const bool scale_paired =
+        scale_provisioner_ != nullptr && !scale_provisioner_->saved_name().empty();
+    shots = (b.paddle_hw && b.wired_setting) || scale_paired;
+  }
+  const int gate = (paired ? 1 : 0) | (ntp_ready() ? 2 : 0) | (shots ? 4 : 0);
   if (gate == schedule_gate_) return;
   schedule_gate_ = gate;
-  const char* why = nullptr;
-  if (!paired) {
-    why = "Pair a Micra first (Settings > Micra > Bluetooth).";
-  } else if (gate != 3) {
-    why = "Needs WiFi with Auto time (NTP) synced: Settings > Apollo > WiFi.";
+  if (settings_.sched_asb_status != nullptr) {
+    if (shots) lv_obj_add_flag(settings_.sched_asb_status, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_remove_flag(settings_.sched_asb_status, LV_OBJ_FLAG_HIDDEN);
   }
-  ui::set_text(settings_.sched_status, why != nullptr ? why : "");
-  if (why != nullptr) lv_obj_remove_flag(settings_.sched_status, LV_OBJ_FLAG_HIDDEN);
-  else lv_obj_add_flag(settings_.sched_status, LV_OBJ_FLAG_HIDDEN);
   apply_schedule_clickable();
 }
 
@@ -4920,7 +4970,7 @@ void App::apply_schedule_clickable() {
   if (s.sched_slider == nullptr) return;
   // The gate greys everything; Enabled = off greys everything but itself;
   // a selected day that is switched off greys its own window controls.
-  const bool gate = schedule_gate_ == 3;
+  const bool gate = (schedule_gate_ & 3) == 3;
   const bool ok = gate && schedule_cfg_.enabled;
   const bool day_on = schedule_cfg_.same_every_day ||
                       schedule_cfg_.days[s.sched_edit_day].enabled;
@@ -4934,6 +4984,7 @@ void App::apply_schedule_clickable() {
   const bool paired = (schedule_gate_ & 1) != 0;
   const bool asb = paired && schedule_cfg_.auto_standby_enabled;
   set_clickable(s.sched_standby_switch, paired);
+  set_clickable(s.sched_timer_switch, asb);
   set_clickable(s.sched_standby_minus, asb && schedule_cfg_.auto_standby_min > core::kAutoStandbyMinMin);
   set_clickable(s.sched_standby_plus, asb && schedule_cfg_.auto_standby_min < core::kAutoStandbyMaxMin);
   if (asb) lv_obj_remove_state(s.sched_standby_value, LV_STATE_DISABLED);

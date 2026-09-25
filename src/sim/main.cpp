@@ -82,7 +82,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             bool update_modal = false, core::IUpdateSource* updates = nullptr,
             core::ISettingsBackup* backup = nullptr, int backup_modal = 0,
             int schedule_day = -1, core::ISchedule* schedule = nullptr,
-            bool welcome_modal = false) {
+            bool welcome_modal = false, int standby_timer_s = -1) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
@@ -106,6 +106,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   if (shot_modal_id >= 0) app.open_shot_card(static_cast<uint32_t>(shot_modal_id));
   if (log_modal) app.open_log_modal();
   if (unwired_midshot_ms != 0) app.pose_unwired_midshot(unwired_midshot_ms);
+  if (standby_timer_s >= 0) app.pose_standby_timer(standby_timer_s);  // the MICRA header countdown
   if (toast)
     app.show_toast("Shot not started: Auto shot is enabled. "
                    "Connect the scale or switch to Manual mode.");
@@ -169,16 +170,25 @@ int main() {
                bool log_modal = false, uint32_t unwired_midshot_ms = 0,
                bool toast = false, bool join_modal = false, bool screensaver = false,
                bool update_modal = false, int backup_modal = 0, int schedule_day = -1,
-               bool welcome_modal = false) {
+               bool welcome_modal = false, int standby_timer_s = -1) {
     return render(machine, provisioner, battery, disp, clock, history, scale,
                   scale_provisioner, brew, network, shots, s, path, tab, sec, modal, theme,
                   stats, clean_lock, shot_id, history_ym, backflush, log_modal,
                   unwired_midshot_ms, toast, join_modal, screensaver, update_modal,
-                  &updates, &backup, backup_modal, schedule_day, &schedule, welcome_modal);
+                  &updates, &backup, backup_modal, schedule_day, &schedule, welcome_modal,
+                  standby_timer_s);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
   ok &= r({320, 240}, "renders/home_320x240.png");
+  // Auto-standby counting down (Show auto-standby timer on): the MICRA header
+  // carries "<power> 27 min"; the scale battery in its "Icon + %" style.
+  disp.set_scale_battery_style(2);
+  ok &= r({800, 480}, "renders/home_standby_timer_800x480.png", 0, -1, false, 0, -1, false, -1,
+          0, false, false, 0, false, false, false, false, 0, -1, false, 27 * 60);
+  ok &= r({320, 240}, "renders/home_standby_timer_320x240.png", 0, -1, false, 0, -1, false, -1,
+          0, false, false, 0, false, false, false, false, 0, -1, false, 27 * 60);
+  disp.set_scale_battery_style(0);
   // Scrolling strip-chart graph (the non-default style; scope is the default).
   disp.set_scope_graph(false);
   ok &= r({800, 480}, "renders/home_scroll_800x480.png");
@@ -334,6 +344,13 @@ int main() {
   network.set_synced(true);
   machine.set_link(core::Link::Unconfigured);
   ok &= r({800, 480}, "renders/micra_schedule_unpaired_800x480.png", 1, ui::kSectionMicraSchedule);
+  machine.set_link(core::Link::Connected);
+  // No shot source (no wired paddle, no scale): auto-standby says what it needs.
+  brew.set_wired_paddle(false);
+  scale_provisioner.set_saved(false);
+  ok &= r({800, 480}, "renders/micra_schedule_noshots_800x480.png", 1, ui::kSectionMicraSchedule);
+  scale_provisioner.set_saved(true);
+  brew.set_wired_paddle(true);
   machine.set_link(core::Link::Connected);
   network.set_synced(false);
   ok &= r({320, 240}, "renders/scale_settings_320x240.png", 1, ui::kSectionScaleSettings);

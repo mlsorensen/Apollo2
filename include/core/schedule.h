@@ -156,6 +156,8 @@ class ScheduleEngine {
 
   // Auto-standby is counting down from the last shot.
   bool auto_standby_armed() const { return asb_armed_; }
+  // Milliseconds until it fires (0 when due or not armed).
+  uint32_t auto_standby_remaining_ms(uint32_t now_ms) const;
 
   // Minute-of-week slots the engine acts on for `weekday` (for tests/logs).
   int on_trigger(int weekday) const;

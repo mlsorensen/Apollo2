@@ -526,27 +526,32 @@ void build_micra_schedule_rows(lv_obj_t* menu, lv_obj_t* page, lv_obj_t* times_p
                                ui::SettingsWidgets& out) {
   // The switch list has room to breathe: a page built for eleven controls now
   // holds six rows, so more air between them than the default column.
-  lv_obj_set_style_pad_row(page, ui::dp(compact ? 10 : 16), 0);
+  lv_obj_set_style_pad_row(page, ui::dp(compact ? 10 : 20), 0);
 
-  // Auto-standby first, its own group: independent of the schedule below (App
-  // gates it on a paired Micra only — no clock, no master switch).
-  //   After last shot [sw] [-] 30 min [+]
-  section_label(page, "Auto-standby", font);
-  make_switch_stepper(make_setting_row(page, "After last shot", font), font, symbol_font,
-                      btn_size, compact, &out.sched_standby_switch, &out.sched_standby_minus,
-                      &out.sched_standby_value, &out.sched_standby_plus);
+  // Auto-standby first: independent of the schedule below (App gates it on a
+  // paired Micra only — no clock, no master switch). No group headings: the
+  // row names carry it, and the page keeps its air.
+  //   Auto-standby after last shot [sw] [-] 30 min [+]
+  //   Show auto-standby timer [sw]        (the countdown on the Home MICRA card)
+  make_switch_stepper(make_setting_row(page, "Auto-standby after last shot", font), font,
+                      symbol_font, btn_size, compact, &out.sched_standby_switch,
+                      &out.sched_standby_minus, &out.sched_standby_value,
+                      &out.sched_standby_plus);
+  out.sched_timer_switch =
+      make_switch(make_setting_row(page, "Show auto-standby timer", font), btn_size);
+  // Auto-standby counts from a SHOT, which the device only sees through a
+  // wired paddle or the scale's detector: say so when it has neither.
+  out.sched_asb_status = lv_label_create(page);
+  lv_obj_set_width(out.sched_asb_status, lv_pct(100));
+  lv_label_set_long_mode(out.sched_asb_status, LV_LABEL_LONG_WRAP);
+  lv_obj_set_style_text_color(out.sched_asb_status, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(out.sched_asb_status, font, 0);
+  lv_label_set_text(out.sched_asb_status,
+                    "Needs a wired paddle, or a paired scale in Shot detect mode.");
+  lv_obj_add_flag(out.sched_asb_status, LV_OBJ_FLAG_HIDDEN);
 
-  // The timed on / standby group. Its gate line (why its rows are greyed, when
-  // they are) sits under the heading, above the rows it speaks for.
-  section_label(page, "Schedule", font);
-  out.sched_status = lv_label_create(page);
-  lv_obj_set_width(out.sched_status, lv_pct(100));
-  lv_label_set_long_mode(out.sched_status, LV_LABEL_LONG_WRAP);
-  lv_obj_set_style_text_color(out.sched_status, lv_color_hex(ui::theme::muted()), 0);
-  lv_obj_set_style_text_font(out.sched_status, font, 0);
-  lv_label_set_text(out.sched_status, "");
-  lv_obj_add_flag(out.sched_status, LV_OBJ_FLAG_HIDDEN);
-
+  // The timed on / standby rows. They grey out without a paired Micra or a
+  // trusted clock; the manual says why (the page has no room for a line).
   // Enable schedules [sw]: the master switch for the TIMES, named for what it
   // switches so it doesn't read as the master of the whole page.
   out.sched_enable_switch =
@@ -1105,6 +1110,19 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   // saved model's descriptors and shows/hides per state (pairing hint /
   // connect prompt / live rows), so nothing here needs to know models.
   {
+    // Battery display [Icon]: Apollo's own preference for the Home SCALE
+    // card, first because it is available in every state (the rows below
+    // need the scale).
+    lv_obj_t* rb = make_setting_row(out.scale_device_page, "Battery display", font);
+    out.sbatt_btn = ui::make_button(rb);
+    lv_obj_set_height(out.sbatt_btn, btn_size);
+    lv_obj_set_style_pad_hor(out.sbatt_btn, ui::dp(14), 0);
+    lv_obj_set_style_bg_color(out.sbatt_btn, lv_color_hex(ui::theme::card()), 0);
+    out.sbatt_value = lv_label_create(out.sbatt_btn);
+    lv_obj_set_style_text_color(out.sbatt_value, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(out.sbatt_value, font, 0);
+    lv_obj_center(out.sbatt_value);
+
     out.scale_dev_hint = lv_label_create(out.scale_device_page);
     lv_label_set_text(out.scale_dev_hint, "Pair a scale to adjust its settings");
     lv_obj_set_style_text_color(out.scale_dev_hint, lv_color_hex(ui::theme::muted()), 0);

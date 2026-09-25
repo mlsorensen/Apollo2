@@ -73,6 +73,10 @@ class Config {
   void set_flow_smooth(int level);
   int shot_window_growth() const;      // shot-graph X growth 0..2 (default 2 = continuous)
   void set_shot_window_growth(int mode);
+  int scale_battery_style() const;     // Home scale battery 0 icon / 1 percent / 2 both (default 0)
+  void set_scale_battery_style(int style);
+  bool show_standby_timer() const;     // Home MICRA card auto-standby countdown (default false)
+  void set_show_standby_timer(bool on);
 
   int brightness() const;     // screen brightness 0..100 (default 100)
   void set_brightness(int percent);

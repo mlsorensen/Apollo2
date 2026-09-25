@@ -165,8 +165,9 @@ per weekday, with a global warm-up lead. Shape of it:
   >= 0`, i.e. a real sync THIS boot) and the date is real. The warm-up lead
   may wrap into the previous evening (minute-of-week arithmetic).
 - Gate on the page (`sync_schedule_gate`, change-detected): paired Micra AND
-  ntp_ready; otherwise every control is DISABLED (per-widget 40 % opa, not a
-  container) with the reason in `sched_status`. `MachineSnapshot::brewing` is
+  ntp_ready; otherwise every schedule control is DISABLED (per-widget 40 %
+  opa, not a container) SILENTLY — the owner dropped the explanatory line
+  (2026-09-25, "too much for the page"); the manual carries the reason. `MachineSnapshot::brewing` is
   NEVER set by the link — use `ShotPhase`.
 - AUTO-STANDBY (v1.0.0-beta.4, owner's spec 2026-09-23) lives in the SAME
   engine (`tick_auto_standby`, `ScheduleAction::AutoStandby`): a countdown
@@ -177,18 +178,25 @@ per weekday, with a global warm-up lead. Shape of it:
   anyone disarms it; it fires only Connected + On + phase kIdle, and needs
   NO clock and NOT the master `enabled` (UI gates it on "paired" only). A
   minutes edit while armed moves the deadline (timed from the shot's end).
+  It needs a SHOT SOURCE (wired paddle, or a paired scale in Shot detect —
+  Manual-unwired has no edge source); `sync_schedule_gate` bit2 shows the
+  `sched_asb_status` line when there is neither.
   Range 10..240 in 10-min steps (`sanitize_auto_standby_min`), default 30.
-  UI: the Schedule page is TWO lv_menu pages — the switches (one per line;
-  Auto-standby FIRST under its own heading, then a "Schedule" heading, the
-  gate line and the master labelled "Enable schedules" — on purpose, so
-  Auto-standby never reads as being under the master)
+  UI: the Schedule page is TWO lv_menu pages — the switches (one per line,
+  NO group headings: "Auto-standby after last shot", "Show auto-standby
+  timer" (Home MICRA header shows "<power> N min" via
+  ui::set_micra_standby_timer from refresh(); IDisplaySettings key
+  `schasbt`), then the gate line and the master labelled "Enable schedules"
+  — Auto-standby sits FIRST on purpose so it never reads as being under the
+  master)
   + a "Configure schedule" entry whose value label summarises the window
   ("Per day" only once the enabled days differ), and the times page (chips,
   the day's own switch, pickers, range bar, Copy times to). The chips are
   select-only again (the tristate tap was reverted 2026-09-23).
 - NVS keys (all ADDs): `schen`, `schsame`, `schwarm`, `schwarmm`, `schwarn`
   (cloud-app notice dismissed), `schasb` + `schasbm` (auto-standby on /
-  minutes), `schall` (daily window) and `schd0`..`schd6`
+  minutes), `schasbt` (show the countdown), `schall` (daily window) and
+  `schd0`..`schd6`
   (Mon..Sun), the windows packed by `core::pack_day` (bits 0-10 on, 11-21 off,
   22 enabled; `unpack_day` sanitizes so garbage degrades to a legal window).
   `platform::ScheduleSettings::set_config` writes only changed keys.

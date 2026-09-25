@@ -30,7 +30,11 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 - **Auto-standby after the last shot.** Settings → Micra → Schedule →
   Auto-standby sends the machine to standby a set time after the last shot
   (default 30 min, off by default). Every shot restarts the count; a machine
-  the schedule turned on and nobody used stays on.
+  the schedule turned on and nobody used stays on. Show auto-standby timer
+  puts the minutes left on the Home MICRA card.
+- **Scale battery as icon, percent or both.** Settings → Scale → Device
+  settings → Battery display picks how the SCALE card shows the scale's
+  battery.
 - **Settings tab doubles as a home button.** Tapping the Settings tab while
   already inside Settings jumps straight back to its root page, so crossing
   from one section to another no longer takes several Backs.

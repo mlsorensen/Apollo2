@@ -83,6 +83,16 @@ void DisplaySettings::set_shot_window_growth(int mode) {
   config_.set_shot_window_growth(mode);
 }
 
+int DisplaySettings::scale_battery_style() const { return config_.scale_battery_style(); }
+
+void DisplaySettings::set_scale_battery_style(int style) {
+  config_.set_scale_battery_style(style);
+}
+
+bool DisplaySettings::show_standby_timer() const { return config_.show_standby_timer(); }
+
+void DisplaySettings::set_show_standby_timer(bool on) { config_.set_show_standby_timer(on); }
+
 bool DisplaySettings::perf_overlay() const { return config_.perf_overlay(); }
 
 bool DisplaySettings::click_sound() const { return config_.click_sound(); }

@@ -33,6 +33,9 @@ struct HomeWidgets {
   // (null on compact / no-scale, where the single top-bar status is used instead).
   lv_obj_t* micra_status_dot = nullptr;
   lv_obj_t* micra_status_label = nullptr;
+  lv_obj_t* micra_timer_label = nullptr;  // MICRA header, after the caption: the
+                                          // auto-standby countdown (hidden unless live)
+  int scale_batt_style = 0;               // scale battery: 0 icon, 1 percent, 2 both
   lv_obj_t* scale_status_dot = nullptr;
   lv_obj_t* scale_status_label = nullptr;
   lv_obj_t* shot_timer_label = nullptr;  // scale panel: shot timer (scale.timer_ms)
@@ -100,7 +103,8 @@ struct HomeWidgets {
   bool heat_pulse_lit = false;
   // Scale battery icon in the SCALE header, right of the status text (icon-only
   // level estimate; hidden unless the connected scale reports a level).
-  lv_obj_t* scale_batt_label = nullptr;
+  lv_obj_t* scale_batt_label = nullptr;      // the level icon (status font)
+  lv_obj_t* scale_batt_pct_label = nullptr;  // the percent (caption font), before the icon
   // Flow-rate strip chart (large screens only). A self-managed lv_canvas: newest
   // sample at the right, the plot scrolls right->left by wall-clock time (see
   // flow_graph_tick) so older data trails off the left. Each step memmoves the
@@ -264,6 +268,9 @@ void build_rail_tray(lv_obj_t* rail, const lv_font_t* font, HomeWidgets& out);
 // Compact counterpart: clock + battery pushed to the right of the bottom tab bar
 // (the compact tab bar is horizontal). Same "no top bar" treatment as build_rail_tray.
 void build_bottom_tray(lv_obj_t* bar, const lv_font_t* font, HomeWidgets& out);
+
+// The MICRA header's auto-standby countdown: seconds left, or -1 to hide it.
+void set_micra_standby_timer(HomeWidgets& w, int remaining_s);
 
 // Apply machine + battery + scale state to the built widgets (live, no rebuild).
 // scale_features/scale_connect_enabled drive the sleep-aware scale status: a

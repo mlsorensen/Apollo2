@@ -34,6 +34,10 @@ class DisplaySettings : public core::IDisplaySettings {
   void set_flow_smooth(int level) override;
   int shot_window_growth() const override;
   void set_shot_window_growth(int mode) override;
+  int scale_battery_style() const override;
+  void set_scale_battery_style(int style) override;
+  bool show_standby_timer() const override;
+  void set_show_standby_timer(bool on) override;
   bool perf_overlay() const override;
   void set_perf_overlay(bool on) override;
   bool click_sound() const override;

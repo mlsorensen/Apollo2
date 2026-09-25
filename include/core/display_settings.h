@@ -84,6 +84,16 @@ class IDisplaySettings {
   virtual int shot_window_growth() const = 0;
   virtual void set_shot_window_growth(int mode) = 0;
 
+  // Scale battery on the Home SCALE card: 0 = level icon (the default),
+  // 1 = percent, 2 = both. Persisted.
+  virtual int scale_battery_style() const = 0;
+  virtual void set_scale_battery_style(int style) = 0;
+
+  // Home MICRA card shows the auto-standby countdown while one is running
+  // (Settings > Micra > Schedule > Show auto-standby timer). Default off.
+  virtual bool show_standby_timer() const = 0;
+  virtual void set_show_standby_timer(bool on) = 0;
+
   // Performance overlay: LVGL's on-screen FPS / CPU / render-time monitor. Off by
   // default (it's a diagnostic and covers a screen corner); the UI shows/hides the
   // sysmon label at runtime to match this.

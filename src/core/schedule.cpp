@@ -156,6 +156,13 @@ ScheduleAction ScheduleEngine::tick_auto_standby(const ScheduleInputs& in) {
   return ScheduleAction::AutoStandby;
 }
 
+uint32_t ScheduleEngine::auto_standby_remaining_ms(uint32_t now_ms) const {
+  if (!asb_armed_) return 0;
+  const uint32_t wait_ms = static_cast<uint32_t>(cfg_.auto_standby_min) * 60000u;
+  const uint32_t since = now_ms - asb_since_ms_;
+  return since >= wait_ms ? 0 : wait_ms - since;
+}
+
 ScheduleAction ScheduleEngine::tick(const ScheduleInputs& in) {
   const ScheduleAction asb = tick_auto_standby(in);
   if (!cfg_.enabled || !in.time_trusted || !in.now.valid || !in.now.date_valid) {

@@ -47,15 +47,16 @@ Settings
 │  ├─ Controls  — Wired paddle* · Chime melody* · Chime volume*
 │  │             · Brew Temperature · Steam Enable + Temperature
 │  ├─ Cleaning* — Auto flush · Flush delay · Backflush cleaning  → cleaning mode
-│  └─ Schedule  — Auto-standby (after last shot) · Enable schedules
-│                · Same every day · Smart Warm-up
+│  └─ Schedule  — Auto-standby after last shot · Show auto-standby timer
+│                · Enable schedules · Same every day · Smart Warm-up
 │                └─ Configure schedule — day chips · Day enabled · On at / Off at
 │                                        · range slider · Copy times to
 ├─ Scale
 │  ├─ Bluetooth       — Scan · saved scale (Connect / Forget)
 │  ├─ Shot settings   — Target · Review hold · Detect lead-in · Smoothing
 │  │                    · Drop negative g/s · Oscilloscope graph · Window growth
-│  └─ Device settings — the scale's own settings (Beep · Auto-off/sleep · Unit …)
+│  └─ Device settings — Battery display (Icon / Percent / Icon + %)
+│                       · the scale's own settings (Beep · Auto-off/sleep · Unit …)
 ├─ Apollo
 │  ├─ Display     — Brightness* · Screen timeout · Idle screen (Lion/Apollo/Alternate/Dim/Off)
 │  │               · Theme · Fahrenheit · Button sounds* · Performance overlay
@@ -114,6 +115,11 @@ Without a scale, the MICRA card fills the screen as a single hero:
   routinely settles at 127 °C and stops heating there. Boards with a speaker
   can also chime when it turns `Ready` — see
   [Settings → Micra → Controls](#controls).
+  While **Auto‑standby** is counting down (and *Show auto‑standby timer* is
+  on), the header also shows the minutes left next to the caption:
+
+  <img src="docs/img/manual/home-standby-timer.png" width="70%" alt="Auto-standby countdown on the MICRA card">
+
 - ② ③ **BREW / STEAM** — live boiler temperatures. On larger screens each has a
   **−/+** stepper that edits the set‑point directly; the small grey number is
   the current target. Edits are written to the machine as you tap.
@@ -312,34 +318,41 @@ Turns the machine on and sends it to standby at set times, from the device's
 own clock, so it is warm when you walk up and asleep when you don't. Two
 pages, neither of which scrolls: **Schedule** holds Auto‑standby and the
 schedule switches, one per line, and **Configure schedule** holds the times.
-The schedule rows need a paired Micra and a clock it can trust: WiFi on with **Auto time (NTP)**
-synced since the last power‑up (see [Settings → Apollo → WiFi](#wifi)). Until
-both hold, those rows are greyed out and a line above them says which is
-missing (Auto‑standby needs only the paired Micra). The first time you open the page a notice asks you to turn off any
+**The schedule rows are greyed out until two things hold:** a paired Micra,
+and a clock the device can trust — WiFi on with **Auto time (NTP)** synced
+since the last power‑up (see [Settings → Apollo → WiFi](#wifi)). The page
+doesn't say which is missing; if the rows won't take a tap, check those two.
+Auto‑standby needs only the paired Micra. The first time you open the page a notice asks you to turn off any
 schedule in the La Marzocco app — two schedules for one machine conflict and
 confuse. **OK** dismisses it until the next restart; **Don't show again**, for
 good.
 
-- ① **Auto‑standby** *(default off, 30 min; 10–240 in 10‑minute steps)* — its
-  own group, independent of the schedule below: sends the machine to standby
-  this long after the **last shot**, like the Micra's own auto‑standby. Each
-  shot restarts the count; a machine that was switched on but never used is
-  left alone, so a scheduled turn‑on stays up until you use it (and a
-  scheduled turn‑on cancels a running count). It needs only a paired Micra —
-  no WiFi, no clock, and it works with the schedules switched off.
-- ② **Enable schedules** *(default off)* — the master switch for the timed on
+- ① **Auto‑standby after last shot** *(default off, 30 min; 10–240 in
+  10‑minute steps)* — independent of the schedule rows below: sends the
+  machine to standby this long after the **last shot**, like the Micra's own
+  auto‑standby. Each shot restarts the count; a machine that was switched on
+  but never used is left alone, so a scheduled turn‑on stays up until you use
+  it (and a scheduled turn‑on cancels a running count). It needs only a
+  paired Micra — no WiFi, no clock, and it works with the schedules switched
+  off. It does need to *see* shots, though: through a wired paddle, or a
+  paired scale in Shot detect mode. With neither, a line under the row says
+  so and the count can never start.
+- ② **Show auto‑standby timer** *(default off)* — while a count is running,
+  the Home MICRA card shows the minutes left next to its caption (see
+  [MICRA card](#micra-card)).
+- ③ **Enable schedules** *(default off)* — the master switch for the timed on
   and standby. Off keeps the times you set and greys out the rows below it;
   Auto‑standby is not affected.
-- ③ **Same every day** *(default on)* — one window for the whole week. Turn it
+- ④ **Same every day** *(default on)* — one window for the whole week. Turn it
   off for per‑day times: the Configure schedule page grows a row of day chips
   (below) and each day gets its own On at / Off at. **Turning it off copies
   the daily window onto all seven days** as the starting point, so you only
   edit the days that differ.
-- ④ **Smart Warm‑up** *(default on, 8 min; 0–30)* — starts the machine this
+- ⑤ **Smart Warm‑up** *(default on, 8 min; 0–30)* — starts the machine this
   many minutes *before* On at, so the boilers are at temperature by the
   scheduled time. One setting for the whole week. A lead that reaches past
   midnight simply starts the evening before.
-- ⑤ **Configure schedule** — opens the times page below. The row shows the
+- ⑥ **Configure schedule** — opens the times page below. The row shows the
   current window at a glance, or *Per day* once the days differ.
 
   <img src="docs/img/manual/micra-schedule-days.png" width="70%" alt="Configure schedule, per day">
@@ -439,9 +452,13 @@ How it behaves:
 
 ![Scale device settings — a Bookoo Themis's rows](docs/img/manual/scale-device-settings.png)
 
-Settings stored on the scale itself, adjusted over Bluetooth. Which rows
-appear — and their value choices — depends on the scale model (a Bookoo
-Themis's ① **Beep** and ② **Auto‑off** shown above):
+① **Battery display** is Apollo's own: how the SCALE card on Home shows the
+scale's battery — **Icon** (the level glyph, the default), **Percent**, or
+**Icon + %**. It is available whether or not a scale is connected.
+
+The rest are settings stored on the scale itself, adjusted over Bluetooth.
+Which rows appear — and their value choices — depends on the scale model (a
+Bookoo Themis's ② **Beep** and ③ **Auto‑off** shown above):
 
 - **Bookoo Themis / Themis Ultra** — **Beep** (buzzer level Off / 1–3, the
   same range the Bookoo app offers) and **Auto‑off** (5–30 min). The scale

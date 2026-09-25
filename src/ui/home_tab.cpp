@@ -483,9 +483,11 @@ lv_obj_t* make_panel_card(lv_obj_t* parent, int pad) {
 // Panel header: caption on the left, a status dot on the right, with status text
 // beside the dot unless out_status is null (compact cards are too narrow for it —
 // the dot color carries the state there).
+// `out_aux` (optional) receives a second muted caption-font label right after
+// the caption — the MICRA card's auto-standby countdown — hidden until filled.
 void make_panel_header(lv_obj_t* card, const char* caption, const lv_font_t* cap_font,
                        const lv_font_t* status_font, lv_obj_t** out_dot,
-                       lv_obj_t** out_status) {
+                       lv_obj_t** out_status, lv_obj_t** out_aux = nullptr) {
   lv_obj_t* hdr = lv_obj_create(card);
   lv_obj_remove_style_all(hdr);
   lv_obj_remove_flag(hdr, LV_OBJ_FLAG_SCROLLABLE);
@@ -495,10 +497,29 @@ void make_panel_header(lv_obj_t* card, const char* caption, const lv_font_t* cap
   lv_obj_set_flex_align(hdr, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
 
-  lv_obj_t* cap = lv_label_create(hdr);
+  lv_obj_t* cap_parent = hdr;
+  if (out_aux != nullptr) {
+    cap_parent = lv_obj_create(hdr);
+    lv_obj_remove_style_all(cap_parent);
+    lv_obj_remove_flag(cap_parent, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_size(cap_parent, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(cap_parent, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(cap_parent, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(cap_parent, ui::dp(10), 0);
+  }
+  lv_obj_t* cap = lv_label_create(cap_parent);
   lv_label_set_text(cap, caption);
   lv_obj_set_style_text_color(cap, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(cap, cap_font, 0);
+  if (out_aux != nullptr) {
+    lv_obj_t* aux = lv_label_create(cap_parent);
+    lv_label_set_text(aux, "");
+    lv_obj_set_style_text_color(aux, lv_color_hex(ui::theme::muted()), 0);
+    lv_obj_set_style_text_font(aux, cap_font, 0);
+    lv_obj_add_flag(aux, LV_OBJ_FLAG_HIDDEN);
+    *out_aux = aux;
+  }
 
   lv_obj_t* sg = lv_obj_create(hdr);
   lv_obj_remove_style_all(sg);
@@ -635,7 +656,8 @@ lv_obj_t* add_stat_row(lv_obj_t* card, const char* caption, const lv_font_t* cap
 void build_compact_micra_card(lv_obj_t* parent, int pad, const lv_font_t* cap_font,
                               const lv_font_t* val_font, ui::HomeWidgets& out) {
   lv_obj_t* card = make_panel_card(parent, pad);
-  make_panel_header(card, "MICRA", cap_font, cap_font, &out.micra_status_dot, nullptr);
+  make_panel_header(card, "MICRA", cap_font, cap_font, &out.micra_status_dot, nullptr,
+                    &out.micra_timer_label);
   out.brew_value = add_stat_row(card, "BREW", cap_font, val_font, &out.brew_set);
   out.boiler_value = add_stat_row(card, "STEAM", cap_font, val_font, &out.boiler_set);
 }
@@ -660,7 +682,7 @@ void build_micra_panel(lv_obj_t* parent, const lv_font_t* cap_font,
                        const lv_font_t* action_font, ui::HomeWidgets& out) {
   lv_obj_t* card = make_panel_card(parent, pad);
   make_panel_header(card, "MICRA", cap_font, status_font, &out.micra_status_dot,
-                    &out.micra_status_label);
+                    &out.micra_status_label, &out.micra_timer_label);
   lv_obj_t* body = make_panel_body(card);
   lv_obj_t* bcol = make_panel_column(body, "BREW", cap_font, val_font, &out.brew_value);
   make_stepper_group(bcol, btn_size, symbol_font, set_font, &out.brew_set,
@@ -688,9 +710,15 @@ void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_t* card = make_panel_card(parent, pad);
   make_panel_header(card, "SCALE", cap_font, status_font, &out.scale_status_dot,
                     &out.scale_status_label);
-  // Scale battery: icon-only level estimate to the right of the status text
-  // (same flex group as the dot + status). update_home shows/colors it when
-  // the connected scale reports a level.
+  // Scale battery to the right of the status text (same flex group as the
+  // dot + status): the percent in the caption's small font, so it reads like
+  // the "SCALE" label, then the level icon at the status size. update_home
+  // shows/colors them per the Battery display setting when the connected
+  // scale reports a level.
+  out.scale_batt_pct_label = lv_label_create(lv_obj_get_parent(out.scale_status_dot));
+  lv_obj_set_style_text_font(out.scale_batt_pct_label, cap_font, 0);
+  lv_obj_set_style_text_color(out.scale_batt_pct_label, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_add_flag(out.scale_batt_pct_label, LV_OBJ_FLAG_HIDDEN);
   out.scale_batt_label = lv_label_create(lv_obj_get_parent(out.scale_status_dot));
   lv_obj_set_style_text_font(out.scale_batt_label, status_font, 0);
   lv_obj_set_style_text_color(out.scale_batt_label, lv_color_hex(ui::theme::muted()), 0);
@@ -846,9 +874,9 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   out.tare_btn = out.tare_label = nullptr;
   out.flush_btn = out.flush_label = nullptr;  // large layouts only
   out.scale_connect_btn = out.scale_connect_label = nullptr;
-  out.scale_batt_label = nullptr;
+  out.scale_batt_label = out.scale_batt_pct_label = nullptr;
   out.status_dot = out.status_label = nullptr;
-  out.micra_status_dot = out.micra_status_label = nullptr;
+  out.micra_status_dot = out.micra_status_label = out.micra_timer_label = nullptr;
   out.scale_status_dot = out.scale_status_label = nullptr;
   out.shot_timer_label = out.target_minus = out.target_plus = nullptr;
   // All flow-graph widgets: only the large scale-aware layout builds them, so null
@@ -899,7 +927,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
       // small grey beneath the value (room for a bigger value at full width).
       lv_obj_t* card = make_panel_card(cards, card_pad);
       make_panel_header(card, "MICRA", c_cap, sub_font, &out.micra_status_dot,
-                        &out.micra_status_label);
+                        &out.micra_status_label, &out.micra_timer_label);
       lv_obj_t* body = make_panel_body(card);
       lv_obj_t* bcol = make_panel_column(body, "BREW", c_cap, ui::font_dp(28),
                                          &out.brew_value);
@@ -963,7 +991,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
 
     lv_obj_t* card = make_panel_card(row, card_pad);
     make_panel_header(card, "MICRA", hero_cap, panel_status, &out.micra_status_dot,
-                      &out.micra_status_label);
+                      &out.micra_status_label, &out.micra_timer_label);
     lv_obj_t* body = make_panel_body(card);
     // BREW / STEAM, each: caption -> big live value -> [-] set [+], centered in the
     // tall card. The set label is widened for the larger set font.
@@ -1027,6 +1055,23 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   // to the card's real content box.
   lv_obj_update_layout(parent);
   populate_flow_graph(graph_card, out);
+}
+
+// "<power> 27 min" after the MICRA caption while an auto-standby count runs;
+// minutes are rounded up so it never reads 0 while still armed.
+void set_micra_standby_timer(HomeWidgets& w, int remaining_s) {
+  if (w.micra_timer_label == nullptr) return;
+  const bool hidden = lv_obj_has_flag(w.micra_timer_label, LV_OBJ_FLAG_HIDDEN);
+  if (remaining_s < 0) {
+    if (!hidden) lv_obj_add_flag(w.micra_timer_label, LV_OBJ_FLAG_HIDDEN);
+    return;
+  }
+  char t[24];
+  const int mins = (remaining_s + 59) / 60;
+  if (mins >= 1) std::snprintf(t, sizeof(t), LV_SYMBOL_POWER " %d min", mins);
+  else std::snprintf(t, sizeof(t), LV_SYMBOL_POWER " <1 min");
+  ui::set_text(w.micra_timer_label, t);
+  if (hidden) lv_obj_remove_flag(w.micra_timer_label, LV_OBJ_FLAG_HIDDEN);
 }
 
 void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
@@ -1210,19 +1255,31 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   if (w.scale_status_label != nullptr)
     ui::set_text(w.scale_status_label, scale_txt);
 
-  // Scale battery: icon-only estimate beside the status, when reported.
+  // Scale battery beside the status, when reported: the level icon, the
+  // percent, or both (Settings > Scale > Device settings > Battery display).
   if (w.scale_batt_label != nullptr) {
-    if (scale.connected && scale.battery_valid) {
-      if (lv_obj_has_flag(w.scale_batt_label, LV_OBJ_FLAG_HIDDEN))
-        lv_obj_remove_flag(w.scale_batt_label, LV_OBJ_FLAG_HIDDEN);
-      ui::set_text(w.scale_batt_label, battery_icon(scale.battery_pct));
-      ui::set_text_color(w.scale_batt_label,
-                         scale.battery_pct <= scale_features.battery_low_pct
-                             ? ui::theme::alert()
-                             : ui::theme::muted());
-    } else if (!lv_obj_has_flag(w.scale_batt_label, LV_OBJ_FLAG_HIDDEN)) {
-      lv_obj_add_flag(w.scale_batt_label, LV_OBJ_FLAG_HIDDEN);
+    const bool have = scale.connected && scale.battery_valid;
+    const bool show_pct = have && w.scale_batt_style != 0;
+    const bool show_icon = have && w.scale_batt_style != 1;
+    const uint32_t color = have && scale.battery_pct <= scale_features.battery_low_pct
+                               ? ui::theme::alert() : ui::theme::muted();
+    auto show = [](lv_obj_t* o, bool on) {
+      if (o == nullptr || on != lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) return;
+      if (on) lv_obj_remove_flag(o, LV_OBJ_FLAG_HIDDEN);
+      else lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+    };
+    if (show_pct) {
+      char sb[8];
+      std::snprintf(sb, sizeof(sb), "%d%%", scale.battery_pct);
+      ui::set_text(w.scale_batt_pct_label, sb);
+      ui::set_text_color(w.scale_batt_pct_label, color);
     }
+    if (show_icon) {
+      ui::set_text(w.scale_batt_label, battery_icon(scale.battery_pct));
+      ui::set_text_color(w.scale_batt_label, color);
+    }
+    show(w.scale_batt_pct_label, show_pct);
+    show(w.scale_batt_label, show_icon);
   }
 
   // In-card scale actions: the connect toggle mirrors the link switch (accent =

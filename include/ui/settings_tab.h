@@ -54,16 +54,17 @@ struct SettingsWidgets {
   // Two pages so neither scrolls: the Schedule page holds one switch per line
   // (Enabled, Same every day, Smart Warm-up, Auto-standby) and a "Configure
   // schedule" entry; that page holds the day chips, the day's own switch, the
-  // On at / Off at pickers, the range bar and Copy times to. Every control
-  // below dims + stops taking touches while the page is gated (no paired
-  // Micra, or no trusted NTP time); sched_status says why.
-  lv_obj_t* sched_status = nullptr;            // gate explanation (hidden when OK)
+  // On at / Off at pickers, the range bar and Copy times to. Every schedule
+  // control dims + stops taking touches while the page is gated (no paired
+  // Micra, or no trusted NTP time) — silently; the manual says why.
   lv_obj_t* sched_enable_switch = nullptr;     // master on/off
   lv_obj_t* sched_same_switch = nullptr;       // "Same every day"
   lv_obj_t* sched_standby_switch = nullptr;    // Auto-standby: standby N min after the
   lv_obj_t* sched_standby_minus = nullptr;     // last shot (needs only a paired Micra)
   lv_obj_t* sched_standby_value = nullptr;
   lv_obj_t* sched_standby_plus = nullptr;
+  lv_obj_t* sched_timer_switch = nullptr;      // "Show auto-standby timer" on the Home card
+  lv_obj_t* sched_asb_status = nullptr;        // why auto-standby can't see shots (hidden when it can)
   lv_obj_t* sched_config_row = nullptr;        // "Configure schedule  <window>  >" entry
   lv_obj_t* sched_config_value = nullptr;      // the window summary (nullptr on compact)
   lv_obj_t* sched_day_row = nullptr;           // the Mon..Sun chip strip (hidden
@@ -157,6 +158,8 @@ struct SettingsWidgets {
   // Shot-graph X-window growth cycle button (Snap / Smooth / Continuous)
   lv_obj_t* xgrow_btn = nullptr;
   lv_obj_t* xgrow_value = nullptr;
+  lv_obj_t* sbatt_btn = nullptr;    // Scale > Device settings > Battery display
+  lv_obj_t* sbatt_value = nullptr;  // (Apollo's own preference: Icon / Percent / Icon + %)
   lv_obj_t* perf_overlay_switch = nullptr;   // on = show LVGL FPS/CPU overlay
   lv_obj_t* clean_lock_btn = nullptr;        // 30 s touch lockout for wiping the screen
   lv_obj_t* auto_connect_switch = nullptr;   // Micra > Bluetooth: connect to the

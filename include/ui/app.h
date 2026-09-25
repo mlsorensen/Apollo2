@@ -153,6 +153,9 @@ class App {
   void schedule_slider_released();         // ...and persist on release
   void schedule_warmup_adjust(int dir);    // warm-up minutes [-]/[+]
   void set_schedule_auto_standby(bool on); // Auto-standby: standby N min after the last shot
+  void set_show_standby_timer(bool on);    // "Show auto-standby timer" on the Home MICRA card
+  void cycle_scale_battery_style();        // Scale > Device settings > Battery display
+  void pose_standby_timer(int remaining_s);  // sim pose: the Home countdown
   void schedule_auto_standby_adjust(int dir);  // ...its minutes, 10-min steps
   void schedule_copy_times();              // "Copy times to" [Copy]: edited day -> target
   // Fresh unit: "Welcome" with the setup order (WiFi + time zone first, then
@@ -436,7 +439,7 @@ class App {
   bool schedule_warned_ = false;           // cloud-app notice shown this session
   bool settings_tab_was_active_ = false;   // Settings tab already showing when its button was pressed
   bool welcome_checked_ = false;           // the first refresh decided about the welcome
-  int schedule_gate_ = -1;                 // change-detect: bit0 paired, bit1 NTP; -1 unknown
+  int schedule_gate_ = -1;                 // change-detect: bit0 paired, bit1 NTP, bit2 shot source; -1 unknown
 
   // Shot-history view state. shot_view_ backs the open shot-card modal (the
   // card's graph paints from it on every redraw, so it must outlive the
