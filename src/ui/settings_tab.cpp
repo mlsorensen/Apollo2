@@ -386,10 +386,28 @@ void build_device_wifi_rows(lv_obj_t* page, const lv_font_t* text_font,
   out.wifi_status = lv_label_create(rst);
   lv_obj_set_style_text_color(out.wifi_status, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(out.wifi_status, text_font, 0);
-  // Two lines for a static address (gateway + mask beneath), right-aligned so
-  // both lines hug the row's edge.
-  lv_obj_set_style_text_align(out.wifi_status, LV_TEXT_ALIGN_RIGHT, 0);
   lv_label_set_text(out.wifi_status, "Off");
+
+  // Address: the IP with how it was assigned, and beneath it, smaller and
+  // muted, the gateway and mask the network actually applied. Shown only
+  // while connected (App hides the row otherwise) so the page stays short.
+  out.wifi_addr_row = make_setting_row(page, "Address", text_font);
+  lv_obj_t* col = lv_obj_create(out.wifi_addr_row);
+  lv_obj_remove_style_all(col);
+  lv_obj_remove_flag(col, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_size(col, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
+  lv_obj_set_style_pad_row(col, ui::dp(2), 0);
+  out.wifi_addr_value = lv_label_create(col);
+  lv_obj_set_style_text_color(out.wifi_addr_value, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(out.wifi_addr_value, text_font, 0);
+  lv_label_set_text(out.wifi_addr_value, "");
+  out.wifi_addr_sub = lv_label_create(col);
+  lv_obj_set_style_text_color(out.wifi_addr_sub, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(out.wifi_addr_sub, ui::font_dp(14), 0);
+  lv_label_set_text(out.wifi_addr_sub, "");
+  lv_obj_add_flag(out.wifi_addr_row, LV_OBJ_FLAG_HIDDEN);
 
   // Set up / Forget buttons share a row (mirrors the connection panel's actions).
   lv_obj_t* rb = lv_obj_create(page);

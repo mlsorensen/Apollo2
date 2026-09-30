@@ -588,10 +588,11 @@ page fits on screen with little to no scrolling.
 
 - ① **Enable** *(default off)* — join your home network. Used only for NTP time
   sync; all machine/scale control is local Bluetooth.
-- ② **Status** — `Off`, `Connecting`, or the network name and IP address with
-  how it was assigned, *(DHCP)* or *(static)*; a static address also lists
-  the gateway and subnet mask on a second line, so a wrong entry is visible
-  here without opening the portal.
+- ② **Status** — `Off`, `Connecting`, `Connected to ⟨network⟩`, or
+  `Connection failed`. While connected an **Address** row appears beneath it
+  with the IP and how it was assigned, *(DHCP)* or *(static)*, and the
+  gateway and subnet mask in use — so a wrong static entry is visible here
+  without opening the portal.
 - ③ **Set up WiFi** — starts the device's own access point (`Micra-Setup`) and
   setup page for entering credentials (same flow as token entry: scan the
   QR code on the screen with your phone's camera and the page pops up on its

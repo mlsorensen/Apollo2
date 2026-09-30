@@ -37,8 +37,8 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
   battery.
 - **Static IP address.** The WiFi setup page offers a network address
   choice: automatic (DHCP) as before, or static with IP, subnet mask, gateway
-  and optional DNS. Stats → Info and the WiFi page's Status row show which
-  one is in use, and Status lists the gateway and mask for a static one.
+  and optional DNS. Stats → Info and the WiFi page show which one is in
+  use; the WiFi page's Address row also lists the gateway and mask.
   Change it by running Set up WiFi again; the page pre-fills what is stored.
 - **Scheduled turn-on after a lost connection.** If the Micra's Bluetooth
   link dropped overnight, the device used to wait for a touch before

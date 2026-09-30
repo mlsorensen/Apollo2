@@ -245,7 +245,10 @@ struct SettingsWidgets {
 
   // --- WiFi (station + NTP time) ---
   lv_obj_t* wifi_switch = nullptr;      // enable/disable joining home WiFi
-  lv_obj_t* wifi_status = nullptr;      // "Connected  192.168.1.42" / "Not connected"
+  lv_obj_t* wifi_status = nullptr;      // "Connected to HomeWiFi" / "Off" / "Connecting"
+  lv_obj_t* wifi_addr_row = nullptr;    // Address row (hidden unless connected):
+  lv_obj_t* wifi_addr_value = nullptr;  //   "192.168.1.42 (DHCP)"
+  lv_obj_t* wifi_addr_sub = nullptr;    //   "gateway 192.168.1.1 · mask 255.255.255.0"
   lv_obj_t* wifi_setup_btn = nullptr;   // "Set up" -> AP credential portal
   lv_obj_t* wifi_forget_btn = nullptr;  // clear saved credentials
   lv_obj_t* tz_dropdown = nullptr;      // timezone picker (POSIX TZ under the

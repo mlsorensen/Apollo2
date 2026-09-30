@@ -4253,8 +4253,9 @@ void App::update_settings_view() {
         else lv_obj_remove_state(settings_.wifi_switch, LV_STATE_CHECKED);
       }
     }
-    char buf[128];
+    char buf[64];
     uint32_t color = ui::theme::muted();
+    const bool connected = network_->status() == core::NetState::Connected;
     switch (network_->status()) {
       case core::NetState::Disabled:
         std::snprintf(buf, sizeof(buf), "Off");
@@ -4263,16 +4264,7 @@ void App::update_settings_view() {
         std::snprintf(buf, sizeof(buf), "Connecting" LV_SYMBOL_WIFI);
         break;
       case core::NetState::Connected:
-        // How the address was assigned, and for a static one the gateway and
-        // mask on a second line — the portal is the only place they're set,
-        // so this is where a wrong entry shows up.
-        if (network_->static_ip()) {
-          std::snprintf(buf, sizeof(buf), "%s  %s (static)\ngateway %s  mask %s",
-                        network_->ssid(), network_->ip(), network_->gateway(),
-                        network_->netmask());
-        } else {
-          std::snprintf(buf, sizeof(buf), "%s  %s (DHCP)", network_->ssid(), network_->ip());
-        }
+        std::snprintf(buf, sizeof(buf), "Connected to %s", network_->ssid());
         color = ui::theme::ok();
         break;
       case core::NetState::Failed:
@@ -4282,6 +4274,23 @@ void App::update_settings_view() {
     }
     ui::set_text(settings_.wifi_status, buf);
     ui::set_text_color(settings_.wifi_status, color);
+    // Address row: IP + how it was assigned, gateway and mask beneath. The
+    // portal is the only place a static one is entered, so this is where a
+    // wrong entry shows up; for DHCP it says what the router handed out.
+    if (settings_.wifi_addr_row != nullptr) {
+      if (connected) {
+        char addr[48], sub[72];
+        std::snprintf(addr, sizeof(addr), "%s (%s)", network_->ip(),
+                      network_->static_ip() ? "static" : "DHCP");
+        std::snprintf(sub, sizeof(sub), "gateway %s  " LV_SYMBOL_BULLET "  mask %s",
+                      network_->gateway(), network_->netmask());
+        ui::set_text(settings_.wifi_addr_value, addr);
+        ui::set_text(settings_.wifi_addr_sub, sub);
+        lv_obj_remove_flag(settings_.wifi_addr_row, LV_OBJ_FLAG_HIDDEN);
+      } else {
+        lv_obj_add_flag(settings_.wifi_addr_row, LV_OBJ_FLAG_HIDDEN);
+      }
+    }
   }
 
   // Backup page: say what is actually on the card, and grey Restore when there
