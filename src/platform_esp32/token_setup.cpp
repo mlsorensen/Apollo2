@@ -221,6 +221,21 @@ void TokenSetup::handle_root() {
       page += "</option>";
     }
     page += kWifiPageAfterTz;
+    // A revisit (the network is already saved) shows the saved SSID and makes
+    // the password optional — blank keeps the saved one for that SSID — so a
+    // one-field change (a static address, the time zone) doesn't mean
+    // retyping credentials. The password itself is never sent to the page.
+    const std::string saved = config_.wifi_ssid();
+    if (!saved.empty()) {
+      page += "<script>document.getElementById('ssid').value='";
+      for (char c : saved) {  // SSIDs are free text: escape for a JS single-quoted literal
+        if (c == '\\' || c == '\'') page += '\\';
+        if (c == '<') { page += "\\x3c"; continue; }
+        page += c;
+      }
+      page += "';document.getElementById('pass').placeholder="
+              "'Password (leave blank to keep the saved one)';</script>";
+    }
     // Pre-fill the address block from what is stored, so a revisit to change
     // one field doesn't mean retyping the rest.
     if (config_.static_ip()) {
@@ -290,8 +305,16 @@ void TokenSetup::handle_wifi() {
       return;
     }
   }
-  config_.save_wifi(std::string(ssid.c_str()), std::string(pass.c_str()));
+  // Blank password + the SSID unchanged = keep the saved password (the page
+  // says so once a network is saved). A different SSID with a blank password
+  // is an open network, as it always was.
+  std::string new_pass(pass.c_str());
+  const std::string saved_ssid = config_.wifi_ssid();
+  const bool keep_pass = pass.length() == 0 && !saved_ssid.empty() && saved_ssid == ssid.c_str();
+  if (keep_pass) new_pass = config_.wifi_password();
+  config_.save_wifi(std::string(ssid.c_str()), new_pass);
   config_.set_wifi_enabled(true);
+  if (keep_pass) core::logf("TokenSetup: password kept for the saved network\n");
   config_.save_static_ip(want_static, want_static ? ip.c_str() : "", want_static ? mask.c_str() : "",
                          want_static ? gw.c_str() : "", want_static ? dns.c_str() : "");
   core::logf("TokenSetup: network address %s\n", want_static ? "static" : "DHCP");

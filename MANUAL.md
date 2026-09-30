@@ -607,8 +607,10 @@ page fits on screen with little to no scrolling.
   optional DNS server (the gateway when blank). A static address is handy if
   you bookmark the device's web page or reserve addresses on your router.
   There is no on‑device editor for these: to change or clear them, run
-  **Set up WiFi** again — the page comes up pre‑filled with what is stored,
-  and switching back to *automatic* is one tap. **Stats → Info** shows the
+  **Set up WiFi** again — the page comes up with your network name and
+  address settings pre‑filled, and the password can be left blank to keep the
+  saved one, so a one‑field change is just that. Switching back to
+  *automatic* is one tap. **Stats → Info** shows the
   current address with *(static)* or *(DHCP)* after it.
 
 - ③ **Forget** — clears the saved network.
