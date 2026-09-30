@@ -79,21 +79,55 @@ const char kWifiPage[] =
     // table), so the two stay one list.
     "<select id=tz name='tz' style='width:100%;padding:10px;box-sizing:border-box'>"
     "<option value=''>Time zone (optional &mdash; set later under Settings)</option>";
+// Network address: DHCP (the default) or a static address. Optional and
+// rarely needed, so it sits below the essentials and its fields only appear
+// once Static is picked. There is no on-device editor for these -- changing
+// them means running Set up WiFi again, which pre-fills what is stored
+// (handle_root splices the values in).
 const char kWifiPageAfterTz[] =
     "</select>"
+    "<select id=ipmode onchange='ipm()' style='width:100%;padding:10px;"
+    "box-sizing:border-box;margin-top:8px'>"
+    "<option value='dhcp'>Network address: automatic (DHCP)</option>"
+    "<option value='static'>Network address: static</option></select>"
+    "<div id=stat style='display:none;margin-top:8px'>"
+    "<input id=ip placeholder='IP address, e.g. 192.168.1.50' inputmode='decimal' "
+    "autocomplete='off' style='width:100%;padding:10px;box-sizing:border-box;margin-bottom:8px'>"
+    "<input id=mask placeholder='Subnet mask, e.g. 255.255.255.0' inputmode='decimal' "
+    "autocomplete='off' style='width:100%;padding:10px;box-sizing:border-box;margin-bottom:8px'>"
+    "<input id=gw placeholder='Gateway (router), e.g. 192.168.1.1' inputmode='decimal' "
+    "autocomplete='off' style='width:100%;padding:10px;box-sizing:border-box;margin-bottom:8px'>"
+    "<input id=dns placeholder='DNS server (optional; the gateway if blank)' "
+    "inputmode='decimal' autocomplete='off' "
+    "style='width:100%;padding:10px;box-sizing:border-box'>"
+    "</div>"
     "<p id=wmsg style='font-size:.9em'></p>"
     "<p><button style='padding:10px 24px;font-size:1em'>Save WiFi</button></p>"
     "</form>"
-    "<script>function submitWifi(){"
+    "<script>function ipm(){document.getElementById('stat').style.display="
+    "document.getElementById('ipmode').value=='static'?'block':'none';}"
+    "function q(v){return /^(25[0-5]|2[0-4]\\d|1?\\d?\\d)(\\.(25[0-5]|2[0-4]\\d|1?\\d?\\d)){3}$/"
+    ".test(v);}"
+    "function submitWifi(){"
     "var s=document.getElementById('ssid').value.trim();"
     "var p=document.getElementById('pass').value;"
     "var z=document.getElementById('tz').value;"
     "var m=document.getElementById('wmsg');"
     "if(!s){m.style.color='#c00';m.textContent='Enter a network name.';return false;}"
+    "var st=document.getElementById('ipmode').value=='static';"
+    "var ip=document.getElementById('ip').value.trim(),"
+    "mk=document.getElementById('mask').value.trim(),"
+    "gw=document.getElementById('gw').value.trim(),"
+    "dn=document.getElementById('dns').value.trim();"
+    "if(st&&!(q(ip)&&q(mk)&&q(gw)&&(!dn||q(dn)))){m.style.color='#c00';"
+    "m.textContent='Static address: fill IP, subnet mask and gateway as four numbers, "
+    "e.g. 192.168.1.50.';return false;}"
     "m.style.color='#888';m.textContent='Saving\\u2026';"
     "fetch('/wifi',{method:'POST',headers:{'Content-Type':"
     "'application/x-www-form-urlencoded'},body:'ssid='+encodeURIComponent(s)+"
-    "'&pass='+encodeURIComponent(p)+(z?'&tz='+encodeURIComponent(z):'')})"
+    "'&pass='+encodeURIComponent(p)+(z?'&tz='+encodeURIComponent(z):'')+"
+    "'&ipmode='+(st?'static':'dhcp')+(st?'&ip='+encodeURIComponent(ip)+'&mask='+"
+    "encodeURIComponent(mk)+'&gw='+encodeURIComponent(gw)+'&dns='+encodeURIComponent(dn):'')})"
     ".then(function(r){return r.text();})"
     ".then(function(t){m.style.color='#0a0';m.textContent=t;})"
     ".catch(function(){m.style.color='#c00';"
@@ -187,6 +221,23 @@ void TokenSetup::handle_root() {
       page += "</option>";
     }
     page += kWifiPageAfterTz;
+    // Pre-fill the address block from what is stored, so a revisit to change
+    // one field doesn't mean retyping the rest.
+    if (config_.static_ip()) {
+      page += "<script>document.getElementById('ipmode').value='static';ipm();";
+      const struct { const char* id; std::string val; } fields[] = {
+          {"ip", config_.static_ip_addr()}, {"mask", config_.static_ip_mask()},
+          {"gw", config_.static_ip_gateway()}, {"dns", config_.static_ip_dns()}};
+      for (const auto& f : fields) {
+        if (f.val.empty()) continue;
+        page += "document.getElementById('";
+        page += f.id;
+        page += "').value='";
+        page += f.val.c_str();  // a stored dotted quad: digits and dots only
+        page += "';";
+      }
+      page += "</script>";
+    }
   }
   page += kPageTail;
   server_->send(200, "text/html", page);
@@ -222,8 +273,28 @@ void TokenSetup::handle_wifi() {
     server_->send(200, "text/plain", "Enter a network name.");
     return;
   }
+  // Network address: DHCP unless the form said static with four parseable
+  // quads (the page validates too; this guards a hand-made POST). A bad static
+  // set is refused outright rather than half-saved.
+  const bool want_static = server_->arg("ipmode") == "static";
+  String ip = server_->arg("ip"), mask = server_->arg("mask"), gw = server_->arg("gw"),
+         dns = server_->arg("dns");
+  ip.trim(); mask.trim(); gw.trim(); dns.trim();
+  if (want_static) {
+    IPAddress a, m, g, d;
+    if (!a.fromString(ip) || !m.fromString(mask) || !g.fromString(gw) ||
+        (dns.length() > 0 && !d.fromString(dns))) {
+      server_->send(200, "text/plain",
+                    "Static address not saved: IP, subnet mask and gateway must each be "
+                    "four numbers like 192.168.1.50. Nothing was changed.");
+      return;
+    }
+  }
   config_.save_wifi(std::string(ssid.c_str()), std::string(pass.c_str()));
   config_.set_wifi_enabled(true);
+  config_.save_static_ip(want_static, want_static ? ip.c_str() : "", want_static ? mask.c_str() : "",
+                         want_static ? gw.c_str() : "", want_static ? dns.c_str() : "");
+  core::logf("TokenSetup: network address %s\n", want_static ? "static" : "DHCP");
   // Optional time zone from the same form. Only values from our own table are
   // accepted (the page offers nothing else; this guards a hand-made POST).
   const String tz = server_->arg("tz");

@@ -41,8 +41,11 @@ bool is_unit_key(const char* k) {
 // (Network::begin joins on ssid non-empty, and an empty PSK is a valid open-
 // network attempt that can never succeed), so the enable flag goes too.
 bool is_wifi_key(const char* k) {
-  return std::strcmp(k, "ssid") == 0 || std::strcmp(k, "wifipass") == 0 ||
-         std::strcmp(k, "wifi_en") == 0;
+  static const char* kNet[] = {"ssid", "wifipass", "wifi_en",
+                               "ipstatic", "ipaddr", "ipmask", "ipgw", "ipdns"};
+  for (const char* n : kNet)
+    if (std::strcmp(k, n) == 0) return true;
+  return false;
 }
 
 // Only the token itself. The saved MAC and name identify the machine, they

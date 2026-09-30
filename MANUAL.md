@@ -61,7 +61,8 @@ Settings
 │  ├─ Display     — Brightness* · Screen timeout · Idle screen (Lion/Apollo/Alternate/Dim/Off)
 │  │               · Theme · Fahrenheit · Button sounds* · Performance overlay
 │  ├─ Time & date — Time · Date · 24-hour · Timezone
-│  ├─ WiFi        — Enable · Status · Set up WiFi → QR portal · Forget
+│  ├─ WiFi        — Enable · Status · Set up WiFi → QR portal (network, time zone,
+│  │                 DHCP / static address) · Forget
 │  │               · Auto time (NTP) · Check for updates (Off/Boot/Daily/Hourly)
 │  │                 → notice → Install now · Beta updates
 │  └─ Backup      — On the card · Back up to card · Restore from card
@@ -71,7 +72,7 @@ Stats
 ├─ Brew | Boiler — temperature history graphs (+/− zoom)
 ├─ History — headline stats (tap → reset) · month filter · shot list
 │            └─ tap a shot → full-screen shot card (with delete)
-└─ Info — firmware (→ Check for updates) · uptime · IP · NTP synced · Diagnostic log
+└─ Info — firmware (→ Check for updates) · uptime · IP (DHCP/static) · NTP synced · Diagnostic log
           (tap → viewer) · Micra details
 
   * = only on boards whose hardware supports it (see the note above)
@@ -597,6 +598,16 @@ page fits on screen with little to no scrolling.
 
   <img src="docs/img/manual/join-modal.png" width="70%" alt="The QR join modal">
 
+  The page's last control is **Network address**: *automatic (DHCP)*, the
+  default, or *static*. Static reveals four fields — IP address, subnet mask
+  (255.255.255.0 on most home networks), gateway (your router), and an
+  optional DNS server (the gateway when blank). A static address is handy if
+  you bookmark the device's web page or reserve addresses on your router.
+  There is no on‑device editor for these: to change or clear them, run
+  **Set up WiFi** again — the page comes up pre‑filled with what is stored,
+  and switching back to *automatic* is one tap. **Stats → Info** shows the
+  current address with *(static)* or *(DHCP)* after it.
+
 - ③ **Forget** — clears the saved network.
 - ④ **Auto time (NTP)** *(default on)* — sync the clock over WiFi while
   connected. (The timezone it applies is set under **Time & date**.)
@@ -774,7 +785,8 @@ action lives directly on the root:
 ![Device info](docs/img/manual/stats-info.png)
 
 - **Info** — device details: our firmware version + git revision, uptime,
-  battery/USB state with a runtime estimate, **NTP synced** (how long ago the
+  battery/USB state with a runtime estimate, the **IP address** with how it
+  was assigned — *(DHCP)* or *(static)*, see [WiFi](#wifi) —, **NTP synced** (how long ago the
   clock last synced over the internet, or "not since boot"), and the machine's
   Device Information (manufacturer, model, serial, firmware) read over Bluetooth.
   - **Check for updates** — next to the firmware version, tap it to check the

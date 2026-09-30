@@ -82,6 +82,13 @@ constexpr char kStandbyTimerKey[] = "schasbt";  // Home MICRA card auto-standby 
 constexpr char kWifiEnKey[] = "wifi_en";
 constexpr char kWifiSsidKey[] = "ssid";
 constexpr char kWifiPassKey[] = "wifipass";
+// Static IP (v1.0.0-beta.7, ADDs): mode + the four dotted quads as typed on
+// the portal. Travel with the WiFi group in a settings backup.
+constexpr char kIpStaticKey[] = "ipstatic";
+constexpr char kIpAddrKey[] = "ipaddr";
+constexpr char kIpMaskKey[] = "ipmask";
+constexpr char kIpGwKey[] = "ipgw";
+constexpr char kIpDnsKey[] = "ipdns";
 constexpr char kTzKey[] = "tz";
 constexpr char kNtpKey[] = "ntp";
 constexpr char kNtpEnKey[] = "ntp_en";
@@ -758,6 +765,31 @@ void Config::clear_wifi() {
   p.begin(kNamespace, /*readOnly=*/false);
   p.remove(kWifiSsidKey);
   p.remove(kWifiPassKey);
+  p.end();
+}
+
+bool Config::static_ip() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
+  const bool v = p.isKey(kIpStaticKey) ? p.getBool(kIpStaticKey, false) : false;
+  p.end();
+  return v;
+}
+
+std::string Config::static_ip_addr() const { return read_key(kIpAddrKey); }
+std::string Config::static_ip_mask() const { return read_key(kIpMaskKey); }
+std::string Config::static_ip_gateway() const { return read_key(kIpGwKey); }
+std::string Config::static_ip_dns() const { return read_key(kIpDnsKey); }
+
+void Config::save_static_ip(bool on, const std::string& addr, const std::string& mask,
+                            const std::string& gateway, const std::string& dns) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kIpStaticKey, on);
+  p.putString(kIpAddrKey, addr.c_str());
+  p.putString(kIpMaskKey, mask.c_str());
+  p.putString(kIpGwKey, gateway.c_str());
+  p.putString(kIpDnsKey, dns.c_str());
   p.end();
 }
 

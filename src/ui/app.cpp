@@ -4127,11 +4127,12 @@ void App::update_stats_view() {
     else
       std::snprintf(up, sizeof(up), "%us", static_cast<unsigned>(up_s));
 
-    // IP only means anything while the station is actually connected.
-    const char* ip = (network_ != nullptr &&
-                      network_->status() == core::NetState::Connected)
-                         ? network_->ip()
-                         : "";
+    // IP only means anything while the station is actually connected; say how
+    // it was assigned, since a static one is set (and changed) on the portal.
+    char ip[48] = "";
+    if (network_ != nullptr && network_->status() == core::NetState::Connected)
+      std::snprintf(ip, sizeof(ip), "%s (%s)", network_->ip(),
+                    network_->static_ip() ? "static" : "DHCP");
     // NTP: honest "last real sync" (the RTC-provided boot time doesn't count).
     char ntp[24];
     const int nsec = (network_ != nullptr) ? network_->ntp_seconds_since_sync() : -1;

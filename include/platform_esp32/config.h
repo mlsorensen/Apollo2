@@ -128,6 +128,15 @@ class Config {
   std::string wifi_password() const;  // saved PSK (plaintext in NVS), or ""
   void save_wifi(const std::string& ssid, const std::string& password);
   void clear_wifi();          // forget the saved network (incl. password)
+  // Static address (portal option; default DHCP). Dotted quads as typed;
+  // Network validates again before applying. dns "" = use the gateway.
+  bool static_ip() const;
+  std::string static_ip_addr() const;
+  std::string static_ip_mask() const;
+  std::string static_ip_gateway() const;
+  std::string static_ip_dns() const;
+  void save_static_ip(bool on, const std::string& addr, const std::string& mask,
+                      const std::string& gateway, const std::string& dns);
   std::string timezone() const;    // POSIX TZ string (default "UTC0")
   void set_timezone(const std::string& tz);
   std::string ntp_server() const;  // NTP host (default "pool.ntp.org")

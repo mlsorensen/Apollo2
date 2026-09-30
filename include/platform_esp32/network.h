@@ -41,6 +41,7 @@ class Network : public core::INetwork {
   core::NetState status() const override { return status_; }
   const char* ssid() const override;
   const char* ip() const override { return ip_.c_str(); }
+  bool static_ip() const override;
 
   bool enabled() const override;
   void set_enabled(bool on) override;

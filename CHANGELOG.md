@@ -35,6 +35,10 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 - **Scale battery as icon, percent or both.** Settings → Scale → Device
   settings → Battery display picks how the SCALE card shows the scale's
   battery.
+- **Static IP address.** The WiFi setup page offers a network address
+  choice: automatic (DHCP) as before, or static with IP, subnet mask, gateway
+  and optional DNS. Stats → Info shows which one is in use. Change it by
+  running Set up WiFi again; the page pre-fills what is stored.
 - **Scheduled turn-on after a lost connection.** If the Micra's Bluetooth
   link dropped overnight, the device used to wait for a touch before
   reconnecting, so a morning turn-on could find it disconnected and be

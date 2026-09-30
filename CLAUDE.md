@@ -41,6 +41,19 @@ together, and re-prove a rev v3 P4 from Chrome before deploying. A site-only
 hot deploy = build, then commit index.html + vendor/ on gh-pages (the OWNER
 pushes it; the assistant's push is refused as a CI-gate bypass).
 
+## Static IP (v1.0.0-beta.7)
+
+Set ONLY on the WiFi setup portal (TokenSetup's WiFi page: a "Network
+address" select, DHCP default; Static reveals ip/mask/gw/dns, validated by
+the page's regex AND by IPAddress::fromString in handle_wifi — a bad set is
+refused, nothing half-saved). No on-device editor by design (owner): change
+it by re-running Set up WiFi; handle_root pre-fills the stored values.
+Network::start_station applies WiFi.config() before begin(), or an all-zero
+config() to return to DHCP within the same boot. NVS keys (ADDs) `ipstatic`
+(bool) + `ipaddr`/`ipmask`/`ipgw`/`ipdns` (strings, as typed); they travel in
+the backup's WiFi opt-out group. INetwork::static_ip() (default false) feeds
+the Info row "x.x.x.x (static|DHCP)".
+
 ## OTA self-update (v0.11+)
 
 Two separate parts: a CHECK/notify port (`update_check.*`) and an INSTALL that
@@ -156,8 +169,9 @@ is on — swap hardware and every shot survives while every preference is lost.
 - PER-UNIT KEYS never leave the board and survive the erase: `padsense`,
   `paddrive` (repair knobs for a damaged pad), `otainst` (install boot flag),
   `lastunix` (clock seed), `_init`.
-- The two credentials — `wifipass` (with `ssid`/`wifi_en`: an SSID with no PSK
-  is a join that can never succeed) and `token` — are OPT-OUT switches in the
+- The two credentials — `wifipass` (with `ssid`/`wifi_en`, and since beta.7
+  the static-address keys `ipstatic`/`ipaddr`/`ipmask`/`ipgw`/`ipdns`: an
+  SSID with no PSK is a join that can never succeed) and `token` — are OPT-OUT switches in the
   confirm modal, because the file is plain text on a card that leaves the
   machine. `mac`/`name` always travel: they identify the machine, not open it.
 - A backup written by NEWER firmware is refused (`core::semver_newer`, shared

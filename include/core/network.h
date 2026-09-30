@@ -21,7 +21,10 @@ class INetwork {
 
   virtual NetState status() const = 0;
   virtual const char* ssid() const = 0;  // configured SSID ("" if none)
-  virtual const char* ip() const = 0;    // DHCP address when Connected, else ""
+  virtual const char* ip() const = 0;    // address when Connected, else ""
+  // True when the saved network uses a static address (set on the setup
+  // portal) rather than DHCP. Display only — the Info page's IP row.
+  virtual bool static_ip() const { return false; }
 
   // Master on/off. Disabling drops the station; enabling (re)connects from the
   // saved credentials. Persisted.

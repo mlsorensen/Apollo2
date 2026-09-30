@@ -64,6 +64,22 @@ void Network::start_station() {
                  heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)));
   WiFi.mode(WIFI_STA);
   WiFi.setTxPower(kTxPower);
+  // Static address, if the portal set one. All-zero config() = back to DHCP,
+  // which matters when a static setup is switched off within the same boot
+  // (the WiFi library keeps the last config otherwise).
+  IPAddress ip, mask, gw, dns;
+  if (config_.static_ip() && ip.fromString(config_.static_ip_addr().c_str()) &&
+      mask.fromString(config_.static_ip_mask().c_str()) &&
+      gw.fromString(config_.static_ip_gateway().c_str())) {
+    const std::string dns_s = config_.static_ip_dns();
+    if (dns_s.empty() || !dns.fromString(dns_s.c_str())) dns = gw;
+    WiFi.config(ip, gw, mask, dns);
+    core::logf("Network: static IP %s mask %s gw %s dns %s\n", ip.toString().c_str(),
+               mask.toString().c_str(), gw.toString().c_str(), dns.toString().c_str());
+  } else {
+    if (config_.static_ip()) core::logf("Network: static IP fields invalid; using DHCP\n");
+    WiFi.config(IPAddress(), IPAddress(), IPAddress());  // DHCP
+  }
   WiFi.begin(ssid.c_str(), pass.c_str());
   // Disable WiFi modem sleep (the Arduino default is WIFI_PS_MIN_MODEM). On the
   // native-WiFi S3 the station otherwise sleeps between DTIM beacons and drops
@@ -195,6 +211,8 @@ const char* Network::ssid() const {
 }
 
 bool Network::enabled() const { return config_.wifi_enabled(); }
+
+bool Network::static_ip() const { return config_.static_ip(); }
 
 void Network::set_enabled(bool on) {
   config_.set_wifi_enabled(on);
