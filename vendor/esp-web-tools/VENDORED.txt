@@ -1,0 +1,3 @@
+esp-web-tools 10.4.0 (https://github.com/esphome/esp-web-tools, Apache-2.0)
+rebuilt with esptool-js 0.7.0 by tools/build_esp_web_tools.sh.
+See that script for why.
