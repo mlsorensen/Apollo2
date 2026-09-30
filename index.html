@@ -218,6 +218,12 @@
   const sel = document.getElementById('version');
   const badge = document.getElementById('ver');
   const warn = document.getElementById('oldwarn');
+  // Declared up here because apply() below touches them on the first call:
+  // a `const` further down is in its temporal dead zone at that point, and
+  // the ReferenceError killed the whole script (no version list, a dead
+  // Detect button) from the beta-channel change until 2026-09-29.
+  const betabox = document.getElementById('showbeta');
+  const betawarn = document.getElementById('betawarn');
   let latest = window.APOLLO2_VERSION || '';
 
   // A P4 card carries two images (data-board = rev v1.x, data-board-rev3 =
@@ -249,8 +255,6 @@
   // directory is a version directory — so the channel is just which list feeds
   // this dropdown. ?beta=1 opens the page with pre-releases already shown, for
   // handing a tester a link.
-  const betabox = document.getElementById('showbeta');
-  const betawarn = document.getElementById('betawarn');
   if (new URLSearchParams(location.search).get('beta') === '1') betabox.checked = true;
 
   function loadVersions(keepSelection) {
