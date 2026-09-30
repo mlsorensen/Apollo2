@@ -1,5 +1,7 @@
 #include "core/schedule.h"
 
+#include "core/system.h"
+
 namespace core {
 
 bool operator==(const ScheduleConfig& a, const ScheduleConfig& b) {
@@ -96,8 +98,33 @@ bool ScheduleEngine::in_window(int now_mow, int trigger_mow) {
 void ScheduleEngine::clear_latches() {
   on_latched_ = -1;
   off_latched_ = -1;
+  on_open_ = -1;
+  off_open_ = -1;
   defer_ = false;
   idle_timing_ = false;
+}
+
+namespace {
+const char* const kDay[7] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
+}  // namespace
+
+// A trigger is inside its window but can't fire yet. Remember it (once) with
+// the reason, so a window that closes unfired leaves a line in the log ring —
+// otherwise a missed morning is indistinguishable from a disabled schedule.
+void ScheduleEngine::note_open(int16_t& open_slot, int slot, const char* what,
+                               const char* why) {
+  if (open_slot == slot) return;
+  open_slot = static_cast<int16_t>(slot);
+  logf("schedule: %s at %s %02d:%02d is due but waiting: %s\n", what,
+       kDay[(slot / kMinutesPerDay) % 7], (slot % kMinutesPerDay) / 60, slot % 60, why);
+}
+
+void ScheduleEngine::close_expired(int16_t& open_slot, int now_mow, const char* what) {
+  if (open_slot < 0 || in_window(now_mow, open_slot)) return;
+  logf("schedule: %s at %s %02d:%02d MISSED — its window closed unfired\n", what,
+       kDay[(open_slot / kMinutesPerDay) % 7], (open_slot % kMinutesPerDay) / 60,
+       open_slot % 60);
+  open_slot = -1;
 }
 
 void ScheduleEngine::set_config(const ScheduleConfig& c, const ScheduleInputs& in) {
@@ -168,6 +195,20 @@ ScheduleAction ScheduleEngine::tick(const ScheduleInputs& in) {
   if (!cfg_.enabled || !in.time_trusted || !in.now.valid || !in.now.date_valid) {
     defer_ = false;  // latches stay: an NTP blip must not re-fire a consumed slot
     idle_timing_ = false;
+    // Enabled with a real date but no trusted clock: a trigger passing by
+    // right now is being missed — say so (once per slot).
+    if (cfg_.enabled && in.now.valid && in.now.date_valid) {
+      const int now_mow = minute_of_week(in.now);
+      for (int w = 0; w < 7; ++w) {
+        if (!cfg_.day(w).enabled) continue;
+        if (in_window(now_mow, on_trigger(w)) && on_latched_ != on_trigger(w))
+          note_open(on_open_, on_trigger(w), "turn-on", "clock not trusted (no NTP sync this boot)");
+        if (in_window(now_mow, off_trigger(w)) && off_latched_ != off_trigger(w))
+          note_open(off_open_, off_trigger(w), "standby", "clock not trusted (no NTP sync this boot)");
+      }
+      close_expired(on_open_, now_mow, "turn-on");
+      close_expired(off_open_, now_mow, "standby");
+    }
     return asb;
   }
   const int now_mow = minute_of_week(in.now);
@@ -205,11 +246,14 @@ ScheduleAction ScheduleEngine::tick(const ScheduleInputs& in) {
       // window still fires; past the window the slot just passes.
       if (connected) {
         on_latched_ = static_cast<int16_t>(on);
+        on_open_ = -1;
         defer_ = false;  // an "on" inside a pending standby wins
         idle_timing_ = false;
         asb_armed_ = false;  // ...and so does the schedule over an auto-standby count
         fired_on_weekday_ = static_cast<int8_t>(w);
         if (in.power != Power::On) return ScheduleAction::TurnOn;
+      } else {
+        note_open(on_open_, on, "turn-on", "Micra not connected");
       }
     }
 
@@ -217,14 +261,19 @@ ScheduleAction ScheduleEngine::tick(const ScheduleInputs& in) {
     if (in_window(now_mow, off) && off_latched_ != off) {
       if (connected) {
         off_latched_ = static_cast<int16_t>(off);
+        off_open_ = -1;
         if (in.power == Power::On) {
           if (in.phase == ShotPhase::kIdle) return ScheduleAction::Standby;
           defer_ = true;  // mid-shot / in review: wait for quiet
           idle_timing_ = false;
         }
+      } else {
+        note_open(off_open_, off, "standby", "Micra not connected");
       }
     }
   }
+  close_expired(on_open_, now_mow, "turn-on");
+  close_expired(off_open_, now_mow, "standby");
   return asb;
 }
 

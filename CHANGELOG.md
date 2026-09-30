@@ -35,6 +35,11 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 - **Scale battery as icon, percent or both.** Settings → Scale → Device
   settings → Battery display picks how the SCALE card shows the scale's
   battery.
+- **Scheduled turn-on after a lost connection.** If the Micra's Bluetooth
+  link dropped overnight, the device used to wait for a touch before
+  reconnecting, so a morning turn-on could find it disconnected and be
+  skipped. It now reconnects while the screen is asleep, and a skipped
+  trigger is recorded in the diagnostic log with the reason.
 - **Crash-dump download no longer crashes P4 boards.** Fetching the crash
   dump from the device's web page (Stats → Info, or /coredump) made every P4
   reboot and lose the dump it was serving. It now downloads.

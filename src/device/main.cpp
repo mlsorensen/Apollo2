@@ -772,23 +772,31 @@ void loop() {
   }
   g_network.poll();          // drive the WiFi station state machine + NTP->RTC
 
-  // Park BLE (re)connect attempts while the machine is idle (screensaver on)
-  // AND while the setup portal's AP is up. Idle: stops the pointless "connect
-  // failed" churn and frees the internal RAM the radio's connecting holds,
-  // which is what lets the daily update check run reliably on the heap-tight
-  // S3. Portal: every connect attempt is a multi-second radio hold that the
-  // AP's beacons and the phone's join/DHCP handshake must squeeze around —
-  // HW-observed on the 4.3C (2026-09-12): with the scale absent, 13 s
-  // attempts ran throughout a portal session and the phone took ~90 s to
-  // join. The Micra link is released the moment a token is submitted, since
-  // the portal closes on that connect. Only NEW attempts are suppressed; an
-  // established Micra/scale link stays connected.
+  // Park BLE (re)connect attempts:
+  //  - SCALE: while the machine is idle (screensaver on) AND while the setup
+  //    portal's AP is up. Idle: stops the pointless "connect failed" churn
+  //    and frees the internal RAM the radio's connecting holds, which is what
+  //    lets the daily update check run reliably on the heap-tight S3.
+  //  - MICRA: while the portal is up ONLY. It used to park on the saver too,
+  //    and that defeated the schedule (owner, 2026-09-30): a link lost
+  //    overnight stayed lost until the first touch, so a 06:30 turn-on found
+  //    the Micra disconnected and was dropped — the saver park was only ever
+  //    meant for scale discovery. A connected Micra costs no more RAM asleep
+  //    than awake, and the reconnect churn exists only while the machine is
+  //    unreachable; the update check's own heap gate covers that case.
+  //  Portal: every connect attempt is a multi-second radio hold that the AP's
+  //  beacons and the phone's join/DHCP handshake must squeeze around —
+  //  HW-observed on the 4.3C (2026-09-12): with the scale absent, 13 s
+  //  attempts ran throughout a portal session and the phone took ~90 s to
+  //  join. The Micra link is released the moment a token is submitted, since
+  //  the portal closes on that connect. Only NEW attempts are suppressed; an
+  //  established Micra/scale link stays connected.
   {
     static bool micra_prev = false, scale_prev = false;
     const bool saver = g_app.screensaver_active();
     const bool portal = g_token_setup.active();
     const bool park_scale = saver || portal;
-    const bool park_micra = saver || (portal && !g_token_setup.token_submitted());
+    const bool park_micra = portal && !g_token_setup.token_submitted();
     if (park_micra != micra_prev) {
       micra_prev = park_micra;
       g_micra.pause_connects(park_micra);

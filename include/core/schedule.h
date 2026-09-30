@@ -28,6 +28,9 @@
 //     kStandbyGraceMs, then fires if the machine is still on.
 //   - Nothing fires unless the caller vouches for the clock (time_trusted:
 //     NTP configured + a real sync landed this boot) and the date is real.
+//   - A trigger whose window closes WITHOUT firing is logged with the reason
+//     (link down / clock not trusted) — the only trace a missed morning
+//     leaves, since a dropped slot is otherwise silent (2026-09-30).
 //
 // Auto-standby (owner's spec, 2026-09-23) rides along in the same engine so
 // its one interaction with the schedule is in one place:
@@ -171,12 +174,17 @@ class ScheduleEngine {
  private:
   static bool in_window(int now_mow, int trigger_mow);
   void clear_latches();
+  // Log-and-forget bookkeeping for the two "open" slots above.
+  void note_open(int16_t& open_slot, int slot, const char* what, const char* why);
+  void close_expired(int16_t& open_slot, int now_mow, const char* what);
   ScheduleAction tick_auto_standby(const ScheduleInputs& in);
 
   ScheduleConfig cfg_{};
   bool loaded_ = false;
   int16_t on_latched_ = -1;   // minute-of-week slot already consumed, -1 none
   int16_t off_latched_ = -1;
+  int16_t on_open_ = -1;      // slot in its window, waiting (link / clock), -1 none:
+  int16_t off_open_ = -1;     // logged as missed if the window closes unfired
   bool defer_ = false;         // an off trigger is waiting for kIdle + grace
   bool idle_timing_ = false;   // the grace timer is running
   uint32_t idle_since_ms_ = 0;

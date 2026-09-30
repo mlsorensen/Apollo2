@@ -4,11 +4,23 @@
 // LVGL/Arduino-free by rule), so it runs in under a second.
 
 #include <cassert>
+#include <cstdarg>
 #include <cstdio>
 
 #include "core/schedule.h"
 
 using namespace core;
+
+// The engine logs missed triggers through core::logf, which each platform
+// implements; the host check just prints them.
+namespace core {
+void logf(const char* fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  std::vprintf(fmt, ap);
+  va_end(ap);
+}
+}  // namespace core
 
 namespace {
 

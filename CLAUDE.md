@@ -186,7 +186,13 @@ per weekday, with a global warm-up lead. Shape of it:
   covers the auto-flush), then fires if still on; nothing fires unless
   `App::ntp_ready()` (WiFi enabled + NTP enabled + `ntp_seconds_since_sync()
   >= 0`, i.e. a real sync THIS boot) and the date is real. The warm-up lead
-  may wrap into the previous evening (minute-of-week arithmetic).
+  may wrap into the previous evening (minute-of-week arithmetic). A trigger
+  whose window closes UNFIRED logs `schedule: ... MISSED` with the reason
+  it was waiting (Micra not connected / clock not trusted) — added
+  2026-09-30 after a cold morning left no trace. Same day: main.cpp no longer
+  parks Micra reconnects under the screensaver (portal-only now; the saver
+  park was always meant for the scale) — a link lost overnight used to stay
+  lost until the first touch, which is the leading (unproven) explanation.
 - Gate on the page (`sync_schedule_gate`, change-detected): paired Micra AND
   ntp_ready; otherwise every schedule control is DISABLED (per-widget 40 %
   opa, not a container) SILENTLY — the owner dropped the explanatory line
