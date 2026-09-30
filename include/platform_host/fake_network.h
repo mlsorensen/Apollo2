@@ -17,6 +17,10 @@ class FakeNetwork : public core::INetwork {
   const char* ssid() const override { return saved_ ? "HomeWiFi" : ""; }
   void set_saved(bool on) { saved_ = on; }  // pose "no network saved yet"
   const char* ip() const override { return enabled_ ? "192.168.1.42" : ""; }
+  bool static_ip() const override { return static_; }
+  void set_static(bool on) { static_ = on; }  // pose the static-address status row
+  const char* gateway() const override { return enabled_ ? "192.168.1.1" : ""; }
+  const char* netmask() const override { return enabled_ ? "255.255.255.0" : ""; }
 
   bool enabled() const override { return enabled_; }
   void set_enabled(bool on) override { enabled_ = on; }
@@ -43,6 +47,7 @@ class FakeNetwork : public core::INetwork {
   bool ntp_en_ = true;
   bool synced_ = false;
   bool saved_ = true;
+  bool static_ = false;
   std::string tz_ = "AEST-10AEDT,M10.1.0,M4.1.0";  // Sydney, for previews
   std::string ntp_ = "pool.ntp.org";
 };

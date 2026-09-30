@@ -54,6 +54,8 @@ void Network::start_station() {
     return;
   }
   ip_.clear();
+  gw_.clear();
+  mask_.clear();
   // WiFi-NO_MEM diagnosis (esp_wifi_init fails with ESP_ERR_NO_MEM on the
   // 4.3C): log what internal RAM the stack actually has to work with at init
   // time — total free + largest contiguous block (fragmentation shows up as a
@@ -95,11 +97,15 @@ void Network::start_station() {
 void Network::stop_station() {
   WiFi.disconnect(/*wifioff=*/true);
   ip_.clear();
+  gw_.clear();
+  mask_.clear();
   status_ = core::NetState::Disabled;
 }
 
 void Network::on_connected() {
   ip_ = WiFi.localIP().toString().c_str();
+  gw_ = WiFi.gatewayIP().toString().c_str();
+  mask_ = WiFi.subnetMask().toString().c_str();
   status_ = core::NetState::Connected;
   from_portal_ = false;
   core::logf("Network: connected, IP=%s\n", ip_.c_str());

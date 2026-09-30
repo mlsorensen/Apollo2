@@ -4253,7 +4253,7 @@ void App::update_settings_view() {
         else lv_obj_remove_state(settings_.wifi_switch, LV_STATE_CHECKED);
       }
     }
-    char buf[64];
+    char buf[128];
     uint32_t color = ui::theme::muted();
     switch (network_->status()) {
       case core::NetState::Disabled:
@@ -4263,7 +4263,16 @@ void App::update_settings_view() {
         std::snprintf(buf, sizeof(buf), "Connecting" LV_SYMBOL_WIFI);
         break;
       case core::NetState::Connected:
-        std::snprintf(buf, sizeof(buf), "%s  %s", network_->ssid(), network_->ip());
+        // How the address was assigned, and for a static one the gateway and
+        // mask on a second line — the portal is the only place they're set,
+        // so this is where a wrong entry shows up.
+        if (network_->static_ip()) {
+          std::snprintf(buf, sizeof(buf), "%s  %s (static)\ngateway %s  mask %s",
+                        network_->ssid(), network_->ip(), network_->gateway(),
+                        network_->netmask());
+        } else {
+          std::snprintf(buf, sizeof(buf), "%s  %s (DHCP)", network_->ssid(), network_->ip());
+        }
         color = ui::theme::ok();
         break;
       case core::NetState::Failed:

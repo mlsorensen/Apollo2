@@ -42,6 +42,8 @@ class Network : public core::INetwork {
   const char* ssid() const override;
   const char* ip() const override { return ip_.c_str(); }
   bool static_ip() const override;
+  const char* gateway() const override { return gw_.c_str(); }
+  const char* netmask() const override { return mask_.c_str(); }
 
   bool enabled() const override;
   void set_enabled(bool on) override;
@@ -71,6 +73,7 @@ class Network : public core::INetwork {
 
   core::NetState status_ = core::NetState::Disabled;
   std::string ip_;
+  std::string gw_, mask_;  // as applied, captured with ip_ on connect
   mutable std::string str_cache_;  // backing for ssid()/timezone()/ntp_server()
   uint32_t connect_deadline_ms_ = 0;  // STA association timeout
   uint32_t retry_at_ms_ = 0;          // next reconnect attempt after a failure

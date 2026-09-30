@@ -386,6 +386,9 @@ void build_device_wifi_rows(lv_obj_t* page, const lv_font_t* text_font,
   out.wifi_status = lv_label_create(rst);
   lv_obj_set_style_text_color(out.wifi_status, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(out.wifi_status, text_font, 0);
+  // Two lines for a static address (gateway + mask beneath), right-aligned so
+  // both lines hug the row's edge.
+  lv_obj_set_style_text_align(out.wifi_status, LV_TEXT_ALIGN_RIGHT, 0);
   lv_label_set_text(out.wifi_status, "Off");
 
   // Set up / Forget buttons share a row (mirrors the connection panel's actions).

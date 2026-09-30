@@ -378,6 +378,9 @@ int main() {
   ok &= r({800, 480}, "renders/device_display_800x480.png", 1, ui::kSectionDeviceDisplay);
   ok &= r({800, 480}, "renders/device_time_800x480.png", 1, ui::kSectionDeviceTime);
   ok &= r({800, 480}, "renders/device_wifi_800x480.png", 1, ui::kSectionDeviceWifi);
+  network.set_static(true);  // static address: gateway + mask on a second status line
+  ok &= r({800, 480}, "renders/device_wifi_static_800x480.png", 1, ui::kSectionDeviceWifi);
+  network.set_static(false);
 
   // Settings > Apollo > Backup: the page in its three card states, then the two
   // confirmations (the whole point of the flow is what those two say).

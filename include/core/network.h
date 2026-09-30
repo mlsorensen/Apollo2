@@ -25,6 +25,10 @@ class INetwork {
   // True when the saved network uses a static address (set on the setup
   // portal) rather than DHCP. Display only — the Info page's IP row.
   virtual bool static_ip() const { return false; }
+  // The applied gateway and subnet mask while Connected, else "". Display only
+  // (the WiFi status row lists them for a static address).
+  virtual const char* gateway() const { return ""; }
+  virtual const char* netmask() const { return ""; }
 
   // Master on/off. Disabling drops the station; enabling (re)connects from the
   // saved credentials. Persisted.
