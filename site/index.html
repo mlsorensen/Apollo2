@@ -4,8 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Apollo 2 — web flasher</title>
-<!-- ESP Web Tools: browser flashing over Web Serial (Chrome/Edge). -->
-<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+<!-- ESP Web Tools: browser flashing over Web Serial (Chrome/Edge). VENDORED,
+     not unpkg: tools/build_esp_web_tools.sh rebuilds it with a newer esptool-js
+     than any esp-web-tools release ships (rev v3 ESP32-P4 ROMs go silent on
+     the chip-detect read that esptool-js <= 0.6 makes first). -->
+<script type="module" src="vendor/esp-web-tools/install-button.js"></script>
 <script src="version.js"></script>
 <style>
   :root {

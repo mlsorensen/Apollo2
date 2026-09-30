@@ -25,6 +25,22 @@ accurate and the layering rules there are hard rules:
 - Board differences live in `include/platform_esp32/board_config.h` blocks +
   feature macros; driver code never hardcodes pins.
 
+## Web flasher engine is VENDORED (2026-09-29)
+
+`site/index.html` loads esp-web-tools from `site/vendor/esp-web-tools/`
+(git-ignored; built by `tools/build_esp_web_tools.sh` = `make site-vendor`,
+and by the pages job on every deploy), NOT from unpkg. Reason, bench-proven
+on the rev v3.2 X-8: esptool-js <= 0.6 reads the chip-detect "magic"
+register 0x40001000 right after sync and the rev v3 P4 ROM goes SILENT on
+it ("Serial data stream stopped" = a 3 s read timeout, not noise), so every
+web flash of rev v3 silicon died after the erase/confirm dialogs while
+`make flash` (esptool.py, GET_SECURITY_INFO detection) was fine. esptool-js
+0.7.0 fixed detection; esp-web-tools (10.4.0 and main) still pins ^0.6.0,
+so we rebuild it with esptool-js pinned. Bump the two pins in the script
+together, and re-prove a rev v3 P4 from Chrome before deploying. A site-only
+hot deploy = build, then commit index.html + vendor/ on gh-pages (the OWNER
+pushes it; the assistant's push is refused as a CI-gate bypass).
+
 ## OTA self-update (v0.11+)
 
 Two separate parts: a CHECK/notify port (`update_check.*`) and an INSTALL that

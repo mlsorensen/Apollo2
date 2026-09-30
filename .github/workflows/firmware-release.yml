@@ -399,10 +399,20 @@ jobs:
           path: fw
           merge-multiple: true
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+
+      # The flasher's engine, built here rather than loaded from unpkg: see
+      # the script for why (esptool-js pin; rev v3 ESP32-P4 chip detection).
+      - name: Build the vendored esp-web-tools bundle
+        run: tools/build_esp_web_tools.sh
+
       - name: Assemble site (page + versioned firmware + manifests)
         run: |
           mkdir -p "public/${RELEASE_TAG}/firmware" "public/${RELEASE_TAG}/manifests"
           cp site/index.html public/
+          cp -r site/vendor public/vendor
           # notes.txt: this version's CHANGELOG section (same extraction as the
           # release notes). The on-device update check fetches it to show the
           # "what's new" text in its notification modal.

@@ -381,7 +381,10 @@ That makes the board *buildable*, not *supported*. Releasing one is a separate,
 deliberate step: a row in the `.github/workflows/firmware-release.yml` matrix
 (whose `board` value must equal the block's `kUpdateSlug`, since the
 self‑updater fetches `<site>/<tag>/firmware/app/<slug>.bin`), a card in
-`site/index.html`, and a row in the tables above. Releases are tagged `vX.Y.Z`;
+`site/index.html`, and a row in the tables above. (The flasher's engine,
+esp-web-tools, is vendored by `tools/build_esp_web_tools.sh` with a pinned
+esptool-js rather than loaded from unpkg — the script says why.) Releases are
+tagged `vX.Y.Z`;
 a `vX.Y.Z-beta.N` tag publishes the same images as a pre-release, listed only in
 `releases-beta.json` (the stable `releases.json` every device reads stays
 releases-only) — promoting one to stable is a rebuild at the real tag, never a

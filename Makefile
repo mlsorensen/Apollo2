@@ -34,6 +34,8 @@
 #                           (docs/img/manual/) from the sim renders
 #   make webapp             rebuild the embedded web app (needs node; every
 #                           device build/flash target does this for you)
+#   make site-vendor        rebuild the web flasher's esp-web-tools bundle into
+#                           site/vendor/ (needs node + git; CI does this on deploy)
 #   make lmtoken            build the cloud token tool (tools/lmtoken)
 #   make lmtoken-release    cross-compile + zip lmtoken for all OSes (tools/lmtoken/dist/)
 #   make lmtoken-publish VERSION=1.0.0   tag lmtoken-v1.0.0 + push it -> CI builds the release
@@ -62,6 +64,9 @@ $(WEBAPP_HDR): $(WEBAPP_SRC)
 
 webapp: $(WEBAPP_HDR)
 
+site-vendor:
+	@tools/build_esp_web_tools.sh
+
 .DEFAULT_GOAL := build
 .PHONY: flash flash-s3-2 flash-s3-7b flash-s3-4-3b flash-s3-4-3c flash-p4-4-3 \
         flash-p4-5 flash-p4-x-7 flash-p4-x-8 flash-p4-x-10-1 \
@@ -71,7 +76,7 @@ webapp: $(WEBAPP_HDR)
         build-p4-x-7 build-p4-x-8 build-p4-x-10-1 \
         build-7b build-4-3b build-4-3c build-p4 \
         build-release build-all \
-        webapp monitor padsense paddrive sim test-schedule docs-img lmtoken lmtoken-release lmtoken-publish clean
+        webapp site-vendor monitor padsense paddrive sim test-schedule docs-img lmtoken lmtoken-release lmtoken-publish clean
 
 flash: $(WEBAPP_HDR)
 	@tools/flash.sh $(BOARD)
