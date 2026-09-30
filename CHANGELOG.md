@@ -35,6 +35,10 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 - **Scale battery as icon, percent or both.** Settings → Scale → Device
   settings → Battery display picks how the SCALE card shows the scale's
   battery.
+- **Web flasher fixed for newer P4 boards.** Flashing a rev v3 ESP32-P4
+  (the X 8", newer P4-5 and P4-4.3 units) from the browser used to fail after
+  the confirmation dialogs; it now completes. The version list and Detect
+  board also work again.
 - **Settings tab doubles as a home button.** Tapping the Settings tab while
   already inside Settings jumps straight back to its root page, so crossing
   from one section to another no longer takes several Backs.
