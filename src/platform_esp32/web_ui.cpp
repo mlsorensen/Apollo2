@@ -10,6 +10,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cctype>
 #include <cstring>
 #include <ctime>
 #include <new>
@@ -249,6 +250,81 @@ void WebUi::handle_log() {
   free(buf);
 }
 
+namespace {
+// Find the ESP_CORE_DUMP_INFO note in a stored core dump and copy its ELF-SHA
+// string (see handle_coredump for why this is not esp_core_dump_get_summary).
+// `base`/`size` bound the dump inside `part`; `scratch` (>= 4 KB) holds the
+// note section. Leaves `out` untouched when anything doesn't add up.
+#if defined(CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH)
+void read_coredump_sha(const esp_partition_t* part, size_t base, size_t size,
+                       char* scratch, size_t scratch_len, char* out, size_t out_len) {
+  constexpr uint32_t kInfoNoteType = 8266;  // ELF_ESP_CORE_DUMP_INFO_TYPE (core_dump_elf.c)
+  constexpr uint32_t kPtNote = 4;
+  auto rd = [&](size_t off, void* dst, size_t n) {
+    return off <= size && n <= size - off &&
+           esp_partition_read(part, base + off, dst, n) == ESP_OK;
+  };
+  // The dump = a small binary header, then the ELF. Locate the magic.
+  uint8_t head[64];
+  if (!rd(0, head, sizeof(head))) return;
+  size_t elf = SIZE_MAX;
+  for (size_t i = 0; i + 4 <= sizeof(head); i += 4) {
+    if (head[i] == 0x7f && head[i + 1] == 'E' && head[i + 2] == 'L' && head[i + 3] == 'F') {
+      elf = i;
+      break;
+    }
+  }
+  if (elf == SIZE_MAX) return;
+  uint8_t eh[52];  // ELF32 header
+  if (!rd(elf, eh, sizeof(eh))) return;
+  uint32_t phoff;
+  uint16_t phentsize, phnum;
+  std::memcpy(&phoff, eh + 28, 4);
+  std::memcpy(&phentsize, eh + 42, 2);
+  std::memcpy(&phnum, eh + 44, 2);
+  if (phentsize < 32 || phnum == 0 || phnum > 512) return;
+  for (uint32_t i = 0; i < phnum; ++i) {
+    uint8_t ph[32];
+    const size_t ph_off = static_cast<size_t>(phoff) + static_cast<size_t>(i) * phentsize;
+    if (!rd(elf + ph_off, ph, sizeof(ph))) return;
+    uint32_t p_type, p_offset, p_filesz;
+    std::memcpy(&p_type, ph + 0, 4);
+    std::memcpy(&p_offset, ph + 4, 4);
+    std::memcpy(&p_filesz, ph + 16, 4);
+    if (p_type != kPtNote) continue;
+    const size_t n = p_filesz < scratch_len ? p_filesz : scratch_len;
+    if (!rd(elf + p_offset, scratch, n)) return;
+    // Walk the notes: namesz, descsz, type, name (4-aligned), desc (4-aligned).
+    size_t o = 0;
+    while (o + 12 <= n) {
+      uint32_t namesz, descsz, type;
+      std::memcpy(&namesz, scratch + o, 4);
+      std::memcpy(&descsz, scratch + o + 4, 4);
+      std::memcpy(&type, scratch + o + 8, 4);
+      const size_t name_pad = (static_cast<size_t>(namesz) + 3) & ~size_t{3};
+      const size_t desc_pad = (static_cast<size_t>(descsz) + 3) & ~size_t{3};
+      if (name_pad > n || desc_pad > n || o + 12 + name_pad + desc_pad > n) return;
+      if (type == kInfoNoteType && descsz > 4) {
+        // desc = uint32 version + the NUL-terminated hex string.
+        const char* hex = scratch + o + 12 + name_pad + 4;
+        size_t len = 0;
+        while (len < descsz - 4 && len + 1 < out_len && hex[len] != '\0' &&
+               std::isxdigit(static_cast<unsigned char>(hex[len]))) {
+          ++len;
+        }
+        if (len >= 8) {
+          std::memcpy(out, hex, len);
+          out[len] = '\0';
+        }
+        return;
+      }
+      o += 12 + name_pad + desc_pad;
+    }
+  }
+}
+#endif
+}  // namespace
+
 void WebUi::handle_coredump() {
   // Remote crash diagnosis: the panic handler writes an ELF coredump to the
   // `coredump` flash partition (enabled in the stock sdkconfig on every
@@ -287,22 +363,21 @@ void WebUi::handle_coredump() {
   // Name the download after the CRASHED build, not the running one: the dump
   // outlives upgrades, so stamping fw::kVersion here could label a v0.7.0
   // crash as v0.7.1. The dump itself records the crashing app's ELF-SHA
-  // fingerprint (first 8 hex chars, per CONFIG_APP_RETRIEVE_LEN_ELF_SHA) —
-  // correct by construction; each .elf in the release's debug-symbols
-  // archive ships a matching .appsha sidecar to pair them up.
+  // fingerprint (first CONFIG_APP_RETRIEVE_LEN_ELF_SHA hex chars) in its
+  // ESP_CORE_DUMP_INFO note; each .elf in the release's debug-symbols archive
+  // ships a matching .appsha sidecar to pair them up.
+  //
+  // Read that note OURSELVES, through esp_partition_read. The obvious call,
+  // esp_core_dump_get_summary(), memory-maps the partition, and on the P4 the
+  // coredump partition sits above 16 MB where a cache-mapped read FAULTS
+  // (decoded 2026-09-30 on the P4-5: get_summary -> parse_note_section ->
+  // first load from the mmap pointer -> panic). So GET /coredump crashed every
+  // P4, and the dump of that crash replaced the one being fetched. The SPI
+  // driver path (esp_partition_read, 4-byte addressing) is fine — the same
+  // driver-vs-cache split as the OTA 16 MB rule. Every offset taken from the
+  // dump is bounds-checked, so a corrupt dump yields "unknown", never a fault.
   char sha[APP_ELF_SHA256_SZ] = "unknown";
-  auto* sum = static_cast<esp_core_dump_summary_t*>(
-      heap_caps_malloc(sizeof(esp_core_dump_summary_t),
-                       MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-  if (sum == nullptr)
-    sum = static_cast<esp_core_dump_summary_t*>(
-        malloc(sizeof(esp_core_dump_summary_t)));
-  if (sum != nullptr) {
-    if (esp_core_dump_get_summary(sum) == ESP_OK)
-      std::snprintf(sha, sizeof(sha), "%s",
-                    reinterpret_cast<const char*>(sum->app_elf_sha256));
-    free(sum);
-  }
+  read_coredump_sha(part, base, size, buf, kSlice, sha, sizeof(sha));
   char dispo[80];
   std::snprintf(dispo, sizeof(dispo), "attachment; filename=coredump-%s.bin",
                 sha);

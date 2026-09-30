@@ -110,6 +110,13 @@ display isn't up.
   wraps), so an OTA'd app that spills past 16MB is rejected as "invalid segment
   length" and rolls back — even though the flash content is byte-perfect (the
   write + the running app's reads are fine; only the bootloader's read wraps).
+  COROLLARY (decoded 2026-09-30): the running app's DRIVER reads
+  (esp_partition_read) above 16MB are fine, but a CACHE-MAPPED read
+  (esp_partition_mmap / spi_flash_mmap) of that region FAULTS on the current
+  core — the coredump partition lives at 0x1ff0000, so
+  esp_core_dump_get_summary()/get_panic_reason() (both mmap) panic the
+  caller; web_ui.cpp reads the SHA note itself via esp_partition_read. Never
+  mmap anything above 16MB on the P4.
   FIX: `boards/p4_ota_under16.csv` (7MB app slots) keeps BOTH app slots entirely
   under 16MB (app1 ends ~14MB); all P4 envs use it via the base env. Never let a
   P4 app partition or its image cross 16MB. This is a partition-table change, so
