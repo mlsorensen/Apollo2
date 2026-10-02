@@ -846,8 +846,9 @@ action lives directly on the root:
 
 Wiring the paddle harness — parts, photos of the Micra's paddle loom, and
 per‑board terminals — is covered in the [wiring guide](docs/WIRING.md), as
-is the optional **Apollo Link** board for P4 units (paddle pass‑through when
-Apollo is off, power over the same cable; nothing to set in the firmware).
+is the optional **Apollo Link** board for the P4 boards only (paddle
+pass‑through when Apollo is off, power over the same cable; nothing to set
+in the firmware). It does not work with the S3‑4.3C.
 
 ### Paddle pin protection & per‑unit remapping
 

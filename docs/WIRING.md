@@ -20,8 +20,8 @@ it), but you will have the machine open — **unplug the Micra first**.
 > undoing it is easy: open the top and temporarily reconnect the paddle's
 > original connectors to run the machine without Apollo.
 > (The optional [Apollo Link](#apollo-link-optional-p4-boards) board below
-> removes this caveat: it hands the paddle back to the machine whenever Apollo
-> is off.)
+> removes this caveat on the P4 boards: it hands the paddle back to the
+> machine whenever Apollo is off. It does not exist for the S3‑4.3C.)
 
 ## Parts
 
@@ -156,10 +156,14 @@ neoprene sheet between the module and the nearest hot surface does the job.
 
 ## Apollo Link (optional, P4 boards)
 
-**You do not need this.** The opto cable above is the simplest way to wire
-the paddle and it is what most installs use. Apollo Link is a small
-open‑hardware board that replaces the opto module and the DIY splice for
-people who want two extra things:
+**You do not need this, and it is P4‑only.** The opto cable above is the
+simplest way to wire the paddle and it is what most installs use. Apollo
+Link is a small open‑hardware board that replaces the opto module and the
+DIY splice on the **P4 boards (5, 4.3 and the X boxes)** for people who want
+two extra things. **It does not work with the ESP32‑S3‑Touch‑LCD‑4.3C**:
+that box has no header pins for it and already has its own isolators, so
+its paddle wiring is the three screw‑terminal wires described above and
+nothing else.
 
 - **The paddle keeps working without Apollo.** Solid‑state relays on the
   Link wire the paddle straight to the Micra in copper whenever Apollo is

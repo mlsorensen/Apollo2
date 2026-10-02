@@ -87,7 +87,7 @@ them come as finished boxes that need no assembly at all. A Bluetooth scale is
 optional but unlocks the shot timer, flow graph, and brew‑by‑weight. Wiring
 the machine's paddle (for Auto shot) is optional too, and can always be added
 later — see the [wiring guide](docs/WIRING.md) (which also covers the
-optional Apollo Link board for P4 units).
+optional Apollo Link board — **P4 boards only**, not the S3‑4.3C).
 
 ### 2. Flash the firmware
 
@@ -217,7 +217,7 @@ firmware cuts it at target weight.
 |------|----------|--------|-----------|-------------------------------|-------------|
 | [ESP32‑P4‑WIFI6‑Touch‑LCD‑5](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-5.htm) (SKU 33762) | **Mounting on the Micra** | 5" 1280×720 | [3D‑printed shell](hardware/3d-prints/) | DIY cable with an external opto module | **Best** |
 | [ESP32‑P4‑WIFI6‑Touch‑LCD‑4.3](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-4.3.htm) | **Mounting on the Micra, smaller screen** | 4.3" 800×480 | [3D‑printed shell](hardware/3d-prints/) | DIY cable with an external opto module | **Best** |
-| [ESP32‑S3‑Touch‑LCD‑4.3C **BOX**](https://www.waveshare.com/esp32-s3-touch-lcd-4.3c.htm?sku=33630) (SKU 33630) | **Mounting on the Micra with nothing to build** | 4.3" 800×480 | Finished box | **Built‑in opto** — three wires into screw terminals, nothing to build | Good |
+| [ESP32‑S3‑Touch‑LCD‑4.3C **BOX**](https://www.waveshare.com/esp32-s3-touch-lcd-4.3c.htm?sku=33630) (SKU 33630) | **Mounting on the Micra with nothing to build** | 4.3" 800×480 | Finished box | **Built‑in opto** — three wires into screw terminals, nothing to build (the optional Apollo Link board is P4‑only and does not fit this box) | Good |
 | [ESP32‑P4‑WIFI6‑Touch‑LCD‑X **8" box**](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-7-8-10.1.htm) | **Counter‑top companion** | 8" 1280×800 | Finished box | DIY cable with an external opto module | **Best** |
 
 **Start with the ESP32‑P4‑WIFI6‑Touch‑LCD‑5.** It's the recommended
