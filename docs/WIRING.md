@@ -19,8 +19,8 @@ it), but you will have the machine open — **unplug the Micra first**.
 > paddle does nothing. Because the tap is made with pluggable connectors,
 > undoing it is easy: open the top and temporarily reconnect the paddle's
 > original connectors to run the machine without Apollo.
-> (The optional [Apollo Link](#apollo-link-optional-p4-boards) board below
-> removes this caveat on the P4 boards: it hands the paddle back to the
+> (The optional [Apollo Link](#apollo-link-optional-p4-boards) board at the
+> end of this guide removes this caveat on the P4 boards: it hands the paddle back to the
 > machine whenever Apollo is off. It does not exist for the S3‑4.3C.)
 
 ## Parts
@@ -36,7 +36,8 @@ it), but you will have the machine open — **unplug the Micra first**.
   P4's GPIO header makes the board‑side connection clean and solder‑free.
 
 (P4 boards have an optional alternative to the module and the splice: the
-[Apollo Link](#apollo-link-optional-p4-boards) board, further down.)
+[Apollo Link](#apollo-link-optional-p4-boards) board, described at the end
+of this guide.)
 
 Although there are **four** connections at the machine end (Micra white,
 Micra black, and the two paddle‑switch wires), one 3‑conductor cable is all
@@ -154,6 +155,34 @@ and away from the brew head** — there is open space below the hot‑water pipe
 and the steam wand that works well — and where clearance is tight, a piece of
 neoprene sheet between the module and the nearest hot surface does the job.
 
+## Bench‑test before installing
+
+The whole cable can be validated before it ever touches the machine. Connect
+it to Apollo, power up, and turn on **Settings → Micra → Settings → Wired
+paddle**. Apollo relays the paddle regardless of anything else, so:
+
+1. **Touch the two paddle‑sense wires together** — to Apollo that's the
+   paddle flipping ON. On a P4 build the opto module's **red LED lights**
+   while they're touching.
+2. **Meter the Micra side**: with a multimeter in continuity mode across the
+   two machine‑side connectors (the ones destined for the Micra's white and
+   black), you should read a **closed circuit** while the sense wires touch
+   and **open** when you separate them.
+
+That's the whole contract — paddle closed ⇒ Micra‑side contact closed — so if
+both steps behave, the install will work.
+
+## Closing up
+
+Tuck the finished wiring down into the machine, **reconnect any connectors
+you unplugged** for loom access, and put the top panel back on.
+
+## Afterwards
+
+With **Wired paddle** on (from the bench test above), the **Auto shot** mode
+appears on the Home shot pill and **Auto flush** becomes available. See the
+[manual](../MANUAL.md) for what each mode does.
+
 ## Apollo Link (optional, P4 boards)
 
 **You do not need this, and it is P4‑only.** The opto cable above is the
@@ -222,40 +251,35 @@ P4's charger, so a battery fitted to the board is **not charged** by the
 Link; the charger only runs from the P4's own USB‑C. Battery‑less units
 (the usual mount‑on‑Micra build) are unaffected.
 
-**Heat:** the relays are rated to 85 °C. Mount the Link where you would
-mount the opto module — low in the machine, away from the brew head.
 
-**Bench‑test it like the opto cable** (next section): meter across MW and
-MB, short P1 to P2 as the paddle. Plus one extra check that is the whole
-point of the board: with Apollo **powered off** or unplugged, the short
-must read **closed** on the meter, with the LED dark. Power Apollo up (LED
-lit) and the same short reads **open** — the paddle now reaches Apollo
-instead, and Apollo closes the Micra line itself when it runs a shot.
+### Bench‑test the Link
 
-## Bench‑test before installing
+Same idea as the opto cable, but the Link has a second thing to prove: that
+the paddle works *without* Apollo. Set up with a multimeter in continuity
+mode across the two **Micra‑side** wires (the ones for MW and MB), and use
+the two **paddle** wires (P1 and P2) touched together as the paddle.
 
-The whole cable can be validated before it ever touches the machine. Connect
-it to Apollo, power up, and turn on **Settings → Micra → Settings → Wired
-paddle**. Apollo relays the paddle regardless of anything else, so:
+1. **Apollo off.** Power the Link from its USB‑C but leave Apollo unplugged
+   from the Link's *APOLLO* connector (or simply powered down). Touch P1 to
+   P2: the meter must read **closed**, and the Link's green LED stays
+   **dark**. That is the paddle reaching the Micra in copper — the machine
+   would work exactly as stock.
+2. **Apollo on.** Plug Apollo into the Link and let it boot (with nothing
+   on Apollo's own USB‑C, it is now running from the Link — that proves the
+   power path). The green LED comes **on**: Apollo owns the paddle. Turn on
+   **Settings → Micra → Controls → Wired paddle**.
+3. **Paddle through Apollo.** Touch P1 to P2 again: the **shot timer on the
+   Home screen starts** (Apollo saw the paddle) and the meter reads
+   **closed** again — but this time Apollo closed the Micra line itself.
+   Separate the wires: the timer stops and the meter opens.
 
-1. **Touch the two paddle‑sense wires together** — to Apollo that's the
-   paddle flipping ON. On a P4 build the opto module's **red LED lights**
-   while they're touching.
-2. **Meter the Micra side**: with a multimeter in continuity mode across the
-   two machine‑side connectors (the ones destined for the Micra's white and
-   black), you should read a **closed circuit** while the sense wires touch
-   and **open** when you separate them.
+If all three behave, the install will work, and so will the machine on the
+days Apollo is unplugged.
 
-That's the whole contract — paddle closed ⇒ Micra‑side contact closed — so if
-both steps behave, the install will work.
+### Installing it
 
-## Closing up
-
-Tuck the finished wiring down into the machine, **reconnect any connectors
-you unplugged** for loom access, and put the top panel back on.
-
-## Afterwards
-
-With **Wired paddle** on (from the bench test above), the **Auto shot** mode
-appears on the Home shot pill and **Auto flush** becomes available. See the
-[manual](../MANUAL.md) for what each mode does.
+Mount the Link where you would mount the opto module — low in the machine,
+away from the brew head (the relays are rated to 85 °C) — then close up and
+set **Wired paddle** exactly as in the sections above. Everything in the
+manual about Auto shot, auto‑flush and cleaning applies unchanged; the only
+visible difference is that the paddle keeps working when Apollo is off.
