@@ -87,6 +87,9 @@ constexpr float kUsbPowerVolts = 4.15f;      // node at/above this => external (
 constexpr int  kPaddleDrivePin = -1;
 constexpr int  kPaddleSensePin = -1;
 constexpr bool kPaddleActiveHigh = true;   // drive level that "closes" the shot
+constexpr int  kLinkDrivePin = -1;  // no Apollo Link pin set on this board
+constexpr int  kLinkSensePin = -1;
+constexpr int  kLinkCtrlPin  = -1;
 
 #elif defined(BOARD_WAVESHARE_S3_LCD_7B)
 
@@ -171,6 +174,9 @@ constexpr float kUsbPowerVolts = 4.15f;      // node at/above this => external (
 constexpr int  kPaddleDrivePin = -1;
 constexpr int  kPaddleSensePin = -1;
 constexpr bool kPaddleActiveHigh = true;
+constexpr int  kLinkDrivePin = -1;  // no Apollo Link pin set on this board
+constexpr int  kLinkSensePin = -1;
+constexpr int  kLinkCtrlPin  = -1;
 
 #elif defined(BOARD_WAVESHARE_S3_LCD_43B)
 
@@ -251,6 +257,9 @@ constexpr float kUsbPowerVolts = 4.15f;
 constexpr int  kPaddleDrivePin = -1;
 constexpr int  kPaddleSensePin = -1;
 constexpr bool kPaddleActiveHigh = true;
+constexpr int  kLinkDrivePin = -1;  // no Apollo Link pin set on this board
+constexpr int  kLinkSensePin = -1;
+constexpr int  kLinkCtrlPin  = -1;
 
 #elif defined(BOARD_WAVESHARE_S3_LCD_43C)
 
@@ -364,6 +373,9 @@ constexpr int  kPaddleIoExtSense = 0;  // EXIO0 = DI0, LOW = paddle on
 constexpr int  kPaddleDrivePin = -1;   // no native-GPIO paddle path on this board
 constexpr int  kPaddleSensePin = -1;
 constexpr bool kPaddleActiveHigh = true;
+constexpr int  kLinkDrivePin = -1;  // no Apollo Link pin set on this board
+constexpr int  kLinkSensePin = -1;
+constexpr int  kLinkCtrlPin  = -1;
 
 // --- Audio: ES8311 codec (DAC -> onboard speaker header) + ES7210 mic ADC
 //     (unused). I2S pins per the vendor 11_speaker_microphone demo — note the
@@ -512,6 +524,19 @@ constexpr int kAudioPaPin = 53;   // speaker power-amp enable, active-high
 constexpr int  kPaddleDrivePin = 52;
 constexpr int  kPaddleSensePin = 51;
 constexpr bool kPaddleActiveHigh = true;
+// --- Apollo Link (v1.0): the paddle bridge's second pin set, on the 5V end of
+//     the same 40-pin header (schematic pins 12 / 11 / 14; the silkscreen
+//     counts from the other end). DRIVE -> AQY212EH LED via 330R (active-HIGH),
+//     SENSE <- paddle through the Link's NO contact (INPUT_PULLUP, low = closed),
+//     CTRL -> the four LH1502 LEDs (~26 mA, drive strength 3): HIGH hands the
+//     paddle to Apollo, LOW/floating (Apollo off, unplugged, install mode)
+//     leaves it wired to the Micra in copper. Driven and polled TOGETHER with
+//     the corner pins above — no connector setting; whichever cable is fitted
+//     works and the other set is an open pin. GPIO2 is NOT used on purpose:
+//     the 4.3 wires it to the touch INT. ---
+constexpr int  kLinkDrivePin = 3;
+constexpr int  kLinkSensePin = 5;
+constexpr int  kLinkCtrlPin  = 4;
 
 // --- RTC: NO discrete RTC chip (schematic-verified). The "RTC BAT" header
 //     feeds the ESP32-P4's own VBAT pin (102) through a B5819WS diode, backing
@@ -650,6 +675,19 @@ constexpr int kAudioPaPin = 53;   // speaker power-amp enable, active-high
 constexpr int  kPaddleDrivePin = 52;
 constexpr int  kPaddleSensePin = 51;
 constexpr bool kPaddleActiveHigh = true;
+// --- Apollo Link (v1.0): the paddle bridge's second pin set, on the 5V end of
+//     the same 40-pin header (schematic pins 12 / 11 / 14; the silkscreen
+//     counts from the other end). DRIVE -> AQY212EH LED via 330R (active-HIGH),
+//     SENSE <- paddle through the Link's NO contact (INPUT_PULLUP, low = closed),
+//     CTRL -> the four LH1502 LEDs (~26 mA, drive strength 3): HIGH hands the
+//     paddle to Apollo, LOW/floating (Apollo off, unplugged, install mode)
+//     leaves it wired to the Micra in copper. Driven and polled TOGETHER with
+//     the corner pins above — no connector setting; whichever cable is fitted
+//     works and the other set is an open pin. GPIO2 is NOT used on purpose:
+//     the 4.3 wires it to the touch INT. ---
+constexpr int  kLinkDrivePin = 3;
+constexpr int  kLinkSensePin = 5;
+constexpr int  kLinkCtrlPin  = 4;
 
 // --- RTC: same as the 4.3 — no discrete RTC chip; the RTC battery header
 //     backs the P4's VBAT pin / internal RTC (see the 4.3 block's note). ---
@@ -842,6 +880,9 @@ constexpr int kAudioPaPin = 53;   // speaker power-amp enable, active-high
 constexpr int  kPaddleDrivePin = 52;
 constexpr int  kPaddleSensePin = 51;
 constexpr bool kPaddleActiveHigh = true;
+constexpr int  kLinkDrivePin = -1;  // Apollo Link set: not yet mapped on the X
+constexpr int  kLinkSensePin = -1;  // header (check its schematic first)
+constexpr int  kLinkCtrlPin  = -1;
 
 // --- RTC: no discrete RTC chip (same as the other P4 boards). ---
 

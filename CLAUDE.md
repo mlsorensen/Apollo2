@@ -635,6 +635,15 @@ GT911 all up; NimBLE host inits. Paddle/audio/ADC since confirmed, 2026-09-11):
    expander. GPIO51 <- paddle switch to board GND (INPUT_PULLUP, low =
    closed); the physical paddle touches only this board, never the Micra.
    Config-only (native-GPIO path in paddle.cpp). CONFIRMED working on HW.
+   **Apollo Link (v1.0, 2026-10-01):** the bridge board (hardware/
+   paddle-bridge, rev 0.6) uses a SECOND native set on the header's 5V end
+   so one 5-wire cable also POWERS the unit: DRV GPIO3, SENSE GPIO5, CTRL
+   GPIO4 (schematic pins 12/11/14; plus 5V at 1/3 and GND at 5/13). Both
+   sets are driven and polled together (paddle.cpp) — no connector setting,
+   on purpose (owner): the unused set is an open pin. CTRL is held HIGH from
+   begin() (Apollo owns the paddle while booted; input = copper otherwise).
+   GPIO2 deliberately avoided (touch INT on the 4.3); GPIO7/8 = I2C and
+   GPIO37/38 = console UART are unusable. X boards: Link set unmapped (-1).
 5. Audio: config-only reuse of the 4.3C's ES8311 driver — BSP pins MCLK 13 /
    BCLK 12 / LRCLK 10 / DOUT 9, codec at 0x18 on the shared I2C bus, PA
    enable native GPIO53 active-high (BOARD_AUDIO_PA_IOEXT selects expander-vs-

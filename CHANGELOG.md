@@ -11,6 +11,11 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 
 ### Changes
 
+- **Apollo Link.** The P4 boards now also drive the paddle bridge on the 5V end
+  of the 40-pin header (DRV GPIO3, SENSE GPIO5, CTRL GPIO4), so one cable can
+  carry the paddle and power the remote. The original corner-pin cable keeps
+  working unchanged; nothing to set.
+
 - **Scheduled on and standby.** Settings → Micra → Schedule turns the machine
   on and to standby at set times, daily or per weekday, with a Smart Warm-up
   lead (default 8 min). The switches sit on one page and the times under

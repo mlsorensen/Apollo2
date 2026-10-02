@@ -8,6 +8,10 @@
 //  - native GPIO (kPaddleDrivePin/kPaddleSensePin >= 0): a pin driving an
 //    external relay + a pin reading the paddle switch (INPUT_PULLUP, switch to
 //    GND). kPaddleActiveHigh sets the drive polarity.
+//    The P4 boards carry a SECOND native set for the Apollo Link bridge
+//    (kLinkDrivePin/kLinkSensePin, active-high, plus kLinkCtrlPin held HIGH
+//    while booted). Both sets are driven and polled together, so either cable
+//    works with no setting; the unused set is just an open pin.
 // Neither configured -> available() == false and the brew controller idles.
 
 namespace platform {
@@ -28,6 +32,9 @@ class Paddle : public core::IPaddle {
  private:
   int sense_pin_ = -1;  // resolved at begin() on native-GPIO boards
   int drive_pin_ = -1;
+  int link_sense_pin_ = -1;  // Apollo Link set (P4): mirrors the two above
+  int link_drive_pin_ = -1;
+  int ctrl_pin_ = -1;        // Link CTRL: HIGH = paddle handed to Apollo
 };
 
 Paddle& paddle();  // shared singleton (device main + display share none)
