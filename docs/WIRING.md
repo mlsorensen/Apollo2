@@ -282,8 +282,10 @@ days Apollo is unplugged.
 on Apollo, the paddle and Micra wires on J2 — with Apollo running from its
 own USB‑C or battery and the Link's *PWR* port empty. Check that it works:
 the green LED is lit, and flipping the paddle starts the shot timer (or
-pops the Wired‑paddle reminder if that switch is off). Only then plug the
-adapter into the Link. A working Link proves every wire landed on the right
+pops the Wired‑paddle reminder if that switch is off). If you'd rather not
+involve the machine yet, a multimeter in continuity mode across the MW and
+MB wires stands in for the Micra: it reads closed while the paddle is on,
+and the timer still runs. Only then plug the adapter into the Link. A working Link proves every wire landed on the right
 pin *before* the adapter's 5 V goes through it; the Apollo end is a plain
 2 × 7 plug with nothing to stop it going in rotated, and a rotated plug with
 power behind it can destroy the P4. Without that power it can't.
