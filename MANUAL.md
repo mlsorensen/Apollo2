@@ -845,7 +845,9 @@ action lives directly on the root:
 | Auto flush eligible | Yes | Yes (wired boards) | No |
 
 Wiring the paddle harness — parts, photos of the Micra's paddle loom, and
-per‑board terminals — is covered in the [wiring guide](docs/WIRING.md).
+per‑board terminals — is covered in the [wiring guide](docs/WIRING.md), as
+is the optional **Apollo Link** board for P4 units (paddle pass‑through when
+Apollo is off, power over the same cable; nothing to set in the firmware).
 
 ### Paddle pin protection & per‑unit remapping
 

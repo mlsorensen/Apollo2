@@ -19,6 +19,9 @@ it), but you will have the machine open — **unplug the Micra first**.
 > paddle does nothing. Because the tap is made with pluggable connectors,
 > undoing it is easy: open the top and temporarily reconnect the paddle's
 > original connectors to run the machine without Apollo.
+> (The optional [Apollo Link](#apollo-link-optional-p4-boards) board below
+> removes this caveat: it hands the paddle back to the machine whenever Apollo
+> is off.)
 
 ## Parts
 
@@ -31,6 +34,9 @@ it), but you will have the machine open — **unplug the Micra first**.
   S3‑4.3C has isolators built in; no module needed.) A
   [2.54 mm screw‑terminal block](https://a.co/d/0eVdsD4h) that clips onto the
   P4's GPIO header makes the board‑side connection clean and solder‑free.
+
+(P4 boards have an optional alternative to the module and the splice: the
+[Apollo Link](#apollo-link-optional-p4-boards) board, further down.)
 
 Although there are **four** connections at the machine end (Micra white,
 Micra black, and the two paddle‑switch wires), one 3‑conductor cable is all
@@ -147,6 +153,80 @@ head, a boiler, or any other heat‑producing surface is not. **Mount it low
 and away from the brew head** — there is open space below the hot‑water pipe
 and the steam wand that works well — and where clearance is tight, a piece of
 neoprene sheet between the module and the nearest hot surface does the job.
+
+## Apollo Link (optional, P4 boards)
+
+**You do not need this.** The opto cable above is the simplest way to wire
+the paddle and it is what most installs use. Apollo Link is a small
+open‑hardware board that replaces the opto module and the DIY splice for
+people who want two extra things:
+
+- **The paddle keeps working without Apollo.** Solid‑state relays on the
+  Link wire the paddle straight to the Micra in copper whenever Apollo is
+  off, unplugged, rebooting or mid‑update, and hand it to Apollo only while
+  Apollo is running. The "paddle works only through Apollo" caveat at the
+  top of this page no longer applies.
+- **One cable, no USB lead at the display.** A USB‑C power adapter plugs
+  into the Link, and the same 5‑wire cable that carries the paddle also
+  powers Apollo through its GPIO header.
+
+Everything about it lives in the repo under
+[`hardware/paddle-bridge`](../hardware/paddle-bridge): the KiCad schematic
+and layout, a Mouser‑ready BOM (13 line items) and the gerbers to have the
+board made. It is young — the first boards were built in October 2026 — so
+expect rough edges.
+
+**Parts:** the Link board, assembled; two JST PH housings (PHR‑5 for the
+Apollo side, PHR‑4 for the machine side) with their crimp contacts; a
+5‑conductor 24 AWG cable; any USB‑C 5 V adapter (1 A is plenty); and a
+2 × 7 plug for the Apollo end of the cable — an IDC plug such as the Omron
+XG2A‑1401 with 28 AWG wire lies flat against the board (a 2.54 mm crimp
+housing works too, standing taller).
+
+**Apollo end.** The Link uses a second set of pins at the **5 V end** of the
+P4's 40‑pin header (the end nearest the RTC connector). The header's
+silkscreen prints the GPIO *names*, so the five wires land on:
+
+| wire | header label |
+|---|---|
+| 5V | **5V** (either of the two) |
+| GND | **GND** (the one beside 5V, or the one beside 2) |
+| DRV | **3** (GPIO 3) |
+| SENSE | **5** (GPIO 5) |
+| CTRL | **4** (GPIO 4) |
+
+Those sit inside a 2 × 7 rectangle running from **4 … 3V3** on the outer row
+and **GND … 5V** on the inner row, so a 14‑way IDC plug (Omron XG2A‑1401)
+covers them in one go; the other positions in the block stay unwired, since
+they carry the I2C bus (**SCL**, **SDA**), the console UART (**37**, **38**),
+**2** and 3.3 V. The corner pins the opto cable uses (**GND / 52 / 51**) stay
+free — the firmware drives both sets at once, so there is nothing to set,
+and either cable works on any P4 unit.
+
+![Apollo Link plug on the 5 V end of the P4 header](img/wiring/link-apollo-header.jpg)
+
+**Link end.** J1 (marked *APOLLO*) takes the five wires in the order on its
+silkscreen: GND, 5V, DRV, SENSE, CTRL. J2 (marked *Micra: paddle tap*)
+goes to the machine: **P1** and **P2** to the two paddle‑switch wires,
+**MW** and **MB** to the Micra's white and black. The USB‑C port marked
+*PWR* is the 5 V supply. The green LED is lit while Apollo owns the paddle.
+
+![Apollo Link with its cables: machine side, paddle, USB power, Apollo](img/wiring/link-connections.jpg)
+
+**Battery units:** power arriving through the header does not reach the
+P4's charger, so a battery fitted to the board is **not charged** by the
+Link; the charger only runs from the P4's own USB‑C. Battery‑less units
+(the usual mount‑on‑Micra build) are unaffected.
+
+**Heat:** the relays are rated to 85 °C. Mount the Link where you would
+mount the opto module — low in the machine, away from the brew head.
+
+**Bench‑test it like the opto cable** (next section): meter across MW and
+MB, short P1 to P2 as the paddle. Plus one extra check that is the whole
+point of the board: with Apollo **powered off** or unplugged, the short
+must read **closed** on the meter, with the LED dark. Power Apollo up (LED
+lit) and the same short reads **open** — the paddle now reaches Apollo
+instead, and Apollo closes the Micra line itself when it runs a shot.
 
 ## Bench‑test before installing
 

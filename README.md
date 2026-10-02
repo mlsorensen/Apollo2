@@ -86,7 +86,8 @@ Pick a board from the **[Which board?](#which-board)** table below — three of
 them come as finished boxes that need no assembly at all. A Bluetooth scale is
 optional but unlocks the shot timer, flow graph, and brew‑by‑weight. Wiring
 the machine's paddle (for Auto shot) is optional too, and can always be added
-later — see the [wiring guide](docs/WIRING.md).
+later — see the [wiring guide](docs/WIRING.md) (which also covers the
+optional Apollo Link board for P4 units).
 
 ### 2. Flash the firmware
 

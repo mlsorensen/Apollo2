@@ -27,7 +27,11 @@ has only ever shipped with v3 silicon.
 Auto‑shot wiring is optional on every board: without it you still get the full
 brew‑by‑weight experience via **Shot detect**, and only the automatic stop at
 target weight needs the wire. Step‑by‑step wiring instructions (with photos of
-the Micra's paddle loom) are in the **[wiring guide](WIRING.md)**.
+the Micra's paddle loom) are in the **[wiring guide](WIRING.md)**. P4 boards
+also have an optional open‑hardware alternative, the
+[Apollo Link](WIRING.md#apollo-link-optional-p4-boards) board: the paddle
+keeps working with Apollo off, and one cable carries the paddle *and* powers
+the display.
 
 A supported Bluetooth scale (Bookoo Themis, Acaia Umbra / Lunar / Prochef /
 Pyxis, or Varia Aku — Pyxis and Aku untested) is optional but unlocks the shot
