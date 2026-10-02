@@ -257,12 +257,10 @@ paddle.
 
 **Battery units:** whether a fitted battery charges from the Link depends on
 the board. On the **X 8"** it does — measured: 4.93 V at 1.0 A at the Link's
-input while running and charging. On the **P4‑5 and P4‑4.3** don't count on
-it: their header power is not believed to reach the charger, so a battery
-there charges only from the board's own USB‑C (unverified either way —
-check the battery level after a day on the Link before relying on it). Size
-the adapter for the charging case regardless (see Parts); battery‑less units
-draw about 0.6 A.
+input while running and charging. On the **P4‑5 and P4‑4.3** it does
+**not**: header power does not reach their charger, so a battery there
+charges only from the board's own USB‑C. Size the adapter for the charging
+case regardless (see Parts); battery‑less units draw about 0.6 A.
 
 
 ### Bench‑test the Link
