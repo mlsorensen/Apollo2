@@ -25,6 +25,8 @@ board_to_env() {
     p4-5|p45|esp32-p4-micra-5)                            echo "esp32-p4-micra-5" ;;
     p4-4-3-rev3|p4-43-rev3|esp32-p4-micra-43-rev3)        echo "esp32-p4-micra-43-rev3" ;;
     p4-5-rev3|p45-rev3|esp32-p4-micra-5-rev3)             echo "esp32-p4-micra-5-rev3" ;;
+    linktest|esp32-p4-linktest)                           echo "esp32-p4-linktest" ;;
+    linktest-rev3|esp32-p4-linktest-rev3)                 echo "esp32-p4-linktest-rev3" ;;
     p4-x-7|p4x7|esp32-p4-micra-x-7)                       echo "esp32-p4-micra-x-7" ;;
     p4-x-8|p4x8|esp32-p4-micra-x-8)                       echo "esp32-p4-micra-x-8" ;;
     p4-x-10-1|p4-x-10|p4x101|esp32-p4-micra-x-10-1)       echo "esp32-p4-micra-x-10-1" ;;
@@ -139,7 +141,7 @@ fi
 # USB-CDC port must not see a scripted reset dance -- see CLAUDE.md.) The
 # ask is one extra ROM handshake before the flash; the flash resets anyway.
 case "$ENV" in
-  esp32-p4-micra-43|esp32-p4-micra-43-rev3|esp32-p4-micra-5|esp32-p4-micra-5-rev3)
+  esp32-p4-micra-43|esp32-p4-micra-43-rev3|esp32-p4-micra-5|esp32-p4-micra-5-rev3|esp32-p4-linktest|esp32-p4-linktest-rev3)
     if [ -n "$PORT" ]; then
       BASE="${ENV%-rev3}"
       # esptool as PlatformIO ships it: the penv's own entry point first (a

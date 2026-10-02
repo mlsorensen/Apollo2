@@ -138,6 +138,16 @@ build-p4-4-3-rev3: $(WEBAPP_HDR)
 build-p4-5-rev3: $(WEBAPP_HDR)
 	$(PIO) run -e esp32-p4-micra-5-rev3
 
+# Apollo Link bench tester (internal; no webapp header needed)
+build-linktest:
+	$(PIO) run -e esp32-p4-linktest
+
+build-linktest-rev3:
+	$(PIO) run -e esp32-p4-linktest-rev3
+
+flash-linktest:
+	@tools/flash.sh linktest
+
 build-p4-x-7: $(WEBAPP_HDR)
 	$(PIO) run -e esp32-p4-micra-x-7
 

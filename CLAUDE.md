@@ -142,6 +142,13 @@ display isn't up.
   blob when the pinned platform's esp-hosted host version changes.
 - Proving ground: the `esp32-p4-dltest` env (src/dltest/) is the standalone
   firmware the install mode was developed + verified in; keep it.
+- Apollo Link bench tester: the `esp32-p4-linktest` env (+ `-rev3`,
+  src/linktest/main.cpp; `make build-linktest` / `flash-linktest`) is a
+  standalone P4-5 firmware for checking Link boards one after another: both
+  paddle senses live, SHOT/CTRL buttons, a guided meter test with PASS/FAIL,
+  serial mirror (`drv/ctrl/pulse/status/test/pass/fail/abort`). Boots CTRL
+  OFF on purpose (Link in copper) — the opposite of the shipping firmware.
+  Reuses display.cpp/touch.cpp/system.cpp only; no NVS, no radio. Internal.
 
 ## Settings backup to the card (v0.14+)
 
