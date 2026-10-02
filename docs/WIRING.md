@@ -255,11 +255,14 @@ paddle.
 
 ![Apollo Link with its cables: machine side, paddle, USB power, Apollo](img/wiring/link-connections.jpg)
 
-**Battery units:** power arriving through the header **does** reach the
-P4's charger, so a battery fitted to the board charges from the Link just as
-it would from the board's own USB‑C (measured on an X 8": 4.93 V at 1.0 A at
-the Link's input while running and charging). Size the adapter accordingly
-(see Parts). Battery‑less units draw about 0.6 A.
+**Battery units:** whether a fitted battery charges from the Link depends on
+the board. On the **X 8"** it does — measured: 4.93 V at 1.0 A at the Link's
+input while running and charging. On the **P4‑5 and P4‑4.3** don't count on
+it: their header power is not believed to reach the charger, so a battery
+there charges only from the board's own USB‑C (unverified either way —
+check the battery level after a day on the Link before relying on it). Size
+the adapter for the charging case regardless (see Parts); battery‑less units
+draw about 0.6 A.
 
 
 ### Bench‑test the Link
