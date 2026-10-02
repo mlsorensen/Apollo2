@@ -30,6 +30,12 @@ class BrewController : public IBrewController {
   // wake switch — it powers on, no water moves — so the controller passes the
   // level through to the machine but skips the shot timer + automation.
   void set_standby_provider(std::function<bool()> p) { standby_ = std::move(p); }
+  // A scale is PAIRED (saved on this unit), connected or not. Without one the
+  // effective mode is kManual: Shot detect could never see a shot and Auto
+  // could never stop one, and the pass-through relay must not refuse a flip
+  // "because the scale is missing" when there is no scale to miss. The stored
+  // mode is untouched and returns the moment a scale is paired. Unset = known.
+  void set_scale_known_provider(std::function<bool()> p) { scale_known_ = std::move(p); }
   void set_target_persister(std::function<void(float)> p) { persist_target_ = std::move(p); }
   void set_shot_mode_persister(std::function<void(int)> p) { persist_mode_ = std::move(p); }
   void set_overshoot_persister(std::function<void(float)> p) { persist_overshoot_ = std::move(p); }
@@ -89,8 +95,10 @@ class BrewController : public IBrewController {
   // (the closest armed intent) — snapshot() reports the same, so the UI and
   // the state machine can never disagree about what's armed.
   ShotMode eff_mode() const {
+    if (!scale_known()) return ShotMode::kManual;
     return (mode_ == ShotMode::kAuto && !relay()) ? ShotMode::kDetect : mode_;
   }
+  bool scale_known() const { return !scale_known_ || scale_known_(); }
   // Paddle edges are the shot-phase source (kAuto's automation or kManual's
   // relay+timer). kDetect always runs the detector path, relay or not.
   bool wired() const { return relay() && eff_mode() != ShotMode::kDetect; }
@@ -115,6 +123,7 @@ class BrewController : public IBrewController {
   ShotTimer timer_;
   ShotDetector detector_;  // unwired mode's start/stop source
   std::function<bool()> standby_;  // machine known-in-standby (see setter)
+  std::function<bool()> scale_known_;  // a scale is paired (see setter)
   std::function<void(float)> persist_target_;
   std::function<void(int)> persist_mode_;
   std::function<void(float)> persist_overshoot_;
@@ -200,6 +209,8 @@ class BrewController : public IBrewController {
   uint32_t review_until_ms_ = 0;
   uint32_t review_reject_seq_ = 0;  // paddle ON edges swallowed during kReview
   uint32_t scale_refuse_seq_ = 0;   // ON edges refused: armed mode needs a scale
+  uint32_t wired_hint_seq_ = 0;     // first pass-through ON edge with the setting off
+  bool wired_hint_fired_ = false;   // once per boot
   uint32_t blind_since_ms_ = 0;  // scale dark since (kBrewing); 0 = seeing it
   uint32_t last_sense_ms_ = 0;
   uint32_t last_now_ms_ = 0;  // for snapshot()'s elapsed time

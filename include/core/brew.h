@@ -146,6 +146,15 @@ struct BrewSnapshot {
   uint32_t backflush_phase_ms;  // ms left in the current on/off phase
   bool  backflush_done;   // the last sequence ran to completion (cleared when
                           // the next one starts, or on cancel)
+  // --- Hints ------------------------------------------------------------
+  uint32_t wired_hint_seq;     // ticks ONCE per boot, on the first paddle ON
+                               // edge relayed while "Wired paddle" is OFF: the
+                               // firmware just saw a real harness, so the UI
+                               // tells the user the switch exists (timer, Auto
+                               // shot, cleaning all wait behind it)
+  bool  scale_known;      // a scale is paired (saved), connected or not. With
+                          // none, the effective mode is kManual whatever is
+                          // stored: nothing could detect or stop a shot
 };
 
 // True when the ESP-side shot timer is the authoritative shot-time source:

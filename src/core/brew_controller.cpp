@@ -436,6 +436,15 @@ void BrewController::poll_unwired(uint32_t now_ms) {
   if (paddle_.available()) {
     const int edge = sense_paddle_edge(now_ms);
     if (edge == 1) {
+      // First ON edge of this boot with "Wired paddle" OFF: a real harness is
+      // fitted and the user is not getting the timer, Auto shot or cleaning.
+      // Tick once so the UI can point at the switch; the flip itself is
+      // relayed below exactly as before (the hint never blocks the machine).
+      if (!wired_paddle_ && !wired_hint_fired_) {
+        wired_hint_fired_ = true;
+        ++wired_hint_seq_;
+        logf("Brew: paddle seen with Wired paddle OFF -> hint\n");
+      }
       // A flip on a standby machine is its WAKE switch (no water moves) —
       // never refused, same as the wired path.
       const bool wake_only = standby_ && standby_();
@@ -654,6 +663,8 @@ BrewSnapshot BrewController::snapshot() const {
               ? clean_until_ms_ - last_now_ms_
               : 0,
       .backflush_done = bf_done_,
+      .wired_hint_seq = wired_hint_seq_,
+      .scale_known = scale_known(),
   };
 }
 

@@ -45,6 +45,8 @@ class FakeBrewController : public core::IBrewController {
         .backflush_cycle = bf_active_ ? bf_cycle_ : 0,
         .backflush_phase_ms = bf_phase_ms_,
         .backflush_done = bf_done_,
+        .wired_hint_seq = 0,
+        .scale_known = true,
     };
   }
   void set_target_weight_g(float grams) override { target_g_ = grams; }

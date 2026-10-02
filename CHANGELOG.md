@@ -11,6 +11,12 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 
 ### Changes
 
+- **No scale, Manual mode.** With no scale paired the firmware now runs in
+  Manual mode whatever was last chosen, so a paddle flip is never refused
+  "because the scale is missing". The chosen mode returns once a scale is paired.
+- **Wired paddle reminder.** The first paddle flip seen with Wired paddle off
+  pops a one-time hint pointing at the switch, since the timer, Auto shot and
+  cleaning all wait behind it.
 - **Apollo Link.** The P4 boards now also drive the paddle bridge on the 5V end
   of the 40-pin header (DRV GPIO3, SENSE GPIO5, CTRL GPIO4), so one cable can
   carry the paddle and power the remote. The original corner-pin cable keeps

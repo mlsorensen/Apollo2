@@ -2676,6 +2676,14 @@ void App::pump_scale_chart() {
                     bsnap.mode == core::ShotMode::kAuto ? "Auto shot" : "Shot detect");
       show_toast(tb);
     }
+    // A real paddle flip arrived while "Wired paddle" is off (once per boot):
+    // the harness is evidently fitted, so say where the switch is. The flip
+    // was relayed to the machine regardless; this only names what's missing.
+    if (bsnap.wired_hint_seq != wired_hint_seen_) {
+      wired_hint_seen_ = bsnap.wired_hint_seq;
+      show_toast("Paddle harness detected. Turn on Settings > Micra > Controls > "
+                 "Wired paddle for the shot timer, Auto shot and cleaning.");
+    }
     // Unwired stop-early signal: fire the pill flash once per shot, on the
     // controller's latch going high (see BrewSnapshot::stop_hint).
     if (bsnap.stop_hint && !stop_hint_seen_) ui::flash_stop_hint(home_);

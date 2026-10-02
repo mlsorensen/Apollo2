@@ -157,7 +157,9 @@ Without a scale, the MICRA card fills the screen as a single hero:
     *target − overshoot*. The overshoot compensation is learned from each
     auto‑stopped shot's settled weight, so accuracy improves over the first
     few shots.
-  - **Shot detect**: no wiring needed — the shot is detected from the weight
+  - **Shot detect** *(needs a paired scale — with none paired the firmware
+    runs in Manual mode whatever was last chosen, and the pill isn't shown)*:
+    no wiring needed — the shot is detected from the weight
     stream alone (start when flow sustains, stop when flow ceases). There is
     no auto‑stop; instead the pill flashes **Stop** when the shot reaches the
     point where the auto‑stop would have fired, telling you to flip the
@@ -245,7 +247,10 @@ Plots the live flow rate (or weight) from the scale.
 - ① **Wired paddle** *(paddle‑capable boards; default off)* — tell the firmware
   the paddle harness is physically wired. This enables the **Auto shot** mode
   and the auto‑flush. Off, the board behaves like an unwired one (Shot detect
-  / Manual only). Flipping it mid‑shot cancels the shot.
+  / Manual only) — the paddle still runs the machine, but without the shot
+  timer, Auto shot or cleaning, so the first paddle flip the firmware sees
+  with this off pops a one‑time reminder pointing here. Flipping it mid‑shot
+  cancels the shot.
 - ② **Chime melody** *(boards with a speaker; Off / Blue / Pink / Human /
   Gold / White / Autumn / Random, default Blue)* — which tune announces the end of a warm‑up. Each tap
   cycles to the next melody and auditions it; **Random** picks a different

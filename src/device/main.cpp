@@ -344,6 +344,9 @@ void setup() {
   // water moves) — tell the controller so it passes the flip through without
   // starting a phantom shot. Only a KNOWN not-on state counts; disconnected or
   // unknown falls back to normal shot handling.
+  // No paired scale -> effective Manual mode (nothing to detect or stop on);
+  // the stored mode comes back the moment one is paired.
+  g_brew.set_scale_known_provider([] { return !g_scale_provisioner.saved_name().empty(); });
   g_brew.set_standby_provider([] {
     const core::MachineSnapshot s = g_micra.snapshot();
     const bool wake_only = s.link == core::Link::Connected && s.power != core::Power::On;
