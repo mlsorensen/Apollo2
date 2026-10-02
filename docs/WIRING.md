@@ -242,7 +242,15 @@ and either cable works on any P4 unit.
 silkscreen: GND, 5V, DRV, SENSE, CTRL. J2 (marked *Micra: paddle tap*)
 goes to the machine: **P1** and **P2** to the two paddle‑switch wires,
 **MW** and **MB** to the Micra's white and black. The USB‑C port marked
-*PWR* is the 5 V supply. The green LED is lit while Apollo owns the paddle.
+*PWR* is the 5 V supply.
+
+**The green LED** means *Apollo has the paddle*. Apollo switches it on a
+few seconds into every boot and keeps it on for as long as the firmware is
+running, whatever the **Wired paddle** setting — so with Apollo up it should
+simply always be lit. Dark means the paddle is wired to the Micra in copper:
+Apollo is off, unplugged, mid‑update, or the Apollo‑end plug isn't seated on
+the right pins. It says nothing about shots; it doesn't flicker with the
+paddle.
 
 ![Apollo Link with its cables: machine side, paddle, USB power, Apollo](img/wiring/link-connections.jpg)
 
