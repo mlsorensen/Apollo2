@@ -211,7 +211,8 @@ expect rough edges.
 
 **Parts:** the Link board, assembled; two JST PH housings (PHR‑5 for the
 Apollo side, PHR‑4 for the machine side) with their crimp contacts; a
-5‑conductor 24 AWG cable; any USB‑C 5 V adapter (1 A is plenty); and a
+5‑conductor 24 AWG cable; a USB‑C 5 V adapter rated **1.5 A or more** (a
+battery unit draws about 1 A while charging; battery‑less, about 0.6 A); and a
 2 × 7 plug for the Apollo end of the cable — an IDC plug such as the Omron
 XG2A‑1401 with 28 AWG wire lies flat against the board (a 2.54 mm crimp
 housing works too, standing taller).
@@ -254,10 +255,11 @@ paddle.
 
 ![Apollo Link with its cables: machine side, paddle, USB power, Apollo](img/wiring/link-connections.jpg)
 
-**Battery units:** power arriving through the header does not reach the
-P4's charger, so a battery fitted to the board is **not charged** by the
-Link; the charger only runs from the P4's own USB‑C. Battery‑less units
-(the usual mount‑on‑Micra build) are unaffected.
+**Battery units:** power arriving through the header **does** reach the
+P4's charger, so a battery fitted to the board charges from the Link just as
+it would from the board's own USB‑C (measured on an X 8": 4.93 V at 1.0 A at
+the Link's input while running and charging). Size the adapter accordingly
+(see Parts). Battery‑less units draw about 0.6 A.
 
 
 ### Bench‑test the Link
