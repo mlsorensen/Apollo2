@@ -278,8 +278,29 @@ days Apollo is unplugged.
 
 ### Installing it
 
+**Plug the Link's USB power in last.** Connect everything else — the plug
+on Apollo, the paddle and Micra wires on J2 — with Apollo running from its
+own USB‑C or battery and the Link's *PWR* port empty. Check that it works:
+the green LED is lit, and flipping the paddle starts the shot timer (or
+pops the Wired‑paddle reminder if that switch is off). Only then plug the
+adapter into the Link. A working Link proves every wire landed on the right
+pin *before* the adapter's 5 V goes through it; the Apollo end is a plain
+2 × 7 plug with nothing to stop it going in rotated, and a rotated plug with
+power behind it can destroy the P4. Without that power it can't.
+
 Mount the Link where you would mount the opto module — low in the machine,
 away from the brew head (the relays are rated to 85 °C) — then close up and
 set **Wired paddle** exactly as in the sections above. Everything in the
 manual about Auto shot, auto‑flush and cleaning applies unchanged; the only
 visible difference is that the paddle keeps working when Apollo is off.
+
+### If something's off
+
+| What you see | Likely cause | Do |
+|---|---|---|
+| The pump runs the moment Apollo boots, no paddle touched | The plug is rotated 180° (the DRV wire is on a 5 V pin) | Unplug the Apollo end, turn it around |
+| Green LED dark while Apollo is running | The plug is shifted along the header, or the J1 wires are in the wrong order | Re‑seat it one pair in from the 5 V end; check J1 reads GND, 5V, DRV, SENSE, CTRL |
+| LED lit, paddle flips do nothing on Apollo | SENSE not on GPIO 5, or P1/P2 not on the paddle wires | Check the plug position and the J2 wires |
+| Touch or sound stops while the Link is plugged in | A wire landed on SCL/SDA — the plug is rotated | Unplug it; nothing is damaged without the Link's power |
+| Apollo runs from its own USB but not from the Link | 5V/GND not on the 5V/GND pins, or the PTC has tripped | Fix the plug; a tripped PTC resets by itself once the adapter is unplugged |
+| "USB power" shown but a fitted battery never charges | Expected — the Link does not charge a battery | Charge from Apollo's own USB‑C |
