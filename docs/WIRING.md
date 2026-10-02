@@ -278,7 +278,8 @@ days Apollo is unplugged.
 
 ### Installing it
 
-**Plug the Link's USB power in last.** Connect everything else — the plug
+**Plug in the Link's USB power only after verifying the wiring.** Connect
+everything else — the plug
 on Apollo, the paddle and Micra wires on J2 — with Apollo running from its
 own USB‑C or battery and the Link's *PWR* port empty. Check that it works:
 the green LED is lit, and flipping the paddle starts the shot timer (or
