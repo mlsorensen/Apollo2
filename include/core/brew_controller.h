@@ -105,7 +105,7 @@ class BrewController : public IBrewController {
   void poll_wired(uint32_t now_ms);    // paddle relay + weight automation
   void poll_unwired(uint32_t now_ms);  // detector-driven phases (+ pass-through relay)
   void poll_flush(uint32_t now_ms);    // post-shot auto-flush (cup-off -> run the group)
-  void cancel_flush();                 // any flush state -> idle, line opened if we held it
+  void cancel_flush();                 // any flush state -> idle, line opened if it was running
   void poll_clean(uint32_t now_ms);    // manual flush / backflush sequencing
   void end_clean();                    // any cleaning mode -> off, line opened
   // A cleaning cycle could start right now: the drive line exists, the machine
@@ -171,10 +171,12 @@ class BrewController : public IBrewController {
 
   // Auto-flush sequencing (needs the relay; any shot mode). Armed when a real shot freezes into
   // review; a cup-off weight drop starts the delay; then the line runs for
-  // flush_s_ and opens again. User paddle activity cancels it by EDGE, not
-  // level — after a target auto-stop the physical paddle is naturally still
-  // ON when the flush arms, and flipping it back OFF is routine cleanup, not
-  // a takeover. The human still outranks the automation on the drive line.
+  // flush_s_ and opens again. Before the run, user paddle activity cancels it
+  // by EDGE, not level — after a target auto-stop the physical paddle is
+  // naturally still ON when the flush arms, and flipping it back OFF is
+  // routine cleanup, not a takeover. DURING the run paddle flips are ignored
+  // (owner, 2026-10-05: that cleanup flip raced the run starting and cancelled
+  // it); the Home button's Stop ends it early instead.
   // Cleaning modes (Home "Flush" / Settings "Backflush cleaning"). They own the
   // drive line EXCLUSIVELY while active: the shot machinery and the auto-flush
   // are skipped entirely, so nothing else can touch the line mid-cycle. A

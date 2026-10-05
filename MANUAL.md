@@ -132,8 +132,9 @@ Without a scale, the MICRA card fills the screen as a single hero:
   disconnected it becomes **Connect** and starts the Bluetooth link.
 - ⑤ **Flush** *(paddle‑wired boards, screens 4.3" and larger)* — runs the group
   for a quick rinse, for the same time as **Auto flush** (3 s when Auto flush
-  is Off). Tap again while it runs to stop early. Greyed out while a shot is
-  in flight or the machine is in standby.
+  is Off). Tap again while it runs to stop early; it also reads **Stop** while
+  an auto flush is running, and stops that. Greyed out while a shot is in
+  flight or the machine is in standby.
 
 ### SCALE card (when a scale is paired)
 
@@ -290,7 +291,10 @@ the top says so.
 - ① **Auto flush** *(Off / 3 / 6 / 9 / 15 s; default Off)* — after a finished
   shot, when the scale sees the cup lift off, the firmware waits (see **Flush
   delay**) and then runs the group for this long to rinse the puck's surface.
-  Any paddle activity, a new shot, or the machine being in standby cancels it.
+  Before it starts, flipping the paddle on, a new shot, or the machine being in
+  standby cancels it. Once it is running the paddle is ignored — flipping it
+  back to rest won't cut the rinse short — and the Home **Flush** button reads
+  **Stop** to end it early.
   **This one duration drives every timed group run**: the auto‑flush, the Home
   **Flush** button, and each backflush pulse. With Auto flush Off the other two
   fall back to 3 s.

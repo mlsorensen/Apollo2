@@ -139,7 +139,8 @@ struct BrewSnapshot {
                           // can still flush and backflush.
   bool  clean_ready;      // a flush/backflush could START right now: relay,
                           // machine not in standby, no shot in flight
-  bool  manual_flush;     // the Home "Flush" button is holding the line open
+  bool  flush_running;    // a flush the Home button can Stop is running: its
+                          // own manual flush, or the post-shot auto-flush
   bool  backflush_active; // the backflush sequence is running
   bool  backflush_on;     // its current phase (true = group running, false = pause)
   int   backflush_cycle;  // 1..kBackflushCycles while active (0 otherwise)
@@ -226,8 +227,9 @@ class IBrewController {
 
   // Manual group flush (the Home "Flush" button): runs the group for flush_s
   // seconds — the same duration as the post-shot auto-flush, or
-  // kManualFlushDefaultS when that's Off. Tapping again mid-run stops it early.
-  // No-op unless clean_ready.
+  // kManualFlushDefaultS when that's Off. Tapping again mid-run stops it early,
+  // and a tap while the post-shot auto-flush runs stops that (it does not
+  // start a manual one). Otherwise a no-op unless clean_ready.
   virtual void toggle_manual_flush() = 0;
 
   // Start the backflush cleaning sequence (kBackflushCycles on/off pulses).

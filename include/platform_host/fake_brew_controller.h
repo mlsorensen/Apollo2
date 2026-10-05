@@ -39,7 +39,7 @@ class FakeBrewController : public core::IBrewController {
         .flush_delay_s = flush_delay_s_,
         .relay = relay,
         .clean_ready = relay && clean_ready_,
-        .manual_flush = manual_flush_,
+        .flush_running = manual_flush_,
         .backflush_active = bf_active_,
         .backflush_on = bf_on_,
         .backflush_cycle = bf_active_ ? bf_cycle_ : 0,

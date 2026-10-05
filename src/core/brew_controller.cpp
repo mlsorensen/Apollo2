@@ -90,17 +90,18 @@ void BrewController::poll_flush(uint32_t now_ms) {
     cancel_flush();
     return;
   }
-  // Paddle activity cancels by EDGE against the level snapshotted at arming
-  // (after a target auto-stop the paddle is naturally still ON — the level
-  // alone says nothing). Flipping that leftover paddle back OFF is routine
-  // cleanup, tolerated while armed/waiting. An OFF->ON flip is the user
-  // reaching for the machine — cancel explicitly, because the review swallows
-  // that edge so the kBrewing check above never sees it. Any flip mid-run
-  // cancels: an OFF edge already opened the line in poll_wired, and an ON
-  // flip makes cancel_flush leave the closed line to the user.
+  // Paddle activity BEFORE the run cancels by EDGE against the level
+  // snapshotted at arming (after a target auto-stop the paddle is naturally
+  // still ON — the level alone says nothing). Flipping that leftover paddle
+  // back OFF is routine cleanup, tolerated while armed/waiting. An OFF->ON
+  // flip is the user reaching for the machine — cancel explicitly, because
+  // the review swallows that edge so the kBrewing check above never sees it.
+  // Once the flush RUNS the paddle is out of it: sense_paddle_edge drops the
+  // edge (the cleanup flip used to race the run starting and kill it), and
+  // the Home button's Stop is the way to end it early.
   if (paddle_on_ != flush_paddle_ref_) {
     flush_paddle_ref_ = paddle_on_;
-    if (paddle_on_ || flush_state_ == FlushState::kRunning) {
+    if (paddle_on_ && flush_state_ != FlushState::kRunning) {
       cancel_flush();
       return;
     }
@@ -234,6 +235,11 @@ void BrewController::toggle_manual_flush() {
     logf("Brew: manual flush stopped\n");
     return;
   }
+  if (flush_state_ == FlushState::kRunning) {  // "Stop" on the post-shot flush
+    cancel_flush();
+    logf("Brew: auto-flush stopped\n");
+    return;
+  }
   if (clean_ == CleanMode::kBackflush) return;  // the sequence owns the line
   if (!can_clean()) return;
   cancel_shot();  // clears any review/auto-flush and opens the line first
@@ -271,9 +277,9 @@ void BrewController::cancel_backflush() {
 }
 
 void BrewController::cancel_flush() {
-  if (flush_state_ == FlushState::kRunning && driving_ && !paddle_on_) {
-    // We closed the line for the flush and the user's paddle is off: open it.
-    // (With the user's paddle ON, the line is theirs now — leave it closed.)
+  if (flush_state_ == FlushState::kRunning && driving_) {
+    // We closed the line for the flush: open it, whatever the paddle's level
+    // (flips are ignored mid-run, so a paddle that is ON never took the line).
     paddle_.drive(false);
     driving_ = false;
   }
@@ -306,6 +312,14 @@ int BrewController::sense_paddle_edge(uint32_t now_ms) {
   }
   if (on == paddle_on_) return -1;
   paddle_on_ = on;
+  if (flush_state_ == FlushState::kRunning) {
+    // The post-shot auto-flush owns the line while it runs. The level is
+    // tracked but the edge goes to nobody: an OFF must not open the line under
+    // the flush, an ON must not start a shot into it. Wired and pass-through
+    // paths both sense through here, so this covers either.
+    logf("Brew: paddle %s edge ignored (auto-flush running)\n", on ? "ON" : "OFF");
+    return -1;
+  }
   // Every ACCEPTED edge is logged (the raw pin is not): a paddle mystery
   // always comes down to which edges the controller acted on and when.
   logf("Brew: paddle %s edge (phase %d)\n", on ? "ON" : "OFF",
@@ -653,7 +667,8 @@ BrewSnapshot BrewController::snapshot() const {
       .flush_delay_s = flush_delay_s_,
       .relay = relay(),
       .clean_ready = can_clean(),
-      .manual_flush = clean_ == CleanMode::kManual,
+      .flush_running = clean_ == CleanMode::kManual ||
+                       flush_state_ == FlushState::kRunning,
       .backflush_active = clean_ == CleanMode::kBackflush,
       .backflush_on = bf_on_,
       .backflush_cycle = clean_ == CleanMode::kBackflush ? bf_cycle_ : 0,

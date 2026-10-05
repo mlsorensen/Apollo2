@@ -1437,7 +1437,7 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     } else {
       if (lv_obj_has_flag(w.flush_btn, LV_OBJ_FLAG_HIDDEN))
         lv_obj_remove_flag(w.flush_btn, LV_OBJ_FLAG_HIDDEN);
-      if (brew.manual_flush) {
+      if (brew.flush_running) {
         lv_obj_remove_state(w.flush_btn, LV_STATE_DISABLED);
         ui::set_bg_color(w.flush_btn, ui::theme::alert());
         ui::set_text(w.flush_label, LV_SYMBOL_STOP "  Stop");
