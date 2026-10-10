@@ -11,68 +11,40 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 
 ### Changes
 
-- **No scale, Manual mode.** With no scale paired the firmware now runs in
-  Manual mode whatever was last chosen, so a paddle flip is never refused
-  "because the scale is missing". The chosen mode returns once a scale is paired.
-- **Wired paddle reminder.** The first paddle flip seen with Wired paddle off
-  pops a one-time hint pointing at the switch, since the timer, Auto shot and
-  cleaning all wait behind it.
-- **Apollo Link.** The P4 boards now also drive the paddle bridge on the 5V end
-  of the 40-pin header (DRV GPIO3, SENSE GPIO5, CTRL GPIO4), so one cable can
-  carry the paddle and power the remote. The original corner-pin cable keeps
-  working unchanged; nothing to set.
-
 - **Scheduled on and standby.** Settings → Micra → Schedule turns the machine
-  on and to standby at set times, daily or per weekday, with a Smart Warm-up
-  lead (default 8 min). The switches sit on one page and the times under
-  Configure schedule, so neither scrolls. Needs WiFi with Auto time and a
-  paired Micra.
-- **P4-5 and P4-4.3 on the newer ESP32-P4 chip.** Boards shipping since about
-  August 2026 carry v3 silicon that needs its own image; both are now
-  published. The web flasher's Detect reads the chip revision and picks the
-  right one; on a blank board choose it on the card.
-- **Updates are only offered once they are really there.** The check confirms
-  your board's image is being served before showing the notice, so a release
-  still publishing can't send the device into a failing install. A first-boot
-  radio update no longer rolls the new firmware back.
+  on and to standby at set times, daily or per weekday, with a warm-up lead.
+- **Auto-standby after the last shot.** The machine can go to standby a set
+  time after the last shot, with the minutes left shown on the Home card.
+- **Apollo Link.** The P4 boards also drive the paddle bridge on the 5V end of
+  the 40-pin header, so one cable carries the paddle and powers the remote.
 - **Auto flush ignores the paddle once it is running.** Flipping the paddle
-  back to rest mid-rinse no longer cuts it short. To end one early, tap the
-  Home Flush button, which now reads Stop during an auto flush too.
+  back to rest no longer cuts the rinse short; the Home Flush button reads
+  Stop to end it early.
+- **No scale, Manual mode.** With no scale paired the firmware runs in Manual
+  mode, so a paddle flip is never refused for a missing scale.
+- **Wired paddle reminder.** The first paddle flip seen with Wired paddle off
+  pops a one-time hint pointing at the switch.
 - **Cleaning page says when it can't act.** With Wired paddle off, Auto flush
-  and Flush delay are greyed like Backflush already was, with a line on top
-  saying what to switch on.
-- **Auto-standby after the last shot.** Settings → Micra → Schedule →
-  Auto-standby sends the machine to standby a set time after the last shot
-  (default 30 min, off by default). Every shot restarts the count; a machine
-  the schedule turned on and nobody used stays on. Show auto-standby timer
-  puts the minutes left on the Home MICRA card.
+  and Flush delay are greyed out with a line saying what to switch on.
 - **Scale battery as icon, percent or both.** Settings → Scale → Device
-  settings → Battery display picks how the SCALE card shows the scale's
-  battery.
-- **Static IP address.** The WiFi setup page offers a network address
-  choice: automatic (DHCP) as before, or static with IP, subnet mask, gateway
-  and optional DNS. Stats → Info and the WiFi page show which one is in
-  use; the WiFi page's Address row also lists the gateway and mask.
-  Change it by running Set up WiFi again; the page pre-fills what is stored.
-- **Scheduled turn-on after a lost connection.** If the Micra's Bluetooth
-  link dropped overnight, the device used to wait for a touch before
-  reconnecting, so a morning turn-on could find it disconnected and be
-  skipped. It now reconnects while the screen is asleep, and a skipped
-  trigger is recorded in the diagnostic log with the reason.
-- **Crash-dump download no longer crashes P4 boards.** Fetching the crash
-  dump from the device's web page (Stats → Info, or /coredump) made every P4
-  reboot and lose the dump it was serving. It now downloads.
-- **Web flasher fixed for newer P4 boards.** Flashing a rev v3 ESP32-P4
-  (the X 8", newer P4-5 and P4-4.3 units) from the browser used to fail after
-  the confirmation dialogs; it now completes. The version list and Detect
-  board also work again.
-- **Settings tab doubles as a home button.** Tapping the Settings tab while
-  already inside Settings jumps straight back to its root page, so crossing
-  from one section to another no longer takes several Backs.
+  settings → Battery display picks how the SCALE card shows it.
+- **Static IP address.** The WiFi setup page offers a static address with IP,
+  mask, gateway and DNS, and Stats → Info shows which is in use.
 - **Welcome screen on a new unit.** Until a Micra is paired, each boot lists
-  the three recommended steps — WiFi, pair the Micra, pair a scale — with a
-  button for each, all optional. The WiFi setup page now offers the time zone
-  too.
+  the three setup steps — WiFi, Micra, scale — with a button for each.
+- **Settings tab doubles as a home button.** Tapping the Settings tab while
+  inside Settings jumps straight back to its root page.
+- **P4-5 and P4-4.3 on the newer ESP32-P4 chip.** Boards with v3 silicon get
+  their own image, and the web flasher's Detect picks the right one.
+- **Web flasher fixed for newer P4 boards.** Flashing a rev v3 ESP32-P4 from
+  the browser no longer fails after the confirmation dialogs.
+- **Updates are only offered once they are really there.** The check confirms
+  your board's image is being served before showing the notice.
+- **Scheduled turn-on after a lost connection.** The device now reconnects to
+  the Micra while the screen is asleep, and a skipped trigger is logged with
+  the reason.
+- **Crash-dump download no longer crashes P4 boards.** Fetching the crash dump
+  from the device's web page now downloads instead of rebooting the board.
 
 ## v0.14.2
 
