@@ -1,0 +1,38 @@
+
+### Changes
+
+- **Scheduled on and standby.** Settings → Micra → Schedule turns the machine
+  on and to standby at set times, daily or per weekday, with a warm-up lead.
+- **Auto-standby after the last shot.** The machine can go to standby a set
+  time after the last shot, with the minutes left shown on the Home card.
+- **Apollo Link.** The P4 boards also drive the paddle bridge on the 5V end of
+  the 40-pin header, so one cable carries the paddle and powers the remote.
+- **Auto flush ignores the paddle once it is running.** Flipping the paddle
+  back to rest no longer cuts the rinse short; the Home Flush button reads
+  Stop to end it early.
+- **No scale, Manual mode.** With no scale paired the firmware runs in Manual
+  mode, so a paddle flip is never refused for a missing scale.
+- **Wired paddle reminder.** The first paddle flip seen with Wired paddle off
+  pops a one-time hint pointing at the switch.
+- **Cleaning page says when it can't act.** With Wired paddle off, Auto flush
+  and Flush delay are greyed out with a line saying what to switch on.
+- **Scale battery as icon, percent or both.** Settings → Scale → Device
+  settings → Battery display picks how the SCALE card shows it.
+- **Static IP address.** The WiFi setup page offers a static address with IP,
+  mask, gateway and DNS, and Stats → Info shows which is in use.
+- **Welcome screen on a new unit.** Until a Micra is paired, each boot lists
+  the three setup steps — WiFi, Micra, scale — with a button for each.
+- **Settings tab doubles as a home button.** Tapping the Settings tab while
+  inside Settings jumps straight back to its root page.
+- **P4-5 and P4-4.3 on the newer ESP32-P4 chip.** Boards with v3 silicon get
+  their own image, and the web flasher's Detect picks the right one.
+- **Web flasher fixed for newer P4 boards.** Flashing a rev v3 ESP32-P4 from
+  the browser no longer fails after the confirmation dialogs.
+- **Updates are only offered once they are really there.** The check confirms
+  your board's image is being served before showing the notice.
+- **Scheduled turn-on after a lost connection.** The device now reconnects to
+  the Micra while the screen is asleep, and a skipped trigger is logged with
+  the reason.
+- **Crash-dump download no longer crashes P4 boards.** Fetching the crash dump
+  from the device's web page now downloads instead of rebooting the board.
+
