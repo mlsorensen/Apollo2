@@ -880,9 +880,13 @@ constexpr int kAudioPaPin = 53;   // speaker power-amp enable, active-high
 constexpr int  kPaddleDrivePin = 52;
 constexpr int  kPaddleSensePin = 51;
 constexpr bool kPaddleActiveHigh = true;
-constexpr int  kLinkDrivePin = -1;  // Apollo Link set: not yet mapped on the X
-constexpr int  kLinkSensePin = -1;  // header (check its schematic first)
-constexpr int  kLinkCtrlPin  = -1;
+// --- Apollo Link (v1.0): the X's J8 is pin-for-pin the 4.3/5's header at the
+//     5V end (X schematic: 1/3 = VCC_5V, 5/13 = GND, 11 = GPIO5, 12 = GPIO3,
+//     14 = GPIO4), so the same Link set applies. Unmapped until 2026-10-16;
+//     the owner's X-8 ran from the Link but never saw the paddle. ---
+constexpr int  kLinkDrivePin = 3;
+constexpr int  kLinkSensePin = 5;
+constexpr int  kLinkCtrlPin  = 4;
 
 // --- RTC: no discrete RTC chip (same as the other P4 boards). ---
 

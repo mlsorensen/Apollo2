@@ -650,7 +650,10 @@ GT911 all up; NimBLE host inits. Paddle/audio/ADC since confirmed, 2026-09-11):
    on purpose (owner): the unused set is an open pin. CTRL is held HIGH from
    begin() (Apollo owns the paddle while booted; input = copper otherwise).
    GPIO2 deliberately avoided (touch INT on the 4.3); GPIO7/8 = I2C and
-   GPIO37/38 = console UART are unusable. X boards: Link set unmapped (-1).
+   GPIO37/38 = console UART are unusable. X boards: the SAME set since
+   2026-10-16 — the X schematic's J8 is pin-identical at the 5V end (11 =
+   GPIO5, 12 = GPIO3, 14 = GPIO4); v1.0.0's X-8 image shipped it unmapped,
+   so a Link-wired X-8 powered up but never saw the paddle (LED dark).
 5. Audio: config-only reuse of the 4.3C's ES8311 driver — BSP pins MCLK 13 /
    BCLK 12 / LRCLK 10 / DOUT 9, codec at 0x18 on the shared I2C bus, PA
    enable native GPIO53 active-high (BOARD_AUDIO_PA_IOEXT selects expander-vs-
