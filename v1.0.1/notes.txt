@@ -1,0 +1,3 @@
+
+- **Apollo Link on the X 8".** The counter-top board now drives the Link like the P4-5 and P4-4.3 do; in v1.0.0 a Link-wired X 8" ran from it but never saw the paddle (the Link's green LED stayed dark).
+
