@@ -7,7 +7,7 @@ for someone reading the diff. These notes are also shown ON THE DEVICE, whose
 fonts are ASCII-only: stick to characters `sanitize_notes()` (src/ui/app.cpp)
 maps — plain ASCII plus `— – → … × ' "` — or they render as empty boxes.
 
-## Unreleased
+## v1.0.2
 
 - **Flush delay is now 5 / 10 / 15 s, default 5 s.** The 3 s pause was too short to get the cup clear; a 3, 6 or 9 s delay you had set stays until you tap the row.
 
