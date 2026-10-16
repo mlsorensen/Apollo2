@@ -70,6 +70,9 @@ constexpr uint32_t kBackflushOffMs = 3000;
 // to reason about. With auto-flush switched Off there's no duration to borrow,
 // so they fall back to this.
 constexpr int kManualFlushDefaultS = 3;
+// Cup-off -> auto-flush pause when nothing is stored (seconds). 3 s was too
+// short to get the cup clear and a hand out of the way (owner, 2026-10-16).
+constexpr int kFlushDelayDefaultS = 5;
 
 // The run time those three share: the auto-flush setting, or the fallback.
 inline uint32_t flush_run_ms(int flush_s) {

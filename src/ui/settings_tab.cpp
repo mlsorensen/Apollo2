@@ -1022,7 +1022,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
                       "Needs the wired paddle: turn on Settings > Micra > Controls > "
                       "Wired paddle (with the harness fitted).");
     lv_obj_add_flag(out.clean_status, LV_OBJ_FLAG_HIDDEN);
-    // Post-shot auto-flush: tap cycles Off / 3 s / 6 s.
+    // Post-shot auto-flush: tap cycles Off / 3 / 6 / 9 / 15 s.
     lv_obj_t* rf = make_setting_row(out.micra_cleaning_page, "Auto flush", font);
     out.flush_btn = ui::make_button(rf);
     lv_obj_set_style_opa(out.flush_btn, LV_OPA_40, LV_STATE_DISABLED);
@@ -1033,7 +1033,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_set_style_text_color(out.flush_value, lv_color_hex(ui::theme::text()), 0);
     lv_obj_set_style_text_font(out.flush_value, font, 0);
     lv_obj_center(out.flush_value);
-    // Cup-off -> flush pause: tap cycles 3 / 6 / 9 / 15 s. Only meaningful
+    // Cup-off -> flush pause: tap cycles 5 / 10 / 15 s. Only meaningful
     // (and only shown — App manages the HIDDEN flag) while the flush is on.
     out.flush_delay_row = make_setting_row(out.micra_cleaning_page, "Flush delay", font);
     out.flush_delay_btn = ui::make_button(out.flush_delay_row);

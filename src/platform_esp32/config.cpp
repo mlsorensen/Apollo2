@@ -1,5 +1,6 @@
 #include "platform_esp32/config.h"
 
+#include "core/brew.h"
 #include "core/display_settings.h"
 #include "core/schedule.h"
 
@@ -381,8 +382,9 @@ void Config::set_paddle_drive_pin(int pin) {
 
 int Config::flush_delay_s() const {
   Preferences p;
-  if (!p.begin(kNamespace, /*readOnly=*/true)) return 3;
-  const int v = p.isKey(kFlushDelayKey) ? p.getInt(kFlushDelayKey, 3) : 3;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return core::kFlushDelayDefaultS;
+  const int v = p.isKey(kFlushDelayKey) ? p.getInt(kFlushDelayKey, core::kFlushDelayDefaultS)
+                                        : core::kFlushDelayDefaultS;
   p.end();
   return v;
 }

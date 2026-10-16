@@ -106,7 +106,7 @@ class FakeBrewController : public core::IBrewController {
   int review_hold_s_ = 30;
   int detect_lead_in_s_ = 3;
   int flush_s_ = 0;
-  int flush_delay_s_ = 3;
+  int flush_delay_s_ = core::kFlushDelayDefaultS;
   bool clean_ready_ = true;   // machine on, no shot in flight
   bool manual_flush_ = false;
   bool bf_active_ = false;

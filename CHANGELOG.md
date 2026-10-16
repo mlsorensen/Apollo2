@@ -7,6 +7,10 @@ for someone reading the diff. These notes are also shown ON THE DEVICE, whose
 fonts are ASCII-only: stick to characters `sanitize_notes()` (src/ui/app.cpp)
 maps — plain ASCII plus `— – → … × ' "` — or they render as empty boxes.
 
+## Unreleased
+
+- **Flush delay is now 5 / 10 / 15 s, default 5 s.** The 3 s pause was too short to get the cup clear; a 3, 6 or 9 s delay you had set stays until you tap the row.
+
 ## v1.0.1
 
 - **Apollo Link on the X 8".** The counter-top board now drives the Link like the P4-5 and P4-4.3 do; in v1.0.0 a Link-wired X 8" ran from it but never saw the paddle (the Link's green LED stayed dark).

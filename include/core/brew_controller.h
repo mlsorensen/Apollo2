@@ -60,7 +60,7 @@ class BrewController : public IBrewController {
     review_hold_s_ = review_hold_s;
     wired_paddle_ = wired_paddle;
     flush_s_ = flush_s;
-    flush_delay_s_ = (flush_delay_s < 1) ? 3 : flush_delay_s;
+    flush_delay_s_ = (flush_delay_s < 1) ? kFlushDelayDefaultS : flush_delay_s;
     detect_lead_in_s_ =
         (detect_lead_in_s < 0 || detect_lead_in_s > 10) ? 3 : detect_lead_in_s;
   }
@@ -167,7 +167,7 @@ class BrewController : public IBrewController {
   int review_hold_s_ = 30;  // review linger before auto-dismiss (user setting)
   int detect_lead_in_s_ = 3;  // detect-mode preinfusion lead-in (user setting)
   int flush_s_ = 0;         // auto-flush run seconds (0 = off; user setting)
-  int flush_delay_s_ = 3;   // cup-off -> flush pause seconds (user setting)
+  int flush_delay_s_ = kFlushDelayDefaultS;  // cup-off -> flush pause seconds (user setting)
 
   // Auto-flush sequencing (needs the relay; any shot mode). Armed when a real shot freezes into
   // review; a cup-off weight drop starts the delay; then the line runs for

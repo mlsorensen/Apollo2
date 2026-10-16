@@ -633,8 +633,10 @@ void on_flush_delay_clicked(lv_event_t* e) {
 // enough to outlast a machine's preinfusion.
 constexpr int kFlushChoices[] = {0, 3, 6, 9, 15};
 constexpr int kFlushCount = static_cast<int>(sizeof(kFlushChoices) / sizeof(kFlushChoices[0]));
-// Cup-off -> flush pause choices (seconds).
-constexpr int kFlushDelayChoices[] = {3, 6, 9, 15};
+// Cup-off -> flush pause choices (seconds). A stored value from the old
+// 3/6/9/15 list is kept (and shown) until the row is tapped, which wraps
+// to the first entry.
+constexpr int kFlushDelayChoices[] = {5, 10, 15};
 constexpr int kFlushDelayCount =
     static_cast<int>(sizeof(kFlushDelayChoices) / sizeof(kFlushDelayChoices[0]));
 // Ready-chime level: a linear 0-100 scale the user drags or steps. It is NOT
@@ -1292,7 +1294,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     lv_obj_add_event_cb(settings_.flush_btn, on_flush_clicked, LV_EVENT_CLICKED, this);
   }
   if (settings_.flush_delay_btn != nullptr) {
-    set_flush_delay_label(settings_, brew_ != nullptr ? brew_->snapshot().flush_delay_s : 3);
+    set_flush_delay_label(settings_, brew_ != nullptr ? brew_->snapshot().flush_delay_s : core::kFlushDelayDefaultS);
     lv_obj_add_event_cb(settings_.flush_delay_btn, on_flush_delay_clicked,
                         LV_EVENT_CLICKED, this);
   }

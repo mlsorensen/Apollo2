@@ -298,8 +298,9 @@ the top says so.
   **This one duration drives every timed group run**: the auto‑flush, the Home
   **Flush** button, and each backflush pulse. With Auto flush Off the other two
   fall back to 3 s.
-- ② **Flush delay** *(shown while Auto flush is on; 3 / 6 / 9 / 15 s; default
-  3 s)* — the pause between the cup coming off and the flush running.
+- ② **Flush delay** *(shown while Auto flush is on; 5 / 10 / 15 s; default
+  5 s)* — the pause between the cup coming off and the flush running. A
+  3, 6 or 9 s delay set before v1.0.2 stays in force until you tap the row.
 - ③ **Backflush cleaning** — opens a full‑screen cleaning mode. Fit the blind
   filter with detergent, tap **Go**, and the device pulses the group **10
   times: ⟨Auto flush⟩ seconds on, 3 seconds off**, showing the cycle count, a
