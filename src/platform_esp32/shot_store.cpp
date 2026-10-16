@@ -36,7 +36,7 @@ namespace platform {
 namespace {
 
 constexpr const char* kMount = "/sdcard";
-constexpr uint32_t kRetryMs = 5000;  // mount retry cadence while unavailable
+constexpr uint32_t kLivenessMs = 5000;  // mounted-card ping cadence (CMD13, 40 MHz)
 constexpr int kQueueDepth = 2;
 
 #if defined(BOARD_SD_MMC_1BIT)
@@ -130,6 +130,56 @@ const char* classify_fs_sector(const uint8_t* sec) {
   if (std::memcmp(sec + 82, "FAT32", 5) == 0) return "FAT32";
   if (std::memcmp(sec + 54, "FAT", 3) == 0) return "FAT16";
   return "";
+}
+
+// Name the card from its CID: vendor by manufacturer id (the common ones),
+// then the 5-char product name. Unknown vendors show the raw name alone.
+void describe_card(const sdmmc_card_t* card, char* out, size_t n) {
+  const char* vendor = nullptr;
+  switch (card->cid.mfg_id) {
+    case 0x01: vendor = "Panasonic"; break;
+    case 0x02: vendor = "Toshiba"; break;
+    case 0x03: vendor = "SanDisk"; break;
+    case 0x1b: vendor = "Samsung"; break;
+    case 0x1d: vendor = "ADATA"; break;
+    case 0x27: vendor = "Phison"; break;
+    case 0x28: vendor = "Lexar"; break;
+    case 0x31: vendor = "Silicon Power"; break;
+    case 0x41: vendor = "Kingston"; break;
+    case 0x74: vendor = "Transcend"; break;
+    case 0x9f: vendor = "Kingston"; break;
+    default: break;
+  }
+  char name[8];
+  std::snprintf(name, sizeof(name), "%.5s", card->cid.name);
+  // Trim trailing spaces some CIDs pad with.
+  for (int i = static_cast<int>(std::strlen(name)) - 1; i >= 0 && name[i] == ' '; --i) name[i] = '\0';
+  if (vendor != nullptr && name[0] != '\0')
+    std::snprintf(out, n, "%s %s", vendor, name);
+  else if (vendor != nullptr)
+    std::snprintf(out, n, "%s", vendor);
+  else
+    std::snprintf(out, n, "%s", name[0] != '\0' ? name : "SD card");
+}
+
+// Filesystem name of a MOUNTED card, from its boot sector (FATFS mounted it,
+// so it is FAT, but FAT32 vs exFAT is worth saying). Empty if unreadable.
+void read_fs_name(sdmmc_card_t* card, char* out, size_t n) {
+  out[0] = '\0';
+  uint8_t* sec = static_cast<uint8_t*>(heap_caps_malloc(512, MALLOC_CAP_DMA | MALLOC_CAP_8BIT));
+  if (sec == nullptr) return;
+  if (sdmmc_read_sectors(card, sec, 0, 1) == ESP_OK) {
+    const char* fs = classify_fs_sector(sec);
+    if (fs[0] == '\0' && sec[510] == 0x55 && sec[511] == 0xAA) {
+      const uint32_t lba = static_cast<uint32_t>(sec[0x1BE + 8]) |
+                           (static_cast<uint32_t>(sec[0x1BE + 9]) << 8) |
+                           (static_cast<uint32_t>(sec[0x1BE + 10]) << 16) |
+                           (static_cast<uint32_t>(sec[0x1BE + 11]) << 24);
+      if (lba != 0 && sdmmc_read_sectors(card, sec, lba, 1) == ESP_OK) fs = classify_fs_sector(sec);
+    }
+    std::snprintf(out, n, "%s", fs[0] != '\0' ? fs : "FAT");
+  }
+  heap_caps_free(sec);
 }
 
 // Bring the SDMMC bus up ONCE and keep it up forever. On the P4 the C6
@@ -229,8 +279,16 @@ core::MediumState probe_card_format(char* fs_type, size_t n) {
 
 }  // namespace
 
+void ShotStore::mount_early() {
+  // The ONE automatic probe (see the header's mount policy). Runs on the
+  // caller — main's setup(), before the hosted radio exists — so a card is
+  // mounted, or the slot found empty, with nothing else on the controller.
+  if (mutex_ == nullptr) mutex_ = xSemaphoreCreateMutex();
+  try_mount();
+}
+
 void ShotStore::begin() {
-  mutex_ = xSemaphoreCreateMutex();
+  if (mutex_ == nullptr) mutex_ = xSemaphoreCreateMutex();
   queue_ = xQueueCreate(kQueueDepth, sizeof(SaveJob));
   // Low priority on the non-LVGL core. Stack is INTERNAL RAM (the radios
   // and DMA compete for it — scarcest on the S3 boards): 8 KB covers FATFS +
@@ -254,24 +312,30 @@ void ShotStore::task_entry(void* self) { static_cast<ShotStore*>(self)->run(); }
 
 void ShotStore::run() {
   for (;;) {
-    if (!available_) {
-      if (!try_mount()) {
-        vTaskDelay(pdMS_TO_TICKS(kRetryMs));
-        continue;
-      }
-    }
+    // No card: sleep on the queue until someone asks for a mount (or queues a
+    // job that will simply be dropped). Never probe on our own — see the
+    // header's mount policy for why the old 5 s retry loop is gone.
     SaveJob job;
-    if (xQueueReceive(queue_, &job, pdMS_TO_TICKS(kRetryMs)) == pdTRUE) {
-      write_job(job);
+    const TickType_t wait = available_ ? pdMS_TO_TICKS(kLivenessMs) : portMAX_DELAY;
+    if (xQueueReceive(queue_, &job, wait) == pdTRUE) {
+      if (job.kind == JobKind::kMount) {
+        if (!available_) try_mount();
+        set_medium_state(storage().state, /*busy=*/false);
+      } else if (job.kind == JobKind::kUnmount) {
+        if (available_) unmount(core::MediumState::kUnmounted);
+        set_medium_state(core::MediumState::kUnmounted, /*busy=*/false);
+      } else {
+        write_job(job);
+      }
       if (job.rec != nullptr) heap_caps_free(job.rec);
-    } else {
+    } else if (available_) {
       // Idle: liveness probe so a yanked card flips the UI to the guidance
       // card within a few seconds instead of on the next write. This must go
       // to the CARD, not the filesystem — FATFS serves repeated metadata
       // lookups (stat etc.) from its sector cache without touching the bus,
       // which is exactly how a removal stays invisible. CMD13 can't lie.
       if (sdmmc_get_status(static_cast<sdmmc_card_t*>(card_)) != ESP_OK) {
-        unmount();
+        unmount(core::MediumState::kRemoved);
       } else {
         refresh_storage();
       }
@@ -339,7 +403,7 @@ bool ShotStore::try_mount() {
     // The attempt number is printed because the retries themselves are now
     // silent: it should climb by exactly `stride` per line (12 while the state
     // is still news, 120 once "no card" is established). Anything else means
-    // the loop is not running at kRetryMs and the quiet is hiding something.
+    // there is no retry loop any more; attempts are boot + Mount taps.
     if (log_this) {
       if (info.state == core::MediumState::kBadFormat)
         core::logf(
@@ -348,11 +412,11 @@ bool ShotStore::try_mount() {
          info.fs_type, static_cast<unsigned>(attempt));
       else if (err == ESP_ERR_TIMEOUT)
         // The overwhelmingly common case: no card in the slot. Says so plainly
-        // rather than as a failure, because it isn't one — the probe exists so
-        // a card inserted later is picked up within kRetryMs.
+        // rather than as a failure, because it isn't one. Not probed again
+        // until a Mount tap or the next boot (shared-controller policy).
         core::logf("ShotStore: no SD card — normal if the slot is empty; "
-                   "probing every %us (attempt %u)\n",
-                   static_cast<unsigned>(kRetryMs / 1000),
+                   "insert one and tap Settings > Apollo > Storage > Mount "
+                   "(attempt %u)\n",
                    static_cast<unsigned>(attempt));
       else
         core::logf("ShotStore: SD mount failed (%s) (attempt %u)\n",
@@ -412,11 +476,23 @@ bool ShotStore::try_mount() {
     std::fclose(m);
   }
 
+  // Identity for the Storage page: vendor/name from the CID, capacity from
+  // the CSD, filesystem flavour from the boot sector. Read once per mount.
+  char card_name[sizeof(core::StorageInfo::card)];
+  char fs_name[sizeof(core::StorageInfo::fs_type)];
+  describe_card(card, card_name, sizeof(card_name));
+  read_fs_name(card, fs_name, sizeof(fs_name));
+  const uint64_t card_bytes =
+      static_cast<uint64_t>(card->csd.capacity) * static_cast<uint64_t>(card->csd.sector_size);
+
   card_ = card;
   xSemaphoreTake(mutex_, portMAX_DELAY);
   index_ = std::move(loaded);
   next_id_ = max_id + 1;
   stats_since_ = since;
+  std::snprintf(storage_info_.card, sizeof(storage_info_.card), "%s", card_name);
+  std::snprintf(storage_info_.fs_type, sizeof(storage_info_.fs_type), "%s", fs_name);
+  storage_info_.card_bytes = card_bytes;
   xSemaphoreGive(mutex_);
   available_ = true;
   refresh_storage();
@@ -427,18 +503,51 @@ bool ShotStore::try_mount() {
   return true;
 }
 
-void ShotStore::unmount() {
+void ShotStore::unmount(core::MediumState why) {
   available_ = false;
   xSemaphoreTake(mutex_, portMAX_DELAY);
   storage_info_ = {};
+  storage_info_.state = why;
   backup_info_ = {};  // the file went with the card
   xSemaphoreGive(mutex_);
   if (card_ != nullptr) {
+    // On a pulled card this fails fast (no device to flush to) and only frees
+    // the FATFS/VFS state — exactly what we want; a requested unmount flushes.
     esp_vfs_fat_sdcard_unmount(kMount, static_cast<sdmmc_card_t*>(card_));
     card_ = nullptr;
   }
   // The host, slot, and LDO stay up (shared with the radio; see ensure_bus).
-  core::logf("ShotStore: SD unavailable (removed?), will retry\n");
+  // Not retried: the user taps Mount (or reboots) to bring a card back.
+  core::logf("ShotStore: SD %s\n", why == core::MediumState::kRemoved
+                                        ? "removed without Unmount — left unmounted"
+                                        : "unmounted — safe to remove");
+}
+
+void ShotStore::set_medium_state(core::MediumState st, bool busy) {
+  xSemaphoreTake(mutex_, portMAX_DELAY);
+  if (!available_) storage_info_.state = st;
+  storage_info_.busy = busy;
+  xSemaphoreGive(mutex_);
+}
+
+void ShotStore::request_mount() {
+  if (available_ || queue_ == nullptr) return;
+  set_medium_state(storage().state, /*busy=*/true);
+  SaveJob job{nullptr, 0, JobKind::kMount};
+  if (xQueueSend(queue_, &job, 0) != pdTRUE) set_medium_state(storage().state, false);
+}
+
+void ShotStore::request_unmount() {
+  if (!available_ || queue_ == nullptr) return;
+  xSemaphoreTake(mutex_, portMAX_DELAY);
+  storage_info_.busy = true;
+  xSemaphoreGive(mutex_);
+  SaveJob job{nullptr, 0, JobKind::kUnmount};
+  if (xQueueSend(queue_, &job, 0) != pdTRUE) {
+    xSemaphoreTake(mutex_, portMAX_DELAY);
+    storage_info_.busy = false;
+    xSemaphoreGive(mutex_);
+  }
 }
 
 void ShotStore::write_job(SaveJob& job) {
@@ -454,7 +563,7 @@ void ShotStore::write_job(SaveJob& job) {
   if (job.rec == nullptr) {  // persist the stats-reset marker
     FILE* m = std::fopen(stats_since_path(), "w");
     if (m == nullptr) {
-      unmount();
+      unmount(core::MediumState::kRemoved);
       return;
     }
     std::fprintf(m, "%lld\n", static_cast<long long>(stats_since()));
@@ -482,7 +591,7 @@ void ShotStore::write_job(SaveJob& job) {
   core::format_shot_index_row(row, sizeof(row), r.summary);
   FILE* idx = std::fopen(index_path(), "a");
   if (idx == nullptr) {
-    unmount();
+    unmount(core::MediumState::kRemoved);
     return;
   }
   std::fputs(row, idx);
@@ -491,7 +600,7 @@ void ShotStore::write_job(SaveJob& job) {
   // Samples CSV.
   FILE* sf = std::fopen(shot_file_path(r.summary.id, "csv"), "w");
   if (sf == nullptr) {
-    unmount();
+    unmount(core::MediumState::kRemoved);
     return;
   }
   std::fputs(core::kShotSamplesHeader, sf);
@@ -619,8 +728,12 @@ void ShotStore::refresh_storage() {
   uint64_t total = 0, free_b = 0;
   if (esp_vfs_fat_info(kMount, &total, &free_b) != ESP_OK) return;
   xSemaphoreTake(mutex_, portMAX_DELAY);
-  storage_info_ = {total, free_b, free_b < kMinFreeBytes,
-                   core::MediumState::kOk, "FAT"};
+  storage_info_.total_bytes = total;
+  storage_info_.free_bytes = free_b;
+  storage_info_.full = free_b < kMinFreeBytes;
+  storage_info_.state = core::MediumState::kOk;
+  storage_info_.busy = false;
+  // card / fs_type / card_bytes were filled at mount and stay.
   xSemaphoreGive(mutex_);
 }
 
@@ -734,7 +847,7 @@ void ShotStore::remove_files(uint32_t id) {
                 core::kShotDirName);
   FILE* f = std::fopen(tmp, "w");
   if (f == nullptr) {
-    unmount();
+    unmount(core::MediumState::kRemoved);
     return;
   }
   std::fputs(core::kShotIndexHeader, f);
@@ -744,12 +857,12 @@ void ShotStore::remove_files(uint32_t id) {
     std::fputs(row, f);
   }
   if (std::fclose(f) != 0) {
-    unmount();
+    unmount(core::MediumState::kRemoved);
     return;
   }
   ::remove(final_path);  // FATFS rename won't overwrite an existing target
   if (::rename(tmp, final_path) != 0) {
-    unmount();
+    unmount(core::MediumState::kRemoved);
     return;
   }
   core::logf("ShotStore: deleted shot %lu\n", static_cast<unsigned long>(id));

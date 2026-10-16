@@ -16,7 +16,7 @@ your board.
 - [Settings → Scale](#settings-scale) — Bluetooth · Shot settings · Device
   settings · Per‑scale nuances
 - [Settings → Apollo](#settings-device) — Display · Time & date · WiFi ·
-  Backup · Root page
+  Backup · Storage · Root page
 - [Stats](#stats-section) — Brew/Boiler graphs · History · Info
 - [Brew‑by‑weight quick reference](#bbw-reference)
 
@@ -65,7 +65,8 @@ Settings
 │  │                 DHCP / static address) · Forget
 │  │               · Auto time (NTP) · Check for updates (Off/Boot/Daily/Hourly)
 │  │                 → notice → Install now · Beta updates
-│  └─ Backup      — On the card · Back up to card · Restore from card
+│  ├─ Backup      — On the card · Back up to card · Restore from card
+│  └─ Storage     — SD card status · Mount / Unmount · Card · Space
 └─ Lock display for cleaning  → 30 s touch lock
 
 Stats
@@ -710,6 +711,34 @@ A few things worth knowing:
   restore. Older backups are always fine.
 - **Nothing happens on its own.** No automatic backup, no automatic restore;
   swapping cards between machines never changes a setting by itself.
+
+### Storage
+
+![Storage settings](docs/img/manual/device-storage.png)
+
+The memory card that holds your shot history (and any settings backup). The
+slot is checked **once at startup** and otherwise only when you ask — the
+device does not keep polling for a card, so this page is where a card goes in
+and comes out.
+
+- ① **SD card** — `Mounted` (in use), `No card`, `Unsupported format` (see
+  the History section: reformat as FAT32), `Removed` (the card was pulled
+  while mounted — nothing is lost, but it stays unmounted until you say so),
+  or `Unmounted, safe to remove`. `Mounted, FULL` means new shots are not
+  being saved. The button beside it is **Mount** or **Unmount**:
+  - **Mount** — insert a card, tap Mount. A restart does the same thing.
+  - **Unmount** — finishes any write and releases the card so you can take it
+    out cleanly. Shots brewed while unmounted are not recorded (Home and
+    History say so).
+- ② **Card** — the card's make and model as it reports itself, its capacity
+  and filesystem (`FAT32`, or the unsupported one it came with).
+- ③ **Space** — used, free and total space on the card.
+
+> Why the button: on the P4 boards the card slot and the WiFi/Bluetooth
+> radio share one bus controller, and searching an empty slot every few
+> seconds was found to disturb the radio badly enough to restart the device
+> (v1.0.3). Checking once at startup and when you tap Mount removes that;
+> a mounted card in normal use never did it.
 - **Your shots aren't part of this** — they are already on the card, and a
   restore doesn't touch them.
 
@@ -770,11 +799,13 @@ action lives directly on the root:
     ("This SD card is exFAT‑formatted…") instead of pretending the slot is
     empty. Reformat on a computer; the device never formats or erases a card
     on its own.
-  - **Hot‑swap friendly**: no reboot needed in either direction. The device
-    looks for a card every 5 seconds, so a freshly inserted card is picked
-    up within ~5 s; a removed card is likewise noticed within a few seconds
-    and History switches back to the insert‑a‑card guidance. If the card
-    fills up, new shots stop being saved and History says so.
+  - **Inserting and removing**: the slot is checked at startup and when you
+    tap **Mount** on Settings → Apollo → Storage; a freshly inserted card is
+    not picked up on its own (see that page for why). Use **Unmount** there
+    before pulling a card; one pulled while mounted is noticed within a few
+    seconds, History switches to its guidance, and the slot stays idle until
+    you Mount again or restart. If the card fills up, new shots stop being
+    saved and History says so.
   - **What's recorded and when**: recorded shots are viewable immediately —
     no clock needed. Recording NEW shots additionally needs a real date/time
     (NTP, or Settings → Apollo) — until the clock is set the footer warns

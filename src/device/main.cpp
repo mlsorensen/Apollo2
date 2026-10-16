@@ -228,6 +228,16 @@ void setup() {
   }
 #endif
 
+#if defined(BOARD_HAS_SD_MMC)
+  // The SD slot's ONE automatic probe/mount, deliberately BEFORE the hosted
+  // radio link exists: on the P4 both share the SDMMC controller and its
+  // single clock divider, and a cardless probe re-clocks it (400 kHz) under
+  // the C6's 40 MHz link — the X-8 crash of 2026-10-16. Empty slot ~30 ms,
+  // card ~200 ms + the index load. After this, only Settings > Apollo >
+  // Storage > Mount touches the slot (platform/shot_store.h, mount policy).
+  g_shots.mount_early();
+#endif
+
 #if defined(CONFIG_ESP_HOSTED_ENABLE_BT_NIMBLE)
   // Hosted-radio boards (P4 + C6 over SDIO): the transport must be brought up
   // through Arduino's hosted HAL (esp_hosted_init + connect_to_slave + BT
@@ -413,7 +423,7 @@ void setup() {
   const ui::ScreenProfile screen{g_display.width(), g_display.height(),
                                  board::kUiScale};
 #if defined(BOARD_HAS_SD_MMC)
-  g_shots.begin();  // writer task; mounts lazily, so no card is fine
+  g_shots.begin();  // writer task (the mount already happened in mount_early)
 #endif
   // One web server for everything: the setup portal's pages ride it during
   // AP sessions; on the home network it serves the shot-history app + API.

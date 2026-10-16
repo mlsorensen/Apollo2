@@ -58,14 +58,21 @@ enum class MediumState : uint8_t {
   kNone,       // nothing inserted (or the medium doesn't respond)
   kOk,         // mounted and usable
   kBadFormat,  // card responds, filesystem unsupported/corrupt — see fs_type
+  kRemoved,    // was mounted, then stopped answering (pulled without Unmount)
+  kUnmounted,  // unmounted on request; safe to remove, Mount brings it back
 };
 
 struct StorageInfo {
-  uint64_t total_bytes = 0;  // 0 = unknown (no medium / not applicable)
+  uint64_t total_bytes = 0;  // filesystem size; 0 = unknown (no medium)
   uint64_t free_bytes = 0;
   bool full = false;
   MediumState state = MediumState::kNone;
-  char fs_type[8] = "";  // "exFAT" / "NTFS" / "FAT32" / "GPT" / "?" when kBadFormat
+  char fs_type[8] = "";  // "FAT32" / "exFAT" / "NTFS" / "GPT" / "?" (bad format: why)
+  // The card itself, for Settings > Apollo > Storage (empty when unknown):
+  char card[20] = "";          // "SanDisk SC32G" — vendor from the CID's
+                               // manufacturer id when known, else the raw name
+  uint64_t card_bytes = 0;     // capacity from the CSD (0 = unknown)
+  bool busy = false;           // a mount/unmount is in flight (buttons grey)
 };
 
 // The one accuracy definition, shared by every store: 100% minus the mean
@@ -133,6 +140,16 @@ class IShotStore {
   // implementations return a CACHED value — the UI thread must never touch
   // the medium directly.
   virtual StorageInfo storage() const { return {}; }
+
+  // Manual mount/unmount (Settings > Apollo > Storage). Device stores probe
+  // the slot ONCE at boot and otherwise only when asked: on the P4 the SD
+  // slot shares its SDMMC controller with the C6 radio, and a cardless probe
+  // re-clocks that controller under the live radio link (the X-8 reboots of
+  // 2026-10-16). Both are requests: the work runs on the store's own task and
+  // storage().state / .busy report the outcome. Default: not supported.
+  virtual bool supports_mount() const { return false; }
+  virtual void request_mount() {}
+  virtual void request_unmount() {}
 
   // Stats-reset marker (unix; 0 = never reset). Non-destructive: headline
   // stats count only shots at/after the marker, the recorded history is

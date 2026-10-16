@@ -386,6 +386,14 @@ int main() {
   // confirmations (the whole point of the flow is what those two say).
   backup.pose_empty_card();
   ok &= r({800, 480}, "renders/device_backup_empty_800x480.png", 1, ui::kSectionDeviceBackup);
+  // Apollo > Storage: a mounted card, then the empty slot (Mount offered).
+  ok &= r({800, 480}, "renders/device_storage_800x480.png", 1, ui::kSectionDeviceStorage);
+  ok &= r({320, 240}, "renders/device_storage_320x240.png", 1, ui::kSectionDeviceStorage);
+  shots.set_available(false);
+  shots.set_medium(core::MediumState::kNone, "");
+  ok &= r({800, 480}, "renders/device_storage_nosd_800x480.png", 1, ui::kSectionDeviceStorage);
+  shots.set_medium(core::MediumState::kOk, "FAT32");
+  shots.set_available(true);
   backup.pose_backup_present();
   ok &= r({800, 480}, "renders/device_backup_800x480.png", 1, ui::kSectionDeviceBackup);
   ok &= r({1280, 720, 1.5f}, "renders/device_backup_1280x720.png", 1, ui::kSectionDeviceBackup);

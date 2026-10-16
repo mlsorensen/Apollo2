@@ -150,6 +150,31 @@ display isn't up.
   OFF on purpose (Link in copper) — the opposite of the shipping firmware.
   Reuses display.cpp/touch.cpp/system.cpp only; no NVS, no radio. Internal.
 
+## SD mount policy + Settings > Apollo > Storage (v1.0.3)
+
+The slot is probed ONCE per boot — `ShotStore::mount_early()` in setup(),
+deliberately BEFORE `hostedInitBLE()` — and after that only from the Storage
+page's Mount button (a writer-task job). The 5 s cardless retry loop is GONE
+and must not come back: on the P4 the SD slot (SDMMC slot 0) and the C6
+radio (slot 1) share one controller with ONE chip-wide clock divider
+(`HP_SYS_CLKRST`); a cardless probe needs 400 kHz (host_div 10) while the C6
+runs 40 MHz (host_div 4), and IDF's `sdmmc_host_start_command` rewrites the
+shared divider on every slot change, so each probe flipped the C6's clock
+4↔10 around every transaction. Root-caused 2026-10-16 on the owner's X-8:
+coredump = `sdio_read` asserting `sdio_rx_get_buffer` on a 612 KB (garbage
+length) buffer while `shot_store` sat in `sdmmc_card_init` of the probe;
+the morning's silent `software (3)` reset was the same thing via the hosted
+driver's transport-failure restart. A MOUNTED card at 40 MHz shares the C6's
+divider, so the kept 5 s liveness ping (CMD13) never moves the clock — the
+P4-5 with a card never crashed. The X-8 has no card-detect pin and 51 kΩ
+pull-ups on CMD/D0-D3, so presence can only be learned by talking to the
+card. `MediumState` gained kRemoved (pulled while mounted; stays unmounted)
+and kUnmounted (by request); `StorageInfo` carries the CID name/vendor, CSD
+capacity, boot-sector fs type and a `busy` flag for the buttons. A Mount
+tap is one ~25 ms exposure on the user's say-so (~1 in 1,500 probes hit) —
+the radio is NOT torn down for it (owner's call). `GET /coredump` has been
+safe on the P4 since 2026-09-30 (reads via esp_partition_read) — use it.
+
 ## Settings backup to the card (v0.14+)
 
 Settings live in NVS, which does NOT travel with the SD card the shot history

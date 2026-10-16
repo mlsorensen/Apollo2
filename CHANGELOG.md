@@ -7,6 +7,11 @@ for someone reading the diff. These notes are also shown ON THE DEVICE, whose
 fonts are ASCII-only: stick to characters `sanitize_notes()` (src/ui/app.cpp)
 maps — plain ASCII plus `— – → … × ' "` — or they render as empty boxes.
 
+## v1.0.3
+
+- **Fix for random restarts on P4 boards with no SD card.** Searching the empty slot every few seconds disturbed the WiFi/Bluetooth radio, which shares that bus controller, and the device occasionally restarted (coredump-confirmed on an X 8"). The card is now checked once at startup, before the radio comes up, and otherwise only when you ask.
+- **New Settings > Apollo > Storage page.** Shows the card's status, make/model, capacity, filesystem and used/free space, with **Mount** and **Unmount** buttons; insert a card and tap Mount (or restart), Unmount before taking one out. A card pulled while mounted is noticed and left unmounted until you Mount again.
+
 ## v1.0.2
 
 - **Flush delay is now 5 / 10 / 15 s, default 5 s.** The 3 s pause was too short to get the cup clear; a 3, 6 or 9 s delay you had set stays until you tap the row.

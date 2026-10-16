@@ -264,6 +264,9 @@ void on_delete_shot_cancel(lv_event_t* e) {
 void on_backup_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->open_backup_modal();
 }
+void on_storage_mount_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->toggle_storage_mount();
+}
 void on_restore_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->open_restore_modal();
 }
@@ -1195,6 +1198,9 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     lv_obj_add_event_cb(settings_.backup_btn, on_backup_clicked, LV_EVENT_CLICKED, this);
   if (settings_.restore_btn != nullptr)
     lv_obj_add_event_cb(settings_.restore_btn, on_restore_clicked, LV_EVENT_CLICKED, this);
+  if (settings_.storage_mount_btn != nullptr)
+    lv_obj_add_event_cb(settings_.storage_mount_btn, on_storage_mount_clicked,
+                        LV_EVENT_CLICKED, this);
   // lv_menu handles page navigation (root <-> Micra/Scale/Device) itself.
   // Micra connection:
   lv_obj_add_event_cb(settings_.scan_btn, on_scan_clicked, LV_EVENT_CLICKED, this);
@@ -2033,6 +2039,17 @@ void App::cycle_flush() {
   const int next = kFlushChoices[(i + 1) % kFlushCount];  // unknown value -> wraps to Off
   brew_->set_flush_s(next);
   set_flush_label(settings_, next);  // also shows/hides the delay row
+}
+
+void App::toggle_storage_mount() {
+  if (shots_ == nullptr || !shots_->supports_mount()) return;
+  const core::StorageInfo si = shots_->storage();
+  if (si.busy) return;
+  if (si.state == core::MediumState::kOk)
+    shots_->request_unmount();
+  else
+    shots_->request_mount();
+  refresh();  // show "busy" at once rather than on the next 500 ms tick
 }
 
 void App::cycle_flush_delay() {
@@ -3425,8 +3442,11 @@ void App::update_history_view() {
     } else {
       ui::history_show_guidance(
           stats_,
-          "Insert a FAT32-formatted SD card to record shot history.\n"
-          "Each finished shot is saved with its stats and graph.");
+          si.state == core::MediumState::kRemoved || si.state == core::MediumState::kUnmounted
+              ? "The SD card is not mounted.\n"
+                "Settings > Apollo > Storage > Mount brings it back."
+              : "Insert a FAT32-formatted SD card, then Settings > Apollo > Storage > Mount\n"
+                "(or restart) to record shot history. Each shot is saved with its graph.");
     }
     return;
   }
@@ -4329,6 +4349,63 @@ void App::update_settings_view() {
     set_clickable(settings_.backup_btn, info.medium_ready);
     set_clickable(settings_.restore_btn,
                   info.medium_ready && info.file_present && !info.newer_firmware);
+  }
+
+  // Storage page: the card's state, identity and space, and the one action.
+  if (shots_ != nullptr && settings_.storage_status_value != nullptr) {
+    const core::StorageInfo si = shots_->storage();
+    const bool mounted = si.state == core::MediumState::kOk;
+    const char* status = "No card";
+    uint32_t color = ui::theme::muted();
+    switch (si.state) {
+      case core::MediumState::kOk:        status = si.full ? "Mounted, FULL" : "Mounted";
+                                          color = si.full ? ui::theme::alert() : ui::theme::ok(); break;
+      case core::MediumState::kBadFormat: status = "Unsupported format"; color = ui::theme::warn(); break;
+      case core::MediumState::kRemoved:   status = "Removed"; color = ui::theme::warn(); break;
+      case core::MediumState::kUnmounted: status = "Unmounted, safe to remove"; break;
+      case core::MediumState::kNone:      break;
+    }
+    if (si.busy) status = mounted ? "Unmounting..." : "Mounting...";
+    ui::set_text(settings_.storage_status_value, status);
+    ui::set_text_color(settings_.storage_status_value, color);
+    ui::set_text(settings_.storage_mount_label, mounted ? "Unmount" : "Mount");
+    set_clickable(settings_.storage_mount_btn, shots_->supports_mount() && !si.busy);
+
+    auto fmt_bytes = [](uint64_t bytes, char* out, size_t n) {
+      if (bytes >= 1000000000ull)
+        std::snprintf(out, n, "%.1f GB", static_cast<double>(bytes) / 1e9);
+      else
+        std::snprintf(out, n, "%u MB", static_cast<unsigned>(bytes / 1000000ull));
+    };
+    if (mounted || si.state == core::MediumState::kBadFormat) {
+      char cap[20], sub[48];
+      fmt_bytes(si.card_bytes, cap, sizeof(cap));
+      if (si.card_bytes > 0 && si.fs_type[0] != '\0')
+        std::snprintf(sub, sizeof(sub), "%s, %s", cap, si.fs_type);
+      else if (si.fs_type[0] != '\0')
+        std::snprintf(sub, sizeof(sub), "%s", si.fs_type);
+      else
+        sub[0] = '\0';
+      ui::set_text(settings_.storage_card_value, si.card[0] != '\0' ? si.card : "SD card");
+      ui::set_text(settings_.storage_card_sub, sub);
+      lv_obj_remove_flag(settings_.storage_card_row, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_add_flag(settings_.storage_card_row, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (mounted && si.total_bytes > 0) {
+      char used[20], free_s[20], total[20], sub[48];
+      fmt_bytes(si.total_bytes - si.free_bytes, used, sizeof(used));
+      fmt_bytes(si.free_bytes, free_s, sizeof(free_s));
+      fmt_bytes(si.total_bytes, total, sizeof(total));
+      std::snprintf(sub, sizeof(sub), "%s free of %s", free_s, total);
+      char usedl[28];
+      std::snprintf(usedl, sizeof(usedl), "%s used", used);
+      ui::set_text(settings_.storage_space_value, usedl);
+      ui::set_text(settings_.storage_space_sub, sub);
+      lv_obj_remove_flag(settings_.storage_space_row, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_add_flag(settings_.storage_space_row, LV_OBJ_FLAG_HIDDEN);
+    }
   }
 
   if (provisioner_ == nullptr) return;

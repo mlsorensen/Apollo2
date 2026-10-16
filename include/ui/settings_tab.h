@@ -36,6 +36,7 @@ enum SettingsSection {
   kSectionDeviceTime,      // Device > Time & date (clock + calendar steppers)
   kSectionDeviceWifi,      // Device > WiFi (enable/setup/timezone/NTP)
   kSectionDeviceBackup,    // Device > Backup (settings to/from the card)
+  kSectionDeviceStorage,   // Device > Storage (the card: state, identity, space, Mount)
   kSectionCount
 };
 
@@ -267,11 +268,25 @@ struct SettingsWidgets {
   lv_obj_t* backup_status = nullptr;  // what's on the card right now
   lv_obj_t* backup_btn = nullptr;     // "Back up settings" -> confirm modal
   lv_obj_t* restore_btn = nullptr;    // "Restore settings" -> confirm modal
+
+  // Device > Storage (same boards as Backup). The card is probed once at boot
+  // and otherwise only from here (shared SDMMC controller with the P4's radio
+  // — see platform/shot_store.h). Status row carries the Mount/Unmount button.
+  lv_obj_t* device_storage_page = nullptr;
+  lv_obj_t* storage_status_value = nullptr;  // "Mounted" / "No card" / ...
+  lv_obj_t* storage_mount_btn = nullptr;     // label flips Mount <-> Unmount
+  lv_obj_t* storage_mount_label = nullptr;
+  lv_obj_t* storage_card_row = nullptr;      // "SanDisk SC32G" / "29.7 GB, FAT32"
+  lv_obj_t* storage_card_value = nullptr;
+  lv_obj_t* storage_card_sub = nullptr;
+  lv_obj_t* storage_space_row = nullptr;     // "12 MB used" / "29.6 GB free of 29.7 GB"
+  lv_obj_t* storage_space_value = nullptr;
+  lv_obj_t* storage_space_sub = nullptr;
 };
 
 // with_wired_paddle: build the Micra "Wired paddle" switch (paddle-capable
 // boards only — elsewhere unwired mode isn't a choice, it's all there is).
-// with_backup: build Device > Backup (boards with a card slot).
+// with_backup: build Device > Backup AND Device > Storage (boards with a card slot).
 void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
                         bool with_brightness, bool with_sound,
                         bool with_wired_paddle, bool with_backup,

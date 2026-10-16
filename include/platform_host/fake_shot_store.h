@@ -24,6 +24,16 @@ class FakeShotStore : public core::IShotStore {
   core::ShotStats stats(int64_t now_unix) const override;
 
   core::StorageInfo storage() const override { return storage_; }
+  // The sim's Mount/Unmount flip the posed state in place (no task).
+  bool supports_mount() const override { return true; }
+  void request_mount() override {
+    storage_.state = core::MediumState::kOk;
+    available_ = true;
+  }
+  void request_unmount() override {
+    storage_.state = core::MediumState::kUnmounted;
+    available_ = false;
+  }
   int64_t stats_since() const override { return stats_since_; }
   void set_stats_since(int64_t t) override { stats_since_ = t; }
 
@@ -44,7 +54,8 @@ class FakeShotStore : public core::IShotStore {
   int64_t stats_since_ = 0;
   // Plausible 32 GB card for renders; sim poses "full" via set_storage.
   core::StorageInfo storage_ = {32000000000ull, 12400000000ull, false,
-                                core::MediumState::kOk, "FAT"};
+                                core::MediumState::kOk, "FAT32",
+                                "SanDisk SC32G", 31914983424ull, false};
   std::vector<core::ShotRecord> shots_;  // newest first
 };
 

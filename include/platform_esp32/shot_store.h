@@ -23,17 +23,34 @@ namespace platform {
 //
 // Threading: list/count/stats/read run on the LVGL thread against the RAM
 // index (mutex-guarded). save() deep-copies into PSRAM and enqueues; a
-// background writer task owns ALL SD I/O — mounting (lazy, retried), index
-// appends, samples. Any I/O failure unmounts; the card can be hot-inserted/
-// removed and the store recovers on the next retry tick.
+// background writer task owns ALL SD I/O — index appends, samples, and any
+// mount after boot. Any I/O failure unmounts.
+//
+// MOUNT POLICY (v1.0.3): the slot is probed ONCE, synchronously, at boot —
+// mount_early(), called BEFORE the hosted radio link comes up — and after
+// that only when the user taps Mount (a job on the writer task). There is
+// no retry loop. Why: on the P4 the SD slot (SDMMC slot 0) and the C6 radio
+// (slot 1) share one controller with ONE chip-wide clock divider; a cardless
+// probe needs the 400 kHz enumeration clock (host_div 10) while the C6 runs
+// at 40 MHz (host_div 4), and the IDF driver rewrites that shared divider
+// around every command for the probe's duration. Done every 5 s under live
+// radio traffic, the C6 link eventually read a corrupted frame length and
+// the hosted driver asserted (sdio_rx_get_buffer; owner's X-8, 2026-10-16,
+// coredump + memfail record) or silently restarted the host. A MOUNTED card
+// runs at 40 MHz = the C6's divider, so its 5 s liveness ping (CMD13, kept)
+// never changes the clock — the P4-5 with a card never crashed. A pulled
+// card is noticed by that ping and left unmounted (kRemoved) until Mount.
 // The settings backup rides along on this class rather than owning storage of
 // its own: the writer task and its mount ARE the medium (all the retry/no-op-
 // deinit policy above), and a settings file is one more thing on the same card.
 // The UI only ever sees the two ports.
 class ShotStore : public core::IShotStore, public core::ISettingsBackup {
  public:
-  // Spawns the writer task. Call once after NVS/Serial are up; safe before
-  // any card is inserted.
+  // The one automatic mount: probe the slot and mount a card if present,
+  // synchronously on the caller. Call BEFORE the hosted radio link is brought
+  // up (see the mount policy above); safe with an empty slot (~30 ms).
+  void mount_early();
+  // Spawns the writer task. Call once after NVS/Serial are up.
   void begin();
 
   bool available() const override { return available_; }
@@ -49,6 +66,9 @@ class ShotStore : public core::IShotStore, public core::ISettingsBackup {
   // -space queries aren't safe alongside a concurrent write, so the UI
   // thread only ever reads this cache.
   core::StorageInfo storage() const override;
+  bool supports_mount() const override { return true; }
+  void request_mount() override;    // queue a mount attempt (writer task)
+  void request_unmount() override;  // queue a flush + unmount (writer task)
   // Stats-reset marker: lives on the card (/Apollo2/stats_since.txt) so it
   // travels with the data; cached here, written by the writer task.
   int64_t stats_since() const override;
@@ -69,7 +89,7 @@ class ShotStore : public core::IShotStore, public core::ISettingsBackup {
   static constexpr uint64_t kMinFreeBytes = 2ull * 1024 * 1024;
 
  private:
-  enum class JobKind : uint8_t { kShot, kBackup, kRestore };
+  enum class JobKind : uint8_t { kShot, kBackup, kRestore, kMount, kUnmount };
 
   struct SaveJob {
     core::ShotRecord* rec;  // PSRAM copy, owned by the writer. null jobs:
@@ -81,7 +101,8 @@ class ShotStore : public core::IShotStore, public core::ISettingsBackup {
   static void task_entry(void* self);
   void run();                 // writer task loop
   bool try_mount();           // mount + load index; true if usable
-  void unmount();             // failure path: drop the card, retry later
+  void unmount(core::MediumState why);  // drop the card; `why` is what the UI shows
+  void set_medium_state(core::MediumState st, bool busy);  // cache update (any task)
   void write_job(SaveJob& job);
   void remove_files(uint32_t id);  // writer task only: samples + index rewrite
   void refresh_storage();     // writer task only: requery + cache capacity

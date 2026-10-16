@@ -222,8 +222,9 @@ class App {
   void detect_lead_in_adjust(int dir);  // Scale settings: detect lead-in stepper (1s steps)
   void cycle_flow_smooth();          // Scale settings: Off/Light/Medium/Strong
   void cycle_shot_window_growth();   // Scale settings: Snap/Smooth/Continuous
-  void cycle_flush();                // Micra settings "Auto flush": Off / 3 s / 6 s
-  void cycle_flush_delay();          // Micra settings "Flush delay": 3 / 6 / 9 / 15 s
+  void cycle_flush();                // Micra settings "Auto flush": Off / 3 / 6 / 9 / 15 s
+  void cycle_flush_delay();          // Micra settings "Flush delay": 5 / 10 / 15 s
+  void toggle_storage_mount();       // Apollo > Storage: Mount or Unmount the card
   void set_auto_connect(bool on) {   // Micra settings: connect to saved machine at boot
     if (provisioner_ != nullptr) provisioner_->set_auto_connect(on);
   }

@@ -832,6 +832,73 @@ void build_device_backup_rows(lv_obj_t* page, const lv_font_t* text_font,
       action_row(page, "Restore from card", LV_SYMBOL_DOWNLOAD, text_font, btn_h);
 }
 
+// A "label | value + muted sub-line" row (the WiFi Address row's shape).
+lv_obj_t* value_row(lv_obj_t* page, const char* label, const lv_font_t* text_font,
+                    lv_obj_t** value, lv_obj_t** sub) {
+  lv_obj_t* row = make_setting_row(page, label, text_font);
+  lv_obj_t* col = lv_obj_create(row);
+  lv_obj_remove_style_all(col);
+  lv_obj_remove_flag(col, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_size(col, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
+  lv_obj_set_style_pad_row(col, ui::dp(2), 0);
+  *value = lv_label_create(col);
+  lv_obj_set_style_text_color(*value, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(*value, text_font, 0);
+  lv_label_set_text(*value, "");
+  *sub = lv_label_create(col);
+  lv_obj_set_style_text_color(*sub, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(*sub, ui::font_dp(14), 0);
+  lv_label_set_text(*sub, "");
+  return row;
+}
+
+void build_device_storage_rows(lv_obj_t* page, const lv_font_t* text_font, int btn_size,
+                               ui::SettingsWidgets& out) {
+  // Status + the one action. The button's label is Mount or Unmount depending
+  // on the state (App flips it); greyed while a mount/unmount is in flight.
+  lv_obj_t* rs = make_setting_row(page, "SD card", text_font);
+  lv_obj_t* right = lv_obj_create(rs);
+  lv_obj_remove_style_all(right);
+  lv_obj_remove_flag(right, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_size(right, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(right, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(right, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(right, ui::dp(14), 0);
+  out.storage_status_value = lv_label_create(right);
+  lv_obj_set_style_text_color(out.storage_status_value, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(out.storage_status_value, text_font, 0);
+  lv_label_set_text(out.storage_status_value, "");
+  out.storage_mount_btn = ui::make_button(right);
+  lv_obj_set_style_opa(out.storage_mount_btn, LV_OPA_40, LV_STATE_DISABLED);
+  lv_obj_set_height(out.storage_mount_btn, btn_size);
+  lv_obj_set_style_pad_hor(out.storage_mount_btn, ui::dp(14), 0);
+  lv_obj_set_style_bg_color(out.storage_mount_btn, lv_color_hex(ui::theme::card()), 0);
+  out.storage_mount_label = lv_label_create(out.storage_mount_btn);
+  lv_obj_set_style_text_color(out.storage_mount_label, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(out.storage_mount_label, text_font, 0);
+  lv_label_set_text(out.storage_mount_label, "Mount");
+  lv_obj_center(out.storage_mount_label);
+
+  out.storage_card_row =
+      value_row(page, "Card", text_font, &out.storage_card_value, &out.storage_card_sub);
+  out.storage_space_row =
+      value_row(page, "Space", text_font, &out.storage_space_value, &out.storage_space_sub);
+  lv_obj_add_flag(out.storage_card_row, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_flag(out.storage_space_row, LV_OBJ_FLAG_HIDDEN);
+  // Why there is a button at all (the slot is not watched continuously).
+  lv_obj_t* hint = lv_label_create(page);
+  lv_obj_set_width(hint, lv_pct(100));
+  lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
+  lv_obj_set_style_text_color(hint, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_set_style_text_font(hint, ui::font_dp(14), 0);
+  lv_label_set_text(hint,
+                    "The card is checked at startup and when you tap Mount. "
+                    "Unmount before removing a card; a card pulled while mounted "
+                    "stays unmounted until Mount or a restart.");
+}
+
 }  // namespace
 
 namespace ui {
@@ -936,6 +1003,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   out.device_time_page = lv_menu_page_create(menu, "Time & date");
   out.device_wifi_page = lv_menu_page_create(menu, "WiFi");
   if (with_backup) out.device_backup_page = lv_menu_page_create(menu, "Backup");
+  if (with_backup) out.device_storage_page = lv_menu_page_create(menu, "Storage");
   page_column(out.micra_bt_page, compact);
   page_column(out.micra_controls_page, compact);
   page_column(out.micra_schedule_page, compact);
@@ -947,6 +1015,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   page_column(out.device_time_page, compact);
   page_column(out.device_wifi_page, compact);
   if (out.device_backup_page != nullptr) page_column(out.device_backup_page, compact);
+  if (out.device_storage_page != nullptr) page_column(out.device_storage_page, compact);
 
   // Micra > Bluetooth: connection, and the one preference about it
   lv_obj_t* micra_bt_prefs = nullptr;
@@ -1187,6 +1256,8 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   build_device_wifi_rows(out.device_wifi_page, font, btn_size, out);
   if (out.device_backup_page != nullptr)
     build_device_backup_rows(out.device_backup_page, font, btn_h, out);
+  if (out.device_storage_page != nullptr)
+    build_device_storage_rows(out.device_storage_page, font, btn_size, out);
 
   // --- Chooser pages: short nav lists under each root entry -----------------
   out.micra_page = lv_menu_page_create(menu, "Micra");
@@ -1208,6 +1279,8 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   root_entry(menu, out.device_page, out.device_wifi_page, "WiFi", font, btn_h);
   if (out.device_backup_page != nullptr)
     root_entry(menu, out.device_page, out.device_backup_page, "Backup", font, btn_h);
+  if (out.device_storage_page != nullptr)
+    root_entry(menu, out.device_page, out.device_storage_page, "Storage", font, btn_h);
 
   // --- Root page: Micra / Scale / Device -----------------------------------
   out.root_page = lv_menu_page_create(menu, "Settings");
@@ -1250,6 +1323,7 @@ lv_obj_t* settings_section_page(const SettingsWidgets& w, int section) {
     case kSectionDeviceTime:    return w.device_time_page;
     case kSectionDeviceWifi:    return w.device_wifi_page;
     case kSectionDeviceBackup:  return w.device_backup_page;
+    case kSectionDeviceStorage: return w.device_storage_page;
     default:                    return w.root_page;
   }
 }
