@@ -26,6 +26,7 @@ struct ScaleFeatures {
   bool sleep;    // has a discoverable low-power sleep mode: dozes off some time
                  // after a disconnect but keeps advertising, and CONNECTING
                  // wakes it — the UI presents it as "sleeping", never as gone
+  bool weight_stream_required;
 };
 
 // One adjustable setting stored ON the scale itself (beep volume, auto-off
@@ -68,6 +69,7 @@ struct ScaleSnapshot {
   uint32_t    seq;           // increments per received update — consumers use it
                              // to draw event-locked and to measure the stream
                              // rate (scales differ: ~2..20Hz)
+  bool        weight_streaming;
 };
 
 // The port the UI depends on for scale data + commands. The BLE ScaleLink and

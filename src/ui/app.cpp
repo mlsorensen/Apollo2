@@ -1,6 +1,8 @@
 #include "ui/app.h"
 
 #include <cmath>
+#include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -142,6 +144,15 @@ void on_scale_forget_clicked(lv_event_t* e) {
 }
 void on_scale_connect_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->toggle_scale_connection();
+}
+void on_umbra_pair_cancel(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cancel_umbra_pairing();
+}
+void on_umbra_use_unpaired(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->use_umbra_unpaired();
+}
+void on_umbra_pair_poll(lv_timer_t* t) {
+  static_cast<ui::App*>(lv_timer_get_user_data(t))->poll_umbra_pairing();
 }
 void on_scale_dev_setting0(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_scale_device_setting(0);
@@ -2665,6 +2676,9 @@ void App::pump_scale_chart() {
   // Sweep the flow graph left->right by wall-clock time (smooth regardless of the
   // sample rate); flow is derived from the streamed weight. Cheap no-op without a graph.
   const core::ScaleSnapshot snap = scale_->snapshot();
+  const core::ScaleFeatures scale_features = scale_->features();
+  const bool scale_ready = snap.connected &&
+                           (!scale_features.weight_stream_required || snap.weight_streaming);
 
   // Shot lifecycle -> graph: clear the plot when a shot starts (it records exactly
   // one shot), freeze it during review (no ticking = the trace stays put), resume
@@ -2757,7 +2771,7 @@ void App::pump_scale_chart() {
         // grams (net of the detector's baseline) instead. The sentinel forces
         // the live writer to repaint the raw value on dismiss even if the scale
         // reading hasn't moved since the freeze.
-        if (home_.scale_weight != nullptr && snap.connected) {
+        if (home_.scale_weight != nullptr && scale_ready) {
           char wb[16];
           std::snprintf(wb, sizeof(wb), "%.1f g",
                         static_cast<double>(snap.weight_g - bsnap.start_weight_g));
@@ -2819,9 +2833,9 @@ void App::pump_scale_chart() {
   // check sees live-vs-held differ and the readout resets with the rest.
   const bool weight_frozen = have_brew && bsnap.phase == core::ShotPhase::kReview;
   if (home_.scale_weight != nullptr && !weight_frozen &&
-      (snap.weight_g != last_weight_g_ || snap.connected != last_scale_connected_)) {
+      (snap.weight_g != last_weight_g_ || scale_ready != last_scale_connected_)) {
     last_weight_g_ = snap.weight_g;
-    last_scale_connected_ = snap.connected;
+    last_scale_connected_ = scale_ready;
     // Unwired shots never tare — show shot grams (net of the detector's
     // baseline) while one runs/settles, matching the shot plot. The change
     // check stays keyed on the RAW reading (net differs by a constant);
@@ -2831,7 +2845,7 @@ void App::pump_scale_chart() {
                              ? bsnap.start_weight_g
                              : 0.0f);
     char wb[16];
-    if (snap.connected) std::snprintf(wb, sizeof(wb), "%.1f g", static_cast<double>(shown));
+    if (scale_ready) std::snprintf(wb, sizeof(wb), "%.1f g", static_cast<double>(shown));
     else std::snprintf(wb, sizeof(wb), "-- g");
     lv_label_set_text(home_.scale_weight, wb);
   }
@@ -3000,6 +3014,11 @@ lv_obj_t* App::open_join_modal(const char* title, const char* ssid,
 }
 
 void App::close_modal() {
+  if (umbra_pair_timer_ != nullptr) {
+    lv_timer_delete(umbra_pair_timer_);
+    umbra_pair_timer_ = nullptr;
+  }
+  umbra_pair_prompt_ = false;
   if (log_timer_ != nullptr) {  // log viewer: stop tailing before the widgets go
     lv_timer_delete(log_timer_);
     log_timer_ = nullptr;
@@ -4616,9 +4635,61 @@ void App::save_scanned_scale(int index) {
   if (scale_provisioner_ == nullptr) return;
   const std::vector<core::ScanResult> results = scale_provisioner_->scan_results();
   if (index < 0 || index >= static_cast<int>(results.size())) return;
-  scale_provisioner_->save_scale(results[index]);
+  std::string upper = results[index].name;
+  std::transform(upper.begin(), upper.end(), upper.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+  if (upper.find("UMBRA") != std::string::npos) {
+    pending_umbra_scale_ = results[index];
+    scale_provisioner_->save_scale(pending_umbra_scale_, true);
+    settings_.scale_last_count = -1;
+    request_layout_rebuild(kSectionScaleBt);
+    lv_obj_t* card = open_modal(
+        "Pair with Umbra",
+        "Hold the Umbra's button until it blinks magenta. Apollo will confirm the pairing.");
+    modal_button(card, "Cancel", ui::theme::rail(), on_umbra_pair_cancel, this);
+    modal_button(card, "Use unpaired", ui::theme::rail(), on_umbra_use_unpaired, this);
+    umbra_pair_prompt_ = true;
+    umbra_pair_timer_ = lv_timer_create(on_umbra_pair_poll, 250, this);
+  } else {
+    scale_provisioner_->save_scale(results[index], false);
+    settings_.scale_last_count = -1;
+    request_layout_rebuild(kSectionScaleBt);
+  }
+}
+
+void App::poll_umbra_pairing() {
+  if (!umbra_pair_prompt_ || scale_provisioner_ == nullptr ||
+      !scale_provisioner_->partner_pairing_complete())
+    return;
+  umbra_pair_prompt_ = false;
+  if (umbra_pair_timer_ != nullptr) {
+    lv_timer_delete(umbra_pair_timer_);
+    umbra_pair_timer_ = nullptr;
+  }
+  close_modal();
+}
+
+void App::cancel_umbra_pairing() {
+  umbra_pair_prompt_ = false;
+  if (umbra_pair_timer_ != nullptr) {
+    lv_timer_delete(umbra_pair_timer_);
+    umbra_pair_timer_ = nullptr;
+  }
+  close_modal();
+  forget_scale();
+}
+
+void App::use_umbra_unpaired() {
+  umbra_pair_prompt_ = false;
+  if (umbra_pair_timer_ != nullptr) {
+    lv_timer_delete(umbra_pair_timer_);
+    umbra_pair_timer_ = nullptr;
+  }
+  close_modal();
+  if (scale_provisioner_ == nullptr) return;
+  scale_provisioner_->save_scale(pending_umbra_scale_, false);
   settings_.scale_last_count = -1;
-  request_layout_rebuild(kSectionScaleBt);  // Home swaps to the scale-aware layout
+  request_layout_rebuild(kSectionScaleBt);
 }
 
 void App::forget_scale() {

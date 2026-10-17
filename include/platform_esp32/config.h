@@ -29,7 +29,8 @@ class Config {
   // Saved Bluetooth scale (separate from the machine; no token needed).
   std::string scale_mac() const;
   std::string scale_name() const;
-  void save_scale(const std::string& mac, const std::string& name);
+  bool scale_partner_mode() const;
+  void save_scale(const std::string& mac, const std::string& name, bool partner_mode);
   void clear_scale();
 
   // Brew-by-weight target (grams) — persisted so it survives reboots.

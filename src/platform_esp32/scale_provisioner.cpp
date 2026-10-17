@@ -16,18 +16,26 @@ std::vector<core::ScanResult> ScaleProvisioner::scan_results() const {
   return link_.scan_results();
 }
 
-void ScaleProvisioner::save_scale(const core::ScanResult& scale) {
-  config_.save_scale(scale.mac, scale.name);
+void ScaleProvisioner::save_scale(const core::ScanResult& scale, bool partner_mode) {
+  config_.save_scale(scale.mac, scale.name, partner_mode);
   link_.set_name(scale.name);
+  link_.set_partner_mode(partner_mode);
   link_.set_connect_enabled(true);
-  link_.set_address(scale.mac);  // points the link at it -> connects
+  link_.set_address(scale.mac);
 }
 
 std::string ScaleProvisioner::saved_name() const { return config_.scale_name(); }
 
+bool ScaleProvisioner::partner_pairing_complete() const {
+  return link_.partner_pairing_complete();
+}
+
 void ScaleProvisioner::forget() {
   config_.clear_scale();
+  link_.set_name("");
+  link_.set_partner_mode(false);
   link_.set_address("");  // drop the link + idle
+  link_.set_connect_enabled(false);
 }
 
 bool ScaleProvisioner::connect_enabled() const { return link_.connect_enabled(); }

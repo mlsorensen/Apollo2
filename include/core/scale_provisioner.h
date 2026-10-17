@@ -21,11 +21,14 @@ class IScaleProvisioner {
   virtual std::vector<ScanResult> scan_results() const = 0;
 
   // Persist the chosen scale (mac + name) and start connecting to it.
-  virtual void save_scale(const ScanResult& scale) = 0;
+  virtual void save_scale(const ScanResult& scale, bool partner_mode = false) = 0;
 
   // The saved scale's display name, or "" if none is saved. The UI uses this to
   // decide whether to show the Scale tab + scale-aware Home at all.
   virtual std::string saved_name() const = 0;
+
+  // Partner-mode support for Umbra firmware 1.0.8.
+  virtual bool partner_pairing_complete() const { return false; }
 
   // Clear the saved scale -> no scale configured.
   virtual void forget() = 0;

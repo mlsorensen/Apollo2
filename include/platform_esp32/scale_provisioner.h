@@ -19,8 +19,9 @@ class ScaleProvisioner : public core::IScaleProvisioner {
   void start_scan() override;
   bool scanning() const override;
   std::vector<core::ScanResult> scan_results() const override;
-  void save_scale(const core::ScanResult& scale) override;
+  void save_scale(const core::ScanResult& scale, bool partner_mode = false) override;
   std::string saved_name() const override;
+  bool partner_pairing_complete() const override;
   void forget() override;
   bool connect_enabled() const override;
   void set_connect_enabled(bool enabled) override;

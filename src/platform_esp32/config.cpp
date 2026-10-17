@@ -62,6 +62,7 @@ int migrate_chime_volume(int legacy_percent) {
 }
 constexpr char kScaleMacKey[] = "smac";
 constexpr char kScaleNameKey[] = "sname";
+constexpr char kScalePartnerKey[] = "sprtnr";
 constexpr char kTargetKey[] = "tgtg";
 constexpr char kShotModeKey[] = "shotmode";  // LEGACY bool (armed) — migration only
 constexpr char kShotMode3Key[] = "shotmd";   // tri-state core::ShotMode as int
@@ -168,11 +169,20 @@ std::string Config::scale_mac() const { return read_key(kScaleMacKey); }
 
 std::string Config::scale_name() const { return read_key(kScaleNameKey); }
 
-void Config::save_scale(const std::string& mac, const std::string& name) {
+bool Config::scale_partner_mode() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
+  const bool enabled = p.getBool(kScalePartnerKey, false);
+  p.end();
+  return enabled;
+}
+
+void Config::save_scale(const std::string& mac, const std::string& name, bool partner_mode) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putString(kScaleMacKey, mac.c_str());
   p.putString(kScaleNameKey, name.c_str());
+  p.putBool(kScalePartnerKey, partner_mode);
   p.end();
 }
 
@@ -181,6 +191,7 @@ void Config::clear_scale() {
   p.begin(kNamespace, /*readOnly=*/false);
   p.remove(kScaleMacKey);
   p.remove(kScaleNameKey);
+  p.remove(kScalePartnerKey);
   p.end();
 }
 

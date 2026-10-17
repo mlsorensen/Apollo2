@@ -4,6 +4,16 @@
 
 namespace {
 
+constexpr const char* kPartnerSleepLabels[] = {"Off", "1 min", "5 min",
+                                                "10 min", "30 min"};
+constexpr const char* kPartnerBeepLabels[] = {"Off", "On"};
+constexpr const char* kPartnerUnitLabels[] = {"Grams only"};
+constexpr core::ScaleSettingDesc kPartnerSettings[] = {
+    {"Beep", kPartnerBeepLabels, 2},
+    {"Auto sleep", kPartnerSleepLabels, 5},
+    {"Unit", kPartnerUnitLabels, 1, /*read_only=*/true},
+};
+
 constexpr uint32_t kReconnectBackoffMs = 3000;
 // Connect timeout per address-type attempt. We connect by MAC and don't persist
 // the address type, so the transport tries both — a wrong-type attempt at the
@@ -48,6 +58,25 @@ void ScaleLink::set_name(std::string name) {
   driver_ = make_scale_driver(name_.c_str());
 }
 
+void ScaleLink::set_partner_mode(bool enabled) {
+  partner_mode_.store(enabled);
+  partner_paired_.store(false);
+  partner_connected_.store(false);
+  reconnect_requested_.store(true);
+  if (enabled) {
+    std::lock_guard<std::mutex> lk(mutex_);
+    driver_ = make_scale_driver(name_.c_str());
+  }
+  set_connected(false);
+}
+
+void ScaleLink::set_partner_connected(bool connected) {
+  partner_connected_.store(connected);
+  const bool current = snapshot().connected;
+  if (current != connected) set_connected(connected);
+  if (connected && partner_mode_.load()) on_device_setting(2, 0);
+}
+
 void ScaleLink::set_connect_enabled(bool enabled) {
   connect_enabled_.store(enabled);
   reconnect_requested_.store(true);
@@ -57,6 +86,7 @@ void ScaleLink::set_connected(bool c) {
   std::lock_guard<std::mutex> lk(mutex_);
   connected_ = c;
   if (!c) weight_g_ = 0.0f;
+  weight_streaming_ = false;
   // Either edge invalidates the on-scale settings cache: a fresh link must
   // re-read them (the scale may have been adjusted while away), and posted
   // writes must not fire on some future reconnect the user didn't ask for.
@@ -72,6 +102,7 @@ void ScaleLink::set_connected(bool c) {
 void ScaleLink::on_weight(float grams) {
   std::lock_guard<std::mutex> lk(mutex_);
   weight_g_ = grams;
+  weight_streaming_ = true;
   ++seq_;  // stream-rate probe: one tick per received weight update
 }
 
@@ -123,6 +154,22 @@ void ScaleLink::run() {
   bool retare = false;  // second tare send armed (see the tare block below)
   for (;;) {
     if (scan_requested_.exchange(false)) do_scan();  // works in any state
+
+    // Partner-mode support for Umbra firmware 1.0.8.
+    if (partner_mode_.load()) {
+      if (connected) {
+        ble_.disconnect();
+        connected = false;
+        set_connected(false);
+      }
+      const bool current = snapshot().connected;
+      const bool partner = partner_connected_.load() && connect_enabled_.load();
+      if (current != partner) set_connected(partner);
+      if (partner && pending_tare_.exchange(false) && partner_setting_writer_)
+        partner_setting_writer_(-1, 0);
+      sleep_ms(100);
+      continue;
+    }
 
     std::string addr;
     std::shared_ptr<IScaleDriver> drv;
@@ -303,11 +350,20 @@ ScaleSnapshot ScaleLink::snapshot() const {
       .battery_valid = battery_valid_,
       .battery_pct = battery_pct_,
       .seq = seq_,
+      .weight_streaming = weight_streaming_,
   };
 }
 
 ScaleFeatures ScaleLink::features() const {
   std::lock_guard<std::mutex> lk(mutex_);
+  if (partner_mode_.load())
+    return ScaleFeatures{.tare = true,
+                         .flow = true,
+                         .timer = false,
+                         .battery = true,
+                         .battery_low_pct = 15,
+                         .sleep = true,
+                         .weight_stream_required = true};
   if (driver_) return driver_->features();
   return ScaleFeatures{.tare = true,
                        .flow = true,
@@ -321,6 +377,7 @@ void ScaleLink::tare() { pending_tare_.store(true); }
 
 int ScaleLink::device_setting_count() const {
   std::lock_guard<std::mutex> lk(mutex_);
+  if (partner_mode_.load()) return 3;
   // driver_ is classified eagerly from the saved name (set_name), so the
   // descriptors answer while disconnected — only values need the link.
   return driver_ ? driver_->device_setting_count() : 0;
@@ -328,6 +385,8 @@ int ScaleLink::device_setting_count() const {
 
 ScaleSettingDesc ScaleLink::device_setting(int index) const {
   std::lock_guard<std::mutex> lk(mutex_);
+  if (partner_mode_.load())
+    return index >= 0 && index < 3 ? kPartnerSettings[index] : ScaleSettingDesc{};
   if (!driver_ || index < 0 || index >= driver_->device_setting_count())
     return ScaleSettingDesc{};
   return driver_->device_setting(index);
@@ -344,6 +403,15 @@ void ScaleLink::set_device_setting(int index, int option_idx) {
   if (index < 0 || index >= kMaxScaleSettings || option_idx < 0) return;
   std::lock_guard<std::mutex> lk(mutex_);
   if (!connected_) return;  // the scale owns the value; nothing to queue for
+  if (partner_mode_.load()) {
+    if (index > 1 || option_idx > (index == 0 ? 1 : 4) ||
+        kPartnerSettings[index].read_only)
+      return;
+    setting_value_[index] = option_idx;
+    setting_grace_until_ms_[index] = now_ms() + kSettingEchoGraceMs;
+    if (partner_setting_writer_) partner_setting_writer_(index, option_idx);
+    return;
+  }
   const uint32_t now = now_ms();
   setting_value_[index] = option_idx;  // optimistic; see on_device_setting
   setting_grace_until_ms_[index] = now + kSettingEchoGraceMs;

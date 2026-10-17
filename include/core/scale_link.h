@@ -38,6 +38,21 @@ class ScaleLink : public IScale, public IScaleSink {
   void set_address(std::string address);
   void set_name(std::string name);  // display name; also selects the driver
 
+  // Partner-mode support for Umbra firmware 1.0.8.
+  void set_partner_mode(bool enabled);
+  bool partner_mode() const { return partner_mode_.load(); }
+  bool partner_pairing_complete() const { return partner_paired_.load(); }
+  void on_partner_pairing_complete() { partner_paired_.store(true); }
+  void set_partner_connected(bool connected);
+  void on_partner_weight(float grams) { on_weight(grams); }
+  void on_partner_battery(int pct) { on_battery(pct); }
+  void on_partner_setting(int index, int option_idx) {
+    on_device_setting(index, option_idx);
+  }
+  void set_partner_setting_writer(std::function<void(int, int)> writer) {
+    partner_setting_writer_ = std::move(writer);
+  }
+
   // Manual connect gate (a battery remote can drop the scale to save power).
   bool connect_enabled() const { return connect_enabled_.load(); }
   void set_connect_enabled(bool enabled);
@@ -86,6 +101,7 @@ class ScaleLink : public IScale, public IScaleSink {
 
   mutable std::mutex mutex_;  // guards the cached fields below
   bool connected_ = false;
+  bool weight_streaming_ = false;
   float weight_g_ = 0.0f;
   uint32_t timer_ms_ = 0;
   int battery_pct_ = 0;
@@ -110,6 +126,10 @@ class ScaleLink : public IScale, public IScaleSink {
   std::vector<ScanResult> scan_results_;
 
   std::atomic<bool> connect_enabled_{true};  // scales auto-connect when saved
+  std::atomic<bool> partner_mode_{false};
+  std::atomic<bool> partner_paired_{false};
+  std::atomic<bool> partner_connected_{false};
+  std::function<void(int, int)> partner_setting_writer_;
   std::atomic<bool> reconnect_requested_{false};
   std::atomic<bool> scan_requested_{false};
   std::atomic<bool> scanning_{false};

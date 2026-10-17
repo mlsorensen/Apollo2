@@ -90,6 +90,9 @@ class App {
   void toggle_connection();    // Settings "Connect"/"Disconnect" button
   void start_scale_scan();        // Scale page "Scan" button
   void save_scanned_scale(int index);  // a result row in the Scale scan list
+  void cancel_umbra_pairing();
+  void use_umbra_unpaired();
+  void poll_umbra_pairing();
   void forget_scale();            // Scale page "Forget" button
   void toggle_scale_connection(); // Scale page "Connect"/"Disconnect"
   void target_adjust(int dir);    // Scale target weight +/- (grams)
@@ -352,6 +355,9 @@ class App {
   // restores it (LVGL's inactivity clock resets on input). Timer survives
   // rebuilds — it belongs to the app, not the widget tree.
   lv_timer_t* screensaver_timer_ = nullptr;
+  lv_timer_t* umbra_pair_timer_ = nullptr;
+  bool umbra_pair_prompt_ = false;
+  core::ScanResult pending_umbra_scale_{};
   bool screensaver_on_ = false;
   // Saver cover on lv_layer_top (swallows the waking tap): black + the
   // recolored lion drifting DVD-style (Logo), transparent (Dim), black (Off);

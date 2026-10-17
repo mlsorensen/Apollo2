@@ -536,6 +536,7 @@ void setup() {
   // Start the Bluetooth scale link from its saved MAC (empty -> idles).
   const std::string scale_mac = g_config.scale_mac();
   g_scale.set_name(g_config.scale_name());
+  g_scale.set_partner_mode(g_config.scale_partner_mode());
   core::logf("Saved scale: mac=%s\n", scale_mac.empty() ? "(none)" : scale_mac.c_str());
   g_scale.begin(scale_mac);
 }
@@ -603,6 +604,7 @@ void poll_serial_id() {
 }  // namespace
 
 void loop() {
+  g_scale.poll_partner();
   poll_serial_id();          // web-flasher "which board is this?" responder
   g_brew.poll(millis());     // paddle relay + shot state machine (edge-critical)
   // Frame-cost telemetry, replacing LVGL's on-screen perf overlay (which is a
@@ -787,9 +789,9 @@ void loop() {
 
   // Park BLE (re)connect attempts:
   //  - SCALE: while the machine is idle (screensaver on) AND while the setup
-  //    portal's AP is up. Idle: stops the pointless "connect failed" churn
-  //    and frees the internal RAM the radio's connecting holds, which is what
-  //    lets the daily update check run reliably on the heap-tight S3.
+  //    portal's AP is up. Partner-mode support for Umbra firmware 1.0.8 also
+  //    participates in this radio pause. Idle suppresses reconnect churn and
+  //    frees radio RAM for update checks.
   //  - MICRA: while the portal is up ONLY. It used to park on the saver too,
   //    and that defeated the schedule (owner, 2026-09-30): a link lost
   //    overnight stayed lost until the first touch, so a 06:30 turn-on found

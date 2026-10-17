@@ -208,7 +208,8 @@ class AcaiaDriver : public IScaleDriver {
                          .timer = true,
                          .battery = true,
                          .battery_low_pct = 15,
-                         .sleep = umbra};
+                         .sleep = umbra,
+                         .weight_stream_required = true};
   }
 
   const char* select_notify(ble::ICentral& ble) override {

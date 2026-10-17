@@ -20,6 +20,7 @@ class FakeScale : public core::IScale {
         .battery_valid = true,
         .battery_pct = 78,
         .seq = 1,
+        .weight_streaming = connected_,
     };
   }
   core::ScaleFeatures features() const override {
@@ -28,7 +29,8 @@ class FakeScale : public core::IScale {
                                .timer = true,
                                .battery = true,
                                .battery_low_pct = 15,
-                               .sleep = umbra_};
+                               .sleep = umbra_,
+                               .weight_stream_required = lunar_ || umbra_};
   }
   void tare() override {}
 

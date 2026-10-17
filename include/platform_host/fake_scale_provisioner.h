@@ -14,7 +14,7 @@ class FakeScaleProvisioner : public core::IScaleProvisioner {
   void start_scan() override {}
   bool scanning() const override { return false; }
   std::vector<core::ScanResult> scan_results() const override;
-  void save_scale(const core::ScanResult& /*scale*/) override {}
+  void save_scale(const core::ScanResult& /*scale*/, bool /*partner_mode*/ = false) override {}
   std::string saved_name() const override { return saved_ ? "BOOKOO_THEMIS" : ""; }
   void forget() override {}
   bool connect_enabled() const override { return connect_enabled_; }
