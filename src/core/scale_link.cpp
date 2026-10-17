@@ -71,9 +71,7 @@ void ScaleLink::set_partner_mode(bool enabled) {
 
 void ScaleLink::set_partner_connected(bool connected) {
   partner_connected_.store(connected);
-  const bool current = snapshot().connected;
-  if (current != connected) set_connected(connected);
-  if (connected && partner_mode_.load()) on_device_setting(2, 0);
+  if (link_up() != connected) set_connected(connected);
 }
 
 void ScaleLink::set_connect_enabled(bool enabled) {
@@ -161,9 +159,8 @@ void ScaleLink::run() {
         connected = false;
         set_connected(false);
       }
-      const bool current = snapshot().connected;
       const bool partner = partner_connected_.load() && connect_enabled_.load();
-      if (current != partner) set_connected(partner);
+      if (link_up() != partner) set_connected(partner);
       if (partner && pending_tare_.exchange(false) && partner_setting_writer_)
         partner_setting_writer_(-1, 0);
       sleep_ms(100);
@@ -339,17 +336,26 @@ bool ScaleLink::do_connect(const std::string& address) {
   return true;
 }
 
+bool ScaleLink::link_up() const {
+  std::lock_guard<std::mutex> lk(mutex_);
+  return connected_;
+}
+
 ScaleSnapshot ScaleLink::snapshot() const {
   std::lock_guard<std::mutex> lk(mutex_);
+  // "Connected" = USABLE: link up AND a weight received since it came up. A
+  // link can come up seconds before the stream (seen on the Umbra and the
+  // Lunar), and everything downstream keys on this one bit — Home's status/
+  // readout/Tare, Settings, Auto shot arming, the shot detector, the stop
+  // logic — so none of them act on a scale that isn't sending weight yet.
   return ScaleSnapshot{
       .name = name_.c_str(),
-      .connected = connected_,
+      .connected = connected_ && weight_streaming_,
       .weight_g = weight_g_,
       .timer_ms = timer_ms_,
       .battery_valid = battery_valid_,
       .battery_pct = battery_pct_,
       .seq = seq_,
-      .weight_streaming = weight_streaming_,
   };
 }
 
@@ -361,8 +367,7 @@ ScaleFeatures ScaleLink::features() const {
                          .timer = false,
                          .battery = true,
                          .battery_low_pct = 15,
-                         .sleep = true,
-                         .weight_stream_required = true};
+                         .sleep = true};
   if (driver_) return driver_->features();
   return ScaleFeatures{.tare = true,
                        .flow = true,

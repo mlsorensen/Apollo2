@@ -2683,9 +2683,6 @@ void App::pump_scale_chart() {
   // Sweep the flow graph left->right by wall-clock time (smooth regardless of the
   // sample rate); flow is derived from the streamed weight. Cheap no-op without a graph.
   const core::ScaleSnapshot snap = scale_->snapshot();
-  const core::ScaleFeatures scale_features = scale_->features();
-  const bool scale_ready = snap.connected &&
-                           (!scale_features.weight_stream_required || snap.weight_streaming);
 
   // Shot lifecycle -> graph: clear the plot when a shot starts (it records exactly
   // one shot), freeze it during review (no ticking = the trace stays put), resume
@@ -2778,7 +2775,7 @@ void App::pump_scale_chart() {
         // grams (net of the detector's baseline) instead. The sentinel forces
         // the live writer to repaint the raw value on dismiss even if the scale
         // reading hasn't moved since the freeze.
-        if (home_.scale_weight != nullptr && scale_ready) {
+        if (home_.scale_weight != nullptr && snap.connected) {
           char wb[16];
           std::snprintf(wb, sizeof(wb), "%.1f g",
                         static_cast<double>(snap.weight_g - bsnap.start_weight_g));
@@ -2840,9 +2837,9 @@ void App::pump_scale_chart() {
   // check sees live-vs-held differ and the readout resets with the rest.
   const bool weight_frozen = have_brew && bsnap.phase == core::ShotPhase::kReview;
   if (home_.scale_weight != nullptr && !weight_frozen &&
-      (snap.weight_g != last_weight_g_ || scale_ready != last_scale_connected_)) {
+      (snap.weight_g != last_weight_g_ || snap.connected != last_scale_connected_)) {
     last_weight_g_ = snap.weight_g;
-    last_scale_connected_ = scale_ready;
+    last_scale_connected_ = snap.connected;
     // Unwired shots never tare — show shot grams (net of the detector's
     // baseline) while one runs/settles, matching the shot plot. The change
     // check stays keyed on the RAW reading (net differs by a constant);
@@ -2852,7 +2849,7 @@ void App::pump_scale_chart() {
                              ? bsnap.start_weight_g
                              : 0.0f);
     char wb[16];
-    if (scale_ready) std::snprintf(wb, sizeof(wb), "%.1f g", static_cast<double>(shown));
+    if (snap.connected) std::snprintf(wb, sizeof(wb), "%.1f g", static_cast<double>(shown));
     else std::snprintf(wb, sizeof(wb), "-- g");
     lv_label_set_text(home_.scale_weight, wb);
   }

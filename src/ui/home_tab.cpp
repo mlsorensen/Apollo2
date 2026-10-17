@@ -1086,8 +1086,6 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
                  const core::BrewSnapshot& brew, core::NetState net, bool heating) {
   const bool connected = state.link == core::Link::Connected;
   const bool on = state.power == core::Power::On;
-  const bool scale_ready = scale.connected &&
-                           (!scale_features.weight_stream_required || scale.weight_streaming);
 
   // Temperatures: real values when connected, placeholders otherwise. The set point
   // is always compact ("93.0°" — the live value above/beside it carries the unit),
@@ -1128,7 +1126,7 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     const bool weight_frozen = brew.phase == core::ShotPhase::kReview;
     if (!weight_frozen) {
       char wb[16];
-      if (scale_ready) {
+      if (scale.connected) {
         // Unwired shots never tare — show shot grams (net of the detector's
         // baseline) while one runs/settles, matching the shot plot. Same
         // predicate as pump_scale_chart's fast writer.
@@ -1155,7 +1153,7 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
       if (core::esp_shot_timer(brew)) {
         std::snprintf(sb, sizeof(sb), "%.1f s",
                       static_cast<double>(brew.shot_ms) / 1000.0);
-      } else if (scale_ready) {
+      } else if (scale.connected) {
         std::snprintf(sb, sizeof(sb), "%.1f s",
                       static_cast<double>(scale.timer_ms) / 1000.0);
       } else {
@@ -1244,7 +1242,7 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   // retrying, so that reads "Connecting...".
   const char* scale_txt;
   uint32_t scale_dot;
-  if (scale_ready) {
+  if (scale.connected) {
     scale_txt = "Connected";
     scale_dot = ui::theme::ok();
   } else if (scale_connect_enabled) {
@@ -1265,7 +1263,7 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   // Scale battery beside the status, when reported: the level icon, the
   // percent, or both (Settings > Scale > Device settings > Battery display).
   if (w.scale_batt_label != nullptr) {
-    const bool have = scale_ready && scale.battery_valid;
+    const bool have = scale.connected && scale.battery_valid;
     const bool show_pct = have && w.scale_batt_style != 0;
     const bool show_icon = have && w.scale_batt_style != 1;
     const uint32_t color = have && scale.battery_pct <= scale_features.battery_low_pct
@@ -1299,7 +1297,7 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   // a scale blackout aborting it in core — the buttons free up on the next tick.
   const bool shot = core::shot_in_flight(brew);
   if (w.tare_btn != nullptr) {
-    if (scale_ready && !shot)
+    if (scale.connected && !shot)
       lv_obj_remove_state(w.tare_btn, LV_STATE_DISABLED);
     else
       lv_obj_add_state(w.tare_btn, LV_STATE_DISABLED);

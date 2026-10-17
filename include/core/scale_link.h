@@ -88,6 +88,7 @@ class ScaleLink : public IScale, public IScaleSink {
   bool do_connect(const std::string& address);
   void do_scan();
   void set_connected(bool c);
+  bool link_up() const;  // the raw BLE link, before the weight-stream gate
 
   ble::ICentral& ble_;
 
