@@ -7,10 +7,14 @@ for someone reading the diff. These notes are also shown ON THE DEVICE, whose
 fonts are ASCII-only: stick to characters `sanitize_notes()` (src/ui/app.cpp)
 maps — plain ASCII plus `— – → … × ' "` — or they render as empty boxes.
 
-## v1.0.3
+## Unreleased
 
-- **Fix for random restarts on P4 boards with no SD card.** Searching the empty slot every few seconds disturbed the WiFi/Bluetooth radio, which shares that bus controller, and the device occasionally restarted (coredump-confirmed on an X 8"). The card is now checked once at startup, before the radio comes up, and otherwise only when you ask.
-- **New Settings > Apollo > Storage page.** Shows the card's status, make/model, capacity, filesystem and used/free space, with **Mount** and **Unmount** buttons; insert a card and tap Mount (or restart), Unmount before taking one out. A card pulled while mounted is noticed and left unmounted until you Mount again.
+- **Pair an Acaia Umbra (Umbra firmware 1.0.8).** Apollo can pair with the Umbra the way a Lunar does, keeping its sleep/wake behaviour. Choose it in Settings > Scale > Scan; the first time Apollo restarts once, then asks you to hold the Umbra's button until it blinks magenta.
+- **Correct Umbra weight when it's set to ounces.** An Umbra set to oz showed weights 28× too high. It always sends grams, so Apollo no longer converts, and its Unit row is gone — it has no display to change.
+- **Scales count as connected once weight arrives.** Home, Tare and Auto shot now wait for the first weight reading, not just the Bluetooth link, so a shot can't arm on a scale that isn't sending yet.
+- **Forget no longer risks a restart.** Forgetting a scale could occasionally crash Apollo.
+- **P4 boards with no SD card check the slot once.** Searching the empty slot every few seconds disturbed the WiFi/Bluetooth radio, which shares that bus, and could restart the device. The card is now checked at startup and when you ask.
+- **New Settings > Apollo > Storage page.** Shows the card's status, make/model, capacity, filesystem and used/free space, with Mount and Unmount buttons; insert a card and tap Mount (or restart), Unmount before taking one out.
 
 ## v1.0.2
 

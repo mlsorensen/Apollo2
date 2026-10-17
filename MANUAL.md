@@ -52,7 +52,7 @@ Settings
 │                └─ Configure schedule — day chips · Day enabled · On at / Off at
 │                                        · range slider · Copy times to
 ├─ Scale
-│  ├─ Bluetooth       — Scan · saved scale (Connect / Forget)
+│  ├─ Bluetooth       — Scan · saved scale (Connect / Forget) · Umbra pairing
 │  ├─ Shot settings   — Target · Review hold · Detect lead-in · Smoothing
 │  │                    · Drop negative g/s · Oscilloscope graph · Window growth
 │  └─ Device settings — Battery display (Icon / Percent / Icon + %)
@@ -430,6 +430,15 @@ How it behaves:
   sleep their Bluetooth quickly.
 - ① **Saved scale row** — **Connect / Disconnect** and **Forget** (no token
   needed for scales).
+- **Pairing an Acaia Umbra** — choosing an Umbra from the scan list offers to
+  *pair* it, the way a Lunar does, which keeps the Umbra's sleep/wake
+  behaviour on Umbra firmware 1.0.8 (see the per‑scale notes below). The first
+  time, Apollo has to **restart once** to get ready (**Restart**), then shows
+  **Pairing with Umbra**: hold the Umbra's button until it blinks magenta and
+  Apollo confirms by itself. If it hasn't paired after 30 seconds of blinking
+  magenta, turn the Umbra off and enter pairing mode again. **Use unpaired**
+  skips pairing and connects the normal way, with no restart. A paired Umbra
+  may show up as a Lunar ("LUNAR‑APOLLO") in Acaia's app.
 
 ### Shot settings
 
@@ -526,7 +535,13 @@ machine is already warming up when you arrive.
   then shows `Sleeping`), and tap **Connect** in the morning, which wakes the
   Umbra over Bluetooth. The Umbra's battery lasts about a **week** in sleep
   mode — and once it's flat, Connect naturally can't wake it, so put it on a
-  charger if it's been sitting.
+  charger if it's been sitting. **Umbra firmware 1.0.8:** an *unpaired* Umbra
+  powers off about 5 minutes after the link drops instead of sleeping, so
+  Connect can't wake it — **pair** it (Bluetooth above) to keep the sleep
+  behaviour. With a **paired** Umbra, either let the screensaver manage it —
+  the Umbra goes to sleep when the screensaver starts and wakes when you
+  touch the screen — or tap **Disconnect** when you're done and **Connect**
+  when you need it.
 - **Bookoo Themis** — has a sleep mode, but it genuinely powers down: Apollo
   **cannot** wake it with Connect. Treat it like the Lunar: leave Apollo
   connecting, **turn the scale on** in the morning and you're good; when
