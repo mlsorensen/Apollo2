@@ -17,6 +17,16 @@ class ScaleLink : public core::ScaleLink {
  public:
   ScaleLink() : core::ScaleLink(central_), partner_(*this) {}
 
+  // Register the Umbra partner GATT service. Call ONCE, right after
+  // NimBLEDevice::init() and BEFORE any link starts: NimBLE refuses GATT
+  // changes while any connection, connect attempt, scan or advertising is
+  // active, and NimBLEServer::start() turns that refusal into a
+  // ble_svc_gap_init assert (bench, 2026-10-17: boot loop on the 4.3 with a
+  // Micra connecting). Everything after this only starts/stops advertising.
+  bool register_partner() { return partner_.begin(); }
+  bool partner_registered() const { return partner_.ready(); }
+  void hold_partner(bool held) { partner_.hold(held); }
+
   // Start the background task (non-blocking). Empty address -> idle until set.
   void begin(std::string address);
   void set_name(std::string name);

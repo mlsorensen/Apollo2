@@ -30,6 +30,23 @@ bool ScaleProvisioner::partner_pairing_complete() const {
   return link_.partner_pairing_complete();
 }
 
+bool ScaleProvisioner::partner_ready() const { return link_.partner_registered(); }
+
+bool ScaleProvisioner::partner_pair_pending() const {
+  return config_.scale_partner_pending();
+}
+
+void ScaleProvisioner::set_partner_pair_pending(bool pending) {
+  config_.set_scale_partner_pending(pending);
+}
+
+void ScaleProvisioner::set_partner_mode(bool enabled) {
+  config_.save_scale(config_.scale_mac(), config_.scale_name(), enabled);
+  link_.set_partner_mode(enabled);  // address unchanged: central resumes on it
+}
+
+void ScaleProvisioner::hold_partner(bool held) { link_.hold_partner(held); }
+
 void ScaleProvisioner::forget() {
   config_.clear_scale();
   link_.set_name("");

@@ -465,7 +465,7 @@ void setup() {
   // Full reboot, used after a settings restore (set_restart_handler above
   // deliberately heals an RGB panel in place instead of rebooting).
   g_app.set_reboot_handler([] {
-    core::logf("Settings restored -> reboot\n");
+    core::logf("Full reboot (settings restore / Umbra partner setup)\n");
     Serial.flush();
     esp_restart();
   });
@@ -506,6 +506,30 @@ void setup() {
   // another here silently replaces it (that bit us on 2026-09-12).
 
   NimBLEDevice::init("micra-remote");
+
+  // Umbra partner GATT service: registered before any link can connect/scan
+  // (see ScaleLink::register_partner), and ONLY when partner mode is saved.
+  // Measured 2026-10-17: 1,248-1,260 B of internal DMA-capable RAM on both
+  // the P4 4.3 and the S3 4.3C (A/B over 4+4 boots on the 4.3C: steady-state
+  // DMA free 26.0 vs 27.3 KB) — a real cost on the S3, so units without an
+  // Umbra never pay it; choosing an Umbra restarts once (App::
+  // restart_for_umbra) to get here.
+  if (!g_config.scale_partner_mode()) {
+    core::logf("heap: partner GATT not registered (partner mode off)\n");
+  } else {
+    const unsigned i8 = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    const unsigned dma = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
+    const unsigned ps = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    const bool ok = g_scale.register_partner();
+    core::logf("heap: partner GATT %s, cost 8bit=%d DMA=%d PSRAM=%d\n",
+               ok ? "registered" : "FAILED",
+               static_cast<int>(i8) -
+                   static_cast<int>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+               static_cast<int>(dma) -
+                   static_cast<int>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)),
+               static_cast<int>(ps) -
+                   static_cast<int>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM)));
+  }
 
   // Join home WiFi (if enabled) for NTP time. Update checks run LIVE from loop()
   // with BLE up: mbedTLS is pointed at PSRAM (see update_check.cpp) so a small

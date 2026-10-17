@@ -93,6 +93,8 @@ class App {
   void cancel_umbra_pairing();
   void use_umbra_unpaired();
   void poll_umbra_pairing();
+  void restart_for_umbra();  // "Restart" in the Umbra get-ready modal
+  void release_umbra_hold();  // the pairing prompt's 5 s grace period ended
   void forget_scale();            // Scale page "Forget" button
   void toggle_scale_connection(); // Scale page "Connect"/"Disconnect"
   void target_adjust(int dir);    // Scale target weight +/- (grams)
@@ -355,9 +357,15 @@ class App {
   // restores it (LVGL's inactivity clock resets on input). Timer survives
   // rebuilds — it belongs to the app, not the widget tree.
   lv_timer_t* screensaver_timer_ = nullptr;
+  // Umbra partner pairing prompt (polls partner_pairing_complete), and the
+  // once-per-boot check for a prompt owed by a restart (see
+  // check_umbra_pair_pending in refresh()).
   lv_timer_t* umbra_pair_timer_ = nullptr;
+  lv_timer_t* umbra_hold_timer_ = nullptr;  // one-shot 5 s advertising hold
   bool umbra_pair_prompt_ = false;
-  core::ScanResult pending_umbra_scale_{};
+  bool umbra_pair_checked_ = false;
+  void open_umbra_pair_prompt(bool after_restart);
+  void check_umbra_pair_pending();
   bool screensaver_on_ = false;
   // Saver cover on lv_layer_top (swallows the waking tap): black + the
   // recolored lion drifting DVD-style (Logo), transparent (Dim), black (Off);

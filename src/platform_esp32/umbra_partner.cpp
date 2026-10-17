@@ -144,7 +144,7 @@ void UmbraPartner::pause(bool paused) {
 
 void UmbraPartner::poll() {
   if (!initialized_.load()) return;
-  const bool wanted = enabled_.load() && !paused_.load();
+  const bool wanted = enabled_.load() && !paused_.load() && !held_.load();
   if (wanted && !advertising_->isAdvertising() && !connected_.load())
     start_advertising();
   if (!wanted && !stopping_.exchange(true) &&
@@ -152,6 +152,10 @@ void UmbraPartner::poll() {
     stop_and_sleep();
   if (wanted) stopping_.store(false);
   if (wanted) {
+    // Handshake replies owed by the callbacks, in protocol order.
+    if (owe_info_.exchange(false)) send_frame(kInfo, sizeof(kInfo));
+    if (owe_confirm_.exchange(false)) send_frame(kConfirm, sizeof(kConfirm));
+    if (owe_event_.exchange(false)) send_frame(kEvent, sizeof(kEvent));
     const int index = pending_setting_.exchange(-2);
     if (index != -2) send_setting(index, pending_value_.load());
     const uint32_t now = millis();
@@ -175,6 +179,9 @@ void UmbraPartner::on_connect(uint16_t handle) {
   subscribed_.store(false);
   handshake_done_.store(false);
   session_active_.store(false);
+  owe_info_.store(false);
+  owe_confirm_.store(false);
+  owe_event_.store(false);
   last_info_ms_.store(millis());
   scale_.set_partner_connected(true);
   core::logf("UmbraPartner: Umbra connected\n");
@@ -186,6 +193,9 @@ void UmbraPartner::on_disconnect() {
   subscribed_.store(false);
   handshake_done_.store(false);
   session_active_.store(false);
+  owe_info_.store(false);
+  owe_confirm_.store(false);
+  owe_event_.store(false);
   conn_handle_.store(-1);
   scale_.set_partner_connected(false);
   core::logf("UmbraPartner: Umbra disconnected\n");
@@ -196,7 +206,7 @@ void UmbraPartner::on_subscribe(uint16_t value) {
   subscribed_.store(on);
   if (on) {
     last_info_ms_.store(millis());
-    send_frame(kInfo, sizeof(kInfo));
+    owe_info_.store(true);  // sent by poll()
   }
 }
 
@@ -205,14 +215,14 @@ void UmbraPartner::on_write(const uint8_t* frame, size_t n) {
       !checksum_ok(frame, n)) return;
   const uint8_t cmd = frame[2];
   if (cmd == 0x1A || cmd == 0x0B) {
-    send_frame(kConfirm, sizeof(kConfirm));
+    owe_confirm_.store(true);  // sent by poll()
     handshake_done_.store(true);
     scale_.on_partner_pairing_complete();
   } else if (cmd == 0x0C) {
     handshake_done_.store(true);
     session_active_.store(true);
     last_keepalive_ms_.store(millis());
-    send_frame(kEvent, sizeof(kEvent));
+    owe_event_.store(true);  // sent by poll()
   } else if (cmd == 0x1C && n >= 11) {
     const uint32_t raw = static_cast<uint32_t>(frame[3]) |
                          (static_cast<uint32_t>(frame[4]) << 8) |

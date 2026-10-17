@@ -30,6 +30,8 @@ class Config {
   std::string scale_mac() const;
   std::string scale_name() const;
   bool scale_partner_mode() const;
+  bool scale_partner_pending() const;  // pairing prompt owed after a restart
+  void set_scale_partner_pending(bool pending);
   void save_scale(const std::string& mac, const std::string& name, bool partner_mode);
   void clear_scale();
 

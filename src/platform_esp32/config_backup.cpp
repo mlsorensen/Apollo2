@@ -27,11 +27,13 @@ constexpr size_t kMaxLine = 256;  // "str:" + 15-char key + kMaxValue + slack
 // Keys that describe THIS UNIT rather than the user's setup: the per-unit
 // paddle GPIO repair knobs (they belong to the board with the damaged pad),
 // the pending-install boot flag (restoring one would send the machine into
-// install mode), the hourly clock seed, and Preferences' own namespace marker.
+// install mode), the Umbra pairing-prompt flag (a one-boot UI hand-off — never
+// written, and simply dropped by a restore's erase), the hourly clock seed,
+// and Preferences' own namespace marker.
 // Never written to the file, and held back from the erase on restore.
 bool is_unit_key(const char* k) {
-  static const char* kUnit[] = {"padsense", "paddrive", "otainst", "lastunix",
-                                "_init"};
+  static const char* kUnit[] = {"padsense", "paddrive", "otainst", "sprpend",
+                                "lastunix", "_init"};
   for (const char* u : kUnit)
     if (std::strcmp(k, u) == 0) return true;
   return false;

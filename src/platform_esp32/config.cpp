@@ -63,6 +63,7 @@ int migrate_chime_volume(int legacy_percent) {
 constexpr char kScaleMacKey[] = "smac";
 constexpr char kScaleNameKey[] = "sname";
 constexpr char kScalePartnerKey[] = "sprtnr";
+constexpr char kScalePendingKey[] = "sprpend";  // per-unit (config_backup)
 constexpr char kTargetKey[] = "tgtg";
 constexpr char kShotModeKey[] = "shotmode";  // LEGACY bool (armed) — migration only
 constexpr char kShotMode3Key[] = "shotmd";   // tri-state core::ShotMode as int
@@ -177,6 +178,22 @@ bool Config::scale_partner_mode() const {
   return enabled;
 }
 
+bool Config::scale_partner_pending() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
+  const bool pending = p.isKey(kScalePendingKey) && p.getBool(kScalePendingKey, false);
+  p.end();
+  return pending;
+}
+
+void Config::set_scale_partner_pending(bool pending) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  if (pending) p.putBool(kScalePendingKey, true);
+  else p.remove(kScalePendingKey);
+  p.end();
+}
+
 void Config::save_scale(const std::string& mac, const std::string& name, bool partner_mode) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
@@ -192,6 +209,7 @@ void Config::clear_scale() {
   p.remove(kScaleMacKey);
   p.remove(kScaleNameKey);
   p.remove(kScalePartnerKey);
+  p.remove(kScalePendingKey);
   p.end();
 }
 

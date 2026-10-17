@@ -12,10 +12,7 @@ void task_entry(void* arg) { static_cast<core::ScaleLink*>(arg)->run(); }
 }  // namespace
 
 void ScaleLink::begin(std::string address) {
-  if (partner_mode()) {
-    if (!partner_.begin()) core::logf("UmbraPartner: GATT init failed\n");
-    partner_.set_enabled(connect_enabled());
-  }
+  partner_.set_enabled(partner_mode() && connect_enabled());
   set_address(std::move(address));
   // 4096: measured peak 2,356 (Acaia) / 2,300 (Bookoo), both connected +
   // subscribed, and including a Settings scan. ~1.7K margin.
@@ -29,12 +26,9 @@ void ScaleLink::set_name(std::string name) {
 
 void ScaleLink::set_partner_mode(bool enabled) {
   core::ScaleLink::set_partner_mode(enabled);
-  if (enabled && NimBLEDevice::isInitialized()) {
-    if (!partner_.begin()) core::logf("UmbraPartner: GATT init failed\n");
-    partner_.set_enabled(connect_enabled());
-  } else {
-    partner_.set_enabled(false);
-  }
+  // Never registers here — see register_partner(). A no-op if registration
+  // failed at boot (poll() stays idle).
+  partner_.set_enabled(enabled && connect_enabled());
 }
 
 void ScaleLink::set_connect_enabled(bool enabled) {

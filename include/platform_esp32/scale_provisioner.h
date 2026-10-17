@@ -22,6 +22,11 @@ class ScaleProvisioner : public core::IScaleProvisioner {
   void save_scale(const core::ScanResult& scale, bool partner_mode = false) override;
   std::string saved_name() const override;
   bool partner_pairing_complete() const override;
+  bool partner_ready() const override;
+  bool partner_pair_pending() const override;
+  void set_partner_pair_pending(bool pending) override;
+  void set_partner_mode(bool enabled) override;
+  void hold_partner(bool held) override;
   void forget() override;
   bool connect_enabled() const override;
   void set_connect_enabled(bool enabled) override;

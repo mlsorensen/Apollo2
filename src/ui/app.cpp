@@ -151,6 +151,12 @@ void on_umbra_pair_cancel(lv_event_t* e) {
 void on_umbra_use_unpaired(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->use_umbra_unpaired();
 }
+void on_umbra_restart(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->restart_for_umbra();
+}
+void on_umbra_hold_done(lv_timer_t* t) {
+  static_cast<ui::App*>(lv_timer_get_user_data(t))->release_umbra_hold();
+}
 void on_umbra_pair_poll(lv_timer_t* t) {
   static_cast<ui::App*>(lv_timer_get_user_data(t))->poll_umbra_pairing();
 }
@@ -1511,6 +1517,7 @@ void App::update_heating(const core::MachineSnapshot& state) {
 }
 
 void App::refresh() {
+  check_umbra_pair_pending();
   if (machine_ != nullptr) {
     const core::MachineSnapshot snap = machine_->snapshot();
     if (battery_ != nullptr) {
@@ -3019,6 +3026,10 @@ void App::close_modal() {
     umbra_pair_timer_ = nullptr;
   }
   umbra_pair_prompt_ = false;
+  if (umbra_hold_timer_ != nullptr) {  // prompt left inside its grace period
+    lv_timer_delete(umbra_hold_timer_);
+    release_umbra_hold();
+  }
   if (log_timer_ != nullptr) {  // log viewer: stop tailing before the widgets go
     lv_timer_delete(log_timer_);
     log_timer_ = nullptr;
@@ -4639,22 +4650,86 @@ void App::save_scanned_scale(int index) {
   std::transform(upper.begin(), upper.end(), upper.begin(),
                  [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
   if (upper.find("UMBRA") != std::string::npos) {
-    pending_umbra_scale_ = results[index];
-    scale_provisioner_->save_scale(pending_umbra_scale_, true);
+    scale_provisioner_->save_scale(results[index], true);
     settings_.scale_last_count = -1;
     request_layout_rebuild(kSectionScaleBt);
+    if (scale_provisioner_->partner_ready()) {
+      open_umbra_pair_prompt(/*after_restart=*/false);
+      return;
+    }
+    // The partner service registers only at boot (see IScaleProvisioner::
+    // partner_ready): one restart, and the next boot owes the pairing prompt.
+    scale_provisioner_->set_partner_pair_pending(true);
     lv_obj_t* card = open_modal(
         "Pair with Umbra",
-        "Hold the Umbra's button until it blinks magenta. Apollo will confirm the pairing.");
-    modal_button(card, "Cancel", ui::theme::rail(), on_umbra_pair_cancel, this);
-    modal_button(card, "Use unpaired", ui::theme::rail(), on_umbra_use_unpaired, this);
-    umbra_pair_prompt_ = true;
-    umbra_pair_timer_ = lv_timer_create(on_umbra_pair_poll, 250, this);
+        "Apollo needs to restart once to get ready for the Umbra, then it will "
+        "ask you to pair.");
+    lv_obj_t* row = modal_button_row(card);
+    modal_button(row, "Cancel", ui::theme::rail(), on_umbra_pair_cancel, this);
+    modal_button(row, "Use unpaired", ui::theme::card(), on_umbra_use_unpaired, this);
+    modal_button(row, "Restart", ui::theme::accent(), on_umbra_restart, this);
   } else {
     scale_provisioner_->save_scale(results[index], false);
     settings_.scale_last_count = -1;
     request_layout_rebuild(kSectionScaleBt);
   }
+}
+
+void App::open_umbra_pair_prompt(bool after_restart) {
+  // After the get-ready restart the user has ALREADY chosen pairing over
+  // "Use unpaired" (that modal offered it), so the prompt is just progress:
+  // no second choice, no grace period — advertising runs from boot.
+  // The retry hint is bench experience: an Umbra blinking magenta does not
+  // always take the first advertiser it sees; power-cycling it and holding
+  // the button again gets it there.
+  if (after_restart) {
+    lv_obj_t* card = open_modal(
+        "Pairing with Umbra",
+        "Hold the Umbra's button until it blinks magenta. Apollo will confirm the "
+        "pairing.\nIf it hasn't paired after 30 seconds of blinking magenta, turn "
+        "the Umbra off and enter pairing mode again.");
+    modal_button(modal_button_row(card), "Cancel", ui::theme::rail(),
+                 on_umbra_pair_cancel, this);
+    umbra_pair_prompt_ = true;
+    umbra_pair_timer_ = lv_timer_create(on_umbra_pair_poll, 250, this);
+    return;
+  }
+  lv_obj_t* card = open_modal(
+      "Pair with Umbra",
+      "Hold the Umbra's button until it blinks magenta. Apollo will confirm the "
+      "pairing, or tap Use unpaired to connect without pairing.\nIf it hasn't "
+      "paired after 30 seconds of blinking magenta, turn the Umbra off and "
+      "enter pairing mode again.");
+  lv_obj_t* row = modal_button_row(card);
+  modal_button(row, "Cancel", ui::theme::rail(), on_umbra_pair_cancel, this);
+  modal_button(row, "Use unpaired", ui::theme::card(), on_umbra_use_unpaired, this);
+  umbra_pair_prompt_ = true;
+  umbra_pair_timer_ = lv_timer_create(on_umbra_pair_poll, 250, this);
+  // Grace period: an Umbra that is already awake connects the moment Apollo
+  // advertises, so hold the partner quiet for 5 s — time to choose "Use
+  // unpaired" first. Real pairing needs ~10 s of button-holding anyway, so
+  // nothing is lost. close_modal() releases the hold on every exit path.
+  if (scale_provisioner_ != nullptr) scale_provisioner_->hold_partner(true);
+  umbra_hold_timer_ = lv_timer_create(on_umbra_hold_done, 5000, this);
+  lv_timer_set_repeat_count(umbra_hold_timer_, 1);
+}
+
+void App::release_umbra_hold() {
+  umbra_hold_timer_ = nullptr;  // one-shot: LVGL deletes it after this call
+  if (scale_provisioner_ != nullptr) scale_provisioner_->hold_partner(false);
+}
+
+void App::restart_for_umbra() { reboot_device(); }
+
+void App::check_umbra_pair_pending() {
+  // Once per boot, when nothing else is on screen: the restart for a newly
+  // chosen Umbra owes the user its pairing prompt. Cleared on sight, so an
+  // ignored prompt never comes back.
+  if (umbra_pair_checked_ || modal_ != nullptr || scale_provisioner_ == nullptr) return;
+  umbra_pair_checked_ = true;
+  if (!scale_provisioner_->partner_pair_pending()) return;
+  scale_provisioner_->set_partner_pair_pending(false);
+  if (scale_provisioner_->partner_ready()) open_umbra_pair_prompt(/*after_restart=*/true);
 }
 
 void App::poll_umbra_pairing() {
@@ -4687,7 +4762,8 @@ void App::use_umbra_unpaired() {
   }
   close_modal();
   if (scale_provisioner_ == nullptr) return;
-  scale_provisioner_->save_scale(pending_umbra_scale_, false);
+  scale_provisioner_->set_partner_pair_pending(false);
+  scale_provisioner_->set_partner_mode(false);
   settings_.scale_last_count = -1;
   request_layout_rebuild(kSectionScaleBt);
 }
