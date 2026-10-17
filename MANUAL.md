@@ -478,7 +478,7 @@ Bookoo Themis's ② **Beep** and ③ **Auto‑off** shown above):
   *quieter* than the real ones, so they aren't offered; one set elsewhere
   shows as `--`.
 - **Acaia Umbra** — **Beep** (On / Off; also silences its tare/timer chirps),
-  **Auto sleep** (Off / 1–30 min), and **Unit** (g / oz). The Acaia app can
+  and **Auto sleep** (Off / 1–30 min). The Acaia app can
   additionally set *power‑off* timers; those aren't offered here (a
   powered‑off scale can't be woken over Bluetooth) and show as `--` if set
   elsewhere.
@@ -492,8 +492,10 @@ Bookoo Themis's ② **Beep** and ③ **Auto‑off** shown above):
   change mode remotely; use the scale's buttons).
 
 **Unit** only changes what the *scale's own display* shows — Apollo always
-works and displays in grams (an oz‑mode Acaia streams ounces over Bluetooth;
-the firmware converts them back, so brew‑by‑weight targets stay correct).
+works and displays in grams (an oz‑mode Lunar/Pyxis streams ounces over
+Bluetooth; the firmware converts them back, so brew‑by‑weight targets stay
+correct). The Umbra has no display and always sends grams, so it has no
+Unit row.
 Changed values may take a moment to be confirmed by the scale; if a change
 doesn't stick, the row snaps back to what the scale reports.
 - **Varia Aku** — none (no adjustable settings in its protocol; weight and

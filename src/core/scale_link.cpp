@@ -7,12 +7,11 @@ namespace {
 constexpr const char* kPartnerSleepLabels[] = {"Off", "1 min", "5 min",
                                                 "10 min", "30 min"};
 constexpr const char* kPartnerBeepLabels[] = {"Off", "On"};
-constexpr const char* kPartnerUnitLabels[] = {"Grams only"};
 constexpr core::ScaleSettingDesc kPartnerSettings[] = {
     {"Beep", kPartnerBeepLabels, 2},
     {"Auto sleep", kPartnerSleepLabels, 5},
-    {"Unit", kPartnerUnitLabels, 1, /*read_only=*/true},
 };
+constexpr int kPartnerSettingCount = 2;  // no Unit row: the Umbra streams grams
 
 constexpr uint32_t kReconnectBackoffMs = 3000;
 // Connect timeout per address-type attempt. We connect by MAC and don't persist
@@ -377,7 +376,7 @@ void ScaleLink::tare() { pending_tare_.store(true); }
 
 int ScaleLink::device_setting_count() const {
   std::lock_guard<std::mutex> lk(mutex_);
-  if (partner_mode_.load()) return 3;
+  if (partner_mode_.load()) return kPartnerSettingCount;
   // driver_ is classified eagerly from the saved name (set_name), so the
   // descriptors answer while disconnected — only values need the link.
   return driver_ ? driver_->device_setting_count() : 0;
@@ -386,7 +385,8 @@ int ScaleLink::device_setting_count() const {
 ScaleSettingDesc ScaleLink::device_setting(int index) const {
   std::lock_guard<std::mutex> lk(mutex_);
   if (partner_mode_.load())
-    return index >= 0 && index < 3 ? kPartnerSettings[index] : ScaleSettingDesc{};
+    return index >= 0 && index < kPartnerSettingCount ? kPartnerSettings[index]
+                                                      : ScaleSettingDesc{};
   if (!driver_ || index < 0 || index >= driver_->device_setting_count())
     return ScaleSettingDesc{};
   return driver_->device_setting(index);

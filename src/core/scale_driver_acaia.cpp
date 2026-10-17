@@ -76,14 +76,15 @@ constexpr uint8_t kMsgEvent = 12;     // out: notification request; in: events
 //   Lunar/Pyxis: sleep id 1 (status payload[4]), beep id 5 (payload[6])
 constexpr uint8_t kUmbraSettingSleep = 6;
 constexpr uint8_t kUmbraSettingBeep = 7;
-constexpr uint8_t kUmbraSettingUnit = 8;
 constexpr uint8_t kPyxisSettingUnit = 0;
 constexpr uint8_t kPyxisSettingSleep = 1;
 constexpr uint8_t kPyxisSettingBeep = 5;
 
-// Unit wire values differ per generation: Umbra g=0 / oz=1 (status
-// payload[4]); Lunar/Pyxis g=2 / oz=5 (status payload[2] & 0x7F).
-constexpr uint8_t kUmbraUnitWire[] = {0, 1};
+// Lunar/Pyxis: g=2 / oz=5 in status payload[2] & 0x7F; they stream in that
+// DISPLAY unit, so the read drives the oz->g conversion (Apollo is grams-
+// only) and the Unit row sets the scale's own display. The Umbra has no
+// display and streams grams whatever its stored unit (bench, fw 1.0.8) — no
+// Unit row, no conversion.
 constexpr uint8_t kPyxisUnitWire[] = {2, 5};
 constexpr float kOzToGrams = 28.3495f;
 
@@ -116,7 +117,6 @@ constexpr const char* kModeLabels[] = {"1 - Weighing",  "2 - Dual display",
 constexpr ScaleSettingDesc kUmbraSettings[] = {
     {"Beep", kBeepLabels, 2},
     {"Auto sleep", kUmbraSleepLabels, 5},
-    {"Unit", kUnitLabels, 2},
 };
 constexpr ScaleSettingDesc kPyxisSettings[] = {
     {"Beep", kBeepVolLabels, 4, /*read_only=*/false, /*writable_count=*/2,
@@ -369,9 +369,9 @@ class AcaiaDriver : public IScaleDriver {
       id = umbra ? kUmbraSettingSleep : kPyxisSettingSleep;
       value = umbra ? kUmbraSleepWire[option_idx]
                     : static_cast<uint8_t>(option_idx);
-    } else if (index == kSettingUnit && option_idx >= 0 && option_idx <= 1) {
-      id = umbra ? kUmbraSettingUnit : kPyxisSettingUnit;
-      value = umbra ? kUmbraUnitWire[option_idx] : kPyxisUnitWire[option_idx];
+    } else if (index == kSettingUnit && !umbra && option_idx >= 0 && option_idx <= 1) {
+      id = kPyxisSettingUnit;  // Lunar/Pyxis only: the Umbra has no Unit row
+      value = kPyxisUnitWire[option_idx];
     } else {
       return;
     }
@@ -536,10 +536,11 @@ class AcaiaDriver : public IScaleDriver {
           if (payload[2] == kUmbraSleepWire[i]) sleep_idx = i;
         }
         sink.on_device_setting(kSettingSleep, sleep_idx);
-        const int unit_idx =
-            payload[4] == kUmbraUnitWire[0] ? 0 : payload[4] == kUmbraUnitWire[1] ? 1 : -1;
-        unit_oz_.store(unit_idx == 1);
-        sink.on_device_setting(kSettingUnit, unit_idx);
+        // payload[4] is the Umbra's stored unit — ignored: it streams GRAMS
+        // whatever it says (bench, fw 1.0.8, central link: a 29 g load set to
+        // oz streamed 29, which the old x28.35 showed as 822 g). The unit is a
+        // preference for a partner device's display; the Umbra has none.
+        unit_oz_.store(false);
       } else if (gen_ == Gen::kPyxis && n >= 7) {
         sink.on_device_setting(kSettingBeep, payload[6] <= 3 ? payload[6] : -1);
         sink.on_device_setting(kSettingSleep, payload[4] <= 5 ? payload[4] : -1);
@@ -589,9 +590,10 @@ class AcaiaDriver : public IScaleDriver {
           // the scale is streaming.
           last_weight_ms_.store(now_ms());
           weight_seen_.store(true);
-          // The stream is in the scale's DISPLAY unit — an oz-mode scale
+          // Lunar/Pyxis stream in the scale's DISPLAY unit — an oz-mode scale
           // sends ounces (the weight event has no unit field; the status
-          // frame's unit is the authority). Convert so everything downstream
+          // frame's unit is the authority). The Umbra always streams grams
+          // (unit_oz_ stays false there). Convert so everything downstream
           // (targets, detector, graphs) stays gram-space regardless of what
           // the scale's own screen shows.
           float w = decode_weight(p);

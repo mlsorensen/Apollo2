@@ -38,7 +38,7 @@ class FakeScale : public core::IScale {
   // volume (Off/1-3, the vendor app's range), the Umbra a Beep on/off — both
   // with an auto-off timer.
   int device_setting_count() const override {
-    return lunar_ ? 4 : umbra_ ? 3 : 2;
+    return lunar_ ? 4 : 2;  // mirrors AcaiaDriver: the Umbra has no Unit row
   }
   core::ScaleSettingDesc device_setting(int i) const override {
     static constexpr const char* kOnOff[] = {"Off", "On"};
@@ -63,7 +63,7 @@ class FakeScale : public core::IScale {
       return lunar_ ? core::ScaleSettingDesc{"Auto sleep", kLunarSleep, 6}
              : umbra_ ? core::ScaleSettingDesc{"Auto sleep", kUmbraSleep, 5}
                       : core::ScaleSettingDesc{"Auto-off", kBookooOff, 5};
-    if (i == 2 && (umbra_ || lunar_)) {
+    if (i == 2 && lunar_) {
       static constexpr const char* kUnits[] = {"g", "oz"};
       return core::ScaleSettingDesc{"Unit", kUnits, 2};
     }
