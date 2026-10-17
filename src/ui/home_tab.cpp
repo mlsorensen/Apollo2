@@ -879,6 +879,11 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   out.micra_status_dot = out.micra_status_label = out.micra_timer_label = nullptr;
   out.scale_status_dot = out.scale_status_label = nullptr;
   out.shot_timer_label = out.target_minus = out.target_plus = nullptr;
+  // Built only by build_scale_panel. Missing from this list, Forget (scale-
+  // aware -> classic rebuild) left it dangling and App::build attached its
+  // click handler to the freed object — heap corruption, panic inside
+  // lv_event_add (P4 coredump, 2026-10-17).
+  out.shot_btn = out.shot_btn_label = nullptr;
   // All flow-graph widgets: only the large scale-aware layout builds them, so null
   // every one here. Otherwise a scale-aware -> no-scale rebuild leaves these pointing
   // at objects lv_obj_clean already freed, and apply_flow_xaxis_labels / update_home
