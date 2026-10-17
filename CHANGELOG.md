@@ -7,7 +7,7 @@ for someone reading the diff. These notes are also shown ON THE DEVICE, whose
 fonts are ASCII-only: stick to characters `sanitize_notes()` (src/ui/app.cpp)
 maps — plain ASCII plus `— – → … × ' "` — or they render as empty boxes.
 
-## Unreleased
+## v1.1.0
 
 - **Pair an Acaia Umbra (Umbra firmware 1.0.8).** Apollo can pair with the Umbra the way a Lunar does, keeping its sleep/wake behaviour. Choose it in Settings > Scale > Scan; the first time Apollo restarts once, then asks you to hold the Umbra's button until it blinks magenta.
 - **Correct Umbra weight when it's set to ounces.** An Umbra set to oz showed weights 28× too high. It always sends grams, so Apollo no longer converts, and its Unit row is gone — it has no display to change.
