@@ -9,6 +9,7 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 
 ## v1.1.0
 
+- **Fewer surprise restarts on the P4 boards.** Updated the base platform and the WiFi/Bluetooth radio's firmware; the new radio driver recovers from a rare glitch that could restart the X 8" every few hours. On the first start after updating, the radio updates itself and Apollo restarts once more.
 - **Pair an Acaia Umbra (Umbra firmware 1.0.8).** Apollo can pair with the Umbra the way a Lunar does, keeping its sleep/wake behaviour. Choose it in Settings > Scale > Scan; the first time Apollo restarts once, then asks you to hold the Umbra's button until it blinks magenta.
 - **Correct Umbra weight when it's set to ounces.** An Umbra set to oz showed weights 28× too high. It always sends grams, so Apollo no longer converts, and its Unit row is gone — it has no display to change.
 - **Scales count as connected once weight arrives.** Home, Tare and Auto shot now wait for the first weight reading, not just the Bluetooth link, so a shot can't arm on a scale that isn't sending yet.
