@@ -38,9 +38,10 @@ SOC_RESERVE_MEMORY_REGION(0x4ff20000, 0x4ff40000, l2_cache_256k_compat);
 // this costs no usable RAM. Same ROM call and order as the startup, plus a
 // write-back first (PSRAM may already hold dirty lines). Line size stays
 // 64 B: the libs align DMA buffers and cache syncs to 64. Runs at the CORE
-// init stage: core 0 only, the other core still parked. NOT on rev v1.x:
-// there the window is the top of the startup-stack region, unproven on HW.
-#if !CONFIG_ESP32P4_SELECTS_REV_LESS_V3
+// init stage: core 0 only, the other core still parked. Both silicon
+// generations: every unit runs the pinned 256 KB-cache bootloader
+// (tools/pio_p4_bootloader_pin.py), so the window was cache from power-on
+// and nothing (the startup stack included) can live in it.
 static IRAM_ATTR void l2_cache_256k() {
   portDISABLE_INTERRUPTS();
   Cache_WriteBack_All(CACHE_MAP_L1_DCACHE | CACHE_MAP_L2_CACHE);
@@ -54,5 +55,4 @@ ESP_SYSTEM_INIT_FN(l2_cache_256k_init, CORE, BIT(0), 999) {
   l2_cache_256k();
   return ESP_OK;
 }
-#endif
 #endif

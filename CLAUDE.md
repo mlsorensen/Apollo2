@@ -145,9 +145,19 @@ display isn't up.
   `src/platform_esp32/l2_cache_compat.cpp` reserves the 128 KB window the
   libs' heap table would otherwise hand out (rev3 0x4ff20000-0x4ff40000,
   rev v1.x 0x4ff80000-0x4ffa0000). The window is NOT reclaimable at runtime
-  (Store access fault from setup(), bench-proven). Before ANY P4 platform
-  bump: diff `.iram0.text`/heap regions of old vs new ELF and prove a real
-  app-only OTA on a bench unit with an OLD bootloader before releasing.
+  (Store access fault from setup(), bench-proven), so l2_cache_compat.cpp
+  hands it back to the CACHE instead: 256 KB / 64 B lines at the CORE init
+  stage (graph ~1,000 vs ~875 frames/min at 128 KB; beta.1's 256 KB / 128 B
+  did ~1,200 — 128 B lines need a DMA-alignment audit, not done).
+  BOOTLOADER PIN (owner, 2026-10-18): we NEVER publish a bootloader the fleet
+  doesn't run. `tools/pio_p4_bootloader_pin.py` swaps the core's bootloader
+  for `firmware_blobs/p4_bootloader_{rev3,rev1}.bin` (byte-for-byte the
+  v1.1.0-beta.1 ones, core 3.3.9) in FLASH_EXTRA_IMAGES, so factory images,
+  the web flasher and `make flash` all carry it. Moving to a new bootloader
+  is a deliberate release with a "web flash required" notice (the levers,
+  planned for 1.1). Before ANY P4 platform bump: diff `.iram0.text`/heap
+  regions of old vs new ELF and prove a real app-only OTA on a bench unit
+  running the PINNED bootloader before releasing.
 - C6 auto-update (c6_update.cpp): on every P4 boot, if the on-board ESP32-C6
   esp-hosted slave is older than the host lib, flash the embedded matching image
   (`firmware_blobs/c6_slave.bin`, committed, embedded on all P4 envs) to the C6
