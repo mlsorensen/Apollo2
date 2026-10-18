@@ -34,6 +34,7 @@ bool is_aku(const char* name) {
 }
 
 bool is_acaia(const char* name) {
+  if (has_prefix_ci(name, kPartnerAdvertName)) return false;  // another Apollo
   static constexpr const char* kPrefixes[] = {"UMBRA", "LUNAR", "ACAIA", "PYXIS",
                                               "PROCH"};
   for (const char* p : kPrefixes) {

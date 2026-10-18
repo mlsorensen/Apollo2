@@ -66,6 +66,11 @@ class IScaleDriver {
                                   int /*option_idx*/) {}
 };
 
+// The name another Apollo advertises in Umbra partner mode (it poses as a
+// Lunar for the Umbra). Never a scale: classification rejects it, so one
+// Apollo's scan can't offer — or save — another Apollo as an Acaia.
+inline constexpr const char* kPartnerAdvertName = "LUNAR-APOLLO";
+
 // Model classification from an advertised (or saved) device name. Nullptr-safe;
 // make_scale_driver returns nullptr for unrecognized names.
 bool scale_name_supported(const char* name);

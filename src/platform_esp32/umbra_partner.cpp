@@ -6,6 +6,7 @@
 #include <string>
 
 #include "core/system.h"
+#include "core/scale_driver.h"
 #include "core/scale_link.h"
 
 namespace platform {
@@ -93,7 +94,7 @@ class UmbraPartner::NotifyCallbacks final : public NimBLECharacteristicCallbacks
 
 bool UmbraPartner::begin() {
   if (initialized_.load()) return true;
-  NimBLEDevice::setDeviceName("LUNAR-APOLLO");
+  NimBLEDevice::setDeviceName(core::kPartnerAdvertName);
   NimBLEDevice::setSecurityAuth(false, false, false);
 #if !defined(CONFIG_IDF_TARGET_ESP32P4)
   NimBLEDevice::setPower(9);
@@ -117,7 +118,7 @@ bool UmbraPartner::begin() {
   // Partner-mode pairing support for Umbra firmware 1.0.8.
   NimBLEAdvertisementData adv;
   adv.setFlags(0x06);
-  adv.setName("LUNAR-APOLLO");
+  adv.setName(core::kPartnerAdvertName);
   const char manufacturer[] = {0x42, 0x42, '0', '1'};
   adv.setManufacturerData(std::string(manufacturer, sizeof(manufacturer)));
   advertising_->setAdvertisementData(adv);
