@@ -135,6 +135,19 @@ display isn't up.
   P4 app partition or its image cross 16MB. This is a partition-table change, so
   existing P4 units need a one-time web-flash to adopt it (then OTA works). S3
   boards are 16MB flash — no >16MB region, unaffected.
+- P4 L2-CACHE / BOOTLOADER RULE (issue #4, found 2026-10-18): OTA never
+  replaces the bootloader, so an app must load under the bootloader a unit
+  was last WEB-flashed with. Core 3.3.12 (lib-builder #395) cut the P4's L2
+  cache 256 KB -> 128 KB, moving the app's RAM image into what every <= 3.3.11
+  bootloader maps as cache: v1.1.0-beta.2 installed fine, then died at entry
+  (Illegal instruction) and rolled back on every P4. FIX, all P4 envs:
+  `tools/pio_p4_l2_compat.py` links at the 256 KB layout, and
+  `src/platform_esp32/l2_cache_compat.cpp` reserves the 128 KB window the
+  libs' heap table would otherwise hand out (rev3 0x4ff20000-0x4ff40000,
+  rev v1.x 0x4ff80000-0x4ffa0000). The window is NOT reclaimable at runtime
+  (Store access fault from setup(), bench-proven). Before ANY P4 platform
+  bump: diff `.iram0.text`/heap regions of old vs new ELF and prove a real
+  app-only OTA on a bench unit with an OLD bootloader before releasing.
 - C6 auto-update (c6_update.cpp): on every P4 boot, if the on-board ESP32-C6
   esp-hosted slave is older than the host lib, flash the embedded matching image
   (`firmware_blobs/c6_slave.bin`, committed, embedded on all P4 envs) to the C6
