@@ -17,7 +17,11 @@
 #include <sdkconfig.h>
 
 #if CONFIG_IDF_TARGET_ESP32P4 && CONFIG_CACHE_L2_CACHE_SIZE < 0x40000
+#include <esp_attr.h>
+#include <esp_private/startup_internal.h>
+#include <freertos/FreeRTOS.h>
 #include <heap_memory_layout.h>
+#include <rom/cache.h>
 
 #if CONFIG_ESP32P4_SELECTS_REV_LESS_V3
 // rev v1.x: heap region ends 0x4ff80000 under a 256 KB cache, 0x4ffa0000 under 128 KB.
@@ -25,5 +29,30 @@ SOC_RESERVE_MEMORY_REGION(0x4ff80000, 0x4ffa0000, l2_cache_256k_compat);
 #else
 // rev v3: usable SRAM starts 0x4ff40000 under a 256 KB cache, 0x4ff20000 under 128 KB.
 SOC_RESERVE_MEMORY_REGION(0x4ff20000, 0x4ff40000, l2_cache_256k_compat);
+#endif
+// rev v3 only: give the reserved window back to the cache. The libs' startup
+// (cache_hal_init) sets 128 KB / 8 ways / 64 B lines; at beta.1's 256 KB /
+// 128 B the Home graph drew ~1,200 frames/min, at 128 KB / 64 B ~880 (same
+// figure with beta.1's own platform forced to 128 KB — it is the cache, not
+// the core). 256 KB / 64 B wins back ~1,000. The window is reserved above, so
+// this costs no usable RAM. Same ROM call and order as the startup, plus a
+// write-back first (PSRAM may already hold dirty lines). Line size stays
+// 64 B: the libs align DMA buffers and cache syncs to 64. Runs at the CORE
+// init stage: core 0 only, the other core still parked. NOT on rev v1.x:
+// there the window is the top of the startup-stack region, unproven on HW.
+#if !CONFIG_ESP32P4_SELECTS_REV_LESS_V3
+static IRAM_ATTR void l2_cache_256k() {
+  portDISABLE_INTERRUPTS();
+  Cache_WriteBack_All(CACHE_MAP_L1_DCACHE | CACHE_MAP_L2_CACHE);
+  Cache_Set_L2_Cache_Mode(CACHE_SIZE_256K, static_cast<cache_ways_t>(8),
+                          CACHE_LINE_SIZE_64B);
+  Cache_Invalidate_All(CACHE_MAP_L2_CACHE);
+  portENABLE_INTERRUPTS();
+}
+
+ESP_SYSTEM_INIT_FN(l2_cache_256k_init, CORE, BIT(0), 999) {
+  l2_cache_256k();
+  return ESP_OK;
+}
 #endif
 #endif
