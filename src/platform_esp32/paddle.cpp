@@ -78,7 +78,9 @@ void Paddle::begin(int sense_pin_override, int drive_pin_override) {
   // moment the unit loses power or is unplugged.
   link_drive_pin_ = board::kLinkDrivePin;
   if (link_drive_pin_ >= 0) {
-    digitalWrite(link_drive_pin_, LOW);  // level first: no high blip on OUTPUT
+    // Level first: no high blip on OUTPUT. IDF call, not digitalWrite: since
+    // core 3.3.12 digitalWrite refuses a pin pinMode hasn't claimed yet.
+    gpio_set_level(static_cast<gpio_num_t>(link_drive_pin_), 0);
     pinMode(link_drive_pin_, OUTPUT);
   }
   link_sense_pin_ = board::kLinkSensePin;
