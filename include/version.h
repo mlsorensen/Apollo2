@@ -15,8 +15,13 @@ inline constexpr const char* kVersion = "1.1.0-beta.5";
 // this board's slug must be web-flashed (update_check.cpp). The sim has none.
 #ifdef APOLLO_FLASH_EPOCH
 inline constexpr int kFlashEpoch = APOLLO_FLASH_EPOCH;
+#elif defined(ARDUINO)
+// A device build without it would silently claim epoch 1 and offer OTAs it
+// can't install (it happened: the define was once added too late to reach
+// the sources). Fail the build instead.
+#error "APOLLO_FLASH_EPOCH not defined: set custom_flash_epoch on this env"
 #else
-inline constexpr int kFlashEpoch = 1;
+inline constexpr int kFlashEpoch = 1;  // host sim
 #endif
 
 #ifdef FW_GIT_REV

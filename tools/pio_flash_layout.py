@@ -1,5 +1,5 @@
 # Every device env: flash/package a PINNED bootloader (never the core's), and
-# compile in this env's flash epoch.
+# record this env's flash epoch for the release workflow.
 #
 # OTA never replaces the bootloader or the partition table, so every unit keeps
 # the ones it was last web-flashed with. Core 3.3.12 changed the P4
@@ -91,7 +91,8 @@ def _setup():
         epoch = int(env.GetProjectOption("custom_flash_epoch"))  # noqa: F821
     except Exception:
         env.Exit("pio_flash_layout: set custom_flash_epoch on this env")  # noqa: F821
-    env.Append(CPPDEFINES=[("APOLLO_FLASH_EPOCH", epoch)])  # noqa: F821
+    # (APOLLO_FLASH_EPOCH itself is defined by the PRE script pio_version.py;
+    # a define appended here would never reach the sources.)
 
     build_dir = env.subst("$BUILD_DIR")  # noqa: F821
     os.makedirs(build_dir, exist_ok=True)

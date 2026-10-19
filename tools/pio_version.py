@@ -21,3 +21,16 @@ def _git_rev():
 
 
 env.Append(CPPDEFINES=[("FW_GIT_REV", env.StringifyMacro(_git_rev()))])
+
+
+# Flash epoch (see tools/pio_flash_layout.py): defined HERE, in a pre script,
+# because a define appended by a post script never reaches the project sources
+# (found 2026-10-19: every device build silently compiled the fallback epoch).
+# Envs without the option (the sim) get none; version.h fails a device build
+# that lacks it.
+try:
+    _epoch = env.GetProjectOption("custom_flash_epoch")  # noqa: F821
+except Exception:
+    _epoch = None
+if _epoch is not None:
+    env.Append(CPPDEFINES=[("APOLLO_FLASH_EPOCH", int(_epoch))])  # noqa: F821
