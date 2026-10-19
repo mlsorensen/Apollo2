@@ -28,8 +28,8 @@
 #
 # Mechanism: the core puts its bootloader image in FLASH_EXTRA_IMAGES (0x2000
 # on the P4, 0x0 on the S3); firmware.factory.bin (CI artifact, web flasher)
-# and `pio run -t upload` are both assembled from that list. Swap the entry
-# for our blob. flash_layout.json in the build dir hands the epoch and the
+# is assembled from that list, and the USB upload command was already built
+# from it before this script ran (see below). Swap the entry in both. flash_layout.json in the build dir hands the epoch and the
 # offset to tools/flash_layout.py.
 import json
 import os
@@ -64,6 +64,28 @@ def _setup():
         env.Exit("pio_flash_layout: expected one bootloader entry at %s, "  # noqa: F821
                  "found %d — re-check before shipping" % (offset, hits))
     env.Replace(FLASH_EXTRA_IMAGES=images)  # noqa: F821
+
+    # USB upload (`make flash`, `pio run -t upload`) is a SEPARATE path: the
+    # platform's main.py copies FLASH_EXTRA_IMAGES into UPLOADERFLAGS as
+    # (offset, path) pairs BEFORE post scripts run, so swapping the list above
+    # only reaches the factory image. Found 2026-10-19: a `make flash` wrote
+    # the core's IDF 5.5.5 bootloader (21488 B) while the factory image
+    # carried the pin. Swap the pair there too.
+    flags = list(env.get("UPLOADERFLAGS", []))  # noqa: F821
+    if "write-flash" in flags:
+        up = 0
+        for i in range(len(flags) - 1):
+            try:
+                at = int(str(flags[i]), 16)
+            except ValueError:
+                continue
+            if at == int(offset, 16) and str(flags[i + 1]).endswith(".bin"):
+                flags[i + 1] = blob
+                up += 1
+        if up != 1:
+            env.Exit("pio_flash_layout: expected one bootloader in the upload "  # noqa: F821
+                     "command at %s, found %d" % (offset, up))
+        env.Replace(UPLOADERFLAGS=flags)  # noqa: F821
 
     try:
         epoch = int(env.GetProjectOption("custom_flash_epoch"))  # noqa: F821
