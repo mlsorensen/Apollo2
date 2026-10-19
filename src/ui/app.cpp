@@ -2379,8 +2379,10 @@ void App::open_update_modal() {
   const core::UpdateInfo info = updates_->info();
   if (info.version.empty()) return;
 
-  char head[96];
-  std::snprintf(head, sizeof(head), "%s is available - you have v%s.",
+  char head[128];
+  std::snprintf(head, sizeof(head),
+                info.web_flash ? "%s must be installed from a computer - you have v%s."
+                               : "%s is available - you have v%s.",
                 info.version.c_str(), fw::kVersion);
   lv_obj_t* card = open_modal("Update available", head);
 
@@ -2411,10 +2413,17 @@ void App::open_update_modal() {
   lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
   lv_obj_set_style_text_color(hint, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(hint, ui::font_dp(12), 0);
-  lv_label_set_text(hint,
-                    "Or install from a computer at "
-                    "mlsorensen.github.io/Apollo2 - settings are kept. "
-                    "Turn these notices off under Settings > Apollo > WiFi.");
+  // A web-flash-only release (its flash epoch is above ours: new bootloader or
+  // partition table, which OTA can't write) gets the flasher as THE way in and
+  // no Install button — an OTA of it would fail and roll back.
+  lv_label_set_text(hint, info.web_flash
+      ? "It changes Apollo's startup firmware, which can't be updated over "
+        "WiFi. Open mlsorensen.github.io/Apollo2 in Chrome or Edge and connect "
+        "Apollo with USB - settings are kept. "
+        "Turn these notices off under Settings > Apollo > WiFi."
+      : "Or install from a computer at "
+        "mlsorensen.github.io/Apollo2 - settings are kept. "
+        "Turn these notices off under Settings > Apollo > WiFi.");
 
   // Install now downloads the image and reboots into it (both BLE links are
   // parked for the download); Remind me later re-offers next check; Skip won't
@@ -2424,17 +2433,20 @@ void App::open_update_modal() {
                                  on_update_later, this);
   lv_obj_t* skip = modal_button(row, "Skip this version", ui::theme::card(),
                                 on_update_skip, this);
-  lv_obj_t* install = modal_button(row, "Install now", ui::theme::accent(),
-                                   on_update_install, this);
+  lv_obj_t* install = info.web_flash
+      ? nullptr
+      : modal_button(row, "Install now", ui::theme::accent(), on_update_install, this);
   if (row != card) {
-    for (lv_obj_t* b : {later, skip, install}) lv_obj_set_flex_grow(b, 1);
+    for (lv_obj_t* b : {later, skip, install}) {
+      if (b != nullptr) lv_obj_set_flex_grow(b, 1);
+    }
   }
 }
 
 void App::request_install() {
   if (updates_ == nullptr) return;
   const core::UpdateInfo info = updates_->info();
-  if (info.version.empty()) { dismiss_modal(); return; }
+  if (info.version.empty() || info.web_flash) { dismiss_modal(); return; }
   dismiss_modal();
   // The download can't run with the full display up (it fragments the DMA pool
   // the hosted radio needs). Hand off to device main, which reboots into the

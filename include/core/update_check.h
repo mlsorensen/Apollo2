@@ -15,6 +15,10 @@ struct UpdateInfo {
   bool available = false;  // newer than the running firmware and not skipped
   std::string version;     // e.g. "v0.11.0" (empty until a check succeeded)
   std::string notes;       // that release's changelog section (may be empty)
+  // The release changes what lies under the app on this board (bootloader /
+  // partition table — its flash epoch is above ours), so it can only be
+  // installed from a computer. The UI offers the web flasher, never Install.
+  bool web_flash = false;
 };
 
 class IUpdateSource {

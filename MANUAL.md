@@ -677,6 +677,16 @@ page fits on screen with little to no scrolling.
   [web flasher](https://mlsorensen.github.io/Apollo2/) remains the fallback for
   recovery and for a board's very first flash.
 
+  **Updates that need a computer** — once in a while a release changes the
+  part of the firmware that starts the board, which can't be updated over
+  WiFi. The notice then says the version **must be installed from a
+  computer** and has no Install button: open the
+  [web flasher](https://mlsorensen.github.io/Apollo2/) in Chrome or Edge and
+  connect Apollo with USB — settings, the paired machine and shot history are
+  kept. Firmware older than v1.1 doesn't know about this and offers Install
+  anyway; such a release's notes start with **WEB FLASH REQUIRED**, and an
+  install from the device fails and comes back on the version it had.
+
 - ⑥ **Beta updates** *(default off; shown only while checks are on)* — also
   offer pre-release builds, named like `0.14.0-beta.1`. Betas ship the next
   release early so it can be tested on real machines; they are less proven than

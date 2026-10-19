@@ -273,6 +273,12 @@ int main() {
   updates.set_available(true);
   ok &= r({800, 480}, "renders/update_modal_800x480.png", 0, -1, false, 0, -1,
           false, -1, 0, false, false, false, false, false, false, true);
+  updates.set_web_flash(true);  // a release whose flash epoch is above ours
+  ok &= r({800, 480}, "renders/update_modal_webflash_800x480.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, false, false, false, false, true);
+  ok &= r({1280, 800, 1.6f}, "renders/update_modal_webflash_1280x800.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, false, false, false, false, true);
+  updates.set_web_flash(false);
   updates.set_available(false);
   // Backflush cleaning (Settings > Micra): the prompt screen, and mid-sequence
   // with the cycle readout (the fake poses a running sequence the real

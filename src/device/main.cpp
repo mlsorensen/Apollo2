@@ -199,6 +199,19 @@ void setup() {
     core::logf("OTA: running from %s%s\n", run != nullptr ? run->label : "?",
                pending ? " (pending verify - confirms after 60s)" : "");
   }
+  {
+    // What lies under the app: the bootloader from this unit's last WEB
+    // flash (OTA never replaces it — see tools/pio_flash_layout.py) and the
+    // flash epoch this image was built for. Evidence for support and soaks;
+    // the update check gates on the epoch, not on this.
+    esp_bootloader_desc_t bd;
+    if (esp_ota_get_bootloader_description(nullptr, &bd) == ESP_OK)
+      core::logf("boot: bootloader IDF %.32s (%.24s), flash epoch %d\n",
+                 bd.idf_ver, bd.date_time, fw::kFlashEpoch);
+    else
+      core::logf("boot: bootloader has no description, flash epoch %d\n",
+                 fw::kFlashEpoch);
+  }
 #if defined(CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH)
   {
     // A panic/watchdog reset leaves an ELF coredump in the `coredump` flash

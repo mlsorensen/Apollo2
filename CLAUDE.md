@@ -149,15 +149,41 @@ display isn't up.
   hands it back to the CACHE instead: 256 KB / 64 B lines at the CORE init
   stage (graph ~1,000 vs ~875 frames/min at 128 KB; beta.1's 256 KB / 128 B
   did ~1,200 — 128 B lines need a DMA-alignment audit, not done).
-  BOOTLOADER PIN (owner, 2026-10-18): we NEVER publish a bootloader the fleet
-  doesn't run. `tools/pio_p4_bootloader_pin.py` swaps the core's bootloader
-  for `firmware_blobs/p4_bootloader_{rev3,rev1}.bin` (byte-for-byte the
-  v1.1.0-beta.1 ones, core 3.3.9) in FLASH_EXTRA_IMAGES, so factory images,
-  the web flasher and `make flash` all carry it. Moving to a new bootloader
-  is a deliberate release with a "web flash required" notice (the levers,
-  planned for 1.1). Before ANY P4 platform bump: diff `.iram0.text`/heap
-  regions of old vs new ELF and prove a real app-only OTA on a bench unit
-  running the PINNED bootloader before releasing.
+  BOOTLOADER PIN (owner, 2026-10-18; S3 too since 2026-10-19): we NEVER
+  publish a bootloader the fleet doesn't run, on ANY board.
+  `tools/pio_flash_layout.py` (every device env but dltest) swaps the core's
+  bootloader for `firmware_blobs/p4_bootloader_{rev3,rev1}.bin` /
+  `s3_bootloader.bin` (byte-for-byte the v1.1.0-beta.1 ones, core 3.3.9 /
+  IDF 5.5.4; cut with `tools/flash_layout.py extract`) in FLASH_EXTRA_IMAGES,
+  so factory images, the web flasher and `make flash` all carry it. (beta.4's
+  S3 web flash shipped the unpinned IDF 5.5.5 one; harmless, bench units
+  only.) Before ANY platform bump: diff `.iram0.text`/heap regions of old vs
+  new ELF and prove a real app-only OTA on a bench unit running the PINNED
+  bootloader before releasing.
+- FLASH EPOCH = THE WEB-FLASH LEVER (v1.1, 2026-10-19). `custom_flash_epoch`
+  in platformio.ini (set on the S3 and P4 base envs, inherited, overridable
+  per env) -> `fw::kFlashEpoch`. Bump it IN THE COMMIT that changes what lies
+  under the app for those envs (a new pinned bootloader, a partition table)
+  — that is, whenever a unit can only take the release by web flash. The
+  release workflow's `meta` job (ungated, before approval) describes every
+  board's bootloader + partition table from its factory image
+  (`tools/flash_layout.py`), compares them with the newest earlier release
+  that has a `<tag>/meta.json` on gh-pages (`tools/release_meta.py`) and
+  FAILS the run on a change without an epoch bump, or an epoch going down.
+  It publishes `<tag>/meta.json` (`{"epoch":{slug:N},"layout":{...}}`, the
+  epoch map first and within `core::kMaxMetaBytes`), checks it with the
+  device's own parser (`core/release_meta.h` via `tools/meta_epoch.cpp`),
+  and — only on a release that RAISES an epoch — leads the release notes
+  and notes.txt with a `**WEB FLASH REQUIRED** (<boards>)` line, for
+  firmware from before the lever (it can only show notes). The index files
+  are UNCHANGED (flat tag lists: old firmware and the flasher read them).
+  Device (update_check.cpp): once a newer version's image is served, fetch
+  its meta.json; 404 = a release from before meta.json = epoch 1; no answer
+  or our slug missing = don't offer it this round; epoch > kFlashEpoch =
+  `UpdateInfo::web_flash` -> the modal says "must be installed from a
+  computer" and has NO Install button. The bootloader's IDF version is
+  logged at boot (`boot: bootloader IDF ...`) and in /api/summary
+  (`bootloader`, `epoch`) — evidence only; the epoch is the gate.
 - C6 auto-update (c6_update.cpp): on every P4 boot, if the on-board ESP32-C6
   esp-hosted slave is older than the host lib, flash the embedded matching image
   (`firmware_blobs/c6_slave.bin`, committed, embedded on all P4 envs) to the C6
@@ -350,6 +376,9 @@ existing buffer) over adding memory. Applies to fixes as much as features.
    the last), and the workflow warns if `## Unreleased` is still there at
    release time.
 3. `make build-release` green (or `make build-all` for a platform change).
+   Changed a pinned bootloader or a partition table? Bump that env's
+   `custom_flash_epoch` (the run's `meta` job fails otherwise) — the release
+   then becomes web-flash-only for those boards (see FLASH EPOCH above).
 4. Commit, push main, then `gh workflow run firmware-release.yml -f tag=vX.Y.Z`
    (CI creates the tag + Release; never build release binaries locally).
    **Stable tags are cut from main ONLY** — the workflow's first step fails

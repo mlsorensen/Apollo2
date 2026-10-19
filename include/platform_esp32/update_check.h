@@ -52,9 +52,10 @@ class UpdateCheck : public core::IUpdateSource {
   std::atomic<int> seq_{0};
   std::atomic<bool> last_ok_{false};  // last check reached the server + parsed
 
-  mutable std::mutex mu_;  // guards latest_/notes_
+  mutable std::mutex mu_;  // guards latest_/notes_/web_flash_
   std::string latest_;
   std::string notes_;
+  bool web_flash_ = false;  // latest_ needs a web flash on this board
 };
 
 }  // namespace platform

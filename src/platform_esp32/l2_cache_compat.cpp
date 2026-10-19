@@ -40,7 +40,7 @@ SOC_RESERVE_MEMORY_REGION(0x4ff20000, 0x4ff40000, l2_cache_256k_compat);
 // 64 B: the libs align DMA buffers and cache syncs to 64. Runs at the CORE
 // init stage: core 0 only, the other core still parked. Both silicon
 // generations: every unit runs the pinned 256 KB-cache bootloader
-// (tools/pio_p4_bootloader_pin.py), so the window was cache from power-on
+// (tools/pio_flash_layout.py), so the window was cache from power-on
 // and nothing (the startup stack included) can live in it.
 static IRAM_ATTR void l2_cache_256k() {
   portDISABLE_INTERRUPTS();

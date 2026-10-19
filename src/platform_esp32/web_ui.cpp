@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_heap_caps.h>
+#include <esp_ota_ops.h>
 #if __has_include(<esp_core_dump.h>)
 #include <esp_core_dump.h>
 #include <esp_partition.h>
@@ -408,15 +409,23 @@ void WebUi::handle_summary() {
     if (esp_core_dump_image_get(&cd_addr, &cd_size) != ESP_OK) cd_size = 0;
   }
 #endif
-  char buf[672];
+  // bootloader: IDF version of the one under the app (fixed at this unit's
+  // last web flash); epoch: the flash epoch this image was built for.
+  esp_bootloader_desc_t bd;
+  const char* bl_idf =
+      esp_ota_get_bootloader_description(nullptr, &bd) == ESP_OK ? bd.idf_ver : "";
+  bd.idf_ver[sizeof(bd.idf_ver) - 1] = '\0';
+  char buf[736];
   std::snprintf(
       buf, sizeof(buf),
       "{\"name\":\"%s\",\"version\":\"%s\",\"coredump\":%u,"
+      "\"bootloader\":\"%s\",\"epoch\":%d,"
       "\"theme\":{\"bg\":%lu,\"rail\":%lu,\"card\":%lu,\"text\":%lu,"
       "\"muted\":%lu,\"accent\":%lu,\"ok\":%lu,\"warn\":%lu,\"alert\":%lu},"
       "\"storage\":{\"total\":%llu,\"free\":%llu,\"full\":%s},"
       "\"stats\":{\"total\":%d,\"life\":%.1f,\"d30\":%.1f,\"since\":%lld}}",
-      name_, fw::kVersion, static_cast<unsigned>(cd_size),
+      name_, fw::kVersion, static_cast<unsigned>(cd_size), bl_idf,
+      fw::kFlashEpoch,
       static_cast<unsigned long>(t.bg),
       static_cast<unsigned long>(t.rail), static_cast<unsigned long>(t.card),
       static_cast<unsigned long>(t.text), static_cast<unsigned long>(t.muted),

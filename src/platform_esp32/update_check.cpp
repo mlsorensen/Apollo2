@@ -10,6 +10,7 @@
 #include <cstring>
 
 #include "core/network.h"
+#include "core/release_meta.h"
 #include "core/semver.h"
 #include "core/system.h"
 #include "platform_esp32/board_config.h"
@@ -161,7 +162,9 @@ void use_psram_for_tls() {
 // Small authenticated GET into a bounded string. Trust = the cert bundle
 // embedded in the core libs (only reachable through the IDF client config's
 // crt_bundle_attach — the Arduino wrapper can't use the built-in bundle).
-bool https_get(const std::string& url, std::string& out, size_t cap) {
+bool https_get(const std::string& url, std::string& out, size_t cap,
+               int* status = nullptr) {
+  if (status != nullptr) *status = 0;  // 0 = no HTTP answer at all
   esp_http_client_config_t cfg = {};
   cfg.url = url.c_str();
   cfg.crt_bundle_attach = esp_crt_bundle_attach;
@@ -171,6 +174,7 @@ bool https_get(const std::string& url, std::string& out, size_t cap) {
   bool ok = false;
   if (esp_http_client_open(h, 0) == ESP_OK) {
     esp_http_client_fetch_headers(h);
+    if (status != nullptr) *status = esp_http_client_get_status_code(h);
     if (esp_http_client_get_status_code(h) == 200) {
       char buf[512];
       int n;
@@ -217,10 +221,13 @@ bool https_exists(const std::string& url) {
 // A short backoff lets it clear. Fixes intermittent empty release notes and
 // "couldn't contact the update server" on the native-WiFi S3 boards.
 bool https_get_retry(const std::string& url, std::string& out, size_t cap,
-                     int tries) {
+                     int tries, int* status = nullptr) {
   for (int attempt = 1; attempt <= tries; ++attempt) {
     out.clear();
-    if (https_get(url, out, cap)) return true;
+    if (https_get(url, out, cap, status)) return true;
+    // A real HTTP answer (404...) won't change on a retry; only a failure to
+    // get one at all (socket pool, TLS) is worth another go.
+    if (status != nullptr && *status != 0) return false;
     if (attempt < tries) {
       core::logf("UpdateCheck: fetch attempt %d/%d failed, retrying\n", attempt,
                  tries);
@@ -366,6 +373,35 @@ void UpdateCheck::run_check() {
     }
   }
 
+  // Can THIS unit take it over the air? Releases list a flash epoch per board
+  // (<tag>/meta.json); one above ours means the bootloader or partition table
+  // changed, which only a web flash can install, so the modal offers the
+  // flasher instead of Install. A 404 is a release from before meta.json
+  // (epoch 1). Anything else unclear — no answer, or our slug missing — and
+  // the version isn't offered this round: Install on a release that needs a
+  // web flash would fail, roll back and re-offer forever.
+  bool web_flash = false;
+  if (semver_newer(latest.c_str(), fw::kVersion)) {
+    std::string meta;
+    int status = 0;
+    int epoch = -1;
+    if (https_get_retry(std::string(kSiteBase) + "/" + latest + "/meta.json",
+                        meta, core::kMaxMetaBytes, 3, &status)) {
+      epoch = core::meta_epoch(meta, board::kUpdateSlug);
+    } else if (status == 404) {
+      epoch = 1;
+    }
+    if (epoch < 0) {
+      core::logf("UpdateCheck: no flash epoch for %s in %s (HTTP %d); not offering\n",
+                 board::kUpdateSlug, latest.c_str(), status);
+      latest = fw::kVersion;
+    } else if (epoch > fw::kFlashEpoch) {
+      web_flash = true;
+      core::logf("UpdateCheck: %s needs flash epoch %d (this unit: %d) - web flash only\n",
+                 latest.c_str(), epoch, fw::kFlashEpoch);
+    }
+  }
+
   std::string notes;
   bool got_notes = false;
   if (semver_newer(latest.c_str(), fw::kVersion)) {
@@ -385,6 +421,7 @@ void UpdateCheck::run_check() {
     // Don't let a transient notes-fetch failure blank out notes we already have
     // for this same version; a newer version always replaces them.
     if (got_notes || !same_version) notes_ = notes;
+    web_flash_ = web_flash;
   }
   last_ok_.store(true);  // reached the server and read a version
 }
@@ -395,6 +432,7 @@ core::UpdateInfo UpdateCheck::info() const {
   if (latest_.empty()) return out;
   out.version = latest_;
   out.notes = notes_;
+  out.web_flash = web_flash_;
   out.available = semver_newer(latest_.c_str(), fw::kVersion) &&
                   latest_ != config_.skipped_update();
   return out;
@@ -429,6 +467,7 @@ void UpdateCheck::set_beta_channel(bool on) {
     std::lock_guard<std::mutex> lock(mu_);
     latest_.clear();
     notes_.clear();
+    web_flash_ = false;
   }
   last_ok_.store(false);
   check_req_.store(true);

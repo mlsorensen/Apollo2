@@ -201,6 +201,12 @@ jobs:
           # (http://<ip>/coredump) can only be symbolicated against the .elf
           # of the exact build that crashed — without archiving it here, a
           # release-build coredump is undecodable.
+          # What lies UNDER the app (bootloader + partition table, read from
+          # the factory image) and this env's flash epoch: the meta job checks
+          # them against the previous release (tools/release_meta.py).
+          mkdir -p out/layout
+          python3 tools/flash_layout.py describe .pio/build/${{ matrix.env }} \
+              > "out/layout/${{ matrix.board }}.json"
           mkdir -p out/elf
           cp .pio/build/${{ matrix.env }}/firmware.elf \
              "out/elf/apollo2-${{ matrix.board }}-${RELEASE_TAG}.elf"
@@ -239,9 +245,65 @@ jobs:
             echo "- image fw::kVersion asserted == \`${RELEASE_TAG#v}\` (the step above)"
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # FLASH EPOCHS (2026-10-19). OTA can't change what lies under the app (the
+  # bootloader and partition table), so a release that changes either for a
+  # board must raise that board's flash epoch (platformio.ini
+  # custom_flash_epoch) — the device then offers "install from a computer"
+  # instead of Install. This job, BEFORE the approval gate, compares every
+  # board against the newest earlier release with a meta.json and FAILS the
+  # run if something changed under the app without an epoch bump (or an
+  # epoch went down). It writes <tag>/meta.json for the site and, only on a
+  # release that raises an epoch, the WEB FLASH REQUIRED line the notes lead
+  # with (firmware from before the levers can only read the notes).
+  meta:
+    name: flash epochs ${{ inputs.tag }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Only the earlier releases' meta.json files, not their firmware.
+      - uses: actions/checkout@v7
+        continue-on-error: true  # first deploy: no gh-pages branch yet
+        with:
+          ref: gh-pages
+          path: old
+          sparse-checkout: |
+            /*/meta.json
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: fw
+          merge-multiple: true
+
+      - name: Check flash epochs, write meta.json
+        run: |
+          python3 tools/release_meta.py "$RELEASE_TAG" fw/layout old meta
+          # Read it back with the DEVICE's own parser (core/release_meta.h),
+          # truncated to what the device fetches: every slug must come out
+          # at the epoch it was built with.
+          g++ -std=c++17 -Wall -Wextra -Iinclude tools/meta_epoch.cpp -o meta_epoch
+          for f in fw/layout/*.json; do
+            slug=$(basename "$f" .json)
+            want=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["epoch"])' "$f")
+            got=$(./meta_epoch meta/meta.json "$slug")
+            [ "$got" = "$want" ] || { echo "::error::device parser reads epoch $got for $slug, built with $want"; exit 1; }
+          done
+          {
+            echo "### Flash epochs \`$RELEASE_TAG\`"
+            python3 -c 'import json; m=json.load(open("meta/meta.json")); [print("- `%s` epoch %d, bootloader IDF %s" % (s, e, m["layout"][s]["bootloader"]["idf"])) for s, e in m["epoch"].items()]'
+            if [ -s meta/webflash.md ]; then echo; echo "**Notes will lead with:**"; echo; cat meta/webflash.md; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: meta
+          path: meta/*
+
   release:
     name: ${{ contains(inputs.tag, '-beta.') && 'release (PRE-RELEASE)' || 'release' }} ${{ inputs.tag }}
-    needs: build
+    needs: [build, meta]
     runs-on: ubuntu-latest
     environment: release  # waits for the owner's approval; holds RELEASE_TOKEN
     steps:
@@ -317,6 +379,12 @@ jobs:
           if [ ! -s dist/NOTES.md ]; then
             echo "::warning::CHANGELOG.md has no '## ${RELEASE_TAG}' section - publishing with install notes only"
           fi
+          # A release that raises a flash epoch leads with WEB FLASH REQUIRED
+          # (written by the meta job; empty otherwise).
+          if [ -s dist/webflash.md ]; then
+            { cat dist/webflash.md; echo; cat dist/NOTES.md; } > dist/NOTES.tmp
+            mv dist/NOTES.tmp dist/NOTES.md
+          fi
           case "${RELEASE_TAG}" in
             *-beta.*)
               cat >> dist/NOTES.md <<'EOF'
@@ -382,7 +450,7 @@ jobs:
   # run's tag), so re-running an old tag can't roll the page's default back.
   pages:
     name: ${{ contains(inputs.tag, '-beta.') && 'pages (beta index only)' || 'pages' }} ${{ inputs.tag }}
-    needs: build
+    needs: [build, meta]
     runs-on: ubuntu-latest
     environment: release  # waits for the owner's approval; holds RELEASE_TOKEN
     steps:
@@ -427,6 +495,14 @@ jobs:
           BASE_TAG="${RELEASE_TAG%%-beta.*}"   # beta notes fall back to vX.Y.Z's
           if [ ! -s "public/${RELEASE_TAG}/notes.txt" ] && [ "$BASE_TAG" != "$RELEASE_TAG" ]; then
             section "${BASE_TAG}" > "public/${RELEASE_TAG}/notes.txt"
+          fi
+          # Flash epochs (meta job): the device fetches meta.json to learn
+          # whether it may install this over the air; a release that raises an
+          # epoch leads its notes with WEB FLASH REQUIRED for older firmware.
+          cp fw/meta.json "public/${RELEASE_TAG}/meta.json"
+          if [ -s fw/webflash.md ]; then
+            { cat fw/webflash.md; echo; cat "public/${RELEASE_TAG}/notes.txt"; } > notes.tmp
+            mv notes.tmp "public/${RELEASE_TAG}/notes.txt"
           fi
           cp fw/*.bin "public/${RELEASE_TAG}/firmware/"
           cp -r fw/parts "public/${RELEASE_TAG}/firmware/parts"

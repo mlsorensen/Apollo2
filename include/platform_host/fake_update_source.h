@@ -10,6 +10,7 @@ class FakeUpdateSource : public core::IUpdateSource {
   core::UpdateInfo info() const override {
     core::UpdateInfo i;
     i.available = available_;
+    i.web_flash = web_flash_;
     i.version = "v9.9.9";
     i.notes =
         "### Changes\n\n"
@@ -30,9 +31,11 @@ class FakeUpdateSource : public core::IUpdateSource {
   bool last_check_ok() const override { return true; }
 
   void set_available(bool on) { available_ = on; }
+  void set_web_flash(bool on) { web_flash_ = on; }
 
  private:
   bool available_ = false;  // renders stay update-free unless a pose asks
+  bool web_flash_ = false;
   int cadence_ = 1;
   bool beta_ = false;
   int seq_ = 0;
