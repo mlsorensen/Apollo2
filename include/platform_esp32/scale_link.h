@@ -28,7 +28,7 @@ class ScaleLink : public core::ScaleLink {
   void hold_partner(bool held) { partner_.hold(held); }
 
   // Start the background task (non-blocking). Empty address -> idle until set.
-  void begin(std::string address);
+  void begin(std::string address, core::AddrType type);
   void set_name(std::string name);
   void set_partner_mode(bool enabled);
   void set_connect_enabled(bool enabled);

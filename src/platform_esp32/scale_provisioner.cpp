@@ -17,11 +17,11 @@ std::vector<core::ScanResult> ScaleProvisioner::scan_results() const {
 }
 
 void ScaleProvisioner::save_scale(const core::ScanResult& scale, bool partner_mode) {
-  config_.save_scale(scale.mac, scale.name, partner_mode);
+  config_.save_scale(scale.mac, scale.name, partner_mode, scale.addr_type);
   link_.set_name(scale.name);
   link_.set_partner_mode(partner_mode);
   link_.set_connect_enabled(true);
-  link_.set_address(scale.mac);
+  link_.set_address(scale.mac, scale.addr_type);
 }
 
 std::string ScaleProvisioner::saved_name() const { return config_.scale_name(); }
@@ -41,7 +41,8 @@ void ScaleProvisioner::set_partner_pair_pending(bool pending) {
 }
 
 void ScaleProvisioner::set_partner_mode(bool enabled) {
-  config_.save_scale(config_.scale_mac(), config_.scale_name(), enabled);
+  config_.save_scale(config_.scale_mac(), config_.scale_name(), enabled,
+                     config_.scale_addr_type());
   link_.set_partner_mode(enabled);  // address unchanged: central resumes on it
 }
 

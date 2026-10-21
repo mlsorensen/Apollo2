@@ -21,8 +21,9 @@ class NimbleCentral : public core::ble::ICentral {
   NimbleCentral() = default;
 
   std::vector<core::ScanResult> scan(uint32_t ms) override;
-  bool connect(const std::string& mac, bool prefer_random,
+  bool connect(const std::string& mac, core::AddrType type, bool prefer_random,
                uint32_t timeout_ms) override;
+  core::AddrType connected_addr_type() const override { return conn_type_; }
   void disconnect() override;
   bool connected() override;
   void cancel_connect() override;
@@ -43,6 +44,7 @@ class NimbleCentral : public core::ble::ICentral {
   // address-type attempts), not just the current GAP attempt. Cleared at the
   // start of each connect() call.
   std::atomic<bool> cancelled_{false};
+  core::AddrType conn_type_ = core::AddrType::kUnknown;  // type of the live link
 };
 
 }  // namespace platform

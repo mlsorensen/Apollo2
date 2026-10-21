@@ -33,31 +33,42 @@ std::vector<core::ScanResult> NimbleCentral::scan(uint32_t ms) {
     std::strncpy(r.name, name.c_str(), sizeof(r.name) - 1);
     std::strncpy(r.mac, d->getAddress().toString().c_str(), sizeof(r.mac) - 1);
     r.rssi = d->getRSSI();
+    r.addr_type = d->getAddress().getType() == BLE_ADDR_RANDOM
+                      ? core::AddrType::kRandom
+                      : core::AddrType::kPublic;
     found.push_back(r);
   }
   scan->clearResults();
   return found;
 }
 
-bool NimbleCentral::connect(const std::string& mac, bool prefer_random,
-                            uint32_t timeout_ms) {
+bool NimbleCentral::connect(const std::string& mac, core::AddrType type,
+                            bool prefer_random, uint32_t timeout_ms) {
   ensure_host();
   if (client_ == nullptr) client_ = NimBLEDevice::createClient();
   if (timeout_ms > 0) client_->setConnectTimeout(timeout_ms);
+  conn_type_ = core::AddrType::kUnknown;
 
-  // The address type isn't persisted, so try both, preferred type first.
+  // A known type is ONE try; unknown tries both, preferred type first.
   // hold_ is checked before EACH attempt: a peer link about to scan cancels
   // the in-flight try, and without this gate the cancelled first attempt
   // would fall straight through into the second one — camping on the radio
   // for another full timeout and starving the scan it just yielded to.
-  const uint8_t first = prefer_random ? BLE_ADDR_RANDOM : BLE_ADDR_PUBLIC;
-  const uint8_t second = prefer_random ? BLE_ADDR_PUBLIC : BLE_ADDR_RANDOM;
+  const bool random_first = type == core::AddrType::kRandom ||
+                            (type == core::AddrType::kUnknown && prefer_random);
+  const uint8_t first = random_first ? BLE_ADDR_RANDOM : BLE_ADDR_PUBLIC;
+  const uint8_t second = random_first ? BLE_ADDR_PUBLIC : BLE_ADDR_RANDOM;
   if (hold_.load()) return false;
   cancelled_.store(false);  // a stale one-shot cancel must not kill this attempt
+  uint8_t used = first;
   if (!client_->connect(NimBLEAddress(mac, first))) {
+    if (type != core::AddrType::kUnknown) return false;
     if (hold_.load() || cancelled_.load()) return false;
+    used = second;
     if (!client_->connect(NimBLEAddress(mac, second))) return false;
   }
+  conn_type_ = used == BLE_ADDR_RANDOM ? core::AddrType::kRandom
+                                       : core::AddrType::kPublic;
 
   // Discover everything now so the by-UUID lookups below hit the cache.
   for (NimBLERemoteService* svc : client_->getServices(true)) {

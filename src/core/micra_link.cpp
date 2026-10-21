@@ -230,7 +230,8 @@ void MicraLink::run() {
 bool MicraLink::do_connect(const std::string& address, const std::string& token) {
   // Micras advertise a public address more often than not; the transport still
   // falls back to the other type.
-  if (!ble_.connect(address, /*prefer_random=*/false, kConnectTimeoutMs)) {
+  if (!ble_.connect(address, AddrType::kUnknown, /*prefer_random=*/false,
+                    kConnectTimeoutMs)) {
     logf("MicraLink: connect failed\n");
     return false;
   }

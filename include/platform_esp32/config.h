@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <string>
 
+#include "core/provisioner.h"  // core::AddrType
+
 // Persistent device configuration in NVS flash: the saved machine (BLE MAC +
 // display name) chosen via the Settings scan, and the auth token entered via
 // the WiFi setup page. Nothing is compiled in.
@@ -32,7 +34,12 @@ class Config {
   bool scale_partner_mode() const;
   bool scale_partner_pending() const;  // pairing prompt owed after a restart
   void set_scale_partner_pending(bool pending);
-  void save_scale(const std::string& mac, const std::string& name, bool partner_mode);
+  void save_scale(const std::string& mac, const std::string& name, bool partner_mode,
+                  core::AddrType addr_type);
+  // The saved scale's BLE address type (kUnknown until learned: units paired
+  // before it was recorded learn it on their first connect).
+  core::AddrType scale_addr_type() const;
+  void set_scale_addr_type(core::AddrType type);
   void clear_scale();
 
   // Brew-by-weight target (grams) — persisted so it survives reboots.

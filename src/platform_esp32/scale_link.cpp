@@ -11,9 +11,9 @@ namespace {
 void task_entry(void* arg) { static_cast<core::ScaleLink*>(arg)->run(); }
 }  // namespace
 
-void ScaleLink::begin(std::string address) {
+void ScaleLink::begin(std::string address, core::AddrType type) {
   partner_.set_enabled(partner_mode() && connect_enabled());
-  set_address(std::move(address));
+  set_address(std::move(address), type);
   // 4096: measured peak 2,356 (Acaia) / 2,300 (Bookoo), both connected +
   // subscribed, and including a Settings scan. ~1.7K margin.
   xTaskCreatePinnedToCore(&task_entry, "scale_link", 4096, this,

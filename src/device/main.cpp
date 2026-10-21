@@ -572,10 +572,17 @@ void setup() {
 
   // Start the Bluetooth scale link from its saved MAC (empty -> idles).
   const std::string scale_mac = g_config.scale_mac();
+  const core::AddrType scale_type = g_config.scale_addr_type();
   g_scale.set_name(g_config.scale_name());
   g_scale.set_partner_mode(g_config.scale_partner_mode());
-  core::logf("Saved scale: mac=%s\n", scale_mac.empty() ? "(none)" : scale_mac.c_str());
-  g_scale.begin(scale_mac);
+  // The type the connect actually used is persisted next to the MAC, so a
+  // unit paired before it was recorded guesses once and then never again.
+  g_scale.set_addr_type_learned(
+      [](core::AddrType t) { g_config.set_scale_addr_type(t); });
+  core::logf("Saved scale: mac=%s type=%s\n",
+             scale_mac.empty() ? "(none)" : scale_mac.c_str(),
+             core::addr_type_name(scale_type));
+  g_scale.begin(scale_mac, scale_type);
 }
 
 namespace {

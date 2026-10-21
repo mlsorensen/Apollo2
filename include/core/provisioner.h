@@ -12,10 +12,20 @@ namespace core {
 
 // A discovered device. Fixed char buffers (not pointers) so a result is
 // trivially copyable across the scan-task / UI-thread boundary.
+// BLE address type as the peer advertises it. The MAC string alone does not
+// say which, and to the radio public and random are DIFFERENT addresses: a
+// connect at the wrong type never completes. kUnknown = not learned yet.
+enum class AddrType : uint8_t { kUnknown = 0, kPublic = 1, kRandom = 2 };
+
+inline const char* addr_type_name(AddrType t) {
+  return t == AddrType::kPublic ? "public" : t == AddrType::kRandom ? "random" : "unknown";
+}
+
 struct ScanResult {
   char name[24];
   char mac[18];  // "aa:bb:cc:dd:ee:ff" + NUL
   int rssi;
+  AddrType addr_type;  // from the advertisement; the fakes leave kUnknown
 };
 
 class IProvisioner {

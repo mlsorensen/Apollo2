@@ -13,11 +13,20 @@ constexpr core::ScaleSettingDesc kPartnerSettings[] = {
 };
 constexpr int kPartnerSettingCount = 2;  // no Unit row: the Umbra streams grams
 
+// Address type UNKNOWN (a unit paired before the type was recorded, or the
+// relearn attempt below): the transport tries both types, so each try is
+// capped low — a wrong-type try can never succeed and only delays the other.
 constexpr uint32_t kReconnectBackoffMs = 3000;
-// Connect timeout per address-type attempt. We connect by MAC and don't persist
-// the address type, so the transport tries both — a wrong-type attempt at the
-// stack's 30 s default would stall the fallback, so cap it low.
 constexpr uint32_t kConnectTimeoutMs = 5000;
+// Address type KNOWN: one try, so the listen can be long and the gap short.
+// A connect-by-address is the controller listening for that one address; a
+// restart buys nothing, and the dead time between tries is where the waits
+// came from (X-8, 2026-10-21: a 5 s window caught an advertising Bookoo
+// about half the time, each miss then cost the 8 s of public try + backoff).
+// User actions (Disconnect, Forget, Scan) cancel an in-flight try.
+constexpr uint32_t kKnownTypeTimeoutMs = 10000;
+constexpr uint32_t kKnownTypeBackoffMs = 1000;
+constexpr int kKnownTypeFailLimit = 3;  // then relearn with a both-types try
 // After a setting write, ignore readback that still echoes the OLD value for
 // this long: the scale keeps reporting it for a frame or two (Bookoo) up to a
 // full 2 s status-poll cycle (Lunar), and accepting the echo flickered the UI
@@ -41,12 +50,14 @@ constexpr uint32_t kSettingWriteGapMs = 1200;
 
 namespace core {
 
-void ScaleLink::set_address(std::string address) {
+void ScaleLink::set_address(std::string address, AddrType type) {
   {
     std::lock_guard<std::mutex> lk(mutex_);
     address_ = std::move(address);
+    addr_type_ = type;
   }
   reconnect_requested_.store(true);
+  ble_.cancel_connect();  // a try for the OLD address must not run out its timeout
 }
 
 void ScaleLink::set_name(std::string name) {
@@ -77,6 +88,9 @@ void ScaleLink::set_partner_connected(bool connected) {
 void ScaleLink::set_connect_enabled(bool enabled) {
   connect_enabled_.store(enabled);
   reconnect_requested_.store(true);
+  // Disconnect must land now, not when the current try times out — and
+  // Connect right after it starts a fresh try instead of inheriting one.
+  if (!enabled) ble_.cancel_connect();
 }
 
 void ScaleLink::set_connected(bool c) {
@@ -168,10 +182,12 @@ void ScaleLink::run() {
     }
 
     std::string addr;
+    AddrType addr_type;
     std::shared_ptr<IScaleDriver> drv;
     {
       std::lock_guard<std::mutex> lk(mutex_);
       addr = address_;
+      addr_type = addr_type_;
       drv = driver_;
     }
 
@@ -199,16 +215,27 @@ void ScaleLink::run() {
     if (!connected) {
       retare = false;  // a resend never crosses a link drop: taring whatever
                        // sits on a freshly relinked scale could zero a mid-shot cup
-      if (!do_connect(addr)) {
+      // Safety valve: a stored type that keeps failing is retried as unknown
+      // (both types) and relearned — see known_type_fails_.
+      const bool relearn = addr_type != AddrType::kUnknown &&
+                           known_type_fails_ >= kKnownTypeFailLimit;
+      const AddrType try_type = relearn ? AddrType::kUnknown : addr_type;
+      if (!do_connect(addr, try_type)) {
         set_connected(false);
+        if (try_type != AddrType::kUnknown) ++known_type_fails_;
+        else if (relearn) known_type_fails_ = 0;  // one both-types try per limit
         // Sliced so a scan requested mid-backoff (this link's own Scan button
         // cancels the failed attempt above) runs promptly, not seconds later.
-        for (uint32_t waited = 0;
-             waited < kReconnectBackoffMs && !scan_requested_.load(); waited += 100) {
+        const uint32_t backoff = try_type != AddrType::kUnknown
+                                     ? kKnownTypeBackoffMs
+                                     : kReconnectBackoffMs;
+        for (uint32_t waited = 0; waited < backoff && !scan_requested_.load();
+             waited += 100) {
           sleep_ms(100);
         }
         continue;
       }
+      known_type_fails_ = 0;
       connected = true;
       set_connected(true);
       continue;  // re-fetch the freshly created driver next pass
@@ -290,7 +317,7 @@ void ScaleLink::run() {
   }
 }
 
-bool ScaleLink::do_connect(const std::string& address) {
+bool ScaleLink::do_connect(const std::string& address, AddrType type) {
   // Fresh driver per attempt: per-connection state starts clean, and the name
   // may have changed since the last connect.
   std::shared_ptr<IScaleDriver> drv;
@@ -304,12 +331,27 @@ bool ScaleLink::do_connect(const std::string& address) {
     return false;
   }
 
-  // Random first: the Bookoo (and most scales) advertise a random address, so the
-  // saved-MAC reconnect after reboot then succeeds on the first try (was ~30 s: a
-  // PUBLIC-first attempt timed out fully before falling back to RANDOM).
-  if (!ble_.connect(address, /*prefer_random=*/true, kConnectTimeoutMs)) {
-    logf("ScaleLink: connect failed\n");
+  // Known type: one long listen. Unknown: both types, random first — the
+  // Bookoo (and most scales) advertise a random address, so the first-ever
+  // reconnect then succeeds on the first try (was ~30 s: a PUBLIC-first try
+  // timed out fully before falling back to RANDOM).
+  const bool known = type != AddrType::kUnknown;
+  if (!ble_.connect(address, type, /*prefer_random=*/true,
+                    known ? kKnownTypeTimeoutMs : kConnectTimeoutMs)) {
+    logf("ScaleLink: connect failed (%s)\n",
+         known ? addr_type_name(type) : "random+public");
     return false;
+  }
+  // Learn the type the connect actually used: persisted by the platform so
+  // every later connect is a single known-type try.
+  const AddrType used = ble_.connected_addr_type();
+  if (used != AddrType::kUnknown && used != type) {
+    {
+      std::lock_guard<std::mutex> lk(mutex_);
+      addr_type_ = used;
+    }
+    logf("ScaleLink: learned address type %s\n", addr_type_name(used));
+    if (addr_type_learned_) addr_type_learned_(used);
   }
 
   const char* notify_uuid = drv->select_notify(ble_);
@@ -332,7 +374,8 @@ bool ScaleLink::do_connect(const std::string& address) {
     return false;
   }
 
-  logf("ScaleLink: %s connected + subscribed\n", drv->model());
+  logf("ScaleLink: %s connected + subscribed (%s)\n", drv->model(),
+       addr_type_name(used));
   return true;
 }
 

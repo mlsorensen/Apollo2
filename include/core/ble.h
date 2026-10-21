@@ -32,12 +32,17 @@ class ICentral {
   // resolve). Returns every device seen; callers filter by name.
   virtual std::vector<core::ScanResult> scan(uint32_t ms) = 0;
 
-  // Connect to `mac` and discover its services (blocking). The address type
-  // isn't persisted anywhere, so implementations try both; `prefer_random`
-  // hints which to try first (scales usually advertise a random address).
-  // `timeout_ms` caps EACH attempt (0 = the stack's default).
-  virtual bool connect(const std::string& mac, bool prefer_random,
-                       uint32_t timeout_ms) = 0;
+  // Connect to `mac` and discover its services (blocking). A KNOWN `type`
+  // is a single try at that type. kUnknown tries both, `prefer_random`
+  // first (scales usually advertise a random address) — the wrong-type try
+  // can never succeed, so callers learn the type (connected_addr_type) and
+  // persist it to skip that dead time next connect. `timeout_ms` caps EACH
+  // try (0 = the stack's default).
+  virtual bool connect(const std::string& mac, core::AddrType type,
+                       bool prefer_random, uint32_t timeout_ms) = 0;
+  // Address type of the try that produced the current connection (kUnknown
+  // when disconnected or the transport can't tell).
+  virtual core::AddrType connected_addr_type() const { return core::AddrType::kUnknown; }
   virtual void disconnect() = 0;
   virtual bool connected() = 0;
 

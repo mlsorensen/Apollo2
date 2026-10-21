@@ -34,9 +34,17 @@ class ScaleLink : public IScale, public IScaleSink {
   // Empty address -> idle until set.
   void run();
 
-  // Runtime setters (thread-safe; trigger a reconnect).
-  void set_address(std::string address);
+  // Runtime setters (thread-safe; trigger a reconnect). `type` is the saved
+  // scale's address type as learned at pairing time or on a previous connect
+  // (kUnknown = not yet: the transport tries both and the link learns it).
+  void set_address(std::string address, AddrType type = AddrType::kUnknown);
   void set_name(std::string name);  // display name; also selects the driver
+  // Called (from the link thread) when a connect LEARNS the address type —
+  // the first connect on a unit paired before the type was recorded, or a
+  // scale whose type changed. The platform persists it next to the MAC.
+  void set_addr_type_learned(std::function<void(AddrType)> cb) {
+    addr_type_learned_ = std::move(cb);
+  }
 
   // Partner-mode support for Umbra firmware 1.0.8.
   void set_partner_mode(bool enabled);
@@ -85,7 +93,7 @@ class ScaleLink : public IScale, public IScaleSink {
   void on_device_setting(int index, int option_idx) override;
 
  private:
-  bool do_connect(const std::string& address);
+  bool do_connect(const std::string& address, AddrType type);
   void do_scan();
   void set_connected(bool c);
   bool link_up() const;  // the raw BLE link, before the weight-stream gate
@@ -93,7 +101,14 @@ class ScaleLink : public IScale, public IScaleSink {
   ble::ICentral& ble_;
 
   std::string address_;         // guarded by mutex_
+  AddrType addr_type_ = AddrType::kUnknown;  // guarded by mutex_
   std::string name_ = "Scale";  // guarded by mutex_
+  // Consecutive failed known-type connects. After kKnownTypeFailLimit the
+  // next attempt goes back to trying BOTH types and relearns from whichever
+  // works — a stored type can never strand the link (scale firmware updates
+  // have been known to change it). Link thread only.
+  int known_type_fails_ = 0;
+  std::function<void(AddrType)> addr_type_learned_;  // set once before run()
 
   // Model driver for the saved scale; refreshed per connection attempt.
   // Guarded by mutex_; shared_ptr so the notify callback + link loop keep a
