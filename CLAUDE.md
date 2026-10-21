@@ -146,9 +146,16 @@ display isn't up.
   libs' heap table would otherwise hand out (rev3 0x4ff20000-0x4ff40000,
   rev v1.x 0x4ff80000-0x4ffa0000). The window is NOT reclaimable at runtime
   (Store access fault from setup(), bench-proven), so l2_cache_compat.cpp
-  hands it back to the CACHE instead: 256 KB / 64 B lines at the CORE init
-  stage (graph ~1,000 vs ~875 frames/min at 128 KB; beta.1's 256 KB / 128 B
-  did ~1,200 — 128 B lines need a DMA-alignment audit, not done).
+  hands it back to the CACHE instead: 256 KB / 128 B lines at the CORE init
+  stage — beta.1's exact geometry (graph ~1,200 frames/min; ~1,000 at
+  256 KB / 64 B, ~875 at the libs' 128 KB / 64 B; bench 2026-10-21 on rev v3
+  AND rev v1.x). The 128 B line is SAFE with libs built for 64 B: IDF reads
+  the line size off the register at runtime everywhere but the startup
+  mode-set, misaligned invalidates are refused not rounded, and the L2 only
+  fronts PSRAM (internal DMA buffers are behind the 64 B L1). The core
+  itself shipped 256 KB / 128 B on every P4 build Feb-Sep 2026 (lib-builder
+  #350, an ESP-SR override; #395 dropped it as a "cleanup"). The ROM offers
+  only 64 B and 128 B — there is no larger line to try.
   BOOTLOADER PIN (owner, 2026-10-18; S3 too since 2026-10-19): we NEVER
   publish a bootloader the fleet doesn't run, on ANY board.
   `tools/pio_flash_layout.py` (every device env but dltest) swaps the core's

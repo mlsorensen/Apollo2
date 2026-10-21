@@ -9,6 +9,7 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 
 ## v1.1.0
 
+- **Smoother live graph on the P4 boards.** The shot graph draws about 20% more frames per second than in beta.5, back to where it was before the platform update, by restoring the processor cache setting that update had changed.
 - **Fewer surprise restarts on the P4 boards.** Updated the base platform and the WiFi/Bluetooth radio's firmware; the new radio driver recovers from a rare glitch that could restart the X 8" every few hours. On the first start after updating, the radio updates itself and Apollo restarts once more.
 - **Updates that need a computer say so.** If a future release changes the part of the firmware that starts the board, the update notice says it must be installed from a computer with the web flasher, instead of offering an install that can't work.
 - **Pair an Acaia Umbra (Umbra firmware 1.0.8).** Apollo can pair with the Umbra the way a Lunar does, keeping its sleep/wake behaviour. Choose it in Settings > Scale > Scan; the first time Apollo restarts once, then asks you to hold the Umbra's button until it blinks magenta.

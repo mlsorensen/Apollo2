@@ -30,23 +30,32 @@ SOC_RESERVE_MEMORY_REGION(0x4ff80000, 0x4ffa0000, l2_cache_256k_compat);
 // rev v3: usable SRAM starts 0x4ff40000 under a 256 KB cache, 0x4ff20000 under 128 KB.
 SOC_RESERVE_MEMORY_REGION(0x4ff20000, 0x4ff40000, l2_cache_256k_compat);
 #endif
-// rev v3 only: give the reserved window back to the cache. The libs' startup
-// (cache_hal_init) sets 128 KB / 8 ways / 64 B lines; at beta.1's 256 KB /
-// 128 B the Home graph drew ~1,200 frames/min, at 128 KB / 64 B ~880 (same
-// figure with beta.1's own platform forced to 128 KB — it is the cache, not
-// the core). 256 KB / 64 B wins back ~1,000. The window is reserved above, so
-// this costs no usable RAM. Same ROM call and order as the startup, plus a
-// write-back first (PSRAM may already hold dirty lines). Line size stays
-// 64 B: the libs align DMA buffers and cache syncs to 64. Runs at the CORE
-// init stage: core 0 only, the other core still parked. Both silicon
-// generations: every unit runs the pinned 256 KB-cache bootloader
-// (tools/pio_flash_layout.py), so the window was cache from power-on
-// and nothing (the startup stack included) can live in it.
+// Give the reserved window back to the cache, at beta.1's geometry. The libs'
+// startup (cache_hal_init) sets 128 KB / 8 ways / 64 B lines; the Home graph
+// drew ~880 frames/min there, ~1,000 at 256 KB / 64 B, and ~1,200 at 256 KB /
+// 128 B (beta.1; re-measured 2026-10-21 on a rev v3 AND a rev v1.x P4-5:
+// 1,200 and 1,060, 34.7 and 36.9 ms/frame, scales streaming). The window is
+// reserved above, so this costs no usable RAM. Same ROM call and order as the
+// startup, plus a write-back first (PSRAM may already hold dirty lines).
+// 128 B lines are safe with libs built for 64 B: the only compile-time user
+// of the line size in IDF 5.5.1 is this very startup mode-set; esp_cache_msync,
+// the DMA-alignment helpers, cache-aligned heap allocs and the DPI driver all
+// read the live register (cache_hal_get_cache_line_size -> ROM), and a
+// memory-to-cache sync on a range the new size doesn't cover is REFUSED, not
+// rounded. The L2 only fronts PSRAM/flash: internal-SRAM DMA (the hosted
+// radio's SDIO pool) sits behind the L1 D-cache, whose line stays 64 B. The
+// Arduino core itself shipped 256 KB / 128 B on every P4 build from
+// lib-builder #350 (2026-02) to #395 (2026-09), the latter a cleanup that
+// dropped the ESP-SR override, not a fix. Runs at the CORE init stage: core 0
+// only, the other core still parked. Both silicon generations: every unit
+// runs the pinned 256 KB-cache bootloader (tools/pio_flash_layout.py), so the
+// window was cache from power-on and nothing (the startup stack included)
+// can live in it.
 static IRAM_ATTR void l2_cache_256k() {
   portDISABLE_INTERRUPTS();
   Cache_WriteBack_All(CACHE_MAP_L1_DCACHE | CACHE_MAP_L2_CACHE);
   Cache_Set_L2_Cache_Mode(CACHE_SIZE_256K, static_cast<cache_ways_t>(8),
-                          CACHE_LINE_SIZE_64B);
+                          CACHE_LINE_SIZE_128B);
   Cache_Invalidate_All(CACHE_MAP_L2_CACHE);
   portENABLE_INTERRUPTS();
 }
