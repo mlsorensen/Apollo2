@@ -535,7 +535,11 @@ lv_obj_t* history_add_row(StatsWidgets& w, const char* when, const char* mode,
   const bool compact = is_compact(screen);
   const bool xl = is_xl(screen);
   const bool glyph_only = ui::shot_mode_tag_glyph_only(screen);
-  const lv_font_t* font = ui::font_dp(compact ? 13 : xl ? 24 : 17);
+  // 16 dp, not 17: both round to the 16 px face at 1.0x and 24 px at 1.5x,
+  // but at the X 8"'s 1.6x 17 dp snapped UP to 28 px (a 1.75x face in a 1.6x
+  // layout) and the fixed-width date + mode cells below pushed the numbers
+  // off the row's left edge ("36.2/36g" read "2/36g"). 16 dp is 24 px there.
+  const lv_font_t* font = ui::font_dp(compact ? 13 : xl ? 24 : 16);
 
   lv_obj_t* row = lv_obj_create(w.history_list);
   lv_obj_remove_style_all(row);
@@ -628,7 +632,7 @@ lv_obj_t* history_add_filter_button(StatsWidgets& w, const char* label,
       btn, lv_color_hex(active ? ui::theme::accent() : ui::theme::rail()), 0);
   lv_obj_t* l = lv_label_create(btn);
   lv_label_set_text(l, label);
-  lv_obj_set_style_text_font(l, ui::font_dp(xl ? 24 : 17), 0);
+  lv_obj_set_style_text_font(l, ui::font_dp(xl ? 24 : 16), 0);  // = the rows' face
   lv_obj_center(l);
   return btn;
 }
