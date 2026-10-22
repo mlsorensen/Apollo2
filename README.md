@@ -80,6 +80,9 @@ UI just shows that part as offline.
 > same tool can provision one over Bluetooth. Checking now avoids a nasty surprise
 > after a board is already on your bench.
 
+**Prefer to watch?** [Apollo 2 for Micra — From Setup to Shot](https://youtu.be/2J9Y8xyeB9w)
+walks through choosing a board, flashing it and setting it up, start to first shot.
+
 ### 1. Get the hardware
 
 Pick a board from the **[Which board?](#which-board)** table below — three of

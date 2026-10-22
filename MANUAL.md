@@ -1,7 +1,9 @@
 # Apollo 2 user manual
 
 Everything the firmware can do, screen by screen and setting by setting. For
-flashing and first‑time pairing, start with the [README](README.md#getting-started).
+flashing and first‑time pairing, start with the [README](README.md#getting-started),
+or watch [Apollo 2 for Micra — From Setup to Shot](https://youtu.be/2J9Y8xyeB9w),
+which covers choosing a board, flashing and setup.
 
 Some rows only appear where the hardware supports them — a switch you don't see
 (for example **Wired paddle** on a board without paddle wiring, or
