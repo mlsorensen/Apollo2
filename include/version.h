@@ -7,7 +7,7 @@
 
 namespace fw {
 
-inline constexpr const char* kVersion = "1.1.0-beta.6";
+inline constexpr const char* kVersion = "1.1.0-beta.7";
 
 // What lies under the app on this board (pinned bootloader + partition table),
 // which OTA can't change. Comes from platformio.ini `custom_flash_epoch` via
