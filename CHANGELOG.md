@@ -7,7 +7,7 @@ for someone reading the diff. These notes are also shown ON THE DEVICE, whose
 fonts are ASCII-only: stick to characters `sanitize_notes()` (src/ui/app.cpp)
 maps — plain ASCII plus `— – → … × ' "` — or they render as empty boxes.
 
-## Unreleased
+## v1.2.0
 
 - **A second scale for the counter.** Pair a bench scale (the one your milk jug or beans sit on) and read its weight on Home: behind an ESPRESSO | BENCH switch on the scale card, or in its own card beside the graph (Settings > Scale > Display). It has its own Tare; shots stay with the espresso scale.
 - **Choose a scale's job when you save it.** Tapping a scanned scale now asks Espresso or Bench, and the Bluetooth page lists both with Swap roles.

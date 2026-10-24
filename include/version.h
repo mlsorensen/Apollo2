@@ -9,7 +9,7 @@
 
 namespace fw {
 
-inline constexpr const char* kVersion = "1.1.0";
+inline constexpr const char* kVersion = "1.2.0-beta.1";
 
 // Release builds prove kVersion == the tag at compile time (build_check.h).
 #ifdef APOLLO_EXPECT_VERSION
