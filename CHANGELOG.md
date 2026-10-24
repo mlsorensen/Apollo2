@@ -10,7 +10,7 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 ## v1.2.0
 
 - **A second scale for the counter.** Pair a bench scale (the one your milk jug or beans sit on) and read its weight on Home: behind an ESPRESSO | BENCH switch on the scale card, or in its own card beside the graph (Settings > Scale > Display). It has its own Tare; shots stay with the espresso scale.
-- **Choose a scale's job when you save it.** Tapping a scanned scale now asks Espresso or Bench, and the Bluetooth page lists both with Swap roles.
+- **Choose a scale's job when you save it.** Tapping a scanned scale now asks Espresso or Bench, and the Bluetooth page lists both with Swap roles, which trades their jobs without disconnecting either scale.
 - **Scale settings regrouped.** Battery display and the graph look (Smoothing, Drop negative g/s, Oscilloscope graph, Window growth) moved to a new Settings > Scale > Display page; Shot settings keeps Target, Review hold and Detect lead-in; Device settings is now only the scale's own rows.
 - **Graph legend.** The unit chip shows a coloured dot per scale; with a bench scale beside the graph both weights plot together, the bench scale in amber on its own grams axis.
 - **Steadier Bluetooth.** One radio listener at a time across the machine and the scales: reconnect attempts no longer collide, a Settings scan no longer puts a paired Umbra to sleep, and two missing scales are found with one search.
