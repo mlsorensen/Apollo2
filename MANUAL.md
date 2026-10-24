@@ -13,10 +13,10 @@ your board.
 **Contents:**
 
 - [Where everything lives](#nav-map) — a map of every screen and setting
-- [Home](#home) — MICRA card · SCALE card · Flow graph · Shot lifecycle
+- [Home](#home) — MICRA card · SCALE card · BENCH card · Flow graph · Shot lifecycle
 - [Settings → Micra](#settings-micra) — Bluetooth · Controls · Cleaning · Schedule
 - [Settings → Scale](#settings-scale) — Bluetooth · Shot settings · Device
-  settings · Per‑scale nuances
+  settings · Display · Per‑scale nuances
 - [Settings → Apollo](#settings-device) — Display · Time & date · WiFi ·
   Backup · Storage · Root page
 - [Stats](#stats-section) — Brew/Boiler graphs · History · Info
@@ -38,10 +38,15 @@ Home
 ├─ MICRA card — status · BREW/STEAM temps + set-point steppers
 │  ├─ [Power]  Standby / Turn On / Connect
 │  └─ [Flush]  quick group rinse                *(wired-paddle boards)*
-├─ SCALE card — status · WEIGHT (+ target) · TIMER   *(scale paired)*
+├─ SCALE card — status · WEIGHT (+ target) · TIMER   *(espresso scale paired)*
 │  ├─ [shot-mode pill]  Auto shot → Shot detect → Manual  (Reset in review)
-│  └─ [Connect/Disconnect] · [Tare]
-└─ Flow graph — g/s ↔ g toggle · freezes for review after a shot
+│  ├─ [Connect/Disconnect] · [Tare]
+│  └─ [ESPRESSO | BENCH]  swaps in the BENCH card   *(bench scale paired,
+│                         "In the scale card")*
+├─ BENCH card — status · WEIGHT · [Disconnect] · [Tare]   *(bench scale paired;
+│                beside the graph, or behind the switch above)*
+└─ Flow graph — legend chip: g/s ↔ g (espresso) · bench weight in g
+                · freezes for review after a shot
 
 Settings
 ├─ Micra
@@ -54,11 +59,14 @@ Settings
 │                └─ Configure schedule — day chips · Day enabled · On at / Off at
 │                                        · range slider · Copy times to
 ├─ Scale
-│  ├─ Bluetooth       — Scan · saved scale (Connect / Forget) · Umbra pairing
-│  ├─ Shot settings   — Target · Review hold · Detect lead-in · Smoothing
-│  │                    · Drop negative g/s · Oscilloscope graph · Window growth
-│  └─ Device settings — Battery display (Icon / Percent / Icon + %)
-│                       · the scale's own settings (Beep · Auto-off/sleep · Unit …)
+│  ├─ Bluetooth       — Scan → Espresso / Bench · saved scales (ESPRESSO / BENCH:
+│  │                    Connect / Forget) · Swap roles · Umbra pairing
+│  ├─ Shot settings   — Target · Review hold · Detect lead-in
+│  ├─ Device settings — Scale (Espresso / Bench picker)
+│  │                    · the scale's own settings (Beep · Auto-off/sleep · Unit …)
+│  └─ Display         — Battery display (Icon / Percent / Icon + %) · Smoothing
+│                       · Drop negative g/s · Oscilloscope graph · Window growth
+│                       · Bench scale on Home (In the scale card / Beside the graph)
 ├─ Apollo
 │  ├─ Display     — Brightness* · Screen timeout · Idle screen (Lion/Apollo/Alternate/Dim/Off)
 │  │               · Theme · Fahrenheit · Button sounds* · Performance overlay
@@ -139,7 +147,7 @@ Without a scale, the MICRA card fills the screen as a single hero:
   an auto flush is running, and stops that. Greyed out while a shot is in
   flight or the machine is in standby.
 
-### SCALE card (when a scale is paired)
+### SCALE card (when an espresso scale is paired)
 
 ![SCALE card](docs/img/manual/home-scale-card.png)
 
@@ -184,19 +192,52 @@ Without a scale, the MICRA card fills the screen as a single hero:
   shot is running or settling — either would disturb the weight the stop math
   runs on. They re‑enable the moment the shot is over, however it ends.
 
+### BENCH card (when a bench scale is paired)
+
+![BENCH card — behind the ESPRESSO | BENCH switch](docs/img/manual/home-bench-card.png)
+
+A second scale for the counter — the one you weigh milk or beans on, whose
+own screen a jug or plate hides. It is a readout only: the espresso scale
+keeps every shot role (Auto shot, Shot detect, the tare at shot start, the
+auto flush), and nothing on this card is ever disabled by a shot.
+
+- ① **ESPRESSO | BENCH** — with **Bench scale on Home** set to *In the scale
+  card* (the default), the SCALE card's caption becomes this switch. Tap
+  **BENCH** to swap the bench card in; tap **ESPRESSO** to swap back. A shot
+  starting swaps back by itself, so a shot is never hidden. The status dot
+  and battery stay in the header in both positions.
+- ② **WEIGHT** — the bench scale's live reading, with the scale's name under
+  it. Battery and status follow the same rules as the SCALE card's.
+- ③ **Disconnect / Connect** and **Tare** — the bench scale's own.
+- With **Bench scale on Home** set to *Beside the graph*, the bench card sits
+  to the right of the flow graph instead (with just **Tare**), and the graph
+  draws both scales — see below. Both placements are shown in **Settings →
+  Scale → Display**.
+
+![BENCH card beside the graph](docs/img/manual/home-bench-beside.png)
+
+A bench scale with *no* espresso scale paired takes the SCALE card's place by
+itself, and the graph shows it in grams.
+
 ### Flow graph
 
 ![Flow graph](docs/img/manual/home-flow-graph.png)
 
 Plots the live flow rate (or weight) from the scale.
 
-- Tap the **g/s** chip ① to switch between flow rate (g/s) and weight (g);
-  the caption ② names the time window in view.
+- The chip ① is a legend: a coloured dot per scale and its unit. Tap it to
+  switch the espresso trace between flow rate (g/s) and weight (g); the
+  caption ② names the time window in view.
+- With a bench scale, the **BENCH** side of the swap card shows the bench
+  scale's weight in grams instead (its own amber trace, hundreds of grams on
+  the axis). *Beside the graph*, both scales share the plot: the espresso
+  trace against the left axis in its unit, the bench weight in amber against
+  its own right‑hand axis in grams, and the legend carries both dots.
 - During a shot the graph restarts and follows the shot, widening its time
   window as the shot runs on (see **Window growth**); when the shot ends it
   freezes for review (see **Review hold**) and then resumes.
 - The graph style (oscilloscope sweep vs scrolling) and smoothing are set under
-  **Settings → Scale → Shot settings**.
+  **Settings → Scale → Display**.
 
 ### Shot lifecycle notes (all modes)
 
@@ -427,11 +468,22 @@ How it behaves:
 
 ![Scale Bluetooth](docs/img/manual/scale-bluetooth.png)
 
+Apollo keeps up to two scales: the **espresso** scale on the drip tray, which
+runs every shot feature, and an optional **bench** scale for the counter,
+which is a weight readout with its own Tare (see the BENCH card above).
+
 - ② **Scan** — searches for supported scales (Bookoo Themis, Acaia Umbra /
   Lunar / Prochef / Pyxis, Varia Aku — Pyxis and Aku untested). Wake the scale first — most
-  sleep their Bluetooth quickly.
-- ① **Saved scale row** — **Connect / Disconnect** and **Forget** (no token
-  needed for scales).
+  sleep their Bluetooth quickly. Tapping a result asks **Use … as which
+  scale?** — **Espresso** or **Bench** — and saves it there, replacing
+  whatever that slot held. With one scale, choose **Espresso** and you will
+  never see a bench row.
+- ① **Saved scale rows** — one per slot, labelled **ESPRESSO** and **BENCH**,
+  each with **Connect / Disconnect** and **Forget** (no token needed for
+  scales). **Swap roles** appears once both are saved and exchanges them:
+  the slot is the role, so the scale that lands in ESPRESSO takes over the
+  shot features. (Swapping a *paired* Umbra between slots restarts Apollo
+  once, like pairing it did; it stays paired.)
 - **Pairing an Acaia Umbra** — choosing an Umbra from the scan list offers to
   *pair* it, the way a Lunar does, which keeps the Umbra's sleep/wake
   behaviour on Umbra firmware 1.0.8 (see the per‑scale notes below). The first
@@ -440,7 +492,9 @@ How it behaves:
   Apollo confirms by itself. If it hasn't paired after 30 seconds of blinking
   magenta, turn the Umbra off and enter pairing mode again. **Use unpaired**
   skips pairing and connects the normal way, with no restart. A paired Umbra
-  may show up as a Lunar ("LUNAR‑APOLLO") in Acaia's app.
+  may show up as a Lunar ("LUNAR‑APOLLO") in Acaia's app. An Umbra can be
+  paired in either slot, but only **one** Umbra at a time: a second one is
+  saved as a regular Bluetooth scale and Apollo says so.
 
 ### Shot settings
 
@@ -458,30 +512,19 @@ How it behaves:
   started the shot. Adjust it to match your machine's preinfusion setting as
   needed (roughly your typical paddle‑to‑first‑drip time); 0 starts the shot
   at the first drip.
-- ④ **Smoothing** *(Off / Light / Medium / Strong, default Light)* — smoothing on
-  the shot graph's line. Purely visual; detection and auto‑stop use the raw
-  stream.
-- ⑤ **Drop negative g/s** *(default on)* — clamps negative flow readings (cup
-  bumps, scale noise) to zero on the graph.
-- ⑥ **Oscilloscope graph** *(default on)* — the shot graph sweeps left→right and
-  wraps, oscilloscope style. Off, it scrolls continuously instead.
-- ⑦ **Window growth** *(Snap / Smooth / Continuous, default Continuous)* — how
-  the shot graph's time window widens as a shot runs on past 15 s.
-  **Continuous** keeps the whole shot filling the width, squeezing the trace
-  as it lengthens. **Snap** jumps to 30, 45 and 60 s instead. **Smooth** makes
-  the same jumps but eases each one over a second or so. Purely visual.
+
+These are all about how a shot *runs*; how the graph *looks* is under
+**Display** below.
 
 ### Device settings
 
 ![Scale device settings — a Bookoo Themis's rows](docs/img/manual/scale-device-settings.png)
 
-① **Battery display** is Apollo's own: how the SCALE card on Home shows the
-scale's battery — **Icon** (the level glyph, the default), **Percent**, or
-**Icon + %**. It is available whether or not a scale is connected.
-
-The rest are settings stored on the scale itself, adjusted over Bluetooth.
-Which rows appear — and their value choices — depends on the scale model (a
-Bookoo Themis's ② **Beep** and ③ **Auto‑off** shown above):
+Settings stored on the scale itself, adjusted over Bluetooth. With both an
+espresso and a bench scale saved, a **Scale** row at the top picks which one
+the rows below address (**Espresso** / **Bench**); with one scale it is that
+scale. Which rows appear — and their value choices — depends on the scale
+model (a Bookoo Themis's ① **Beep** and ② **Auto‑off** shown above):
 
 - **Bookoo Themis / Themis Ultra** — **Beep** (buzzer level Off / 1–3, the
   same range the Bookoo app offers) and **Auto‑off** (5–30 min). The scale
@@ -517,7 +560,34 @@ until the scale is connected (a **Connect** prompt appears right in the group
 when it isn't — no scale paired yet, the group points you to Bluetooth
 instead). Tap a value to advance to the next choice; the write goes to the
 scale immediately and sticks like any change made from the scale's own
-buttons. Like Tare, these rows are disabled while a shot is running.
+buttons. Like Tare, the espresso scale's rows are disabled while a shot is
+running; the bench scale's never are.
+
+### Display
+
+![Scale display settings](docs/img/manual/scale-display.png)
+
+Apollo's own preferences for how the scales show — none of these are sent to
+a scale.
+
+- ① **Battery display** — how the scale cards on Home show a scale's battery:
+  **Icon** (the level glyph, the default), **Percent**, or **Icon + %**.
+- ② **Smoothing** *(Off / Light / Medium / Strong, default Light)* — smoothing on
+  the shot graph's line. Purely visual; detection and auto‑stop use the raw
+  stream.
+- ③ **Drop negative g/s** *(default on)* — clamps negative flow readings (cup
+  bumps, scale noise) to zero on the graph.
+- ④ **Oscilloscope graph** *(default on)* — the shot graph sweeps left→right and
+  wraps, oscilloscope style. Off, it scrolls continuously instead.
+- ⑤ **Window growth** *(Snap / Smooth / Continuous, default Continuous)* — how
+  the shot graph's time window widens as a shot runs on past 15 s.
+  **Continuous** keeps the whole shot filling the width, squeezing the trace
+  as it lengthens. **Snap** jumps to 30, 45 and 60 s instead. **Smooth** makes
+  the same jumps but eases each one over a second or so. Purely visual.
+- ⑥ **Bench scale on Home** *(shown once a bench scale is saved)* — **In the
+  scale card** (the default: the SCALE card gains the ESPRESSO | BENCH switch)
+  or **Beside the graph** (its own card to the right of the flow graph, and
+  both scales on the graph). See the BENCH card under Home.
 
 ### Per‑scale nuances & recommended daily workflow
 
