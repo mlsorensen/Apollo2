@@ -1,0 +1,72 @@
+{
+ "epoch": {
+  "p4-wifi6-touch-lcd-4.3-rev3": 1,
+  "p4-wifi6-touch-lcd-4.3": 1,
+  "p4-wifi6-touch-lcd-5-rev3": 1,
+  "p4-wifi6-touch-lcd-5": 1,
+  "p4-wifi6-touch-lcd-x-8": 1,
+  "s3-touch-lcd-4.3c": 1
+ },
+ "layout": {
+  "p4-wifi6-touch-lcd-4.3-rev3": {
+   "epoch": 1,
+   "bootloader": {
+    "offset": "0x2000",
+    "size": 21568,
+    "sha256": "f78eeca3343b82ccca259c439de14ad98ad14e1cb31cbc69e077a8ddd96e1add",
+    "idf": "v5.5.4"
+   },
+   "partitions_sha256": "439dbef023a5218b6fc5c7db20ee0401bb38f2e06969c056bb58dcdef0394469"
+  },
+  "p4-wifi6-touch-lcd-4.3": {
+   "epoch": 1,
+   "bootloader": {
+    "offset": "0x2000",
+    "size": 21392,
+    "sha256": "de4d671b677d9025b1bc7da3053263ef649d9cb97ce430a1a787ae1b8332b088",
+    "idf": "v5.5.4"
+   },
+   "partitions_sha256": "439dbef023a5218b6fc5c7db20ee0401bb38f2e06969c056bb58dcdef0394469"
+  },
+  "p4-wifi6-touch-lcd-5-rev3": {
+   "epoch": 1,
+   "bootloader": {
+    "offset": "0x2000",
+    "size": 21568,
+    "sha256": "f78eeca3343b82ccca259c439de14ad98ad14e1cb31cbc69e077a8ddd96e1add",
+    "idf": "v5.5.4"
+   },
+   "partitions_sha256": "439dbef023a5218b6fc5c7db20ee0401bb38f2e06969c056bb58dcdef0394469"
+  },
+  "p4-wifi6-touch-lcd-5": {
+   "epoch": 1,
+   "bootloader": {
+    "offset": "0x2000",
+    "size": 21392,
+    "sha256": "de4d671b677d9025b1bc7da3053263ef649d9cb97ce430a1a787ae1b8332b088",
+    "idf": "v5.5.4"
+   },
+   "partitions_sha256": "439dbef023a5218b6fc5c7db20ee0401bb38f2e06969c056bb58dcdef0394469"
+  },
+  "p4-wifi6-touch-lcd-x-8": {
+   "epoch": 1,
+   "bootloader": {
+    "offset": "0x2000",
+    "size": 21568,
+    "sha256": "f78eeca3343b82ccca259c439de14ad98ad14e1cb31cbc69e077a8ddd96e1add",
+    "idf": "v5.5.4"
+   },
+   "partitions_sha256": "439dbef023a5218b6fc5c7db20ee0401bb38f2e06969c056bb58dcdef0394469"
+  },
+  "s3-touch-lcd-4.3c": {
+   "epoch": 1,
+   "bootloader": {
+    "offset": "0x0000",
+    "size": 19984,
+    "sha256": "b41be55ae9a52aeeb21645c51b86c14027f84c2c91bf67bee6aa0e1b15d18e8b",
+    "idf": "v5.5.4"
+   },
+   "partitions_sha256": "bd0f7954aca2ef7d925ee21aaa1f3dc8822d1d6ce5cbbd26a135e5886bfff6ce"
+  }
+ }
+}
