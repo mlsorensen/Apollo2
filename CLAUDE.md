@@ -370,11 +370,12 @@ existing buffer) over adding memory. Applies to fixes as much as features.
 
 1. `include/version.h` — bump `fw::kVersion` to the tag (minus the `v`). The
    device compares THIS to releases.json; forget it and the new image reports
-   the old version and re-prompts forever (v0.12.3, 2026-09-10). CI now fails
-   the build if the binary's kVersion != the tag, but bump it first anyway.
-   (The image carries it as `apollo-fw=<version>` — kVersion points into a
-   named array, because the xtensa linker tail-merged the bare "1.1.0" into
-   a TZ string and CI refused v1.1.0 on the S3, 2026-10-23. Keep that shape.)
+   the old version and re-prompts forever (v0.12.3, 2026-09-10). CI fails
+   the build if kVersion != the tag (a compile-time static_assert against
+   `APOLLO_EXPECT_VERSION`, see include/build_check.h; the same for the
+   slug via `APOLLO_EXPECT_SLUG` — never a grep of the image: the xtensa
+   linker tail-merged "1.1.0" into a TZ string and refused a correct v1.1.0
+   build, 2026-10-23), but bump it first anyway.
 2. `CHANGELOG.md` — real notes under `## vX.Y.Z` (the workflow extracts them).
    **Concise (owner, 2026-09-12): a bolded lead-in plus one or two sentences
    per bullet, ~50 words at the very most.** Say what the user sees.

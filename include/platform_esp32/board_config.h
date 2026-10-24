@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include "build_check.h"
+
 // Per-board pin & panel configuration. Exactly ONE board is selected at build
 // time via a -DBOARD_* flag in platformio.ini. This is the single place board
 // pins live — driver code reads these constants and never hardcodes a pin.
@@ -9,11 +11,11 @@
 // To add a board (e.g. the 4.3 RGB panel later), add another #elif block with
 // the same constant names that that board's driver needs.
 //
-// kUpdateSlug is `inline` on purpose and must STAY inline: a plain
-// `constexpr char[]` has internal linkage, so every translation unit that uses
-// it gets its OWN copy of the string, and the release workflow asserts the
-// slug appears EXACTLY ONCE in the binary (it is the self-updater's URL — two
-// copies fail the build, as adding a second user of it did).
+// kUpdateSlug is `inline` on purpose: a plain `constexpr char[]` has internal
+// linkage, so every translation unit that uses it would carry its OWN copy of
+// the string. It is the self-updater's URL, and a release build proves it is
+// the matrix row's board at compile time (the static_assert at the end of
+// this file, driven by APOLLO_EXPECT_SLUG — see build_check.h).
 
 namespace board {
 
@@ -912,5 +914,14 @@ constexpr int kSdLdoChannel = 4;
 #define BOARD_UI_SCALE 1.0f
 #endif
 constexpr float kUiScale = BOARD_UI_SCALE;
+
+// Release builds prove the slug is this matrix row's board (build_check.h):
+// the device fetches firmware/app/<kUpdateSlug>.bin, so a mix-up here would
+// have it install another board's image. Every board's slug is in this header,
+// so only the COMPILED constant can be checked, never the source.
+#ifdef APOLLO_EXPECT_SLUG
+static_assert(build_check::str_eq(kUpdateSlug, APOLLO_STRINGIZE(APOLLO_EXPECT_SLUG)),
+              "board::kUpdateSlug != the release matrix's board: the self-updater would fetch the wrong image");
+#endif
 
 }  // namespace board

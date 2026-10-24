@@ -1,5 +1,7 @@
 #pragma once
 
+#include "build_check.h"
+
 // This remote's own firmware version — the software running on the ESP32, NOT the
 // Micra. Shown in Stats > Info ("Remote FW") so a flashed device is identifiable.
 // Bump kVersion on releases; the build also stamps the git revision (FW_GIT_REV,
@@ -7,16 +9,13 @@
 
 namespace fw {
 
-// kVersion POINTS INTO a named array rather than being a bare literal: the
-// release workflow proves the tag by grepping the app image for
-// "apollo-fw=<tag>\0", and a bare "1.1.0" literal is not guaranteed to exist
-// on its own — the xtensa linker tail-merges short literals into any .rodata
-// string that ends the same way (v1.1.0 vanished into the TZ table's
-// "...,M3.2.0,M11.1.0" on the S3 and CI refused the release, 2026-10-23). A
-// named array has its own section, which is never merged, and the pointer
-// keeps it from being garbage-collected.
-inline constexpr char kVersionTag[] = "apollo-fw=1.1.0";
-inline constexpr const char* kVersion = kVersionTag + sizeof("apollo-fw=") - 1;
+inline constexpr const char* kVersion = "1.1.0";
+
+// Release builds prove kVersion == the tag at compile time (build_check.h).
+#ifdef APOLLO_EXPECT_VERSION
+static_assert(build_check::str_eq(kVersion, APOLLO_STRINGIZE(APOLLO_EXPECT_VERSION)),
+              "fw::kVersion != the release tag: bump include/version.h before tagging");
+#endif
 
 // What lies under the app on this board (pinned bootloader + partition table),
 // which OTA can't change. Comes from platformio.ini `custom_flash_epoch` via
