@@ -206,6 +206,81 @@ display isn't up.
   OFF on purpose (Link in copper) — the opposite of the shipping firmware.
   Reuses display.cpp/touch.cpp/system.cpp only; no NVS, no radio. Internal.
 
+## Two scales + the radio arbiter (v1.2, 2026-10-24)
+
+Two scale SLOTS: ESPRESSO (every shot role: auto-stop, the tare at shot
+start, shot detect, the auto-flush cup-off, the graph) and BENCH (a weight
+readout + its own Tare, never refused mid-shot). The slot IS the role, and
+every save goes Scan -> tap a result -> "Use <name> as which scale?" modal
+(no auto-slotting; a one-scale user taps Espresso and never sees a bench
+row). ROLES OVER LINKS (`core::ScaleRoles`, include/core/scale_roles.h):
+the two platform::ScaleLinks (A = radio slot kScaleEspresso, B =
+kScaleBench) are bound to their radio slot, task and — for a paired Umbra —
+the partner GATT service, none of which can move at runtime; so every
+consumer of "the espresso scale" (BrewController, the Home cards, Device
+settings) reads through a `RoleScale` proxy, and `Swap roles` flips the
+two role pointers AND exchanges the stored keys (so a rolled-back build
+still finds its espresso scale under the original keys) — both links keep
+their connections, no reconnect, no restart. Pointers flip BEFORE the keys
+(the learned-type persister resolves its slot via the roles). At boot the
+mapping is identity (link A seeded from the espresso keys). Corollary: the
+shot park follows the ROLE — after a swap the bench role sits on radio
+slot kScaleEspresso and main.cpp parks THAT slot; the espresso ROLE is
+never shot-parked (it must reconnect mid-shot). The provisioner's
+`link_for(slot)` / `slot_of(link)` are the only role<->link lookups. NVS: the espresso keys keep their original names (`smac`/`sname`/
+`sprtnr`/`sprpend`/`satype`), the bench slot is the same set suffixed `2`,
+plus `benchhome` (0 in the scale card, 1 beside the graph). Umbra partner
+mode works in EITHER slot but only ONE at a time (one GATT service, one
+inbound session): `ScaleProvisioner::save_scale` refuses a second and the UI
+saves it as a plain link + toasts. `core::IScaleProvisioner` takes a
+`ScaleSlot`; `App::build` takes the bench `IScale*` (nullable).
+
+Home: `build_home_tab(..., scale_enabled, bench_enabled, bench_mode, ...)`.
+Mode 0 = the SCALE card's caption becomes an ESPRESSO | BENCH switch and the
+two cards share the panel slot (`show_bench_side`; a shot starting snaps
+back to ESPRESSO from pump_scale_chart). Mode 1 = the lower row splits 2:1,
+bench card beside the graph. Bench-only = the bench card in the SCALE slot.
+Graph: a third ring `bench_weights` (no-data = `kFlowNoData`, pen up —
+never 0, so one scale's drop doesn't blank the other); `flow_mode` 2 = the
+bench ring in grams on the left axis (BENCH side / bench-only), `bench_
+overlay` = both series on one canvas, bench against its own right axis
+(`flow_ylabels_r`). The unit chip is a legend (dot + unit per series); the
+tap toggles only the espresso unit. Theme role `bench` (amber) for all of it.
+Settings > Scale: Bluetooth (two rows + Swap), Shot settings (Target /
+Review hold / Detect lead-in ONLY), Device settings (an Espresso/Bench
+picker when both saved, then the scale's own rows), Display (Battery
+display, Smoothing, Drop negative g/s, Oscilloscope graph, Window growth,
+Bench scale on Home). Sim: `FakeScale::set_bench`, render poses 1 (BENCH
+side) / 2 (save modal), renders `home_bench_*`, `scale_bt_bench`,
+`scale_bt_modal`, `scale_display*`, `scale_device_pick`.
+
+RADIO ARBITER (`core::RadioArbiter`, include/core/radio_arbiter.h; host
+test `make test-radio`): the NimBLE host runs ONE listen at a time (a
+connect-by-address or a scan), refuses to scan while a connect is pending,
+and its connect-cancel is GLOBAL (`ble_gap_conn_cancel` aborts whichever
+client is initiating). So: the arbiter is the ONLY thing that cancels, only
+ever the current holder, through per-slot hold hooks; core link code never
+calls `ble_.cancel_connect()`. The links POLL it from their own tasks (no
+task of its own): `poll()` grants kIdle / kDirectConnect / kFinderChunk /
+kUserScan (top priority, preempts anything, including the slot's own
+attempt); `release()` with kConnected / kFailed / kPreempted (NOT a failure:
+no fail count, no backoff) / kScanDone. The finder: one scale missing ->
+the direct 10 s listen as before; two missing -> one passive address-matched
+chunk (`ICentral::scan_for`, stores nothing, stops on the first hit) whose
+SIGHTING the slot's own task turns into a 3 s direct connect (connections
+are never handed across tasks); empty chunks back off 1 -> 5 -> 20 s; a
+chunk counts as serving every missing slot (fairness vs the Micra). Parking
+is a per-slot BITMASK (`ParkSource` saver / portal / shot): the bench slot is
+shot-parked while `BrewSnapshot::phase != kIdle`, the espresso ROLE never
+(it must reconnect mid-shot) — "bench" meaning whichever radio slot holds
+the bench role after a Swap roles (see ROLES OVER LINKS above). The partner-mode Umbra's pause is driven by
+saver/portal only — yielding the radio must never doze it (the old shared
+pause level did, on every Micra Settings scan). Address-type learning
+compares the used type with the STORED one (a sighting hands in the
+advertised type); the Micra learns its type too (`matype`). Max 3
+connections (prebuilt libs): Micra + two scales, or Micra + one inbound
+partner Umbra + one scale.
+
 ## SD mount policy + Settings > Apollo > Storage (v1.0.3)
 
 The slot is probed ONCE per boot — `ShotStore::mount_early()` in setup(),

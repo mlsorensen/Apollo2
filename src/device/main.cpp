@@ -89,7 +89,7 @@ platform::ScaleLink g_scale2{g_radio, core::RadioSlot::kScaleBench};
 // consumer of "the espresso scale" below reads through g_roles, so Swap
 // roles is a pointer swap — no reconnect, no restart (core/scale_roles.h).
 core::ScaleRoles g_roles{g_scale, g_scale2};
-platform::ScaleProvisioner g_scale_provisioner{g_scale, g_scale2, g_roles, g_config};
+platform::ScaleProvisioner g_scale_provisioner{g_roles, g_config};
 // Brew-by-weight: paddle relay + shot state machine over the paddle + scale
 // ports (core logic; polled from loop()).
 core::BrewController g_brew{platform::paddle(), g_roles.espresso()};
@@ -929,22 +929,17 @@ void loop() {
     // radio while a shot runs or sits in review: the espresso scale is
     // streaming at 10 Hz and may itself need to reconnect mid-shot — which
     // stays allowed, so the espresso slot is never shot-parked.
-    // "The bench" is a role: whichever link holds it right now. A swap only
-    // happens with no shot running (App refuses it otherwise), so the bit is
-    // clear whenever the slot changes; the old slot is unparked regardless.
-    static bool shot_prev = false;
-    static core::RadioSlot bench_slot_prev = core::RadioSlot::kScaleBench;
+    // "The bench" is a ROLE: after a Swap roles it is the link on the
+    // kScaleEspresso radio slot. Both bits are driven from (shot, swapped)
+    // on any change — set_parked is idempotent, so no unpark bookkeeping.
+    static bool shot_prev = false, swapped_prev = false;
     const bool shot = g_brew.snapshot().phase != core::ShotPhase::kIdle;
-    const core::RadioSlot bench_slot =
-        g_roles.swapped() ? core::RadioSlot::kScaleEspresso : core::RadioSlot::kScaleBench;
-    if (bench_slot != bench_slot_prev) {
-      g_radio.set_parked(bench_slot_prev, core::ParkSource::kShot, false);
-      bench_slot_prev = bench_slot;
-      shot_prev = false;
-    }
-    if (shot != shot_prev) {
+    const bool swapped = g_roles.swapped();
+    if (shot != shot_prev || swapped != swapped_prev) {
       shot_prev = shot;
-      g_radio.set_parked(bench_slot, core::ParkSource::kShot, shot);
+      swapped_prev = swapped;
+      g_radio.set_parked(core::RadioSlot::kScaleBench, core::ParkSource::kShot, shot && !swapped);
+      g_radio.set_parked(core::RadioSlot::kScaleEspresso, core::ParkSource::kShot, shot && swapped);
     }
   }
 

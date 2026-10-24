@@ -19,7 +19,9 @@ class Config;
 // none).
 class ScaleProvisioner : public core::IScaleProvisioner {
  public:
-  ScaleProvisioner(ScaleLink& a, ScaleLink& b, core::ScaleRoles& roles, Config& config);
+  // `roles` was built over the device's two platform::ScaleLinks (link A =
+  // espresso at boot); the provisioner recovers them from it.
+  ScaleProvisioner(core::ScaleRoles& roles, Config& config);
 
   // The link holding a role right now (boot: A = espresso, B = bench), and
   // the role a link holds — device main needs both (partner registration,
@@ -47,11 +49,10 @@ class ScaleProvisioner : public core::IScaleProvisioner {
 
  private:
   ScaleLink& link(core::ScaleSlot slot) const { return link_for(slot); }
+  ScaleLink& link_a() const;  // the always-running link (scans run on its task)
   // Seed the link holding a role from that slot's saved config (save, forget).
   void apply_slot(core::ScaleSlot slot);
 
-  ScaleLink& a_;
-  ScaleLink& b_;
   core::ScaleRoles& roles_;
   Config& config_;
 };

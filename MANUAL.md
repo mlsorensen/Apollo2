@@ -482,8 +482,9 @@ which is a weight readout with its own Tare (see the BENCH card above).
   each with **Connect / Disconnect** and **Forget** (no token needed for
   scales). **Swap roles** appears once both are saved and exchanges them:
   the slot is the role, so the scale that lands in ESPRESSO takes over the
-  shot features. (Swapping a *paired* Umbra between slots restarts Apollo
-  once, like pairing it did; it stays paired.)
+  shot features. Both scales stay connected through the swap (a paired Umbra
+  stays paired); the graph starts afresh, since its history belonged to the
+  other role.
 - **Pairing an Acaia Umbra** — choosing an Umbra from the scan list offers to
   *pair* it, the way a Lunar does, which keeps the Umbra's sleep/wake
   behaviour on Umbra firmware 1.0.8 (see the per‑scale notes below). The first

@@ -68,9 +68,9 @@ class ScaleRoles {
   ScaleSlot slot_of(const IScale& link) const {
     return &link == bench_.target() ? ScaleSlot::kBench : ScaleSlot::kEspresso;
   }
-  // Link A / B by boot identity (A = seeded from the espresso keys).
+  // Link A by boot identity (seeded from the espresso keys; its task always
+  // runs, so the user's Settings scan is dispatched to it).
   IScale& link_a() { return *a_; }
-  IScale& link_b() { return *b_; }
 
  private:
   IScale* a_;

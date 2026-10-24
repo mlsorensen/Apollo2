@@ -14,9 +14,10 @@
 // tare at shot start, shot detect, the auto-flush cup-off, the graph); the
 // BENCH scale is a weight readout with its own Tare — a counter scale whose
 // screen a plate hides. The slot IS the role: "Swap roles" exchanges the two
-// saved scales, it never re-labels them. Every save goes through the same
-// flow — Scan, tap a result, choose Espresso or Bench — into that slot,
-// replacing whatever was there; nothing is ever auto-slotted.
+// saved scales' keys and, at runtime, which link holds which role
+// (core::ScaleRoles) — the links keep their connections. Every save goes
+// through the same flow — Scan, tap a result, choose Espresso or Bench —
+// into that slot, replacing whatever was there; nothing is ever auto-slotted.
 
 namespace core {
 

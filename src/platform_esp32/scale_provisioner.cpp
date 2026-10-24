@@ -8,13 +8,18 @@ namespace platform {
 
 using core::ScaleSlot;
 
-ScaleProvisioner::ScaleProvisioner(ScaleLink& a, ScaleLink& b, core::ScaleRoles& roles,
-                                   Config& config)
-    : a_(a), b_(b), roles_(roles), config_(config) {}
+ScaleProvisioner::ScaleProvisioner(core::ScaleRoles& roles, Config& config)
+    : roles_(roles), config_(config) {}
 
+// The roles hold the links as core::IScale; on the device they are the two
+// platform::ScaleLinks by construction (device main builds g_roles over
+// them), so the downcast is exact.
 ScaleLink& ScaleProvisioner::link_for(ScaleSlot slot) const {
-  // The roles know the links as core::IScale; A and B are the only two.
-  return &roles_.link_for(slot) == static_cast<core::IScale*>(&b_) ? b_ : a_;
+  return static_cast<ScaleLink&>(roles_.link_for(slot));
+}
+
+ScaleLink& ScaleProvisioner::link_a() const {
+  return static_cast<ScaleLink&>(roles_.link_a());
 }
 
 core::ScaleSlot ScaleProvisioner::slot_of(const ScaleLink& link) const {
@@ -24,12 +29,12 @@ core::ScaleSlot ScaleProvisioner::slot_of(const ScaleLink& link) const {
 // Scans run on link A's task (either would do: the arbiter grants the user
 // scan to whichever slot asks, and A's task always runs); results are read
 // back from it.
-void ScaleProvisioner::start_scan() { a_.request_scan(); }
+void ScaleProvisioner::start_scan() { link_a().request_scan(); }
 
-bool ScaleProvisioner::scanning() const { return a_.scanning(); }
+bool ScaleProvisioner::scanning() const { return link_a().scanning(); }
 
 std::vector<core::ScanResult> ScaleProvisioner::scan_results() const {
-  return a_.scan_results();
+  return link_a().scan_results();
 }
 
 void ScaleProvisioner::apply_slot(ScaleSlot slot) {
@@ -62,15 +67,21 @@ std::string ScaleProvisioner::saved_name(ScaleSlot slot) const {
 }
 
 void ScaleProvisioner::swap_roles() {
-  // The saved keys swap (so a rolled-back build reads the espresso keys as
-  // the espresso scale) and the role pointers swap with them; the links —
+  // The role pointers swap and the saved keys swap with them (so a rolled-
+  // back build reads the espresso keys as the espresso scale); the links —
   // their connections, names, learned types, a paired Umbra's partner
   // session — stay exactly where they are. Nothing reconnects, nothing
   // restarts. The next boot seeds link A from the espresso keys, i.e. the
   // scale that is espresso NOW (link B's), with the identity mapping: the
   // two views agree because the keys and the pointers moved together.
-  config_.swap_scales();
+  // POINTERS FIRST: a link's learned-type persister (on its BLE task)
+  // resolves its slot through the roles and writes that slot's keys. With
+  // the pointers already flipped, a write landing between the two steps
+  // goes to the keys that still hold that link's own record; the key swap
+  // then carries it along. Keys first would have stamped it onto the other
+  // scale's record.
   roles_.swap();
+  config_.swap_scales();
 }
 
 bool ScaleProvisioner::partner_pairing_complete() const {
