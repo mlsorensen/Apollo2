@@ -7,7 +7,16 @@
 
 namespace fw {
 
-inline constexpr const char* kVersion = "1.1.0";
+// kVersion POINTS INTO a named array rather than being a bare literal: the
+// release workflow proves the tag by grepping the app image for
+// "apollo-fw=<tag>\0", and a bare "1.1.0" literal is not guaranteed to exist
+// on its own — the xtensa linker tail-merges short literals into any .rodata
+// string that ends the same way (v1.1.0 vanished into the TZ table's
+// "...,M3.2.0,M11.1.0" on the S3 and CI refused the release, 2026-10-23). A
+// named array has its own section, which is never merged, and the pointer
+// keeps it from being garbage-collected.
+inline constexpr char kVersionTag[] = "apollo-fw=1.1.0";
+inline constexpr const char* kVersion = kVersionTag + sizeof("apollo-fw=") - 1;
 
 // What lies under the app on this board (pinned bootloader + partition table),
 // which OTA can't change. Comes from platformio.ini `custom_flash_epoch` via
