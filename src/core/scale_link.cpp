@@ -257,7 +257,11 @@ void ScaleLink::run() {
                addr_type_name(s.type));
           arb_.report_sighting(s.slot, s.type, now_ms());
         }
-        arb_.release(slot_, g.ticket, ReleaseResult::kScanDone, now_ms());
+        // A chunk cut short (user scan, park, Forget) is not an empty one:
+        // it must not grow the backoff.
+        const bool pre = arb_.was_preempted(slot_, g.ticket);
+        arb_.release(slot_, g.ticket, pre ? ReleaseResult::kPreempted : ReleaseResult::kScanDone,
+                     now_ms());
         continue;
       }
       if (g.work != RadioWork::kDirectConnect) {

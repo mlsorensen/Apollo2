@@ -28,6 +28,7 @@ constexpr char kDisFirmware[] = "2a26";
 constexpr char kDisSoftware[] = "2a28";
 
 constexpr uint32_t kReconnectBackoffMs = 3000;
+constexpr int kKnownTypeFailLimit = 3;  // then relearn with a both-types try
 // Per address-type attempt. A present, advertising Micra connects in ~1-2s;
 // the retry loop covers the rest, so failing fast beats camping on the radio —
 // every try holds the shared radio (core::RadioArbiter), and a 30s value here
@@ -186,7 +187,12 @@ void MicraLink::run() {
         sleep_ms(100);
         continue;
       }
-      const bool ok = do_connect(addr, token, g.addr_type);
+      // Safety valve: a stored type that keeps failing is retried as unknown
+      // (both types) and relearned — see known_type_fails_.
+      const bool relearn = g.addr_type != AddrType::kUnknown &&
+                           known_type_fails_ >= kKnownTypeFailLimit;
+      const AddrType try_type = relearn ? AddrType::kUnknown : g.addr_type;
+      const bool ok = do_connect(addr, token, try_type);
       const bool preempted = arb_.was_preempted(RadioSlot::kMicra, g.ticket);
       arb_.release(RadioSlot::kMicra, g.ticket,
                    ok ? ReleaseResult::kConnected
@@ -195,6 +201,8 @@ void MicraLink::run() {
       if (!ok) {
         set_link(Link::Disconnected);  // unreachable -> back off and retry
         if (preempted) continue;       // a yielded try is not a failed one
+        if (try_type != AddrType::kUnknown) ++known_type_fails_;
+        else if (relearn) known_type_fails_ = 0;  // one both-types try per limit
         // Sliced so a Scan tapped mid-backoff runs promptly, not seconds later.
         for (uint32_t waited = 0; waited < kReconnectBackoffMs &&
                                   !arb_.user_scan_pending(RadioSlot::kMicra);
@@ -219,6 +227,7 @@ void MicraLink::run() {
         set_link(Link::NeedsToken);
         continue;
       }
+      known_type_fails_ = 0;
       mark(true);
       set_link(Link::Connected);
       last_refresh = now_ms();

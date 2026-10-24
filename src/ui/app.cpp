@@ -2130,7 +2130,12 @@ void App::toggle_bench_connection() {
   update_scale_view();
 }
 
-void App::show_bench_side(bool bench) { ui::show_bench_side(home_, bench); }
+void App::show_bench_side(bool bench) {
+  // The shot plot owns the graph from a shot's start through its review:
+  // the BENCH side waits (update_home greys its pill meanwhile).
+  if (bench && brew_ != nullptr && brew_->snapshot().phase != core::ShotPhase::kIdle) return;
+  ui::show_bench_side(home_, bench);
+}
 
 // Scale > Device settings addresses the picked slot (the espresso scale
 // unless the picker says Bench).
@@ -2883,7 +2888,11 @@ void App::pump_scale_chart() {
     stop_hint_seen_ = bsnap.stop_hint;
     const bool entering_brew =
         bsnap.phase == core::ShotPhase::kBrewing && shot_phase_ != core::ShotPhase::kBrewing;
-    if (entering_brew) {
+    // A bench-only unit has no espresso scale to plot a shot from: its graph
+    // keeps sweeping the bench weight and the shot plot never starts.
+    if (entering_brew && home_.bench_only) {
+      // nothing to plot
+    } else if (entering_brew) {
       // A shot starting while the BENCH side of the swap card shows: snap
       // back to ESPRESSO so the shot (and its plot) is never hidden.
       if (home_.bench_side) ui::show_bench_side(home_, false);
@@ -2920,6 +2929,8 @@ void App::pump_scale_chart() {
           // review_shot_plot would double-subtract the baseline and
           // double-shift the timestamps.
           ui::finish_shot_plot(home_);
+        } else if (home_.bench_only) {
+          // no espresso scale: nothing to repaint
         } else {
           // Handoff never happened (no canvas on this layout at detection):
           // the ring still holds absolute stamps and raw grams — one-shot,
@@ -4934,6 +4945,9 @@ void App::forget_bench() {
 
 void App::swap_scale_roles() {
   if (scale_provisioner_ == nullptr) return;
+  // Not mid-shot (or mid-review): the espresso link is the one the stop
+  // math and the frozen readout run on, and a swap drops it.
+  if (brew_ != nullptr && brew_->snapshot().phase != core::ShotPhase::kIdle) return;
   // A partner-mode Umbra changing slots needs the partner service registered
   // on the other link, which only happens at boot: same restart path as
   // saving one fresh (the Umbra stays paired, so no pairing prompt).

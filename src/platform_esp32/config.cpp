@@ -162,6 +162,9 @@ void Config::save(const std::string& mac, const std::string& name) {
   p.begin(kNamespace, /*readOnly=*/false);
   p.putString(kMacKey, mac.c_str());
   p.putString(kNameKey, name.c_str());
+  // A different machine: its address type is unknown until a connect learns
+  // it. Keeping the old one would pin every try to the wrong type.
+  p.remove(kMicraAddrTypeKey);
   p.end();
 }
 

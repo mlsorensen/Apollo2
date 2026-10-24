@@ -991,6 +991,7 @@ lv_obj_t* make_pill(lv_obj_t* seg, const char* text, const lv_font_t* font, uint
   lv_obj_set_style_pad_hor(b, ui::dp(12), 0);
   lv_obj_set_style_pad_ver(b, ui::dp(7), 0);
   lv_obj_set_style_radius(b, ui::dp(14), 0);
+  lv_obj_set_style_opa(b, LV_OPA_40, LV_STATE_DISABLED);
   // The pill is caption-sized; the thumb isn't. Catch taps well around it.
   lv_obj_set_ext_click_area(b, ui::dp(10));
   lv_obj_set_style_bg_color(b, lv_color_hex(color), 0);
@@ -1511,6 +1512,13 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     if (w.bench_tare_btn != nullptr) {
       if (bench->connected) lv_obj_remove_state(w.bench_tare_btn, LV_STATE_DISABLED);
       else lv_obj_add_state(w.bench_tare_btn, LV_STATE_DISABLED);
+    }
+    // The BENCH pills grey out from a shot's start through its review: the
+    // shot plot owns the graph and the espresso card must stay in view.
+    for (int i = 0; i < 2; ++i) {
+      if (w.seg_bench[i] == nullptr) continue;
+      if (brew.phase != core::ShotPhase::kIdle) lv_obj_add_state(w.seg_bench[i], LV_STATE_DISABLED);
+      else lv_obj_remove_state(w.seg_bench[i], LV_STATE_DISABLED);
     }
     if (w.bench_connect_btn != nullptr) {
       const bool connecting = bench_connect_enabled && !bench->connected;
@@ -2974,16 +2982,17 @@ void show_bench_side(HomeWidgets& w, bool bench) {
     }
   }
   // The graph follows the card: bench grams on the BENCH side, the espresso
-  // unit it had before on the ESPRESSO side. During a shot the shot plot owns
-  // the canvas (and the switch is already back on ESPRESSO).
-  if (w.flow_canvas == nullptr || w.bench_weights == nullptr) return;
+  // unit it had before on the ESPRESSO side. While the shot plot owns the
+  // canvas (App refuses the BENCH side then; the snap back to ESPRESSO at a
+  // shot's start arrives before begin_shot_plot) the mode is left alone — the
+  // shot plot reads it for its axis and unit.
+  if (w.flow_canvas == nullptr || w.bench_weights == nullptr || w.flow_shot_plot) return;
   const int want = bench ? 2 : w.flow_mode_saved;
   if (want == w.flow_mode) return;
   if (w.flow_mode != 2) w.flow_mode_saved = w.flow_mode;
   w.flow_mode = want;
   w.flow_prev_y = -1;
   update_flow_legend(w);
-  if (w.flow_shot_plot) return;  // the live sweep picks the mode up after review
   refit_flow_axis(w);
 }
 

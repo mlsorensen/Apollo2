@@ -28,8 +28,13 @@ class ScaleLink : public core::ScaleLink {
   bool partner_registered() const { return partner_.ready(); }
   void hold_partner(bool held) { partner_.hold(held); }
 
-  // Start the background task (non-blocking). Empty address -> idle until set.
+  // Seed the link and start its background task (non-blocking). The espresso
+  // link's task always runs (it also serves the Settings scan); the bench
+  // link's starts only once a bench scale is saved — at boot with a saved
+  // address, or on the first save via set_address — so units without one
+  // never pay its 4 KB stack.
   void begin(std::string address, core::AddrType type);
+  void set_address(std::string address, core::AddrType type = core::AddrType::kUnknown);
   void set_name(std::string name);
   void set_partner_mode(bool enabled);
   void set_connect_enabled(bool enabled);
@@ -44,8 +49,11 @@ class ScaleLink : public core::ScaleLink {
   NimbleCentral& central() { return central_; }
 
  private:
+  void start_task();
+
   NimbleCentral central_;
   UmbraPartner partner_;
+  bool task_started_ = false;
 };
 
 }  // namespace platform

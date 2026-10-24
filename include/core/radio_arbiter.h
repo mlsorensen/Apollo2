@@ -162,7 +162,7 @@ class RadioArbiter {
   bool fresh_sighting_locked(const Slot& s, uint32_t now_ms) const;
   void preempt_holder_locked(HookCall& call);
   void touch_locked();  // state changed: restart the chunk backoff
-  void run_hook(const HookCall& call);
+  void run_hook_locked(const HookCall& call);  // with m_ held (see the .cpp)
 
   mutable std::mutex m_;
   Slot slots_[static_cast<int>(RadioSlot::kCount)];

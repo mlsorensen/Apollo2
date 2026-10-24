@@ -13,7 +13,19 @@ void task_entry(void* arg) { static_cast<core::ScaleLink*>(arg)->run(); }
 
 void ScaleLink::begin(std::string address, core::AddrType type) {
   partner_.set_enabled(partner_mode() && connect_enabled());
-  set_address(std::move(address), type);
+  set_address(std::move(address), type);  // starts the bench task if saved
+  if (slot() == core::RadioSlot::kScaleEspresso) start_task();
+}
+
+void ScaleLink::set_address(std::string address, core::AddrType type) {
+  const bool have = !address.empty();
+  core::ScaleLink::set_address(std::move(address), type);
+  if (have) start_task();  // a bench scale just got saved: bring its link up
+}
+
+void ScaleLink::start_task() {
+  if (task_started_) return;
+  task_started_ = true;
   // 4096: measured peak 2,356 (Acaia) / 2,300 (Bookoo), both connected +
   // subscribed, and including a Settings scan. ~1.7K margin.
   xTaskCreatePinnedToCore(&task_entry, slot() == core::RadioSlot::kScaleBench

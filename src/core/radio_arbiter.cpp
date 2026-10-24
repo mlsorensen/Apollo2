@@ -38,11 +38,11 @@ void RadioArbiter::set_wanted(RadioSlot s, bool wanted) {
     x.wanted = wanted;
     // No longer wanted while mid-attempt (Disconnect, Forget): abort it now,
     // not when its timeout runs out.
-    if (!wanted && holder_ == idx(s) && holder_work_ == RadioWork::kDirectConnect)
+    if (!wanted && holder_ == idx(s) && holder_work_ != RadioWork::kUserScan)
       preempt_holder_locked(call);
     touch_locked();
+    run_hook_locked(call);
   }
-  run_hook(call);
 }
 
 void RadioArbiter::set_connected(RadioSlot s, bool connected) {
@@ -72,12 +72,13 @@ void RadioArbiter::set_parked(RadioSlot s, ParkSource src, bool parked) {
                                 : static_cast<uint8_t>(x.parked & ~bit);
     if (next == x.parked) return;
     x.parked = next;
-    // Parking the slot that is mid-attempt: yield the radio now.
-    if (x.parked != 0 && holder_ == idx(s) && holder_work_ == RadioWork::kDirectConnect)
+    // Parking the slot that is mid-attempt (a connect OR a finder chunk):
+    // yield the radio now.
+    if (x.parked != 0 && holder_ == idx(s) && holder_work_ != RadioWork::kUserScan)
       preempt_holder_locked(call);
     touch_locked();
+    run_hook_locked(call);
   }
-  run_hook(call);
 }
 
 void RadioArbiter::request_user_scan(RadioSlot s) {
@@ -89,18 +90,21 @@ void RadioArbiter::request_user_scan(RadioSlot s) {
     // attempt, which is blocked in the transport until cancelled.
     if (holder_ >= 0 && holder_work_ != RadioWork::kUserScan) preempt_holder_locked(call);
     touch_locked();
+    run_hook_locked(call);
   }
-  run_hook(call);
 }
 
 void RadioArbiter::abort_slot(RadioSlot s) {
   HookCall call;
   {
     std::lock_guard<std::mutex> lk(m_);
-    if (holder_ == idx(s) && holder_work_ == RadioWork::kDirectConnect)
+    // A Forget / Disconnect / re-address while this slot is connecting OR
+    // running a finder chunk: cancel it (a sighting for a forgotten address
+    // would otherwise still come back).
+    if (holder_ == idx(s) && holder_work_ != RadioWork::kUserScan)
       preempt_holder_locked(call);
+    run_hook_locked(call);
   }
-  run_hook(call);
 }
 
 void RadioArbiter::set_hold_hook(RadioSlot s, std::function<void(bool)> hook) {
@@ -128,6 +132,7 @@ RadioGrant RadioArbiter::poll(RadioSlot slot, uint32_t now_ms) {
       // re-issued on EVERY poll until they release, so a cancel that lands
       // before the transport's attempt actually started is not lost.
       if (me.user_scan && holder_work_ != RadioWork::kUserScan) preempt_holder_locked(call);
+      run_hook_locked(call);
     } else if (holder_ == s) {
       grant.work = holder_work_;
       grant.ticket = ticket_;
@@ -174,17 +179,19 @@ RadioGrant RadioArbiter::poll(RadioSlot slot, uint32_t now_ms) {
           grant.addr_type = holder_type_;
           grant.from_sighting = holder_from_sighting_;
           // A stale hold level from an earlier preemption must not refuse
-          // this attempt.
+          // this attempt. Cleared UNDER the mutex, like every preempt: a park
+          // or abort from another thread can't slip its hold(true) in
+          // between the grant and this clear and be overwritten.
           if (me.hold) {
             call.slot = s;
             call.is_hold = true;
             call.hold_level = false;
+            run_hook_locked(call);
           }
         }
       }
     }
   }
-  run_hook(call);
   return grant;
 }
 
@@ -325,21 +332,19 @@ void RadioArbiter::touch_locked() {
   next_chunk_ok_ms_ = 0;  // due now
 }
 
-void RadioArbiter::run_hook(const HookCall& call) {
+void RadioArbiter::run_hook_locked(const HookCall& call) {
   if (call.slot < 0) return;
-  // Hooks are stored under the mutex but called outside it: a transport
-  // cancel is a round trip into the BLE host (and over SDIO on the P4).
-  std::function<void(bool)> hold;
-  std::function<void()> cancel;
-  {
-    std::lock_guard<std::mutex> lk(m_);
-    if (call.is_hold) hold = slots_[call.slot].hold;
-    else cancel = slots_[call.slot].cancel_scan;
-  }
+  // Called with m_ HELD, on purpose: hold levels and cancels are then
+  // ordered exactly like the decisions that caused them, so a grant's
+  // hold(false) can never land after (and undo) a concurrent preempt's
+  // hold(true). A transport cancel is a short round trip into the BLE host
+  // (over SDIO on the P4); the other link tasks poll briefly and tolerate
+  // the wait. The hooks never call back into the arbiter.
+  const Slot& x = slots_[call.slot];
   if (call.is_hold) {
-    if (hold) hold(call.hold_level);
+    if (x.hold) x.hold(call.hold_level);
   } else {
-    if (cancel) cancel();
+    if (x.cancel_scan) x.cancel_scan();
   }
 }
 
