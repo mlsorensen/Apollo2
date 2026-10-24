@@ -999,6 +999,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   out.scale_bt_page = lv_menu_page_create(menu, "Bluetooth");
   out.scale_settings_page = lv_menu_page_create(menu, "Shot settings");
   out.scale_device_page = lv_menu_page_create(menu, "Device settings");
+  out.scale_display_page = lv_menu_page_create(menu, "Display");
   out.device_display_page = lv_menu_page_create(menu, "Display");
   out.device_time_page = lv_menu_page_create(menu, "Time & date");
   out.device_wifi_page = lv_menu_page_create(menu, "WiFi");
@@ -1011,6 +1012,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   page_column(out.scale_bt_page, compact);
   page_column(out.scale_settings_page, compact);
   page_column(out.scale_device_page, compact);
+  page_column(out.scale_display_page, compact);
   page_column(out.device_display_page, compact);
   page_column(out.device_time_page, compact);
   page_column(out.device_wifi_page, compact);
@@ -1146,12 +1148,62 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
                         &out.boiler_value, &out.boiler_plus, &out.boiler_sub);
   }
 
-  // Scale > Bluetooth: connection
+  // Scale > Bluetooth: connection. Two slots: the ESPRESSO scale (the panel's
+  // own saved row, given a role caption) and the BENCH scale (a second row of
+  // the same shape), with "Swap roles" between them. Every save goes through
+  // Scan -> tap a result -> the Espresso / Bench modal (App).
   build_connection_panel(out.scale_bt_page, font, btn_h, &out.scale_saved_row,
                          &out.scale_saved_label, nullptr, &out.scale_connect_btn,
                          &out.scale_connect_label, &out.scale_forget_btn, nullptr,
                          &out.scale_scan_btn, &out.scale_status, &out.scale_list,
                          "Tap Scan to find your scale");
+  {
+    auto role_caption = [&](lv_obj_t* row, const char* role) {
+      lv_obj_t* cap = lv_label_create(row);
+      lv_label_set_text(cap, role);
+      lv_obj_set_style_text_color(cap, lv_color_hex(ui::theme::muted()), 0);
+      lv_obj_set_style_text_font(cap, ui::font_dp(14), 0);
+      lv_obj_set_width(cap, ui::dp(84));
+      lv_obj_move_to_index(cap, 0);
+    };
+    role_caption(out.scale_saved_row, "ESPRESSO");
+    // The bench row: a copy of the saved row's shape.
+    out.bench_saved_row = lv_obj_create(out.scale_bt_page);
+    lv_obj_remove_style_all(out.bench_saved_row);
+    lv_obj_set_width(out.bench_saved_row, lv_pct(100));
+    lv_obj_set_height(out.bench_saved_row, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(out.bench_saved_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(out.bench_saved_row, LV_FLEX_ALIGN_SPACE_BETWEEN,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(out.bench_saved_row, ui::dp(6), 0);
+    lv_obj_add_flag(out.bench_saved_row, LV_OBJ_FLAG_HIDDEN);
+    out.bench_saved_label = lv_label_create(out.bench_saved_row);
+    lv_obj_set_style_text_color(out.bench_saved_label, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(out.bench_saved_label, font, 0);
+    lv_obj_set_flex_grow(out.bench_saved_label, 1);
+    out.bench_connect_btn = ui::make_button(out.bench_saved_row);
+    lv_obj_set_height(out.bench_connect_btn, btn_h);
+    lv_obj_set_style_bg_color(out.bench_connect_btn, lv_color_hex(ui::theme::accent()), 0);
+    out.bench_connect_label = lv_label_create(out.bench_connect_btn);
+    lv_label_set_text(out.bench_connect_label, "Disconnect");
+    lv_obj_set_style_text_color(out.bench_connect_label, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(out.bench_connect_label, font, 0);
+    lv_obj_center(out.bench_connect_label);
+    out.bench_forget_btn = ui::make_button(out.bench_saved_row);
+    lv_obj_set_height(out.bench_forget_btn, btn_h);
+    lv_obj_set_style_bg_color(out.bench_forget_btn, lv_color_hex(ui::theme::alert()), 0);
+    lv_obj_t* bf = lv_label_create(out.bench_forget_btn);
+    lv_label_set_text(bf, "Forget");
+    lv_obj_set_style_text_color(bf, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(bf, font, 0);
+    lv_obj_center(bf);
+    role_caption(out.bench_saved_row, "BENCH");
+    out.scale_swap_btn = action_row(out.scale_bt_page, "Swap roles", LV_SYMBOL_LOOP, font, btn_h);
+    lv_obj_add_flag(out.scale_swap_btn, LV_OBJ_FLAG_HIDDEN);
+    // Order: espresso row, bench row, Swap, then Scan + the results.
+    lv_obj_move_to_index(out.bench_saved_row, 1);
+    lv_obj_move_to_index(out.scale_swap_btn, 2);
+  }
   // Scale > Settings: target weight + flow-graph options
   {
     lv_obj_t* r = make_setting_row(out.scale_settings_page, "Target", font);
@@ -1166,44 +1218,15 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_t* rl = make_setting_row(out.scale_settings_page, "Detect lead-in", font);
     make_inline_stepper(rl, font, symbol_font, btn_size, &out.lead_minus,
                         &out.lead_value, &out.lead_plus, nullptr);
-    // Shot-graph line smoothing: tap cycles Off / Light / Medium / Strong.
-    lv_obj_t* rs2 = make_setting_row(out.scale_settings_page, "Smoothing", font);
-    out.smooth_btn = ui::make_button(rs2);
-    lv_obj_set_height(out.smooth_btn, btn_size);
-    lv_obj_set_style_pad_hor(out.smooth_btn, ui::dp(14), 0);
-    lv_obj_set_style_bg_color(out.smooth_btn, lv_color_hex(ui::theme::card()), 0);
-    out.smooth_value = lv_label_create(out.smooth_btn);
-    lv_obj_set_style_text_color(out.smooth_value, lv_color_hex(ui::theme::text()), 0);
-    lv_obj_set_style_text_font(out.smooth_value, font, 0);
-    lv_obj_center(out.smooth_value);
-    lv_obj_t* rn = make_setting_row(out.scale_settings_page, "Drop negative g/s", font);
-    out.drop_neg_flow_switch = lv_switch_create(rn);
-    lv_obj_set_size(out.drop_neg_flow_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
-    lv_obj_t* rs = make_setting_row(out.scale_settings_page, "Oscilloscope graph", font);
-    out.scope_graph_switch = lv_switch_create(rs);
-    lv_obj_set_size(out.scope_graph_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
-    // Shot-graph X-window growth: tap cycles Snap / Smooth / Continuous.
-    lv_obj_t* rg = make_setting_row(out.scale_settings_page, "Window growth", font);
-    out.xgrow_btn = ui::make_button(rg);
-    lv_obj_set_height(out.xgrow_btn, btn_size);
-    lv_obj_set_style_pad_hor(out.xgrow_btn, ui::dp(14), 0);
-    lv_obj_set_style_bg_color(out.xgrow_btn, lv_color_hex(ui::theme::card()), 0);
-    out.xgrow_value = lv_label_create(out.xgrow_btn);
-    lv_obj_set_style_text_color(out.xgrow_value, lv_color_hex(ui::theme::text()), 0);
-    lv_obj_set_style_text_font(out.xgrow_value, font, 0);
-    lv_obj_center(out.xgrow_value);
-
   }
 
-  // Scale > Device settings: the settings the scale itself stores. Built to
-  // the maximum slot count; update_scale_view() fills labels/values from the
-  // saved model's descriptors and shows/hides per state (pairing hint /
-  // connect prompt / live rows), so nothing here needs to know models.
+  // Scale > Display: how the scales SHOW — Apollo's own preferences, none of
+  // them sent to a scale. Battery display (moved off Device settings, which
+  // is now purely the scale's own rows), the graph's look (moved off Shot
+  // settings, which is now purely shot behaviour), and where the bench scale
+  // lives on Home.
   {
-    // Battery display [Icon]: Apollo's own preference for the Home SCALE
-    // card, first because it is available in every state (the rows below
-    // need the scale).
-    lv_obj_t* rb = make_setting_row(out.scale_device_page, "Battery display", font);
+    lv_obj_t* rb = make_setting_row(out.scale_display_page, "Battery display", font);
     out.sbatt_btn = ui::make_button(rb);
     lv_obj_set_height(out.sbatt_btn, btn_size);
     lv_obj_set_style_pad_hor(out.sbatt_btn, ui::dp(14), 0);
@@ -1212,6 +1235,64 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_set_style_text_color(out.sbatt_value, lv_color_hex(ui::theme::text()), 0);
     lv_obj_set_style_text_font(out.sbatt_value, font, 0);
     lv_obj_center(out.sbatt_value);
+    // Shot-graph line smoothing: tap cycles Off / Light / Medium / Strong.
+    lv_obj_t* rs2 = make_setting_row(out.scale_display_page, "Smoothing", font);
+    out.smooth_btn = ui::make_button(rs2);
+    lv_obj_set_height(out.smooth_btn, btn_size);
+    lv_obj_set_style_pad_hor(out.smooth_btn, ui::dp(14), 0);
+    lv_obj_set_style_bg_color(out.smooth_btn, lv_color_hex(ui::theme::card()), 0);
+    out.smooth_value = lv_label_create(out.smooth_btn);
+    lv_obj_set_style_text_color(out.smooth_value, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(out.smooth_value, font, 0);
+    lv_obj_center(out.smooth_value);
+    lv_obj_t* rn = make_setting_row(out.scale_display_page, "Drop negative g/s", font);
+    out.drop_neg_flow_switch = lv_switch_create(rn);
+    lv_obj_set_size(out.drop_neg_flow_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
+    lv_obj_t* rs = make_setting_row(out.scale_display_page, "Oscilloscope graph", font);
+    out.scope_graph_switch = lv_switch_create(rs);
+    lv_obj_set_size(out.scope_graph_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
+    // Shot-graph X-window growth: tap cycles Snap / Smooth / Continuous.
+    lv_obj_t* rg = make_setting_row(out.scale_display_page, "Window growth", font);
+    out.xgrow_btn = ui::make_button(rg);
+    lv_obj_set_height(out.xgrow_btn, btn_size);
+    lv_obj_set_style_pad_hor(out.xgrow_btn, ui::dp(14), 0);
+    lv_obj_set_style_bg_color(out.xgrow_btn, lv_color_hex(ui::theme::card()), 0);
+    out.xgrow_value = lv_label_create(out.xgrow_btn);
+    lv_obj_set_style_text_color(out.xgrow_value, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(out.xgrow_value, font, 0);
+    lv_obj_center(out.xgrow_value);
+    // Bench scale on Home: tap cycles In the scale card / Beside the graph.
+    // Hidden until a bench scale is saved (App::update_scale_view).
+    out.bench_home_row = make_setting_row(out.scale_display_page, "Bench scale on Home", font);
+    out.bench_home_btn = ui::make_button(out.bench_home_row);
+    lv_obj_set_height(out.bench_home_btn, btn_size);
+    lv_obj_set_style_pad_hor(out.bench_home_btn, ui::dp(14), 0);
+    lv_obj_set_style_bg_color(out.bench_home_btn, lv_color_hex(ui::theme::card()), 0);
+    out.bench_home_value = lv_label_create(out.bench_home_btn);
+    lv_obj_set_style_text_color(out.bench_home_value, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(out.bench_home_value, font, 0);
+    lv_obj_center(out.bench_home_value);
+    lv_obj_add_flag(out.bench_home_row, LV_OBJ_FLAG_HIDDEN);
+  }
+
+  // Scale > Device settings: the settings the scale itself stores. Built to
+  // the maximum slot count; update_scale_view() fills labels/values from the
+  // saved model's descriptors and shows/hides per state (pairing hint /
+  // connect prompt / live rows), so nothing here needs to know models.
+  {
+    // Scale [Espresso]: which saved scale the rows below address. Shown
+    // only with both slots saved (App::update_scale_view).
+    out.dev_slot_row = make_setting_row(out.scale_device_page, "Scale", font);
+    out.dev_slot_btn = ui::make_button(out.dev_slot_row);
+    lv_obj_set_height(out.dev_slot_btn, btn_size);
+    lv_obj_set_style_pad_hor(out.dev_slot_btn, ui::dp(14), 0);
+    lv_obj_set_style_bg_color(out.dev_slot_btn, lv_color_hex(ui::theme::card()), 0);
+    out.dev_slot_value = lv_label_create(out.dev_slot_btn);
+    lv_label_set_text(out.dev_slot_value, "Espresso");
+    lv_obj_set_style_text_color(out.dev_slot_value, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(out.dev_slot_value, font, 0);
+    lv_obj_center(out.dev_slot_value);
+    lv_obj_add_flag(out.dev_slot_row, LV_OBJ_FLAG_HIDDEN);
 
     out.scale_dev_hint = lv_label_create(out.scale_device_page);
     lv_label_set_text(out.scale_dev_hint, "Pair a scale to adjust its settings");
@@ -1274,6 +1355,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   root_entry(menu, out.scale_page, out.scale_bt_page, "Bluetooth", font, btn_h);
   root_entry(menu, out.scale_page, out.scale_settings_page, "Shot settings", font, btn_h);
   root_entry(menu, out.scale_page, out.scale_device_page, "Device settings", font, btn_h);
+  root_entry(menu, out.scale_page, out.scale_display_page, "Display", font, btn_h);
   root_entry(menu, out.device_page, out.device_display_page, "Display", font, btn_h);
   root_entry(menu, out.device_page, out.device_time_page, "Time & date", font, btn_h);
   root_entry(menu, out.device_page, out.device_wifi_page, "WiFi", font, btn_h);
@@ -1318,6 +1400,7 @@ lv_obj_t* settings_section_page(const SettingsWidgets& w, int section) {
     case kSectionScaleBt:       return w.scale_bt_page;
     case kSectionScaleSettings: return w.scale_settings_page;
     case kSectionScaleDevice:   return w.scale_device_page;
+    case kSectionScaleDisplay:  return w.scale_display_page;
     case kSectionDevice:        return w.device_page;
     case kSectionDeviceDisplay: return w.device_display_page;
     case kSectionDeviceTime:    return w.device_time_page;

@@ -40,7 +40,8 @@ class App {
   void build(core::IMachine& machine, core::IProvisioner& provisioner,
              core::IBattery& battery, core::IDisplaySettings& display,
              core::IClock& clock, core::IHistory& history, core::IScale& scale,
-             core::IScaleProvisioner& scale_provisioner, core::IBrewController& brew,
+             core::IScale* bench, core::IScaleProvisioner& scale_provisioner,
+             core::IBrewController& brew,
              core::INetwork& network, core::ISound& sound, core::IShotStore& shots,
              const ScreenProfile& screen, core::IUpdateSource* updates,
              core::ISettingsBackup* backup, core::ISchedule& schedule);
@@ -80,6 +81,9 @@ class App {
   // Bound to UI events:
   void toggle_power();         // power button
   void tare_scale();           // Home "Tare" button
+  void tare_bench();           // the bench card's Tare (never refused mid-shot)
+  void toggle_bench_connection();  // the bench card's / Settings' Connect toggle
+  void show_bench_side(bool bench);  // the ESPRESSO | BENCH switch (also a sim pose)
   // Scale > Settings "On the scale" rows: advance descriptor slot `index` to
   // its next option (writes to the scale; refused offline or mid-shot).
   void cycle_scale_device_setting(int index);
@@ -89,7 +93,14 @@ class App {
   void forget();               // Settings "Forget" button
   void toggle_connection();    // Settings "Connect"/"Disconnect" button
   void start_scale_scan();        // Scale page "Scan" button
-  void save_scanned_scale(int index);  // a result row in the Scale scan list
+  void save_scanned_scale(int index);  // a result row in the Scale scan list -> the modal
+  void open_save_scale_modal(int index);  // "Use <name> as which scale?" (also a sim pose)
+  void save_scanned_scale_to(int slot);   // the modal's Espresso (0) / Bench (1)
+  void forget_bench();            // the bench row's Forget
+  void swap_scale_roles();        // Scale > Bluetooth "Swap roles"
+  void cycle_bench_home_style();  // Scale > Display "Bench scale on Home"
+  void cycle_dev_slot();          // Scale > Device settings picker
+  void toggle_dev_connection();   // that page's Connect prompt (the picked slot)
   void cancel_umbra_pairing();
   void use_umbra_unpaired();
   void poll_umbra_pairing();
@@ -296,6 +307,21 @@ class App {
   bool scale_connect_enabled() const {
     return scale_provisioner_ != nullptr && scale_provisioner_->connect_enabled();
   }
+  // The bench slot: a second core::IScale (null on a build without one) whose
+  // presence on screen follows the provisioner's saved name, like the espresso one.
+  bool bench_saved() const {
+    return bench_ != nullptr && scale_provisioner_ != nullptr &&
+           !scale_provisioner_->saved_name(core::ScaleSlot::kBench).empty();
+  }
+  bool bench_connect_enabled() const {
+    return bench_saved() && scale_provisioner_->connect_enabled(core::ScaleSlot::kBench);
+  }
+  core::ScaleSnapshot bench_snapshot() const {
+    return bench_ != nullptr ? bench_->snapshot() : core::ScaleSnapshot{};
+  }
+  core::ScaleFeatures bench_features() const {
+    return bench_ != nullptr ? bench_->features() : core::ScaleFeatures{};
+  }
 
   core::IMachine* machine_ = nullptr;
   core::IProvisioner* provisioner_ = nullptr;
@@ -304,6 +330,9 @@ class App {
   core::IClock* clock_ = nullptr;
   core::IHistory* history_ = nullptr;
   core::IScale* scale_ = nullptr;
+  core::IScale* bench_ = nullptr;   // the bench slot's port (optional)
+  core::IScale* dev_scale() const;  // the slot Scale > Device settings addresses
+  int pending_scan_index_ = -1;     // the tapped result while the save modal is up
   core::IScaleProvisioner* scale_provisioner_ = nullptr;
   core::IBrewController* brew_ = nullptr;
   core::INetwork* network_ = nullptr;
@@ -343,6 +372,8 @@ class App {
   uint32_t scale_readout_tick_ = 0;     // paces the shot-timer redraw (~10 Hz)
   float last_weight_g_ = 0.0f;          // last weight drawn (redraw on change only)
   bool last_scale_connected_ = false;
+  float last_bench_weight_g_ = 0.0f;    // the bench readout's change detection
+  bool last_bench_connected_ = false;
   core::ShotPhase shot_phase_ = core::ShotPhase::kIdle;  // last seen (graph reset/freeze edges)
   uint32_t brew_reject_seen_ = 0;  // last review_reject_seq (flash Reset on change)
   uint32_t scale_refuse_seen_ = 0;  // last scale_refuse_seq (toast on change)

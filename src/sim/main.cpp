@@ -82,7 +82,8 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             bool update_modal = false, core::IUpdateSource* updates = nullptr,
             core::ISettingsBackup* backup = nullptr, int backup_modal = 0,
             int schedule_day = -1, core::ISchedule* schedule = nullptr,
-            bool welcome_modal = false, int standby_timer_s = -1) {
+            bool welcome_modal = false, int standby_timer_s = -1,
+            core::IScale* bench = nullptr, int bench_pose = 0) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
@@ -91,10 +92,14 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   static host::FakeSound fake_sound;  // stateless; shared across renders
   ui::App app;
   static host::FakeSchedule fallback_schedule;  // renders that don't pose one
-  app.build(machine, provisioner, battery, disp_settings, clock, history, scale,
+  app.build(machine, provisioner, battery, disp_settings, clock, history, scale, bench,
             scale_provisioner, brew, network, fake_sound, shots, screen, updates,
             backup, schedule != nullptr ? *schedule : fallback_schedule);
   app.show_tab(tab);
+  // Bench poses: 1 = the swap card's BENCH side showing; 2 = the "Save as"
+  // modal over a tapped scan result.
+  if (bench_pose == 1) app.show_bench_side(true);
+  if (bench_pose == 2) app.open_save_scale_modal(0);
   if (settings_section >= 0) app.select_settings_section(settings_section);  if (schedule_day >= 0) app.schedule_pick_day(schedule_day);  // per-day chip pose
   if (welcome_modal) app.open_welcome_modal();
   if (stats_section >= 0) app.select_stats_section(stats_section);
@@ -155,6 +160,8 @@ int main() {
   host::FakeClock clock;
   host::FakeHistory history;
   host::FakeScale scale;
+  host::FakeScale bench;  // the bench slot: BOOKOO_ULTRA, 412.5 g
+  bench.set_bench(true);
   host::FakeScaleProvisioner scale_provisioner;
   host::FakeBrewController brew;
   host::FakeNetwork network;
@@ -170,13 +177,13 @@ int main() {
                bool log_modal = false, uint32_t unwired_midshot_ms = 0,
                bool toast = false, bool join_modal = false, bool screensaver = false,
                bool update_modal = false, int backup_modal = 0, int schedule_day = -1,
-               bool welcome_modal = false, int standby_timer_s = -1) {
+               bool welcome_modal = false, int standby_timer_s = -1, int bench_pose = 0) {
     return render(machine, provisioner, battery, disp, clock, history, scale,
                   scale_provisioner, brew, network, shots, s, path, tab, sec, modal, theme,
                   stats, clean_lock, shot_id, history_ym, backflush, log_modal,
                   unwired_midshot_ms, toast, join_modal, screensaver, update_modal,
                   &updates, &backup, backup_modal, schedule_day, &schedule, welcome_modal,
-                  standby_timer_s);
+                  standby_timer_s, &bench, bench_pose);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
@@ -306,6 +313,30 @@ int main() {
   brew.set_wired_paddle(true);
   ok &= r({320, 240}, "renders/scale_bt_320x240.png", 1, ui::kSectionScaleBt);
   ok &= r({800, 480}, "renders/scale_bt_800x480.png", 1, ui::kSectionScaleBt);
+  // --- The bench scale (second slot). Settings first: both rows + Swap roles,
+  // the Save-as modal over a tapped result, the Display page, the Device
+  // settings picker; then Home in both placements, the BENCH side of the
+  // swap card, and a bench-only setup.
+  scale_provisioner.set_bench_saved(true);
+  ok &= r({800, 480}, "renders/scale_bt_bench_800x480.png", 1, ui::kSectionScaleBt);
+  ok &= r({800, 480}, "renders/scale_bt_modal_800x480.png", 1, ui::kSectionScaleBt, false, 0,
+          -1, false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 2);
+  ok &= r({800, 480}, "renders/scale_display_800x480.png", 1, ui::kSectionScaleDisplay);
+  ok &= r({800, 480}, "renders/scale_device_pick_800x480.png", 1, ui::kSectionScaleDevice);
+  ok &= r({800, 480}, "renders/home_bench_card_800x480.png");
+  ok &= r({800, 480}, "renders/home_bench_card_bench_800x480.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 1);
+  ok &= r({1280, 800, 1.6f}, "renders/home_bench_card_bench_1280x800.png", 0, -1, false, 0,
+          -1, false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 1);
+  disp.set_bench_home_style(1);
+  ok &= r({800, 480}, "renders/home_bench_beside_800x480.png");
+  ok &= r({1280, 800, 1.6f}, "renders/home_bench_beside_1280x800.png");
+  disp.set_bench_home_style(0);
+  scale_provisioner.set_saved(false);
+  ok &= r({800, 480}, "renders/home_bench_only_800x480.png");
+  scale_provisioner.set_saved(true);
+  scale_provisioner.set_bench_saved(false);
+  ok &= r({800, 480}, "renders/scale_display_nobench_800x480.png", 1, ui::kSectionScaleDisplay);
   // Cleaning page with Auto flush on, so the Flush delay row is visible (the
   // user manual's screenshot needs all three rows).
   brew.set_flush_s(3);

@@ -145,6 +145,39 @@ void on_scale_forget_clicked(lv_event_t* e) {
 void on_scale_connect_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->toggle_scale_connection();
 }
+void on_bench_tare_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->tare_bench();
+}
+void on_bench_connect_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->toggle_bench_connection();
+}
+void on_seg_espresso_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->show_bench_side(false);
+}
+void on_seg_bench_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->show_bench_side(true);
+}
+void on_bench_forget_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->forget_bench();
+}
+void on_scale_swap_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->swap_scale_roles();
+}
+void on_bench_home_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_bench_home_style();
+}
+void on_dev_slot_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_dev_slot();
+}
+void on_dev_connect_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->toggle_dev_connection();
+}
+void on_save_as_espresso(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->save_scanned_scale_to(0);
+}
+void on_save_as_bench(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->save_scanned_scale_to(1);
+}
 void on_umbra_pair_cancel(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cancel_umbra_pairing();
 }
@@ -725,6 +758,8 @@ constexpr const char* kSmoothName[] = {"Off", "Light", "Medium", "Strong"};
 // mapping itself lives in home_tab.cpp (shot_live_mapping).
 constexpr const char* kWindowGrowthName[] = {"Snap", "Smooth", "Continuous"};
 constexpr const char* kScaleBattName[] = {"Icon", "Percent", "Icon + %"};
+constexpr const char* kBenchHomeName[] = {"In the scale card", "Beside the graph"};
+constexpr const char* kDevSlotName[] = {"Espresso", "Bench"};
 
 // Screen-dim timeout choices (IDisplaySettings::screen_timeout_min).
 constexpr int kDimMinutes[] = {0, 1, 5, 15, 30};
@@ -1011,12 +1046,14 @@ App::~App() {
   if (home_.flow_buf != nullptr) lv_free(home_.flow_buf);
   if (home_.flow_weights != nullptr) lv_free(home_.flow_weights);
   if (home_.flow_flows != nullptr) lv_free(home_.flow_flows);
+  if (home_.bench_weights != nullptr) lv_free(home_.bench_weights);
 }
 
 void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                 core::IBattery& battery, core::IDisplaySettings& display,
                 core::IClock& clock, core::IHistory& history, core::IScale& scale,
-                core::IScaleProvisioner& scale_provisioner, core::IBrewController& brew,
+                core::IScale* bench, core::IScaleProvisioner& scale_provisioner,
+                core::IBrewController& brew,
                 core::INetwork& network, core::ISound& sound, core::IShotStore& shots,
                 const ScreenProfile& screen, core::IUpdateSource* updates,
                 core::ISettingsBackup* backup,
@@ -1039,6 +1076,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   clock_ = &clock;
   history_ = &history;
   scale_ = &scale;
+  bench_ = bench;
   scale_provisioner_ = &scale_provisioner;
   brew_ = &brew;
   network_ = &network;
@@ -1096,6 +1134,10 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   if (home_.flow_flows != nullptr) {
     lv_free(home_.flow_flows);
     home_.flow_flows = nullptr;
+  }
+  if (home_.bench_weights != nullptr) {
+    lv_free(home_.bench_weights);
+    home_.bench_weights = nullptr;
   }
 
   lv_obj_t* scr = lv_screen_active();
@@ -1155,9 +1197,13 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
 
   const bool scale_on =
       scale_provisioner_ != nullptr && !scale_provisioner_->saved_name().empty();
-  build_home_tab(home, screen, scale_on, home_);
+  const bool bench_on = bench_saved();
+  // Battery display and the bench placement are read before the build: the
+  // Home builder sizes the graph's legend/axes by the placement.
   home_.scale_batt_style = display_ != nullptr ? display_->scale_battery_style() : 0;
   if (home_.scale_batt_style < 0 || home_.scale_batt_style > 2) home_.scale_batt_style = 0;
+  build_home_tab(home, screen, scale_on, bench_on,
+                 display_ != nullptr ? display_->bench_home_style() : 0, home_);
   // Every layout except large-no-scale drops the top bar and moves clock/battery to
   // a tray (visible on every tab). Compact -> a horizontal tray on the bottom tab
   // bar; large scale-aware -> the side rail (tabs spread via SPACE_BETWEEN so the
@@ -1178,6 +1224,20 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   if (home_.scale_connect_btn != nullptr)  // in-card connect toggle (sleep/wake)
     lv_obj_add_event_cb(home_.scale_connect_btn, on_scale_connect_clicked,
                         LV_EVENT_CLICKED, this);
+  // Bench card: its own Tare / Connect, and the ESPRESSO | BENCH switch pills
+  // on both cards' headers (swap mode).
+  if (home_.bench_tare_btn != nullptr)
+    lv_obj_add_event_cb(home_.bench_tare_btn, on_bench_tare_clicked, LV_EVENT_CLICKED, this);
+  if (home_.bench_connect_btn != nullptr)
+    lv_obj_add_event_cb(home_.bench_connect_btn, on_bench_connect_clicked,
+                        LV_EVENT_CLICKED, this);
+  for (int i = 0; i < 2; ++i) {
+    if (home_.seg_espresso[i] != nullptr)
+      lv_obj_add_event_cb(home_.seg_espresso[i], on_seg_espresso_clicked, LV_EVENT_CLICKED,
+                          this);
+    if (home_.seg_bench[i] != nullptr)
+      lv_obj_add_event_cb(home_.seg_bench[i], on_seg_bench_clicked, LV_EVENT_CLICKED, this);
+  }
   if (home_.flush_btn != nullptr)  // manual group flush (large layouts)
     lv_obj_add_event_cb(home_.flush_btn, on_flush_clicked_home, LV_EVENT_CLICKED, this);
   if (home_.shot_btn != nullptr)
@@ -1201,10 +1261,13 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   {
     const core::MachineSnapshot msnap = machine_->snapshot();
     update_heating(msnap);
+    const core::ScaleSnapshot bsnap = bench_snapshot();
+    const core::ScaleFeatures bfeat = bench_features();
     update_home(home_, msnap, battery_state_, clock_->now(),
                 clock_->use_24h(), display_->use_fahrenheit(), scale_->snapshot(),
                 scale_->features(), scale_connect_enabled(), brew_->snapshot(),
-                net_status(), heating_);
+                net_status(), heating_, bench_ != nullptr ? &bsnap : nullptr,
+                bench_ != nullptr ? &bfeat : nullptr, bench_connect_enabled());
   }
   update_battery_runtime(battery_state_);
 
@@ -1228,10 +1291,25 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(settings_.scale_scan_btn, on_scale_scan_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.scale_connect_btn, on_scale_connect_clicked, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.scale_forget_btn, on_scale_forget_clicked, LV_EVENT_CLICKED, this);
-  // "On the scale" group: the connect prompt shares the link toggle; the value
-  // buttons cycle their descriptor slot (one handler per fixed slot).
+  if (settings_.bench_connect_btn != nullptr)
+    lv_obj_add_event_cb(settings_.bench_connect_btn, on_bench_connect_clicked, LV_EVENT_CLICKED, this);
+  if (settings_.bench_forget_btn != nullptr)
+    lv_obj_add_event_cb(settings_.bench_forget_btn, on_bench_forget_clicked, LV_EVENT_CLICKED, this);
+  if (settings_.scale_swap_btn != nullptr)
+    lv_obj_add_event_cb(settings_.scale_swap_btn, on_scale_swap_clicked, LV_EVENT_CLICKED, this);
+  if (settings_.dev_slot_btn != nullptr) {
+    settings_.dev_slot = 0;
+    lv_obj_add_event_cb(settings_.dev_slot_btn, on_dev_slot_clicked, LV_EVENT_CLICKED, this);
+  }
+  if (settings_.bench_home_btn != nullptr) {
+    const int style = display_ != nullptr ? display_->bench_home_style() : 0;
+    lv_label_set_text(settings_.bench_home_value, kBenchHomeName[style == 1 ? 1 : 0]);
+    lv_obj_add_event_cb(settings_.bench_home_btn, on_bench_home_clicked, LV_EVENT_CLICKED, this);
+  }
+  // "On the scale" group: the connect prompt toggles the PICKED slot's link;
+  // the value buttons cycle their descriptor slot (one handler per fixed slot).
   if (settings_.scale_dev_connect_btn != nullptr)
-    lv_obj_add_event_cb(settings_.scale_dev_connect_btn, on_scale_connect_clicked,
+    lv_obj_add_event_cb(settings_.scale_dev_connect_btn, on_dev_connect_clicked,
                         LV_EVENT_CLICKED, this);
   static constexpr lv_event_cb_t kDevSettingCbs[core::kMaxScaleSettings] = {
       on_scale_dev_setting0, on_scale_dev_setting1, on_scale_dev_setting2,
@@ -1523,9 +1601,13 @@ void App::refresh() {
     if (battery_ != nullptr) {
       battery_state_ = battery_->battery();
       update_heating(snap);
+      const core::ScaleSnapshot bsnap = bench_snapshot();
+      const core::ScaleFeatures bfeat = bench_features();
       update_home(home_, snap, battery_state_, clock_->now(), clock_->use_24h(),
                   display_->use_fahrenheit(), scale_->snapshot(), scale_->features(),
-                  scale_connect_enabled(), brew_->snapshot(), net_status(), heating_);
+                  scale_connect_enabled(), brew_->snapshot(), net_status(), heating_,
+                  bench_ != nullptr ? &bsnap : nullptr, bench_ != nullptr ? &bfeat : nullptr,
+                  bench_connect_enabled());
       update_battery_runtime(battery_state_);
 
       // Critically-low pack (on battery, sustained) -> hand off to deep sleep.
@@ -1792,9 +1874,13 @@ void App::set_use_fahrenheit(bool on) {
   if (machine_ != nullptr) {
     const core::MachineSnapshot snap = machine_->snapshot();
     update_temp_panels(snap);
+    const core::ScaleSnapshot bsnap = bench_snapshot();
+    const core::ScaleFeatures bfeat = bench_features();
     update_home(home_, snap, battery_state_, clock_->now(), clock_->use_24h(), on,
                 scale_->snapshot(), scale_->features(), scale_connect_enabled(),
-                brew_->snapshot(), net_status(), heating_);
+                brew_->snapshot(), net_status(), heating_,
+                bench_ != nullptr ? &bsnap : nullptr, bench_ != nullptr ? &bfeat : nullptr,
+                bench_connect_enabled());
     update_stats_view();
   }
 }
@@ -1924,7 +2010,7 @@ void App::rebuild() {
   // looked sporadic. (Automatic checks were unaffected: main.cpp drives those
   // through g_update_check directly, not through the App.)
   build(*machine_, *provisioner_, *battery_, *display_, *clock_, *history_, *scale_,
-        *scale_provisioner_, *brew_, *network_, *sound_, *shots_, screen_, updates_,
+        bench_, *scale_provisioner_, *brew_, *network_, *sound_, *shots_, screen_, updates_,
         backup_, *schedule_);
   show_tab(1);                       // back to Settings...
   select_settings_section(section);  // ...on the section that triggered the rebuild
@@ -2031,13 +2117,36 @@ void App::tare_scale() {
   if (scale_ != nullptr) scale_->tare();
 }
 
+// The bench scale has no shot role, so neither of these is refused mid-shot.
+void App::tare_bench() {
+  if (bench_ != nullptr) bench_->tare();
+}
+
+void App::toggle_bench_connection() {
+  if (scale_provisioner_ == nullptr || !bench_saved()) return;
+  scale_provisioner_->set_connect_enabled(core::ScaleSlot::kBench,
+                                          !bench_connect_enabled());
+  update_scale_view();
+}
+
+void App::show_bench_side(bool bench) { ui::show_bench_side(home_, bench); }
+
+// Scale > Device settings addresses the picked slot (the espresso scale
+// unless the picker says Bench).
+core::IScale* App::dev_scale() const {
+  return settings_.dev_slot == 1 && bench_ != nullptr ? bench_ : scale_;
+}
+
 void App::cycle_scale_device_setting(int index) {
-  if (scale_ == nullptr || !scale_->snapshot().connected) return;
-  if (brew_ != nullptr && core::shot_in_flight(brew_->snapshot())) return;
-  if (index < 0 || index >= scale_->device_setting_count()) return;
-  const core::ScaleSettingDesc d = scale_->device_setting(index);
+  core::IScale* sc = dev_scale();
+  if (sc == nullptr || !sc->snapshot().connected) return;
+  // The espresso scale's settings lock mid-shot (a write mid-shot could
+  // change what the stop math reads); the bench scale has no shot role.
+  if (sc == scale_ && brew_ != nullptr && core::shot_in_flight(brew_->snapshot())) return;
+  if (index < 0 || index >= sc->device_setting_count()) return;
+  const core::ScaleSettingDesc d = sc->device_setting(index);
   if (d.option_count <= 0 || d.read_only) return;
-  const int cur = scale_->device_setting_value(index);
+  const int cur = sc->device_setting_value(index);
   // Cycle only through the WRITABLE options (some values display but can't
   // be set over BLE — writable_count). -1 ("--": not read back yet, or a
   // value we don't offer) starts at the first option rather than guessing.
@@ -2045,8 +2154,29 @@ void App::cycle_scale_device_setting(int index) {
                            ? d.writable_count
                            : d.option_count;
   const int next = (cur < 0 || cur + 1 >= writable) ? 0 : cur + 1;
-  scale_->set_device_setting(index, next);
+  sc->set_device_setting(index, next);
   update_scale_view();  // show the optimistic value now, not next refresh
+}
+
+void App::cycle_dev_slot() {
+  settings_.dev_slot = settings_.dev_slot == 0 ? 1 : 0;
+  if (settings_.dev_slot_value != nullptr)
+    lv_label_set_text(settings_.dev_slot_value, kDevSlotName[settings_.dev_slot]);
+  update_scale_view();
+}
+
+void App::toggle_dev_connection() {
+  if (settings_.dev_slot == 1) toggle_bench_connection();
+  else toggle_scale_connection();
+}
+
+void App::cycle_bench_home_style() {
+  if (display_ == nullptr) return;
+  const int style = display_->bench_home_style() == 1 ? 0 : 1;
+  display_->set_bench_home_style(style);
+  if (settings_.bench_home_value != nullptr)
+    lv_label_set_text(settings_.bench_home_value, kBenchHomeName[style]);
+  request_layout_rebuild(kSectionScaleDisplay);  // Home is built for one placement
 }
 
 void App::cycle_flush() {
@@ -2720,9 +2850,10 @@ void App::pump_scale_chart() {
       ui::play_button_press();
       char tb[128];
       std::snprintf(tb, sizeof(tb),
-                    "Shot not started: %s needs the scale. Switch to Manual mode "
+                    "Shot not started: %s needs the %s. Switch to Manual mode "
                     "to pull without one, or connect a scale.",
-                    bsnap.mode == core::ShotMode::kAuto ? "Auto shot" : "Shot detect");
+                    bsnap.mode == core::ShotMode::kAuto ? "Auto shot" : "Shot detect",
+                    bench_saved() ? "espresso scale" : "scale");
       show_toast(tb);
     }
     // A real paddle flip arrived while "Wired paddle" is off (once per boot):
@@ -2740,6 +2871,9 @@ void App::pump_scale_chart() {
     const bool entering_brew =
         bsnap.phase == core::ShotPhase::kBrewing && shot_phase_ != core::ShotPhase::kBrewing;
     if (entering_brew) {
+      // A shot starting while the BENCH side of the swap card shows: snap
+      // back to ESPRESSO so the shot (and its plot) is never hidden.
+      if (home_.bench_side) ui::show_bench_side(home_, false);
       if (bsnap.paddle_wired) {
         ui::begin_shot_plot(home_);  // dynamic-X plot owns the canvas for the shot
         // A tare was sent only if the baseline isn't already confirmed (the scale
@@ -2836,8 +2970,24 @@ void App::pump_scale_chart() {
     } else if (home_.flow_shot_plot) {
       ui::shot_plot_tick(home_, snap);
     } else {
-      ui::flow_graph_tick(home_, snap);
+      const core::ScaleSnapshot bench = bench_snapshot();
+      ui::flow_graph_tick(home_, snap, bench_ != nullptr ? &bench : nullptr);
       if (feed_ring) ui::unwired_ring_tick(home_, snap);
+    }
+  }
+
+  // Bench readout: redraw the moment its snapshot carries a new value (the
+  // scale's own notify rate), like the espresso weight below — never frozen,
+  // never net of anything.
+  if (home_.bench_weight != nullptr && bench_ != nullptr) {
+    const core::ScaleSnapshot b = bench_->snapshot();
+    if (b.weight_g != last_bench_weight_g_ || b.connected != last_bench_connected_) {
+      last_bench_weight_g_ = b.weight_g;
+      last_bench_connected_ = b.connected;
+      char wb[16];
+      if (b.connected) std::snprintf(wb, sizeof(wb), "%.1f g", static_cast<double>(b.weight_g));
+      else std::snprintf(wb, sizeof(wb), "-- g");
+      lv_label_set_text(home_.bench_weight, wb);
     }
   }
 
@@ -4540,7 +4690,8 @@ void set_lead_in_label(ui::SettingsWidgets& s) {
 void App::update_scale_view() {
   if (scale_provisioner_ == nullptr) return;
 
-  // Saved-scale row: name + Connect/Disconnect + Forget (no token for scales).
+  // Saved-scale rows, one per slot: role + name + Connect/Disconnect + Forget
+  // (no token for scales). "Swap roles" only once both are saved.
   const std::string saved = scale_provisioner_->saved_name();
   if (saved.empty()) {
     lv_obj_add_flag(settings_.scale_saved_row, LV_OBJ_FLAG_HIDDEN);
@@ -4553,13 +4704,46 @@ void App::update_scale_view() {
     ui::set_bg_color(settings_.scale_connect_btn,
                      on ? ui::theme::rail() : ui::theme::accent());
   }
+  const std::string bench_name = scale_provisioner_->saved_name(core::ScaleSlot::kBench);
+  const bool have_bench = bench_ != nullptr && !bench_name.empty();
+  if (settings_.bench_saved_row != nullptr) {
+    if (!have_bench) {
+      lv_obj_add_flag(settings_.bench_saved_row, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_remove_flag(settings_.bench_saved_row, LV_OBJ_FLAG_HIDDEN);
+      ui::set_text(settings_.bench_saved_label, bench_name.c_str());
+      const bool on = bench_connect_enabled();
+      ui::set_text(settings_.bench_connect_label, on ? "Disconnect" : "Connect");
+      ui::set_bg_color(settings_.bench_connect_btn, on ? ui::theme::rail() : ui::theme::accent());
+    }
+  }
+  if (settings_.scale_swap_btn != nullptr) {
+    if (have_bench && !saved.empty()) lv_obj_remove_flag(settings_.scale_swap_btn, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(settings_.scale_swap_btn, LV_OBJ_FLAG_HIDDEN);
+  }
+  // Scale > Display > "Bench scale on Home": only with a bench scale saved.
+  if (settings_.bench_home_row != nullptr) {
+    if (have_bench) lv_obj_remove_flag(settings_.bench_home_row, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(settings_.bench_home_row, LV_OBJ_FLAG_HIDDEN);
+  }
+  // Scale > Device settings > the picker: only with both slots saved; with
+  // one scale the rows address whichever it is.
+  if (settings_.dev_slot_row != nullptr) {
+    const bool both = have_bench && !saved.empty();
+    if (both) lv_obj_remove_flag(settings_.dev_slot_row, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(settings_.dev_slot_row, LV_OBJ_FLAG_HIDDEN);
+    if (!both) settings_.dev_slot = (have_bench && saved.empty()) ? 1 : 0;
+    if (settings_.dev_slot_value != nullptr)
+      ui::set_text(settings_.dev_slot_value, kDevSlotName[settings_.dev_slot]);
+  }
 
   // Scale > Device settings page: discoverable in every state.
   // Nothing saved -> pairing hint; saved but offline -> the model's rows,
   // disabled with "--", plus a Connect prompt; connected -> live values.
   // Recomputed from live state on every refresh (like the Home shot lockout),
   // so no path can leave a row stuck disabled or a stale value shown.
-  if (settings_.scale_dev_hint != nullptr && scale_ != nullptr) {
+  core::IScale* dsc = dev_scale();
+  if (settings_.scale_dev_hint != nullptr && dsc != nullptr) {
     const auto show = [](lv_obj_t* obj, bool on) {
       if (on == lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN)) {
         if (on)
@@ -4568,22 +4752,25 @@ void App::update_scale_view() {
           lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
       }
     };
-    const bool have_scale = !saved.empty();
-    const bool connected = scale_->snapshot().connected;
-    const int count = have_scale ? scale_->device_setting_count() : 0;
-    const bool shot = brew_ != nullptr && core::shot_in_flight(brew_->snapshot());
+    const bool bench_picked = dsc == bench_ && bench_ != nullptr && settings_.dev_slot == 1;
+    const bool have_scale = bench_picked ? have_bench : !saved.empty();
+    const bool connected = dsc->snapshot().connected;
+    const int count = have_scale ? dsc->device_setting_count() : 0;
+    // The espresso scale's rows lock mid-shot; the bench scale's never do.
+    const bool shot = !bench_picked && brew_ != nullptr && core::shot_in_flight(brew_->snapshot());
     show(settings_.scale_dev_hint, !have_scale);
     show(settings_.scale_dev_connect_row, have_scale && !connected);
     if (have_scale && !connected)
       ui::set_text(settings_.scale_dev_connect_label,
-                   scale_provisioner_->connect_enabled() ? "Connecting..." : "Connect");
+                   (bench_picked ? bench_connect_enabled() : scale_provisioner_->connect_enabled())
+                       ? "Connecting..." : "Connect");
     for (int i = 0; i < core::kMaxScaleSettings; ++i) {
       const bool vis = i < count;
       show(settings_.scale_dev_rows[i], vis);
       if (!vis) continue;
-      const core::ScaleSettingDesc d = scale_->device_setting(i);
+      const core::ScaleSettingDesc d = dsc->device_setting(i);
       ui::set_text(settings_.scale_dev_labels[i], d.label);
-      const int v = connected ? scale_->device_setting_value(i) : -1;
+      const int v = connected ? dsc->device_setting_value(i) : -1;
       ui::set_text(settings_.scale_dev_values[i],
                    (v >= 0 && v < d.option_count) ? d.option_labels[v] : "--");
       // Read-only rows (e.g. the Lunar's Mode) drop the button chrome
@@ -4651,15 +4838,48 @@ void App::start_scale_scan() {
   settings_.scale_last_count = -1;  // force the list to rebuild next refresh
 }
 
-void App::save_scanned_scale(int index) {
+// A tapped scan result: every save goes through the same choice — which
+// slot. Nothing is ever auto-slotted; a one-scale user taps Espresso and
+// never sees a bench row.
+void App::save_scanned_scale(int index) { open_save_scale_modal(index); }
+
+void App::open_save_scale_modal(int index) {
   if (scale_provisioner_ == nullptr) return;
   const std::vector<core::ScanResult> results = scale_provisioner_->scan_results();
   if (index < 0 || index >= static_cast<int>(results.size())) return;
+  pending_scan_index_ = index;
+  char body[96];
+  std::snprintf(body, sizeof(body), "Use %s as which scale?", results[index].name);
+  lv_obj_t* card = open_modal("Save scale", body);
+  lv_obj_t* row = modal_button_row(card);
+  modal_button(row, "Cancel", ui::theme::rail(), on_token_cancel, this);
+  modal_button(row, "Espresso", ui::theme::accent(), on_save_as_espresso, this);
+  if (bench_ != nullptr)
+    modal_button(row, "Bench", ui::theme::bench(), on_save_as_bench, this);
+}
+
+void App::save_scanned_scale_to(int slot_idx) {
+  const int index = pending_scan_index_;
+  pending_scan_index_ = -1;
+  close_modal();
+  if (scale_provisioner_ == nullptr) return;
+  const std::vector<core::ScanResult> results = scale_provisioner_->scan_results();
+  if (index < 0 || index >= static_cast<int>(results.size())) return;
+  const core::ScaleSlot slot = slot_idx == 1 ? core::ScaleSlot::kBench : core::ScaleSlot::kEspresso;
   std::string upper = results[index].name;
   std::transform(upper.begin(), upper.end(), upper.begin(),
                  [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
   if (upper.find("UMBRA") != std::string::npos) {
-    scale_provisioner_->save_scale(results[index], core::ScaleSlot::kEspresso, true);
+    // Partner mode, in whichever slot — unless the other slot already has a
+    // partner Umbra (one at a time): then it is saved as a plain link.
+    if (!scale_provisioner_->save_scale(results[index], slot, true)) {
+      scale_provisioner_->save_scale(results[index], slot, false);
+      settings_.scale_last_count = -1;
+      request_layout_rebuild(kSectionScaleBt);
+      show_toast("Only one Umbra can use partner pairing; this one was saved as a "
+                 "regular Bluetooth scale.");
+      return;
+    }
     settings_.scale_last_count = -1;
     request_layout_rebuild(kSectionScaleBt);
     if (scale_provisioner_->partner_ready()) {
@@ -4678,10 +4898,33 @@ void App::save_scanned_scale(int index) {
     modal_button(row, "Use unpaired", ui::theme::card(), on_umbra_use_unpaired, this);
     modal_button(row, "Restart", ui::theme::accent(), on_umbra_restart, this);
   } else {
-    scale_provisioner_->save_scale(results[index], core::ScaleSlot::kEspresso, false);
+    scale_provisioner_->save_scale(results[index], slot, false);
     settings_.scale_last_count = -1;
     request_layout_rebuild(kSectionScaleBt);
   }
+}
+
+void App::forget_bench() {
+  if (scale_provisioner_ == nullptr) return;
+  scale_provisioner_->forget(core::ScaleSlot::kBench);
+  settings_.scale_last_count = -1;
+  settings_.dev_slot = 0;
+  request_layout_rebuild(kSectionScaleBt);  // Home loses the bench card
+}
+
+void App::swap_scale_roles() {
+  if (scale_provisioner_ == nullptr) return;
+  // A partner-mode Umbra changing slots needs the partner service registered
+  // on the other link, which only happens at boot: same restart path as
+  // saving one fresh (the Umbra stays paired, so no pairing prompt).
+  const bool partner = scale_provisioner_->partner_slot() >= 0;
+  scale_provisioner_->swap_roles();
+  settings_.scale_last_count = -1;
+  if (partner) {
+    reboot_device();
+    return;
+  }
+  request_layout_rebuild(kSectionScaleBt);
 }
 
 void App::open_umbra_pair_prompt(bool after_restart) {

@@ -105,6 +105,40 @@ struct HomeWidgets {
   // level estimate; hidden unless the connected scale reports a level).
   lv_obj_t* scale_batt_label = nullptr;      // the level icon (status font)
   lv_obj_t* scale_batt_pct_label = nullptr;  // the percent (caption font), before the icon
+
+  // --- Bench scale (the second slot: a weight readout + its own Tare; every
+  // shot role stays on the espresso scale). Built on the large scale-aware
+  // layout only; everything here is null otherwise. Two treatments
+  // (IDisplaySettings::bench_home_style):
+  //   bench_mode 0 "in the scale card": the SCALE panel's caption becomes an
+  //     ESPRESSO | BENCH switch and the two cards share the panel slot, one
+  //     hidden (bench_side says which shows). A shot starting snaps back to
+  //     ESPRESSO (App::show_bench_side).
+  //   bench_mode 1 "beside the graph": the lower row splits 2:1, the bench
+  //     card beside the graph with a hero weight and its own Tare.
+  // A bench scale with NO espresso scale takes the SCALE panel slot alone
+  // (bench_only), no switch.
+  bool bench_enabled = false;
+  bool bench_only = false;
+  int bench_mode = 0;
+  bool bench_side = false;          // swap mode: the BENCH side is showing
+  lv_obj_t* scale_card = nullptr;   // the SCALE panel card (hidden on the bench side)
+  lv_obj_t* bench_card = nullptr;
+  lv_obj_t* bench_weight = nullptr;  // hero weight
+  lv_obj_t* bench_name = nullptr;    // the scale's name under it
+  lv_obj_t* bench_status_dot = nullptr;
+  lv_obj_t* bench_status_label = nullptr;  // null where the header is dot-only
+  lv_obj_t* bench_batt_label = nullptr;
+  lv_obj_t* bench_batt_pct_label = nullptr;
+  lv_obj_t* bench_tare_btn = nullptr;
+  lv_obj_t* bench_connect_btn = nullptr;   // swap mode only (beside: Tare alone)
+  lv_obj_t* bench_connect_label = nullptr;
+  // The ESPRESSO | BENCH pills: one pair per header (index 0 on the SCALE
+  // card, 1 on the bench card), so whichever card shows carries the switch.
+  lv_obj_t* seg_espresso[2] = {nullptr, nullptr};
+  lv_obj_t* seg_bench[2] = {nullptr, nullptr};
+  lv_obj_t* seg_espresso_label[2] = {nullptr, nullptr};
+  lv_obj_t* seg_bench_label[2] = {nullptr, nullptr};
   // Flow-rate strip chart (large screens only). A self-managed lv_canvas: newest
   // sample at the right, the plot scrolls right->left by wall-clock time (see
   // flow_graph_tick) so older data trails off the left. Each step memmoves the
@@ -163,9 +197,24 @@ struct HomeWidgets {
   float* flow_weights = nullptr;      // per-column weight (g) ring (freed by App)
   float* flow_flows = nullptr;        // per-column flow rate (g/s) ring (freed by App)
   float flow_ymax = 6.0f;             // current axis full-scale
-  lv_obj_t* flow_unit_btn = nullptr;  // the g/s <-> g toggle button
+  lv_obj_t* flow_unit_btn = nullptr;  // the unit chip: a LEGEND (dot + unit, x1 or x2)
   lv_obj_t* flow_unit_label = nullptr;
+  lv_obj_t* flow_legend_dot = nullptr;    // coloured dot before the unit
+  lv_obj_t* flow_legend_dot2 = nullptr;   // beside mode: the bench entry
+  lv_obj_t* flow_unit_label2 = nullptr;
   lv_obj_t* flow_ylabels[3] = {nullptr, nullptr, nullptr};  // Y = max, 2max/3, max/3
+  // Bench series on the live sweep. A third per-column ring (NaN = no bench
+  // data in that column: disconnected). flow_mode 2 = the BENCH side of the
+  // swap card: the bench ring alone, in grams, on the left axis, amber. In
+  // "beside the graph" mode (bench_overlay) the bench ring is drawn under the
+  // espresso trace in grams against its OWN right-hand axis (flow_ylabels_r)
+  // while the espresso trace keeps the left axis in its unit.
+  float* bench_weights = nullptr;     // per-column bench weight (g) ring (freed by App)
+  float bench_ymax = 500.0f;          // the bench series' full-scale
+  float bench_prev_y = -1.0f;         // the bench pen row (AA), -1 = up
+  bool bench_overlay = false;         // beside mode: both series on one canvas
+  int flow_mode_saved = 0;            // the espresso unit to return to from mode 2
+  lv_obj_t* flow_ylabels_r[3] = {nullptr, nullptr, nullptr};  // right axis (overlay)
   // X-axis labels. flow_xlabels are the "60s..now" age ticks (scroll only — in scope
   // mode x maps to sweep position, not age, so they'd lie). flow_xspan_label is a
   // single "60 s window" caption shown in scope mode instead.
@@ -254,9 +303,16 @@ struct HomeWidgets {
 };
 
 // Build the Home widgets into `parent`, sized for `screen`. `scale_enabled`
-// selects the scale-aware layout. Values are set by a following update_home call.
+// (an espresso scale is saved) selects the scale-aware layout; `bench_enabled`
+// adds the bench scale in `bench_mode` (0 in the SCALE card, 1 beside the
+// graph), and a bench scale alone is scale-aware too (bench_only). Values are
+// set by a following update_home call.
 void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_enabled,
-                    HomeWidgets& out);
+                    bool bench_enabled, int bench_mode, HomeWidgets& out);
+
+// Swap-card mode: show the BENCH or the ESPRESSO side (pills + the graph's
+// series follow). A no-op outside swap mode.
+void show_bench_side(HomeWidgets& w, bool bench);
 
 // Build the clock/battery system tray at the bottom of the side rail (the tab
 // bar). Only the large scale-aware Home drops the top bar, so this is called just
@@ -277,18 +333,27 @@ void set_micra_standby_timer(HomeWidgets& w, int remaining_s);
 // disconnected sleep-capable scale shows as "Sleeping", not gone.
 // `heating` is the caller's core::derive_heating result (App carries the
 // hysteresis bit and drives set_heating_pulse alongside).
+// `bench` / `bench_features` / `bench_connect_enabled` describe the bench scale
+// (null = none saved): its card's status, battery and Tare follow the same
+// rules as the espresso card's, minus the mid-shot lockout (it has no shot role).
 void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
                  const core::BatteryState& battery, const core::WallTime& clock,
                  bool clock_24h, bool fahrenheit, const core::ScaleSnapshot& scale,
                  const core::ScaleFeatures& scale_features, bool scale_connect_enabled,
-                 const core::BrewSnapshot& brew, core::NetState net, bool heating);
+                 const core::BrewSnapshot& brew, core::NetState net, bool heating,
+                 const core::ScaleSnapshot* bench = nullptr,
+                 const core::ScaleFeatures* bench_features = nullptr,
+                 bool bench_connect_enabled = false);
 
 // Scroll the flow strip chart left by however many pixels elapsed wall-clock time
 // calls for, painting the new right-edge column(s) with the scale's current flow.
 // Called every device-loop iteration (see App::pump_scale_chart); a cheap no-op
 // when there's no graph or not enough time has passed for a pixel step. Time-based
 // (not per-sample) scrolling keeps it smooth regardless of the sample rate.
-void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale);
+// `bench` (null = none) feeds the bench series; the sweep runs while EITHER
+// scale is connected.
+void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale,
+                     const core::ScaleSnapshot* bench = nullptr);
 
 // Flip the graph between flow rate (g/s) and weight (g). Both quantities are kept
 // per column, so the existing trace is re-scaled and redrawn in the new unit rather

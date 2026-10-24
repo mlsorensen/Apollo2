@@ -13,6 +13,7 @@
 //   accent        - active/selected/primary controls
 //   scrollbar     - scrollbar thumb
 //   ok/warn/alert - status: ready-on, heating-standby, fault-stop
+//   bench         - the second (bench) scale: its card, pills, graph trace
 //
 // Values are 0xRRGGBB; wrap with lv_color_hex() at the call site.
 
@@ -25,6 +26,7 @@ struct Palette {
   uint32_t accent;
   uint32_t scrollbar;
   uint32_t ok, warn, alert;
+  uint32_t bench;
 };
 
 int count();
@@ -44,5 +46,6 @@ uint32_t scrollbar();
 uint32_t ok();
 uint32_t warn();
 uint32_t alert();
+uint32_t bench();
 
 }  // namespace ui::theme

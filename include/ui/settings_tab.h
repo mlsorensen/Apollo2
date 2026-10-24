@@ -31,6 +31,7 @@ enum SettingsSection {
   kSectionScaleBt,         // Scale > Bluetooth
   kSectionScaleSettings,   // Scale > Shot settings (target/review/graph)
   kSectionScaleDevice,     // Scale > Device settings (stored on the scale)
+  kSectionScaleDisplay,    // Scale > Display (battery style, graph look, bench placement)
   kSectionDevice,          // Device chooser (Display | Time & date | WiFi)
   kSectionDeviceDisplay,   // Device > Display (brightness/dim/theme/units/sound)
   kSectionDeviceTime,      // Device > Time & date (clock + calendar steppers)
@@ -87,10 +88,23 @@ struct SettingsWidgets {
   lv_obj_t* sched_warm_value = nullptr;
   lv_obj_t* sched_warm_plus = nullptr;
   int sched_edit_day = 0;                      // chip selection, 0 = Monday (UI state only)
-  lv_obj_t* scale_page = nullptr;           // chooser: Bluetooth | Settings
-  lv_obj_t* scale_bt_page = nullptr;        // connection
-  lv_obj_t* scale_settings_page = nullptr;  // shot settings (target/review/graph)
+  lv_obj_t* scale_page = nullptr;           // chooser: Bluetooth | Shot | Device | Display
+  lv_obj_t* scale_bt_page = nullptr;        // connection (both slots)
+  lv_obj_t* scale_settings_page = nullptr;  // shot settings (target/review/lead-in)
   lv_obj_t* scale_device_page = nullptr;    // device settings (stored on the scale)
+  lv_obj_t* scale_display_page = nullptr;   // how the scales show: battery, graph, bench
+
+  // Scale > Device settings > the scale picker ("Scale: Espresso / Bench"),
+  // shown only with both slots saved; dev_slot is which one the rows below
+  // address (core::ScaleSlot as int).
+  lv_obj_t* dev_slot_row = nullptr;
+  lv_obj_t* dev_slot_btn = nullptr;
+  lv_obj_t* dev_slot_value = nullptr;
+  int dev_slot = 0;
+  // Scale > Display > "Bench scale on Home" (row hidden without a bench scale).
+  lv_obj_t* bench_home_row = nullptr;
+  lv_obj_t* bench_home_btn = nullptr;
+  lv_obj_t* bench_home_value = nullptr;
 
   // Scale > Device settings: the settings the SCALE stores (beep, auto-off —
   // core::ScaleSettingDesc). One tap-to-cycle row per descriptor slot;
@@ -123,11 +137,19 @@ struct SettingsWidgets {
   bool scan_done = false;    // a scan has finished (shows "none found" vs the hint)
 
   // --- Scale connection (mirrors the Micra rows; no token) -----------------
-  lv_obj_t* scale_saved_row = nullptr;
+  // Two saved rows, one per slot, each "<ROLE>  <name>  [Connect] [Forget]",
+  // and a "Swap roles" row between them that shows once both are saved.
+  lv_obj_t* scale_saved_row = nullptr;      // the ESPRESSO slot
   lv_obj_t* scale_saved_label = nullptr;
   lv_obj_t* scale_connect_btn = nullptr;
   lv_obj_t* scale_connect_label = nullptr;
   lv_obj_t* scale_forget_btn = nullptr;
+  lv_obj_t* bench_saved_row = nullptr;      // the BENCH slot
+  lv_obj_t* bench_saved_label = nullptr;
+  lv_obj_t* bench_connect_btn = nullptr;
+  lv_obj_t* bench_connect_label = nullptr;
+  lv_obj_t* bench_forget_btn = nullptr;
+  lv_obj_t* scale_swap_btn = nullptr;       // "Swap roles"
   lv_obj_t* scale_scan_btn = nullptr;
   lv_obj_t* scale_status = nullptr;
   lv_obj_t* scale_list = nullptr;

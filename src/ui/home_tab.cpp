@@ -55,19 +55,29 @@ constexpr uint32_t kShotRemapMinMs = 50;
 // point reads clearly (fresh trace behind it, gap in front).
 constexpr int kFlowScopeGapPx = 4;
 
-// Modes: 0 = flow rate (g/s), 1 = weight (g). Each has a unit + a default axis
-// full-scale, which is also the floor the axis shrinks back to.
-const char* flow_unit(int mode) { return mode == 1 ? "g" : "g/s"; }
-float flow_default_max(int mode) { return mode == 1 ? 10.0f : 6.0f; }
+// Modes: 0 = flow rate (g/s), 1 = weight (g), 2 = the BENCH scale's weight (g)
+// — the swap card's BENCH side (or a bench-only setup). Each has a unit + a
+// default axis full-scale, which is also the floor the axis shrinks back to.
+// The bench scale weighs milk jugs and breakfast, not shots: its scale is
+// hundreds of grams in 250 g steps.
+const char* flow_unit(int mode) { return mode == 0 ? "g/s" : "g"; }
+float flow_default_max(int mode) {
+  return mode == 2 ? 500.0f : mode == 1 ? 10.0f : 6.0f;
+}
 
 // Smallest "nice" axis >= v for the mode (even / multiple of 10 so the labels
 // 0, max/2, max stay clean), floored at the mode default.
 float flow_nice_max(int mode, float v) {
   const float floor = flow_default_max(mode);
   if (v <= floor) return floor;
-  const float step = (mode == 1) ? 15.0f : 3.0f;  // multiples of 3 -> clean thirds
+  const float step = mode == 2 ? 250.0f : (mode == 1) ? 15.0f : 3.0f;  // clean thirds
   return step * std::ceil(v / step);
 }
+
+// "No data" marker for a ring column (the series' scale was disconnected
+// when that column was written): the pen lifts over it instead of plotting 0.
+constexpr float kFlowNoData = -1.0e30f;
+inline bool flow_gap(float v) { return v <= -1.0e29f || std::isnan(v); }
 
 // Map a value to a canvas row against the current axis: 0 = top = ymax, h-1 = 0.
 // Returns a float row: the fractional part carries sub-pixel position, which the
@@ -119,14 +129,24 @@ uint16_t flow_dim_color() {
   const lv_color_t bg = lv_color_hex(ui::theme::card());
   return lv_color_to_u16(lv_color_mix(a, bg, 100));  // ~40% accent over the bg
 }
+// The bench series' colours, the same two tones in the theme's bench role.
+uint16_t bench_bright_color() {
+  return lv_color_to_u16(lv_color_hex(ui::theme::bench()));
+}
+uint16_t bench_dim_color() {
+  const lv_color_t a = lv_color_hex(ui::theme::bench());
+  const lv_color_t bg = lv_color_hex(ui::theme::card());
+  return lv_color_to_u16(lv_color_mix(a, bg, 100));
+}
 
 // Fill the area under the line in column x with a translucent wash of the trace
 // color (~40% over the plot background). Painted after the column clear and
 // before the line, so the line's AA feather blends onto the fill seamlessly.
 // Gridline rows get the wash blended over the gridline color so the grid stays
-// readable through the fill.
-void fill_flow_below(HomeWidgets& w, int x, float yf, uint16_t trace_color) {
-  const float y0f = (w.flow_prev_y < 0.0f) ? yf : w.flow_prev_y;
+// readable through the fill. `prev_y` is the series' pen row (-1 = up): the
+// espresso trace keeps it in flow_prev_y, the bench trace in bench_prev_y.
+void fill_flow_below(HomeWidgets& w, int x, float yf, uint16_t trace_color, float prev_y) {
+  const float y0f = (prev_y < 0.0f) ? yf : prev_y;
   const float b = (y0f < yf ? yf : y0f);  // bottom of the line span at this column
   int start = static_cast<int>(b) + 1;
   if (start < 0) start = 0;
@@ -142,6 +162,9 @@ void fill_flow_below(HomeWidgets& w, int x, float yf, uint16_t trace_color) {
     *px = (yy == gy[0] || yy == gy[1]) ? blend565(*px, trace_color, 102) : fill;
   }
 }
+void fill_flow_below(HomeWidgets& w, int x, float yf, uint16_t trace_color) {
+  fill_flow_below(w, x, yf, trace_color, w.flow_prev_y);
+}
 
 // Draw the flow line into column x in `color`: a vertical run joining the previous
 // pen row to the new one, so consecutive samples connect into a continuous line.
@@ -149,12 +172,12 @@ void fill_flow_below(HomeWidgets& w, int x, float yf, uint16_t trace_color) {
 // and each row is painted at its fractional coverage (blended over what's already
 // in the column). Sub-pixel motion then reads as intensity easing instead of the
 // line snapping a whole pixel per step.
-void draw_flow_segment(HomeWidgets& w, int x, float yf, uint16_t color) {
+void draw_flow_segment(HomeWidgets& w, int x, float yf, uint16_t color, float prev_y) {
   // Line thickness: the trace reads as ~2*halfwidth px (solid core + one
   // feathered row each side). Scaled so the trace keeps its physical weight on
   // high-DPI panels.
   const float kHalfWidth = 1.25f * ui::scale();
-  const float y0f = (w.flow_prev_y < 0.0f) ? yf : w.flow_prev_y;
+  const float y0f = (prev_y < 0.0f) ? yf : prev_y;
   const float a = (y0f < yf ? y0f : yf) - kHalfWidth;
   const float b = (y0f < yf ? yf : y0f) + kHalfWidth;
   uint16_t* col = w.flow_buf + x;
@@ -175,49 +198,120 @@ void draw_flow_segment(HomeWidgets& w, int x, float yf, uint16_t color) {
     }
   }
 }
+void draw_flow_segment(HomeWidgets& w, int x, float yf, uint16_t color) {
+  draw_flow_segment(w, x, yf, color, w.flow_prev_y);
+}
 
-// Update the three dynamic Y labels (max, 2max/3, max/3, top->down) on a rescale.
+// Update the three dynamic Y labels (max, 2max/3, max/3, top->down) on a
+// rescale — the left axis for the active series, and in beside mode the
+// right axis for the bench series.
 void set_flow_ylabels(HomeWidgets& w) {
   for (int i = 0; i < 3; ++i) {
-    if (w.flow_ylabels[i] == nullptr) continue;
-    const float v = w.flow_ymax * static_cast<float>(3 - i) / 3.0f;
-    lv_label_set_text_fmt(w.flow_ylabels[i], "%d", static_cast<int>(v + 0.5f));
+    if (w.flow_ylabels[i] != nullptr) {
+      const float v = w.flow_ymax * static_cast<float>(3 - i) / 3.0f;
+      lv_label_set_text_fmt(w.flow_ylabels[i], "%d", static_cast<int>(v + 0.5f));
+    }
+    if (w.flow_ylabels_r[i] != nullptr) {
+      const float v = w.bench_ymax * static_cast<float>(3 - i) / 3.0f;
+      lv_label_set_text_fmt(w.flow_ylabels_r[i], "%d", static_cast<int>(v + 0.5f));
+    }
   }
 }
 
-// The value ring for the current mode (weight in g, or flow rate in g/s).
+// The unit chip is a legend: a coloured dot per series + its unit. Mode 0/1
+// = the espresso trace in the accent; mode 2 = the bench trace in the bench
+// colour; beside mode shows both entries.
+void update_flow_legend(HomeWidgets& w) {
+  if (w.flow_unit_label == nullptr) return;
+  const bool bench_active = w.flow_mode == 2;
+  ui::set_text(w.flow_unit_label, flow_unit(w.flow_mode));
+  if (w.flow_legend_dot != nullptr)
+    ui::set_bg_color(w.flow_legend_dot,
+                     bench_active ? ui::theme::bench() : ui::theme::accent());
+  if (w.flow_unit_label2 != nullptr) ui::set_text(w.flow_unit_label2, "g");
+  if (w.flow_legend_dot2 != nullptr) ui::set_bg_color(w.flow_legend_dot2, ui::theme::bench());
+}
+
+// The value ring for the current mode (weight in g, flow rate in g/s, or the
+// bench weight in g).
 float* flow_active_ring(HomeWidgets& w) {
+  if (w.flow_mode == 2) return w.bench_weights;
   return (w.flow_mode == 1) ? w.flow_weights : w.flow_flows;
 }
 
-// Redraw the whole plot from the active value ring at the current ymax — used when
-// the axis rescales or the unit toggles (the pixels already drawn are at the old
+// Paint column x of the live sweep from the rings: the bench series first
+// (beside mode: under the espresso trace, against bench_ymax) then the active
+// series against flow_ymax. A column whose series has no data lifts that pen.
+// `dim` = the aged previous sweep in scope mode.
+void paint_flow_column(HomeWidgets& w, int x, bool dim) {
+  clear_flow_column(w, x);
+  if (w.bench_overlay && w.bench_weights != nullptr && w.flow_mode != 2) {
+    const float bv = w.bench_weights[x];
+    if (flow_gap(bv)) {
+      w.bench_prev_y = -1;
+    } else {
+      const float y = flow_row(bv, w.flow_h, w.bench_ymax);
+      const uint16_t c = dim ? bench_dim_color() : bench_bright_color();
+      fill_flow_below(w, x, y, c, w.bench_prev_y);
+      draw_flow_segment(w, x, y, c, w.bench_prev_y);
+      w.bench_prev_y = y;
+    }
+  }
+  const float* ring = flow_active_ring(w);
+  const float v = ring != nullptr ? ring[x] : kFlowNoData;
+  if (flow_gap(v)) {
+    w.flow_prev_y = -1;
+    return;
+  }
+  const float y = flow_row(v, w.flow_h, w.flow_ymax);
+  const bool bench_series = w.flow_mode == 2;
+  const uint16_t c = bench_series ? (dim ? bench_dim_color() : bench_bright_color())
+                                  : (dim ? flow_dim_color() : flow_bright_color());
+  fill_flow_below(w, x, y, c, w.flow_prev_y);
+  draw_flow_segment(w, x, y, c, w.flow_prev_y);
+  w.flow_prev_y = y;
+}
+
+// Redraw the whole plot from the value rings at the current axes — used when
+// an axis rescales or the unit toggles (the pixels already drawn are at the old
 // scale / other unit). Column x maps to screen-x in both styles; in scope mode the
-// oldest sample sits just after the cursor, so we lift the pen there to avoid a
+// oldest sample sits just after the cursor, so we lift the pens there to avoid a
 // false vertical line across the newest/oldest seam.
 void redraw_flow_from_ring(HomeWidgets& w) {
   const float* ring = flow_active_ring(w);
-  const uint16_t bright = flow_bright_color();
-  const uint16_t dim = flow_dim_color();
   const int seam = w.flow_scope_mode ? (w.flow_cursor + 1) % w.flow_w : -1;
   w.flow_prev_y = -1;
+  w.bench_prev_y = -1;
   for (int x = 0; x < w.flow_w; ++x) {
-    if (x == seam) w.flow_prev_y = -1;  // pen up: don't connect across the sweep seam
-    const float y = flow_row(ring[x], w.flow_h, w.flow_ymax);
-    clear_flow_column(w, x);
+    if (x == seam) {  // pen up: don't connect across the sweep seam
+      w.flow_prev_y = -1;
+      w.bench_prev_y = -1;
+    }
     // Scope mode: columns past the cursor belong to the previous sweep -> dim them.
-    const uint16_t color = (w.flow_scope_mode && x > w.flow_cursor) ? dim : bright;
-    fill_flow_below(w, x, y, color);
-    draw_flow_segment(w, x, y, color);
-    w.flow_prev_y = y;
+    paint_flow_column(w, x, w.flow_scope_mode && x > w.flow_cursor);
   }
-  // Leave the pen at the LIVE head, not the ring's last column. In scope mode
+  // Leave the pens at the LIVE head, not the ring's last column. In scope mode
   // the last column is the previous sweep's tail (usually ~0): a mid-sweep
   // rescale that returned with the pen there made the next painted column draw
   // a phantom vertical stab down to zero (baked into the canvas, absent from
   // the ring — the "line to zero and back" artifact).
-  if (w.flow_scope_mode)
-    w.flow_prev_y = flow_row(ring[w.flow_cursor], w.flow_h, w.flow_ymax);
+  if (w.flow_scope_mode) {
+    const float v = ring != nullptr ? ring[w.flow_cursor] : kFlowNoData;
+    w.flow_prev_y = flow_gap(v) ? -1 : flow_row(v, w.flow_h, w.flow_ymax);
+    if (w.bench_overlay && w.bench_weights != nullptr) {
+      const float bv = w.bench_weights[w.flow_cursor];
+      w.bench_prev_y = flow_gap(bv) ? -1 : flow_row(bv, w.flow_h, w.bench_ymax);
+    }
+  }
+}
+
+// Peak of a ring, ignoring no-data columns.
+float ring_peak(const float* ring, int n) {
+  float m = 0.0f;
+  if (ring == nullptr) return m;
+  for (int x = 0; x < n; ++x)
+    if (!flow_gap(ring[x]) && ring[x] > m) m = ring[x];
+  return m;
 }
 
 // Invalidate `n` plot columns starting at screen-column c0 (wrapping past the right
@@ -242,7 +336,9 @@ void invalidate_flow_span(HomeWidgets& w, int c0, int n) {
 // The styled (empty) flow-graph card. The canvas that fills it is created later
 // by populate_flow_graph — only once every sibling exists and the layout is
 // final, so the content box we measure is the real one. Returns the card.
-lv_obj_t* make_flow_graph_card(lv_obj_t* parent) {
+// `right_axis`: leave room for the bench series' own Y labels on the right
+// (beside mode: two series, two scales).
+lv_obj_t* make_flow_graph_card(lv_obj_t* parent, bool right_axis = false) {
   lv_obj_t* card = lv_obj_create(parent);
   lv_obj_remove_style_all(card);
   lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
@@ -254,8 +350,19 @@ lv_obj_t* make_flow_graph_card(lv_obj_t* parent) {
   lv_obj_set_style_pad_left(card, ui::dp(30), 0);    // Y labels
   lv_obj_set_style_pad_bottom(card, ui::dp(22), 0);  // X labels
   lv_obj_set_style_pad_top(card, ui::dp(18), 0);
-  lv_obj_set_style_pad_right(card, ui::dp(12), 0);
+  lv_obj_set_style_pad_right(card, ui::dp(right_axis ? 36 : 12), 0);
   return card;
+}
+
+// A small coloured dot (a legend swatch, a status light).
+lv_obj_t* make_dot(lv_obj_t* parent, int size, uint32_t color) {
+  lv_obj_t* dot = lv_obj_create(parent);
+  lv_obj_remove_style_all(dot);
+  lv_obj_set_size(dot, size, size);
+  lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+  lv_obj_set_style_bg_color(dot, lv_color_hex(color), 0);
+  return dot;
 }
 
 // A flow-rate (g/s) sweep graph: a canvas we paint one column at a time as time
@@ -280,10 +387,17 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   out.flow_h = ph;
   out.flow_stride = static_cast<int>(stride_bytes / sizeof(uint16_t));
   out.flow_prev_y = -1;
+  out.bench_prev_y = -1;
   out.flow_tick = 0;
   out.flow_accum_ms = 0;
-  out.flow_mode = 0;
+  // The series on show: the espresso trace in g/s, or — on the BENCH side of
+  // the swap card / a bench-only setup — the bench weight (mode 2). Beside
+  // mode overlays the bench series on the espresso trace instead.
+  out.flow_mode_saved = 0;
+  out.flow_mode = (out.bench_only || (out.bench_mode == 0 && out.bench_side)) ? 2 : 0;
+  out.bench_overlay = out.bench_enabled && !out.bench_only && out.bench_mode == 1;
   out.flow_ymax = flow_default_max(out.flow_mode);
+  out.bench_ymax = flow_default_max(2);
   // Live-sweep pacing. Raw = the kFlowWindowS design window spread over the
   // plot width. When that lands NEAR LVGL's refresh period (the 800x480
   // boards: ~60ms/px vs the 33ms refresh grid), the two clocks alias — the
@@ -306,19 +420,31 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   }
   out.flow_weights = static_cast<float*>(lv_malloc(static_cast<size_t>(pw) * sizeof(float)));
   out.flow_flows = static_cast<float*>(lv_malloc(static_cast<size_t>(pw) * sizeof(float)));
-  if (out.flow_weights == nullptr || out.flow_flows == nullptr) {  // OOM: tick no-ops
+  // The bench ring only where a bench scale is drawn (modes 2 / overlay): one
+  // more float per column (~2.6 KB at 800x480) from the same pool.
+  const bool want_bench_ring = out.bench_enabled;
+  out.bench_weights = want_bench_ring ? static_cast<float*>(
+                                            lv_malloc(static_cast<size_t>(pw) * sizeof(float)))
+                                      : nullptr;
+  if (out.flow_weights == nullptr || out.flow_flows == nullptr ||
+      (want_bench_ring && out.bench_weights == nullptr)) {  // OOM: tick no-ops
     if (out.flow_weights != nullptr) lv_free(out.flow_weights);
     if (out.flow_flows != nullptr) lv_free(out.flow_flows);
-    out.flow_weights = out.flow_flows = nullptr;
+    if (out.bench_weights != nullptr) lv_free(out.bench_weights);
+    out.flow_weights = out.flow_flows = out.bench_weights = nullptr;
     return;
   }
-  for (int x = 0; x < pw; ++x) out.flow_weights[x] = out.flow_flows[x] = 0.0f;
+  for (int x = 0; x < pw; ++x) {
+    out.flow_weights[x] = out.flow_flows[x] = 0.0f;
+    if (out.bench_weights != nullptr) out.bench_weights[x] = kFlowNoData;
+  }
 
   for (int x = 0; x < pw; ++x) clear_flow_column(out, x);  // background + gridlines
 
-  // Unit toggle button in the plot's top-left corner (clear of the Y-label column,
-  // which sits in the left margin). Tap flips g/s <-> g, re-scaling and redrawing
-  // the existing trace in the new unit.
+  // Legend chip in the plot's top-left corner (clear of the Y-label column,
+  // which sits in the left margin): a coloured dot + the unit per series. Tap
+  // flips the espresso trace g/s <-> g, re-scaling and redrawing the existing
+  // trace in the new unit; the bench entry is always grams.
   lv_obj_t* btn = lv_button_create(card);
   lv_obj_remove_style_all(btn);
   lv_obj_set_style_bg_color(btn, lv_color_hex(ui::theme::bg()), 0);
@@ -326,25 +452,48 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   lv_obj_set_style_radius(btn, ui::dp(8), 0);
   lv_obj_set_style_pad_hor(btn, ui::dp(12), 0);
   lv_obj_set_style_pad_ver(btn, ui::dp(7), 0);
+  lv_obj_set_style_pad_column(btn, ui::dp(8), 0);
+  lv_obj_set_size(btn, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_align(btn, LV_ALIGN_TOP_LEFT, ui::dp(6), ui::dp(6));
+  out.flow_legend_dot = make_dot(btn, ui::dp(10), ui::theme::accent());
   lv_obj_t* blab = lv_label_create(btn);
   lv_label_set_text(blab, flow_unit(out.flow_mode));
   lv_obj_set_style_text_color(blab, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(blab, ui::font_dp(20), 0);
   out.flow_unit_btn = btn;
   out.flow_unit_label = blab;
+  if (out.bench_overlay) {
+    lv_obj_t* spacer = lv_obj_create(btn);
+    lv_obj_remove_style_all(spacer);
+    lv_obj_set_size(spacer, ui::dp(6), 1);
+    out.flow_legend_dot2 = make_dot(btn, ui::dp(10), ui::theme::bench());
+    out.flow_unit_label2 = lv_label_create(btn);
+    lv_label_set_text(out.flow_unit_label2, "g");
+    lv_obj_set_style_text_color(out.flow_unit_label2, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(out.flow_unit_label2, ui::font_dp(20), 0);
+  }
+  update_flow_legend(out);
 
   // Four Y labels (0, max/3, 2max/3, max) in the left margin, aligned to the plot
   // rows. The top three are dynamic (updated on rescale); the bottom "0" is static.
-  auto make_ylabel = [&](int y) {
+  auto make_ylabel = [&](int y, bool right) {
     lv_obj_t* l = lv_label_create(card);
-    lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::muted()), 0);
+    lv_obj_set_style_text_color(l, lv_color_hex(right ? ui::theme::bench() : ui::theme::muted()), 0);
     lv_obj_set_style_text_font(l, ui::font_dp(14), 0);
-    lv_obj_align(l, LV_ALIGN_TOP_LEFT, ui::dp(-26), y - ui::dp(8));
+    if (right) lv_obj_align(l, LV_ALIGN_TOP_RIGHT, ui::dp(30), y - ui::dp(8));
+    else lv_obj_align(l, LV_ALIGN_TOP_LEFT, ui::dp(-26), y - ui::dp(8));
     return l;
   };
-  for (int t = 0; t < 3; ++t) out.flow_ylabels[t] = make_ylabel(ph * t / 3);  // max..max/3
-  lv_label_set_text(make_ylabel(ph), "0");                                     // bottom, static
+  for (int t = 0; t < 3; ++t) out.flow_ylabels[t] = make_ylabel(ph * t / 3, false);  // max..max/3
+  lv_label_set_text(make_ylabel(ph, false), "0");                                     // bottom, static
+  if (out.bench_overlay) {
+    // The bench series' own axis on the right, in the bench colour so the
+    // two scales can't be read against the wrong line.
+    for (int t = 0; t < 3; ++t) out.flow_ylabels_r[t] = make_ylabel(ph * t / 3, true);
+    lv_label_set_text(make_ylabel(ph, true), "0");
+  }
   set_flow_ylabels(out);
 
   // Static X age labels (window..now) below the plot — meaningful only in scroll
@@ -387,6 +536,18 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
     wsum += f * dt;
     out.flow_flows[x] = f;
     out.flow_weights[x] = wsum;
+    // Bench: a jug on the counter — a plateau, a pour, a second plateau.
+    if (out.bench_weights != nullptr) {
+      const float jug = 412.5f;
+      out.bench_weights[x] = t < 0.35f   ? jug
+                             : t < 0.55f ? jug + 180.0f * ((t - 0.35f) / 0.20f)
+                                         : jug + 180.0f;
+    }
+  }
+  if (out.bench_weights != nullptr) {
+    out.bench_ymax = flow_nice_max(2, ring_peak(out.bench_weights, pw));
+    if (out.flow_mode == 2) out.flow_ymax = out.bench_ymax;
+    set_flow_ylabels(out);
   }
   redraw_flow_from_ring(out);
 #endif
@@ -783,6 +944,129 @@ void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_set_height(out.tare_btn, action_h);
   lv_obj_set_width(out.tare_btn, 0);
   lv_obj_set_flex_grow(out.tare_btn, 1);
+  // The card itself, for the swap mode's show/hide.
+  out.scale_card = card;
+}
+
+// ---- Bench scale -----------------------------------------------------------
+
+// A neutral action button in a card's bottom row (the espresso card's
+// Disconnect/Tare shape), returning the label through `out_label`.
+lv_obj_t* make_card_action(lv_obj_t* acts, const char* text, const lv_font_t* font,
+                           int action_h, lv_obj_t** out_label) {
+  lv_obj_t* b = ui::make_button(acts);
+  lv_obj_set_height(b, action_h);
+  lv_obj_set_width(b, 0);
+  lv_obj_set_flex_grow(b, 1);
+  lv_obj_set_style_radius(b, ui::dp(14), 0);
+  lv_obj_set_style_bg_color(b, lv_color_hex(ui::theme::rail()), 0);
+  lv_obj_set_style_opa(b, LV_OPA_40, LV_STATE_DISABLED);
+  lv_obj_t* l = lv_label_create(b);
+  lv_label_set_text(l, text);
+  lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::text()), 0);
+  lv_obj_set_style_text_font(l, font, 0);
+  lv_obj_center(l);
+  if (out_label != nullptr) *out_label = l;
+  return b;
+}
+
+// One pill of the ESPRESSO | BENCH switch.
+lv_obj_t* make_pill(lv_obj_t* seg, const char* text, const lv_font_t* font, uint32_t color,
+                    lv_obj_t** out_label) {
+  lv_obj_t* b = ui::make_button(seg);
+  lv_obj_set_size(b, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_style_pad_hor(b, ui::dp(10), 0);
+  lv_obj_set_style_pad_ver(b, ui::dp(4), 0);
+  lv_obj_set_style_radius(b, ui::dp(12), 0);
+  lv_obj_set_style_bg_color(b, lv_color_hex(color), 0);
+  lv_obj_set_style_bg_opa(b, LV_OPA_TRANSP, 0);  // show_bench_side fills the active one
+  lv_obj_t* l = lv_label_create(b);
+  lv_label_set_text(l, text);
+  lv_obj_set_style_text_font(l, font, 0);
+  lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_center(l);
+  *out_label = l;
+  return b;
+}
+
+// Replace a panel header's caption with the ESPRESSO | BENCH switch (swap
+// mode). `hdr` is the header row make_panel_header built: child 0 = caption,
+// child 1 = the status group. `idx` = which card's copy of the switch.
+void add_segmented_switch(lv_obj_t* hdr, int idx, const lv_font_t* cap_font,
+                          HomeWidgets& out) {
+  lv_obj_add_flag(lv_obj_get_child(hdr, 0), LV_OBJ_FLAG_HIDDEN);  // the caption
+  lv_obj_t* seg = lv_obj_create(hdr);
+  lv_obj_remove_style_all(seg);
+  lv_obj_remove_flag(seg, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_size(seg, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(seg, LV_FLEX_FLOW_ROW);
+  lv_obj_set_style_pad_all(seg, ui::dp(2), 0);
+  lv_obj_set_style_radius(seg, ui::dp(14), 0);
+  lv_obj_set_style_bg_opa(seg, LV_OPA_COVER, 0);
+  lv_obj_set_style_bg_color(seg, lv_color_hex(ui::theme::rail()), 0);
+  out.seg_espresso[idx] = make_pill(seg, "ESPRESSO", cap_font, ui::theme::accent(),
+                                    &out.seg_espresso_label[idx]);
+  out.seg_bench[idx] = make_pill(seg, "BENCH", cap_font, ui::theme::bench(),
+                                 &out.seg_bench_label[idx]);
+  lv_obj_move_to_index(seg, 0);
+}
+
+// Battery labels (percent + icon) after a header's status text, the espresso
+// card's shape; update_home shows/colours them per the Battery display setting.
+void add_bench_battery(lv_obj_t* status_group, const lv_font_t* cap_font,
+                       const lv_font_t* status_font, HomeWidgets& out) {
+  out.bench_batt_pct_label = lv_label_create(status_group);
+  lv_obj_set_style_text_font(out.bench_batt_pct_label, cap_font, 0);
+  lv_obj_set_style_text_color(out.bench_batt_pct_label, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_add_flag(out.bench_batt_pct_label, LV_OBJ_FLAG_HIDDEN);
+  out.bench_batt_label = lv_label_create(status_group);
+  lv_obj_set_style_text_font(out.bench_batt_label, status_font, 0);
+  lv_obj_set_style_text_color(out.bench_batt_label, lv_color_hex(ui::theme::muted()), 0);
+  lv_obj_add_flag(out.bench_batt_label, LV_OBJ_FLAG_HIDDEN);
+}
+
+// The BENCH card: header (caption or the switch; status dot, optional text,
+// battery), a hero weight with the scale's name under it, and the actions —
+// Disconnect + Tare in the panel slot, Tare alone beside the graph (its
+// Connect lives in Settings; the beside card is the readout).
+lv_obj_t* build_bench_panel(lv_obj_t* parent, const lv_font_t* cap_font,
+                            const lv_font_t* status_font, int pad, int action_h,
+                            const lv_font_t* action_font, bool xl, bool with_status_text,
+                            bool with_connect, bool with_switch, HomeWidgets& out) {
+  lv_obj_t* card = make_panel_card(parent, pad);
+  make_panel_header(card, "BENCH", cap_font, status_font, &out.bench_status_dot,
+                    with_status_text ? &out.bench_status_label : nullptr);
+  lv_obj_t* sg = lv_obj_get_parent(out.bench_status_dot);
+  add_bench_battery(sg, cap_font, status_font, out);
+  if (with_switch) add_segmented_switch(lv_obj_get_child(card, 0), 1, cap_font, out);
+
+  lv_obj_t* body = make_panel_body(card);
+  lv_obj_set_flex_flow(body, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(body, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  out.bench_weight = lv_label_create(body);
+  lv_label_set_text(out.bench_weight, "-- g");
+  lv_obj_set_style_text_font(out.bench_weight, ui::font_dp(xl ? 48 : 40), 0);
+  lv_obj_set_style_text_color(out.bench_weight, lv_color_hex(ui::theme::text()), 0);
+  out.bench_name = lv_label_create(body);
+  lv_label_set_text(out.bench_name, "");
+  lv_obj_set_style_text_font(out.bench_name, cap_font, 0);
+  lv_obj_set_style_text_color(out.bench_name, lv_color_hex(ui::theme::muted()), 0);
+
+  lv_obj_t* acts = lv_obj_create(card);
+  lv_obj_remove_style_all(acts);
+  lv_obj_remove_flag(acts, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_width(acts, lv_pct(100));
+  lv_obj_set_height(acts, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(acts, LV_FLEX_FLOW_ROW);
+  lv_obj_set_style_pad_column(acts, pad, 0);
+  if (with_connect)
+    out.bench_connect_btn =
+        make_card_action(acts, "Disconnect", action_font, action_h, &out.bench_connect_label);
+  out.bench_tare_btn = make_card_action(acts, LV_SYMBOL_LOOP "  Tare", action_font, action_h,
+                                        nullptr);
+  out.bench_card = card;
+  return card;
 }
 
 }  // namespace
@@ -857,10 +1141,18 @@ void build_bottom_tray(lv_obj_t* bar, const lv_font_t* font, HomeWidgets& out) {
 }
 
 void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_enabled,
-                    HomeWidgets& out) {
+                    bool bench_enabled, int bench_mode, HomeWidgets& out) {
   const bool compact = is_compact(screen);
   const bool xl = is_xl(screen);
-  out.scale_enabled = scale_enabled;
+  // Scale-aware with EITHER scale saved. The compact tier (the internal 2")
+  // never shows the bench scale, so there it follows the espresso one only.
+  if (compact) bench_enabled = false;
+  const bool any_scale = scale_enabled || bench_enabled;
+  out.scale_enabled = any_scale;
+  out.bench_enabled = bench_enabled;
+  out.bench_only = bench_enabled && !scale_enabled;
+  out.bench_mode = bench_mode == 1 ? 1 : 0;
+  out.bench_side = false;
   out.compact = compact;
 
   // HomeWidgets is reused across rebuilds, and build() frees the old widgets. Null
@@ -890,9 +1182,23 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   // dereference them (LoadProhibited on forget-scale).
   out.flow_canvas = nullptr;  // flow_buf is freed by App before each rebuild
   out.flow_unit_btn = out.flow_unit_label = nullptr;
+  out.flow_legend_dot = out.flow_legend_dot2 = out.flow_unit_label2 = nullptr;
   out.flow_xspan_label = nullptr;
   for (lv_obj_t*& yl : out.flow_ylabels) yl = nullptr;
+  for (lv_obj_t*& yl : out.flow_ylabels_r) yl = nullptr;
   for (lv_obj_t*& xl : out.flow_xlabels) xl = nullptr;
+  // Bench scale widgets: large scale-aware layout only (bench_weights is
+  // freed by App before each rebuild, with the other rings).
+  out.scale_card = out.bench_card = nullptr;
+  out.bench_weight = out.bench_name = nullptr;
+  out.bench_status_dot = out.bench_status_label = nullptr;
+  out.bench_batt_label = out.bench_batt_pct_label = nullptr;
+  out.bench_tare_btn = out.bench_connect_btn = out.bench_connect_label = nullptr;
+  for (int i = 0; i < 2; ++i) {
+    out.seg_espresso[i] = out.seg_bench[i] = nullptr;
+    out.seg_espresso_label[i] = out.seg_bench_label[i] = nullptr;
+  }
+  out.bench_overlay = false;
 
   const int pad = ui::dp(compact ? 8 : xl ? 28 : 20);
   const int gap = ui::dp(compact ? 6 : xl ? 22 : 16);
@@ -976,7 +1282,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   const int panel_btn = ui::dp(xl ? 54 : 42);
   const lv_font_t* panel_sym = ui::font_dp(xl ? 28 : 20);
 
-  if (!scale_enabled) {
+  if (!any_scale) {
     // --- Large no-scale Home: one MICRA card as the hero, filling the whole space
     // (no second card to share it), then Power. Bigger value + steppers than the
     // scale-aware panels, and the BREW/STEAM clusters are centered vertically so the
@@ -1047,19 +1353,63 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   lv_obj_set_style_pad_column(panels, gap, 0);
   build_micra_panel(panels, panel_cap, panel_status, panel_val, panel_set, panel_btn,
                     panel_sym, panel_pad, action_h, btn_font, out);
-  build_scale_panel(panels, panel_cap, panel_status, panel_val, panel_set, panel_btn,
-                    panel_sym, panel_pad, action_h, btn_font, out);
+  if (out.bench_only) {
+    // No espresso scale: the bench card takes the SCALE slot alone (status
+    // text, Disconnect + Tare, no switch) and the graph shows it in grams.
+    build_bench_panel(panels, panel_cap, panel_status, panel_pad, action_h, btn_font, xl,
+                      /*with_status_text=*/true, /*with_connect=*/true,
+                      /*with_switch=*/false, out);
+  } else {
+    build_scale_panel(panels, panel_cap, panel_status, panel_val, panel_set, panel_btn,
+                      panel_sym, panel_pad, action_h, btn_font, out);
+    if (bench_enabled && out.bench_mode == 0) {
+      // Swap mode: both cards in the slot, the switch on each header, the
+      // status text dropped for the switch's width (the dot carries the
+      // state, as on the compact cards). The bench card starts hidden.
+      lv_obj_t* scale_hdr = lv_obj_get_child(out.scale_card, 0);
+      add_segmented_switch(scale_hdr, 0, panel_cap, out);
+      lv_obj_add_flag(out.scale_status_label, LV_OBJ_FLAG_HIDDEN);
+      out.scale_status_label = nullptr;
+      build_bench_panel(panels, panel_cap, panel_status, panel_pad, action_h, btn_font, xl,
+                        /*with_status_text=*/false, /*with_connect=*/true,
+                        /*with_switch=*/true, out);
+      lv_obj_add_flag(out.bench_card, LV_OBJ_FLAG_HIDDEN);
+    }
+  }
 
   // The flow graph fills the (slightly smaller) lower half. The card is created
   // here for correct flex order, but its canvas is sized only once the layout
-  // is final (populate_flow_graph below).
-  lv_obj_t* graph_card = make_flow_graph_card(parent);
-  lv_obj_set_flex_grow(graph_card, 5);  // the other side of the 7:5 split
+  // is final (populate_flow_graph below). Beside mode: the lower row splits
+  // 2:1 between the graph and the bench card.
+  const bool beside = bench_enabled && !out.bench_only && out.bench_mode == 1;
+  lv_obj_t* graph_card;
+  if (beside) {
+    lv_obj_t* lower = lv_obj_create(parent);
+    lv_obj_remove_style_all(lower);
+    lv_obj_remove_flag(lower, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_width(lower, lv_pct(100));
+    lv_obj_set_flex_grow(lower, 5);  // the other side of the 7:5 split
+    lv_obj_set_flex_flow(lower, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(lower, gap, 0);
+    graph_card = make_flow_graph_card(lower, /*right_axis=*/true);
+    lv_obj_set_height(graph_card, lv_pct(100));
+    lv_obj_set_width(graph_card, 0);
+    lv_obj_set_flex_grow(graph_card, 2);
+    build_bench_panel(lower, panel_cap, panel_status, panel_pad, action_h, btn_font, xl,
+                      /*with_status_text=*/false, /*with_connect=*/false,
+                      /*with_switch=*/false, out);
+    lv_obj_set_flex_grow(out.bench_card, 1);
+  } else {
+    graph_card = make_flow_graph_card(parent);
+    lv_obj_set_flex_grow(graph_card, 5);  // the other side of the 7:5 split
+  }
 
   // Everything's in place: resolve the final layout, then size + paint the graph
   // to the card's real content box.
   lv_obj_update_layout(parent);
   populate_flow_graph(graph_card, out);
+  // Swap mode starts on the ESPRESSO side: paint the pills to match.
+  if (bench_enabled && out.bench_mode == 0 && !out.bench_only) show_bench_side(out, false);
 }
 
 // "<power> 27 min" after the MICRA caption while an auto-standby count runs;
@@ -1083,9 +1433,72 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
                  const core::BatteryState& battery, const core::WallTime& clock,
                  bool clock_24h, bool fahrenheit, const core::ScaleSnapshot& scale,
                  const core::ScaleFeatures& scale_features, bool scale_connect_enabled,
-                 const core::BrewSnapshot& brew, core::NetState net, bool heating) {
+                 const core::BrewSnapshot& brew, core::NetState net, bool heating,
+                 const core::ScaleSnapshot* bench, const core::ScaleFeatures* bench_features,
+                 bool bench_connect_enabled) {
   const bool connected = state.link == core::Link::Connected;
   const bool on = state.power == core::Power::On;
+
+  // Bench card: readout, name, status, battery, Tare/Connect. No shot lockout
+  // anywhere here — the bench scale plays no part in a shot.
+  if (w.bench_card != nullptr && bench != nullptr) {
+    char wb[16];
+    if (bench->connected) std::snprintf(wb, sizeof(wb), "%.1f g", static_cast<double>(bench->weight_g));
+    else std::snprintf(wb, sizeof(wb), "-- g");
+    ui::set_text(w.bench_weight, wb);
+    ui::set_text(w.bench_name, bench->name != nullptr ? bench->name : "");
+    const char* btxt;
+    uint32_t bdot;
+    if (bench->connected) {
+      btxt = "Connected";
+      bdot = ui::theme::ok();
+    } else if (bench_connect_enabled) {
+      btxt = "Connecting...";
+      bdot = ui::theme::warn();
+    } else if (bench_features != nullptr && bench_features->sleep) {
+      btxt = "Sleeping";
+      bdot = ui::theme::muted();
+    } else {
+      btxt = "Disconnected";
+      bdot = ui::theme::muted();
+    }
+    ui::set_bg_color(w.bench_status_dot, bdot);
+    if (w.bench_status_label != nullptr) ui::set_text(w.bench_status_label, btxt);
+    if (w.bench_batt_label != nullptr) {
+      const bool have = bench->connected && bench->battery_valid;
+      const bool show_pct = have && w.scale_batt_style != 0;
+      const bool show_icon = have && w.scale_batt_style != 1;
+      const int low = bench_features != nullptr ? bench_features->battery_low_pct : 15;
+      const uint32_t color =
+          have && bench->battery_pct <= low ? ui::theme::alert() : ui::theme::muted();
+      auto show = [](lv_obj_t* o, bool on_) {
+        if (o == nullptr || on_ != lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) return;
+        if (on_) lv_obj_remove_flag(o, LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+      };
+      if (show_pct) {
+        char sb[8];
+        std::snprintf(sb, sizeof(sb), "%d%%", bench->battery_pct);
+        ui::set_text(w.bench_batt_pct_label, sb);
+        ui::set_text_color(w.bench_batt_pct_label, color);
+      }
+      if (show_icon) {
+        ui::set_text(w.bench_batt_label, battery_icon(bench->battery_pct));
+        ui::set_text_color(w.bench_batt_label, color);
+      }
+      show(w.bench_batt_pct_label, show_pct);
+      show(w.bench_batt_label, show_icon);
+    }
+    if (w.bench_tare_btn != nullptr) {
+      if (bench->connected) lv_obj_remove_state(w.bench_tare_btn, LV_STATE_DISABLED);
+      else lv_obj_add_state(w.bench_tare_btn, LV_STATE_DISABLED);
+    }
+    if (w.bench_connect_btn != nullptr) {
+      ui::set_text(w.bench_connect_label, bench_connect_enabled ? "Disconnect" : "Connect");
+      ui::set_bg_color(w.bench_connect_btn,
+                       bench_connect_enabled ? ui::theme::rail() : ui::theme::accent());
+    }
+  }
 
   // Temperatures: real values when connected, placeholders otherwise. The set point
   // is always compact ("93.0°" — the live value above/beside it carries the unit),
@@ -1379,7 +1792,7 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
   // Neutral fill: card() on the classic layouts (button sits on the bg), rail()
   // when the button lives inside the MICRA card (card-on-card is invisible).
   const uint32_t pow_neutral =
-      (w.scale_connect_btn != nullptr) ? ui::theme::rail() : ui::theme::card();
+      (w.scale_enabled && !w.compact) ? ui::theme::rail() : ui::theme::card();
   // Release a pending power toggle: answered (the reported power changed),
   // link lost (nothing left to wait on), or timed out.
   if (w.power_pending_until != 0 &&
@@ -1583,13 +1996,16 @@ void reset_flow_graph(HomeWidgets& w) {
   for (int x = 0; x < w.flow_w; ++x) {
     w.flow_weights[x] = 0.0f;
     w.flow_flows[x] = 0.0f;
+    if (w.bench_weights != nullptr) w.bench_weights[x] = kFlowNoData;
     clear_flow_column(w, x);
   }
   w.flow_prev_y = -1;
+  w.bench_prev_y = -1;
   w.flow_tick = 0;      // restart the scroll clock cleanly on the next tick
   w.flow_accum_ms = 0;
   w.flow_cursor = 0;    // scope sweep restarts at the left edge
   w.flow_ymax = flow_default_max(w.flow_mode);
+  w.bench_ymax = flow_default_max(2);
   set_flow_ylabels(w);
   w.flow_blanked = true;
   lv_obj_invalidate(w.flow_canvas);
@@ -2303,14 +2719,21 @@ static void flow_smooth_push(HomeWidgets& w, float rw, float rf, float* out_w,
   *out_f = af;
 }
 
-void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
+void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale,
+                     const core::ScaleSnapshot* bench) {
   if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_weights == nullptr ||
       w.flow_flows == nullptr || w.flow_w <= 0)
     return;
 
-  // Scale disconnected: blank the plot instead of scrolling a fake zero line in.
-  // Clear once on the transition to an empty grid, then idle until it reconnects.
-  if (!scale.connected) {
+  // Which series are live. The espresso trace needs the espresso scale; the
+  // bench series (mode 2, or the beside-mode overlay) needs the bench scale.
+  const bool bench_series = w.bench_weights != nullptr && (w.flow_mode == 2 || w.bench_overlay);
+  const bool esp_on = scale.connected && w.flow_mode != 2;
+  const bool bench_on = bench_series && bench != nullptr && bench->connected;
+  // Nothing connected: blank the plot instead of scrolling a fake zero line
+  // in. Clear once on the transition to an empty grid, then idle until a
+  // scale reconnects.
+  if (!esp_on && !bench_on) {
     if (!w.flow_blanked) {
       reset_flow_graph(w);
       reset_flow_history(w);  // reconnect weights won't relate to these samples
@@ -2318,6 +2741,7 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
     return;
   }
   w.flow_blanked = false;
+  if (!esp_on) reset_flow_history(w);  // the rate window must not span a gap
 
   const uint32_t now = lv_tick_get();
   if (w.flow_tick == 0) {  // first call: start the clock, nothing to advance yet
@@ -2341,17 +2765,21 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
   // Flow = trailing-window derivative over the time-stamped weight history
   // (update_flow_rate — shared with the shot plot). A rising weight is real
   // flow; a falling one (cup removed) is negative, handled per drop-negative.
-  const float rrw = scale.weight_g;  // g (signed; the scale streams weight, not flow)
-  const float rrf = update_flow_rate(w, scale, now);
-  // Smooth on the way IN, gated on a step actually happening this frame — the
-  // delay line advances with the plot, not with the render loop. What lands in
-  // the ring is therefore already filtered, which keeps the Y auto-range, the
-  // mode toggle and every redraw-from-ring path consistent with no extra work.
-  float rw = rrw, rf = rrf;
-  if (w.flow_accum_ms >= ms_per_step) flow_smooth_push(w, rrw, rrf, &rw, &rf);
-  const float raw = (w.flow_mode == 1) ? rw : rf;
+  // With the espresso scale away its columns are no-data (pen up), never 0.
+  float rw = kFlowNoData, rf = kFlowNoData;
+  if (esp_on) {
+    const float rrw = scale.weight_g;  // g (signed; the scale streams weight, not flow)
+    const float rrf = update_flow_rate(w, scale, now);
+    // Smooth on the way IN, gated on a step actually happening this frame — the
+    // delay line advances with the plot, not with the render loop. What lands in
+    // the ring is therefore already filtered, which keeps the Y auto-range, the
+    // mode toggle and every redraw-from-ring path consistent with no extra work.
+    rw = rrw;
+    rf = rrf;
+    if (w.flow_accum_ms >= ms_per_step) flow_smooth_push(w, rrw, rrf, &rw, &rf);
+  }
+  const float bw = bench_on ? bench->weight_g : kFlowNoData;  // bench weight, raw
 
-  const uint16_t bright = flow_bright_color();
   const int scope_start = w.flow_cursor;  // for the scope-mode partial invalidation
   bool scope_wrapped = false;             // a wrap forces a full re-blit (dim redraw)
   int steps = 0;
@@ -2376,14 +2804,14 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
                    static_cast<size_t>(w.flow_w - px) * sizeof(float));
       std::memmove(w.flow_flows, w.flow_flows + px,
                    static_cast<size_t>(w.flow_w - px) * sizeof(float));
-      const float y = flow_row(raw, w.flow_h, w.flow_ymax);
+      if (w.bench_weights != nullptr)
+        std::memmove(w.bench_weights, w.bench_weights + px,
+                     static_cast<size_t>(w.flow_w - px) * sizeof(float));
       for (int x = w.flow_w - px; x < w.flow_w; ++x) {
         w.flow_weights[x] = rw;
         w.flow_flows[x] = rf;
-        clear_flow_column(w, x);
-        fill_flow_below(w, x, y, bright);
-        draw_flow_segment(w, x, y, bright);
-        w.flow_prev_y = y;
+        if (w.bench_weights != nullptr) w.bench_weights[x] = bw;
+        paint_flow_column(w, x, false);
       }
     }
   } else {
@@ -2398,16 +2826,14 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
         w.flow_cursor = c;
         w.flow_weights[c] = rw;
         w.flow_flows[c] = rf;
+        if (w.bench_weights != nullptr) w.bench_weights[c] = bw;
         if (c == 0) {  // wrapped: age the just-finished sweep to dim, pen up for the new
           redraw_flow_from_ring(w);
           scope_wrapped = true;
           w.flow_prev_y = -1;
+          w.bench_prev_y = -1;
         }
-        const float y = flow_row(raw, w.flow_h, w.flow_ymax);
-        clear_flow_column(w, c);
-        fill_flow_below(w, c, y, bright);
-        draw_flow_segment(w, c, y, bright);
-        w.flow_prev_y = y;
+        paint_flow_column(w, c, false);
         for (int g = 1; g <= kFlowScopeGapPx; ++g) {  // blank gap just ahead of the head
           int gc = c + g;
           if (gc >= w.flow_w) gc -= w.flow_w;
@@ -2421,20 +2847,28 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
   // Auto-range the Y axis: grow immediately to fit the window's peak; shrink back
   // toward the mode default only once the peak drops below half scale (hysteresis,
   // so it settles instead of flip-flopping at a threshold). On a change, redraw the
-  // whole plot from the ring (existing pixels are at the old scale).
-  float wmax = 0.0f;
-  const float* ring = flow_active_ring(w);
-  for (int x = 0; x < w.flow_w; ++x)
-    if (ring[x] > wmax) wmax = ring[x];
+  // whole plot from the ring (existing pixels are at the old scale). The bench
+  // overlay's right axis ranges the same way on its own ring.
+  const float wmax = ring_peak(flow_active_ring(w), w.flow_w);
   const float want = flow_nice_max(w.flow_mode, wmax);
   const bool grow = want > w.flow_ymax;
   const bool shrink = want < w.flow_ymax && wmax < w.flow_ymax * 0.5f;
   bool rescaled = false;
   if (grow || shrink) {
     w.flow_ymax = want;
+    rescaled = true;
+  }
+  if (w.bench_overlay && w.bench_weights != nullptr && w.flow_mode != 2) {
+    const float bmax = ring_peak(w.bench_weights, w.flow_w);
+    const float bwant = flow_nice_max(2, bmax);
+    if (bwant > w.bench_ymax || (bwant < w.bench_ymax && bmax < w.bench_ymax * 0.5f)) {
+      w.bench_ymax = bwant;
+      rescaled = true;
+    }
+  }
+  if (rescaled) {
     redraw_flow_from_ring(w);
     set_flow_ylabels(w);
-    rescaled = true;
   }
 
   if (!w.flow_scope_mode || rescaled || scope_wrapped) {
@@ -2446,15 +2880,32 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
   }
 }
 
+// Re-fit the axis to the active ring's peak and repaint — after a mode change
+// (the unit toggle, the ESPRESSO | BENCH switch).
+static void refit_flow_axis(HomeWidgets& w) {
+  if (w.flow_blanked) {
+    w.flow_ymax = flow_default_max(w.flow_mode);
+    set_flow_ylabels(w);
+    lv_obj_invalidate(w.flow_canvas);
+    return;
+  }
+  w.flow_ymax = flow_nice_max(w.flow_mode, ring_peak(flow_active_ring(w), w.flow_w));
+  set_flow_ylabels(w);
+  redraw_flow_from_ring(w);
+  lv_obj_invalidate(w.flow_canvas);
+}
+
 void toggle_flow_mode(HomeWidgets& w) {
   if (w.flow_canvas == nullptr || w.flow_buf == nullptr || w.flow_weights == nullptr ||
       w.flow_flows == nullptr)
     return;
+  if (w.flow_mode == 2) return;  // the BENCH side is grams, full stop
   w.flow_mode ^= 1;
+  w.flow_mode_saved = w.flow_mode;
   // Both rings are kept live by flow_graph_tick, so the existing trace survives the
   // switch: re-scale the axis to the now-active quantity's window peak and redraw in
   // the new unit (unless blanked — leave the empty grid until the scale reconnects).
-  if (w.flow_unit_label != nullptr) lv_label_set_text(w.flow_unit_label, flow_unit(w.flow_mode));
+  update_flow_legend(w);
   if (w.flow_shot_plot) {
     // The shot plot redraws wholesale from its own samples (works frozen in
     // review too): re-fit the axis for the new quantity and repaint.
@@ -2463,20 +2914,46 @@ void toggle_flow_mode(HomeWidgets& w) {
     shot_plot_redraw_full(w, UINT32_MAX);
     return;
   }
-  if (w.flow_blanked) {
-    w.flow_ymax = flow_default_max(w.flow_mode);
-    set_flow_ylabels(w);
-    lv_obj_invalidate(w.flow_canvas);
+  refit_flow_axis(w);
+}
+
+void show_bench_side(HomeWidgets& w, bool bench) {
+  if (!w.bench_enabled || w.bench_only || w.bench_mode != 0 || w.bench_card == nullptr ||
+      w.scale_card == nullptr)
     return;
+  w.bench_side = bench;
+  // One card in the panel slot at a time: hidden objects leave the flex row.
+  if (bench) {
+    lv_obj_add_flag(w.scale_card, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(w.bench_card, LV_OBJ_FLAG_HIDDEN);
+  } else {
+    lv_obj_add_flag(w.bench_card, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(w.scale_card, LV_OBJ_FLAG_HIDDEN);
   }
-  const float* ring = flow_active_ring(w);
-  float wmax = 0.0f;
-  for (int x = 0; x < w.flow_w; ++x)
-    if (ring[x] > wmax) wmax = ring[x];
-  w.flow_ymax = flow_nice_max(w.flow_mode, wmax);
-  set_flow_ylabels(w);
-  redraw_flow_from_ring(w);
-  lv_obj_invalidate(w.flow_canvas);
+  // The pills: the active one filled in its colour, the other bare.
+  for (int i = 0; i < 2; ++i) {
+    if (w.seg_espresso[i] != nullptr) {
+      lv_obj_set_style_bg_opa(w.seg_espresso[i], bench ? LV_OPA_TRANSP : LV_OPA_COVER, 0);
+      ui::set_text_color(w.seg_espresso_label[i],
+                         bench ? ui::theme::muted() : ui::theme::bg());
+    }
+    if (w.seg_bench[i] != nullptr) {
+      lv_obj_set_style_bg_opa(w.seg_bench[i], bench ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+      ui::set_text_color(w.seg_bench_label[i], bench ? ui::theme::bg() : ui::theme::muted());
+    }
+  }
+  // The graph follows the card: bench grams on the BENCH side, the espresso
+  // unit it had before on the ESPRESSO side. During a shot the shot plot owns
+  // the canvas (and the switch is already back on ESPRESSO).
+  if (w.flow_canvas == nullptr || w.bench_weights == nullptr) return;
+  const int want = bench ? 2 : w.flow_mode_saved;
+  if (want == w.flow_mode) return;
+  if (w.flow_mode != 2) w.flow_mode_saved = w.flow_mode;
+  w.flow_mode = want;
+  w.flow_prev_y = -1;
+  update_flow_legend(w);
+  if (w.flow_shot_plot) return;  // the live sweep picks the mode up after review
+  refit_flow_axis(w);
 }
 
 void set_flow_drop_negative(HomeWidgets& w, bool on) {
@@ -2514,13 +2991,16 @@ void set_flow_scope_mode(HomeWidgets& w, bool on) {
   // carry over — reset to an empty grid and let the tick refill it in the new style.
   w.flow_cursor = 0;
   w.flow_prev_y = -1;
+  w.bench_prev_y = -1;
   w.flow_tick = 0;
   w.flow_accum_ms = 0;
   w.flow_blanked = false;
   w.flow_ymax = flow_default_max(w.flow_mode);
+  w.bench_ymax = flow_default_max(2);
   for (int x = 0; x < w.flow_w; ++x) {
     w.flow_weights[x] = 0.0f;
     w.flow_flows[x] = 0.0f;
+    if (w.bench_weights != nullptr) w.bench_weights[x] = kFlowNoData;
     clear_flow_column(w, x);
   }
   set_flow_ylabels(w);

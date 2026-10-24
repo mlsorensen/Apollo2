@@ -13,12 +13,13 @@ class FakeScale : public core::IScale {
  public:
   core::ScaleSnapshot snapshot() const override {
     return core::ScaleSnapshot{
-        .name = lunar_ ? "LUNAR-A1B2" : umbra_ ? "UMBRA-7F3A" : "BOOKOO_THEMIS",
+        .name = bench_ ? "BOOKOO_ULTRA" : lunar_ ? "LUNAR-A1B2" : umbra_ ? "UMBRA-7F3A"
+                                                                       : "BOOKOO_THEMIS",
         .connected = connected_,
-        .weight_g = 36.4f,
+        .weight_g = bench_ ? 412.5f : 36.4f,
         .timer_ms = 27000,
         .battery_valid = true,
-        .battery_pct = 78,
+        .battery_pct = bench_ ? 84 : 78,
         .seq = 1,
     };
   }
@@ -78,6 +79,8 @@ class FakeScale : public core::IScale {
   }
 
   void set_connected(bool c) { connected_ = c; }
+  // Bench persona: the counter scale (a Bookoo Ultra with a milk jug on it).
+  void set_bench(bool b) { bench_ = b; }
   // Umbra persona: sleep-capable scale, for rendering the "Sleeping" Home state.
   void set_umbra(bool u) { umbra_ = u; }
   // Lunar persona: Acaia with a Unit row + the read-only weighing-mode row.
@@ -90,6 +93,7 @@ class FakeScale : public core::IScale {
   bool connected_ = true;
   bool umbra_ = false;
   bool lunar_ = false;
+  bool bench_ = false;
   int setting_value_[4] = {3, 2, 0, 3};  // Beep / Auto-off / Unit g / Mode 4
 };
 

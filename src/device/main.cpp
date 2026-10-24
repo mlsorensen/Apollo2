@@ -458,7 +458,8 @@ void setup() {
         ui::theme::ok(),   ui::theme::warn(),  ui::theme::alert()};
   });
   g_app.build(g_micra, g_provisioner, g_battery, g_display_settings, g_clock, g_history,
-              g_scale, g_scale_provisioner, g_brew, g_network, platform::sound(), g_shots,
+              g_scale, &g_scale2, g_scale_provisioner, g_brew, g_network, platform::sound(),
+              g_shots,
               screen, &g_update_check,
 #if defined(BOARD_HAS_SD_MMC)
               // Settings backup/restore: the shot store implements it too — the
