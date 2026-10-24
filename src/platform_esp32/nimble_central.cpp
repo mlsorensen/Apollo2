@@ -3,6 +3,9 @@
 #include <NimBLEDevice.h>
 
 #include <cstring>
+#include <strings.h>
+
+#include "core/system.h"
 
 namespace {
 
@@ -13,6 +16,36 @@ void ensure_host() {
   NimBLEDevice::setMTU(247);  // machineCapabilities (~180B) exceeds default MTU
 }
 
+// Finder-chunk matcher: the scan singleton calls onResult for every
+// advertisement; a target address ends the scan at once. Address compare is
+// case-insensitive text — both sides come from NimBLEAddress::toString().
+class FinderCallbacks final : public NimBLEScanCallbacks {
+ public:
+  explicit FinderCallbacks(const core::FinderTargets& targets) : targets_(targets) {}
+  core::Sighting sighting;
+
+  void onResult(const NimBLEAdvertisedDevice* d) override {
+    if (sighting.found) return;
+    const std::string addr = d->getAddress().toString();
+    const core::AddrType seen = d->getAddress().getType() == BLE_ADDR_RANDOM
+                                    ? core::AddrType::kRandom
+                                    : core::AddrType::kPublic;
+    for (int i = 0; i < targets_.count; ++i) {
+      const core::FinderTarget& t = targets_.t[i];
+      if (strcasecmp(addr.c_str(), t.addr) != 0) continue;
+      if (t.type != core::AddrType::kUnknown && t.type != seen) continue;
+      sighting.found = true;
+      sighting.slot = t.slot;
+      sighting.type = seen;
+      NimBLEDevice::getScan()->stop();  // releases the blocked getResults()
+      return;
+    }
+  }
+
+ private:
+  const core::FinderTargets& targets_;
+};
+
 }  // namespace
 
 namespace platform {
@@ -20,6 +53,10 @@ namespace platform {
 std::vector<core::ScanResult> NimbleCentral::scan(uint32_t ms) {
   ensure_host();
   NimBLEScan* scan = NimBLEDevice::getScan();
+  // The scan object is a process-wide singleton that scan_for() also drives:
+  // set EVERYTHING this mode needs, never rely on a previous caller's state.
+  scan->setScanCallbacks(nullptr, false);
+  scan->setMaxResults(0xFF);
   scan->setActiveScan(true);  // also fetch scan-response for the full name
   NimBLEScanResults results = scan->getResults(ms, false);
 
@@ -42,12 +79,40 @@ std::vector<core::ScanResult> NimbleCentral::scan(uint32_t ms) {
   return found;
 }
 
+core::Sighting NimbleCentral::scan_for(const core::FinderTargets& targets, uint32_t ms) {
+  ensure_host();
+  if (targets.count <= 0) return core::Sighting{};
+  NimBLEScan* scan = NimBLEDevice::getScan();
+  FinderCallbacks cb(targets);
+  // Passive (no scan-request round trips; the address is all we need), no
+  // stored results (a Settings scan in a busy flat keeps 3-6 KB of devices;
+  // a background chunk every few seconds must keep nothing), matched in the
+  // callback which stops the scan on the first hit.
+  scan->setScanCallbacks(&cb, false);
+  scan->setMaxResults(0);
+  scan->setActiveScan(false);
+  scan->getResults(ms, false);  // blocks until the duration, stop() or cancel_scan()
+  scan->setScanCallbacks(nullptr, false);  // cb goes out of scope below
+  scan->clearResults();
+  return cb.sighting;
+}
+
+void NimbleCentral::cancel_scan() {
+  if (!NimBLEDevice::isInitialized()) return;
+  NimBLEScan* scan = NimBLEDevice::getScan();
+  if (scan->isScanning()) scan->stop();  // the blocked getResults() returns
+}
+
 bool NimbleCentral::connect(const std::string& mac, core::AddrType type,
                             bool prefer_random, uint32_t timeout_ms) {
   ensure_host();
   if (client_ == nullptr) client_ = NimBLEDevice::createClient();
   if (timeout_ms > 0) client_->setConnectTimeout(timeout_ms);
   conn_type_ = core::AddrType::kUnknown;
+  // Arbiter telltale: a connect starting while a scan runs means two links
+  // hold the radio at once (the connect would silently kill the scan).
+  if (NimBLEDevice::getScan()->isScanning())
+    core::logf("NimbleCentral: connect while scanning (arbiter bug?)\n");
 
   // A known type is ONE try; unknown tries both, preferred type first.
   // hold_ is checked before EACH attempt: a peer link about to scan cancels
@@ -61,12 +126,14 @@ bool NimbleCentral::connect(const std::string& mac, core::AddrType type,
   if (hold_.load()) return false;
   cancelled_.store(false);  // a stale one-shot cancel must not kill this attempt
   uint8_t used = first;
-  if (!client_->connect(NimBLEAddress(mac, first))) {
-    if (type != core::AddrType::kUnknown) return false;
-    if (hold_.load() || cancelled_.load()) return false;
+  connecting_.store(true);
+  bool ok = client_->connect(NimBLEAddress(mac, first));
+  if (!ok && type == core::AddrType::kUnknown && !hold_.load() && !cancelled_.load()) {
     used = second;
-    if (!client_->connect(NimBLEAddress(mac, second))) return false;
+    ok = client_->connect(NimBLEAddress(mac, second));
   }
+  connecting_.store(false);
+  if (!ok) return false;
   conn_type_ = used == BLE_ADDR_RANDOM ? core::AddrType::kRandom
                                        : core::AddrType::kPublic;
 
@@ -88,7 +155,9 @@ void NimbleCentral::cancel_connect() {
   // aborted first address-type attempt falls through to the second, and the
   // "cancelled" connect keeps the radio for another full timeout.
   cancelled_.store(true);
-  if (client_ != nullptr) client_->cancelConnect();
+  // NimBLE's cancel is GLOBAL (ble_gap_conn_cancel aborts whichever client is
+  // initiating): only issue it while THIS instance is the one connecting.
+  if (client_ != nullptr && connecting_.load()) client_->cancelConnect();
 }
 
 void NimbleCentral::hold_connects(bool on) {

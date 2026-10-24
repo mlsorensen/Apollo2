@@ -205,6 +205,13 @@ test-schedule:
 	g++ -std=c++20 -Wall -Wextra -Iinclude tools/schedule_test.cpp src/core/schedule.cpp \
 	    -o .pio/build/schedule_test && ./.pio/build/schedule_test
 
+# The BLE radio arbiter (core/radio_arbiter.cpp) is pure decision logic polled
+# by the link tasks; its decision table is checked the same way.
+test-radio:
+	@mkdir -p .pio/build
+	g++ -std=c++20 -Wall -Wextra -Iinclude tools/radio_arbiter_test.cpp src/core/radio_arbiter.cpp \
+	    -o .pio/build/radio_arbiter_test && ./.pio/build/radio_arbiter_test
+
 # Regenerate the manual's annotated screenshots from the sim renders. The
 # manifest (docs/img/manual/manifest.json) holds the callout coordinates; see
 # tools/annotate_docs.py for the update rules when the UI changes.

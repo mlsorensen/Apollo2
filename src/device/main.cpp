@@ -23,6 +23,7 @@
 
 #include "core/brew_controller.h"
 #include "core/log_ring.h"
+#include "core/radio_arbiter.h"
 #include "core/system.h"
 #include "platform_esp32/battery.h"
 #include "platform_esp32/board_config.h"
@@ -64,7 +65,10 @@ namespace {
 platform::Display g_display;
 platform::Touch g_touch;
 platform::Config g_config;
-platform::MicraLink g_micra;
+// One radio listener at a time across every BLE link (see core/radio_arbiter.h):
+// the links poll it from their own tasks; it owns every connect-cancel.
+core::RadioArbiter g_radio;
+platform::MicraLink g_micra{g_radio};
 platform::TokenSetup g_token_setup{g_config, g_micra};
 platform::Provisioner g_provisioner{g_micra, g_config, g_token_setup};
 platform::Battery g_battery;
@@ -74,7 +78,7 @@ platform::Clock g_clock{g_config};
 platform::Network g_network{g_config, g_clock, g_token_setup};  // WiFi station + NTP
 platform::UpdateCheck g_update_check{g_config, g_network};  // daily release check
 platform::History g_history;
-platform::ScaleLink g_scale;            // NimBLE Bluetooth scale (Bookoo/Acaia)
+platform::ScaleLink g_scale{g_radio, core::RadioSlot::kScaleEspresso};  // the espresso scale
 platform::ScaleProvisioner g_scale_provisioner{g_scale, g_config};
 // Brew-by-weight: paddle relay + shot state machine over the paddle + scale
 // ports (core logic; polled from loop()).
@@ -549,26 +553,39 @@ void setup() {
   // TLS fetch no longer starves the hosted radio's internal-DMA pool.
   g_network.begin();
 
-  // Radio arbitration: the host refuses to scan while ANY connect is pending,
-  // so each link's scan preempts the OTHER link's connect attempts (cancels an
-  // in-flight one, holds new ones off until the scan finishes). Without this,
-  // a Settings scan silently returned nothing whenever the other device sat in
-  // "Connecting" (user-reported on the 4.3C).
-  g_micra.set_scan_peer_pauser([](bool on) { g_scale.pause_connects(on); });
-  g_scale.set_scan_peer_pauser([](bool on) { g_micra.pause_connects(on); });
+  // Radio arbitration: the host runs ONE listen at a time (a connect-by-
+  // address, a scan), refuses to scan while any connect is pending, and its
+  // connect-cancel is global. g_radio grants each link its turn and is the
+  // only thing that cancels — through these hooks, aimed at the holder.
+  // Without arbitration a Settings scan silently returned nothing whenever
+  // the other device sat in "Connecting" (user-reported on the 4.3C), and the
+  // Micra's and the scale's reconnect attempts collided and interleaved by luck.
+  g_radio.set_hold_hook(core::RadioSlot::kMicra,
+                        [](bool on) { g_micra.central().hold_connects(on); });
+  g_radio.set_scan_cancel_hook(core::RadioSlot::kMicra,
+                               []() { g_micra.central().cancel_scan(); });
+  g_radio.set_hold_hook(core::RadioSlot::kScaleEspresso,
+                        [](bool on) { g_scale.central().hold_connects(on); });
+  g_radio.set_scan_cancel_hook(core::RadioSlot::kScaleEspresso,
+                               []() { g_scale.central().cancel_scan(); });
 
   // Seed the link from saved config, then start the background BLE task. With
   // no MAC -> Unconfigured; MAC but no token -> NeedsToken (Settings "Setup").
   const std::string mac = g_config.mac();
   g_micra.set_name(g_config.name());
   g_micra.set_token(g_config.token());
-  core::logf("Saved machine: mac=%s token=%s\n", mac.empty() ? "(none)" : mac.c_str(),
-             g_config.token().empty() ? "(none)" : "set");
+  core::logf("Saved machine: mac=%s token=%s type=%s\n", mac.empty() ? "(none)" : mac.c_str(),
+             g_config.token().empty() ? "(none)" : "set",
+             core::addr_type_name(g_config.micra_addr_type()));
   // Opt-in auto-connect (Micra > Settings): grab the saved machine at boot
   // instead of waiting for a Connect tap. Default off — a connected remote
   // occupies the Micra's single BLE slot.
   if (!mac.empty() && g_config.auto_connect()) g_micra.set_connect_enabled(true);
-  g_micra.begin(mac);
+  // The address type the connect actually used is persisted next to the MAC
+  // (one 8 s try per reconnect instead of two, sharing the radio with the
+  // scales' finder).
+  g_micra.set_addr_type_learned([](core::AddrType t) { g_config.set_micra_addr_type(t); });
+  g_micra.begin(mac, g_config.micra_addr_type());
 
   // Start the Bluetooth scale link from its saved MAC (empty -> idles).
   const std::string scale_mac = g_config.scale_mac();
@@ -851,18 +868,28 @@ void loop() {
   //  the portal closes on that connect. Only NEW attempts are suppressed; an
   //  established Micra/scale link stays connected.
   {
-    static bool micra_prev = false, scale_prev = false;
+    static bool micra_prev = false, saver_prev = false, portal_prev = false;
     const bool saver = g_app.screensaver_active();
     const bool portal = g_token_setup.active();
-    const bool park_scale = saver || portal;
     const bool park_micra = portal && !g_token_setup.token_submitted();
     if (park_micra != micra_prev) {
       micra_prev = park_micra;
-      g_micra.pause_connects(park_micra);
+      g_radio.set_parked(core::RadioSlot::kMicra, core::ParkSource::kPortal, park_micra);
     }
-    if (park_scale != scale_prev) {
-      scale_prev = park_scale;
-      g_scale.pause_connects(park_scale);
+    // Each source holds its own bit on the arbiter, so the portal closing
+    // can't un-park a saver-parked scale. The partner-mode Umbra is put to
+    // sleep by the same two sources — and ONLY these: yielding the radio to
+    // another link must never doze it (the old shared pause level did, on
+    // every Micra Settings scan).
+    if (saver != saver_prev) {
+      saver_prev = saver;
+      g_radio.set_parked(core::RadioSlot::kScaleEspresso, core::ParkSource::kSaver, saver);
+      g_scale.pause_partner(saver || portal);
+    }
+    if (portal != portal_prev) {
+      portal_prev = portal;
+      g_radio.set_parked(core::RadioSlot::kScaleEspresso, core::ParkSource::kPortal, portal);
+      g_scale.pause_partner(saver || portal);
     }
   }
 

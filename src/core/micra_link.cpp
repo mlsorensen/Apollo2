@@ -30,8 +30,8 @@ constexpr char kDisSoftware[] = "2a28";
 constexpr uint32_t kReconnectBackoffMs = 3000;
 // Per address-type attempt. A present, advertising Micra connects in ~1-2s;
 // the retry loop covers the rest, so failing fast beats camping on the radio —
-// a pending connect blocks the host from scanning (see pause_connects), and a
-// 30s value here made Settings scans unusable while "Connecting".
+// every try holds the shared radio (core::RadioArbiter), and a 30s value here
+// made Settings scans unusable while "Connecting".
 constexpr uint32_t kConnectTimeoutMs = 8000;
 
 bool write_with_nul(core::ble::ICentral& ble, const char* uuid,
@@ -52,13 +52,15 @@ bool MicraLink::read_setting(const char* name, std::string& out) {
   return !out.empty();
 }
 
-void MicraLink::set_address(std::string address) {
+void MicraLink::set_address(std::string address, AddrType type) {
   {
     std::lock_guard<std::mutex> lk(mutex_);
     address_ = std::move(address);
+    addr_type_ = type;
   }
   token_bad_.store(false);  // new machine -> give its token a fresh chance
   reconnect_requested_.store(true);
+  arb_.abort_slot(RadioSlot::kMicra);  // a try for the OLD address must not run out
 }
 
 void MicraLink::set_token(std::string token) {
@@ -73,6 +75,7 @@ void MicraLink::set_token(std::string token) {
 void MicraLink::set_connect_enabled(bool enabled) {
   connect_enabled_.store(enabled);
   reconnect_requested_.store(true);  // nudge the loop to act now (drop or reconnect)
+  if (!enabled) arb_.abort_slot(RadioSlot::kMicra);  // Disconnect lands now
 }
 
 void MicraLink::set_name(std::string name) {
@@ -96,27 +99,50 @@ void MicraLink::set_link(Link link) {
 void MicraLink::run() {
   bool connected = false;
   uint32_t last_refresh = 0;
+  // The arbiter tracks the raw link so it knows when this slot wants the
+  // radio; every edge of `connected` goes through here.
+  auto mark = [&](bool up) {
+    connected = up;
+    arb_.set_connected(RadioSlot::kMicra, up);
+  };
 
   for (;;) {
-    if (scan_requested_.exchange(false)) do_scan();  // works in any link state
-
     std::string addr;
     std::string token;
+    AddrType addr_type;
     {
       std::lock_guard<std::mutex> lk(mutex_);
       addr = address_;
       token = token_;
+      addr_type = addr_type_;
+    }
+    arb_.set_target(RadioSlot::kMicra, addr, addr_type);
+    arb_.set_wanted(RadioSlot::kMicra, !addr.empty() && !token.empty() &&
+                                           !token_bad_.load() && connect_enabled_.load());
+
+    // The user's Settings scan: granted by the arbiter (it preempts whoever
+    // holds the radio, including this link's own connect attempt), run here
+    // in any link state.
+    if (arb_.user_scan_pending(RadioSlot::kMicra)) {
+      const RadioGrant g = arb_.poll(RadioSlot::kMicra, now_ms());
+      if (g.work == RadioWork::kUserScan) {
+        do_scan();
+        arb_.release(RadioSlot::kMicra, g.ticket, ReleaseResult::kScanDone, now_ms());
+      } else {
+        sleep_ms(100);
+        continue;
+      }
     }
 
     // Not fully provisioned: idle in the matching state (don't spin on connect).
     if (addr.empty()) {
-      if (connected) { ble_.disconnect(); connected = false; }
+      if (connected) { ble_.disconnect(); mark(false); }
       set_link(Link::Unconfigured);
       sleep_ms(500);
       continue;
     }
     if (token.empty()) {
-      if (connected) { ble_.disconnect(); connected = false; }
+      if (connected) { ble_.disconnect(); mark(false); }
       // No token: the machine can't be read for one (the cloud-issued token is
       // obtained out-of-band, e.g. via lmtoken). Idle in NeedsToken until one is
       // entered (set_token clears this).
@@ -130,7 +156,7 @@ void MicraLink::run() {
     // not a flaky link. Idle in NeedsToken (don't hammer the machine) until a new
     // token arrives (set_token / set_address clear this).
     if (token_bad_.load()) {
-      if (connected) { ble_.disconnect(); connected = false; }
+      if (connected) { ble_.disconnect(); mark(false); }
       set_link(Link::NeedsToken);
       sleep_ms(500);
       continue;
@@ -139,7 +165,7 @@ void MicraLink::run() {
     // User disconnected: drop the link and idle (don't auto-reconnect) so another
     // remote can take the Micra's single BLE slot.
     if (!connect_enabled_.load()) {
-      if (connected) { ble_.disconnect(); connected = false; }
+      if (connected) { ble_.disconnect(); mark(false); }
       set_link(Link::Disconnected);
       sleep_ms(500);
       continue;
@@ -147,26 +173,32 @@ void MicraLink::run() {
 
     if (reconnect_requested_.exchange(false) && connected) {
       ble_.disconnect();
-      connected = false;
-    }
-
-    // Peer link is scanning: the host can't scan with a connect pending, so
-    // hold off on new attempts until it releases us. Established connections
-    // are untouched — only the (re)connect loop yields.
-    if (!connected && connects_paused_.load()) {
-      set_link(Link::Connecting);  // still trying — just yielding the radio
-      sleep_ms(200);
-      continue;
+      mark(false);
     }
 
     if (!connected) {
-      set_link(Link::Connecting);
-      if (!do_connect(addr, token)) {
+      set_link(Link::Connecting);  // still trying, even while yielding the radio
+      // Ask the arbiter: another link may hold the radio (a scale's connect
+      // or finder chunk, a Settings scan), or the setup portal may have
+      // parked us. Established connections are never touched by any of it.
+      const RadioGrant g = arb_.poll(RadioSlot::kMicra, now_ms());
+      if (g.work != RadioWork::kDirectConnect) {
+        sleep_ms(100);
+        continue;
+      }
+      const bool ok = do_connect(addr, token, g.addr_type);
+      const bool preempted = arb_.was_preempted(RadioSlot::kMicra, g.ticket);
+      arb_.release(RadioSlot::kMicra, g.ticket,
+                   ok ? ReleaseResult::kConnected
+                      : preempted ? ReleaseResult::kPreempted : ReleaseResult::kFailed,
+                   now_ms());
+      if (!ok) {
         set_link(Link::Disconnected);  // unreachable -> back off and retry
-        // Sliced so a scan requested mid-backoff (this link's own Scan button
-        // cancels the failed attempt above) runs promptly, not seconds later.
-        for (uint32_t waited = 0;
-             waited < kReconnectBackoffMs && !scan_requested_.load(); waited += 100) {
+        if (preempted) continue;       // a yielded try is not a failed one
+        // Sliced so a Scan tapped mid-backoff runs promptly, not seconds later.
+        for (uint32_t waited = 0; waited < kReconnectBackoffMs &&
+                                  !arb_.user_scan_pending(RadioSlot::kMicra);
+             waited += 100) {
           sleep_ms(100);
         }
         continue;
@@ -183,17 +215,17 @@ void MicraLink::run() {
         logf("MicraLink: token rejected (reads failed) -> NeedsToken\n");
         token_bad_.store(true);
         ble_.disconnect();
-        connected = false;
+        mark(false);
         set_link(Link::NeedsToken);
         continue;
       }
-      connected = true;
+      mark(true);
       set_link(Link::Connected);
       last_refresh = now_ms();
     }
 
     if (!ble_.connected()) {
-      connected = false;
+      mark(false);
       set_link(Link::Disconnected);
       continue;
     }
@@ -227,13 +259,30 @@ void MicraLink::run() {
   }
 }
 
-bool MicraLink::do_connect(const std::string& address, const std::string& token) {
-  // Micras advertise a public address more often than not; the transport still
-  // falls back to the other type.
-  if (!ble_.connect(address, AddrType::kUnknown, /*prefer_random=*/false,
-                    kConnectTimeoutMs)) {
-    logf("MicraLink: connect failed\n");
+bool MicraLink::do_connect(const std::string& address, const std::string& token,
+                           AddrType type) {
+  // A learned type is one try; unknown tries both, public first (Micras
+  // advertise a public address more often than not).
+  if (!ble_.connect(address, type, /*prefer_random=*/false, kConnectTimeoutMs)) {
+    logf("MicraLink: connect failed (%s)\n",
+         type != AddrType::kUnknown ? addr_type_name(type) : "public+random");
     return false;
+  }
+  // Learn the type the connect used so later connects are a single try (a
+  // two-type try holds the shared radio for 16 s). Compared with the stored
+  // type, persisted by the platform next to the MAC.
+  const AddrType used = ble_.connected_addr_type();
+  bool learned = false;
+  if (used != AddrType::kUnknown) {
+    std::lock_guard<std::mutex> lk(mutex_);
+    if (used != addr_type_) {
+      addr_type_ = used;
+      learned = true;
+    }
+  }
+  if (learned) {
+    logf("MicraLink: learned address type %s\n", addr_type_name(used));
+    if (addr_type_learned_) addr_type_learned_(used);
   }
 
   if (!ble_.has_characteristic(kReadUuid) || !ble_.has_characteristic(kWriteUuid) ||
@@ -379,10 +428,10 @@ void MicraLink::do_set_steam_enabled(bool enabled) {
 }
 
 void MicraLink::request_scan() {
-  scanning_.store(true);        // reflect immediately in the UI
-  scan_requested_.store(true);  // the loop performs the actual scan
-  ble_.cancel_connect();        // if OUR loop is camped in a connect attempt,
-                                // unblock it so the scan runs now, not in ~10s
+  scanning_.store(true);  // reflect immediately in the UI
+  // The arbiter grants the scan to our loop next and preempts whoever holds
+  // the radio — including our own connect attempt, which it cancels.
+  arb_.request_user_scan(RadioSlot::kMicra);
 }
 
 bool MicraLink::scanning() const { return scanning_.load(); }
@@ -393,11 +442,9 @@ std::vector<ScanResult> MicraLink::scan_results() const {
 }
 
 void MicraLink::do_scan() {
-  // Take the radio: the peer link cancels any in-flight connect and holds off
-  // (the host refuses to scan while a connect is pending — without this, a
-  // scan during the scale's connect window returned nothing). The short sleep
-  // lets the cancel land before the scan starts.
-  if (peer_pause_) { peer_pause_(true); sleep_ms(300); }
+  // Runs only under the arbiter's kUserScan grant: no other link is
+  // connecting or scanning (the host refuses to scan while a connect is
+  // pending — a scan during a scale's connect window used to return nothing).
   std::vector<ScanResult> found;
   // 10 s, matching the scale's window and for the same reason (see
   // ScaleLink::do_scan): the radio splits airtime with any LIVE link and with
@@ -414,21 +461,12 @@ void MicraLink::do_scan() {
     if (std::strncmp(r.name, "MICRA", 5) != 0) continue;  // La Marzocco name prefix
     found.push_back(r);
   }
-  if (peer_pause_) peer_pause_(false);
 
   {
     std::lock_guard<std::mutex> lk(mutex_);
     scan_results_ = std::move(found);
   }
   scanning_.store(false);
-}
-
-void MicraLink::pause_connects(bool on) {
-  connects_paused_.store(on);
-  // Level-held at the transport: aborts the in-flight attempt AND blocks new
-  // ones (incl. the second address-type try inside a cancelled connect()) —
-  // a plain cancel left those to grab the radio back before the peer's scan.
-  ble_.hold_connects(on);
 }
 
 }  // namespace core

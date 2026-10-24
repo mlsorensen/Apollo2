@@ -6,7 +6,8 @@
 #include <string>
 #include <vector>
 
-#include "core/provisioner.h"  // core::ScanResult
+#include "core/provisioner.h"     // core::ScanResult
+#include "core/radio_arbiter.h"   // core::FinderTargets / Sighting
 
 // Core BLE central port: the small GATT-client vocabulary the device protocols
 // (Micra, scales) are written against. Like every core header this stays free
@@ -32,6 +33,18 @@ class ICentral {
   // resolve). Returns every device seen; callers filter by name.
   virtual std::vector<core::ScanResult> scan(uint32_t ms) = 0;
 
+  // Finder chunk (see core::RadioArbiter): a PASSIVE scan that matches only
+  // the given addresses, stores nothing, and stops on the FIRST match.
+  // Blocks for `ms`, or less when a target is seen or cancel_scan() lands.
+  // Returns the sighting (found=false for an empty chunk). The default is
+  // for hosts without a radio.
+  virtual core::Sighting scan_for(const core::FinderTargets& /*targets*/, uint32_t /*ms*/) {
+    return core::Sighting{};
+  }
+  // Stop a running scan (scan() or scan_for()) from another thread; the
+  // blocked call returns with what it has. No-op when not scanning.
+  virtual void cancel_scan() {}
+
   // Connect to `mac` and discover its services (blocking). A KNOWN `type`
   // is a single try at that type. kUnknown tries both, `prefer_random`
   // first (scales usually advertise a random address) — the wrong-type try
@@ -47,9 +60,11 @@ class ICentral {
   virtual bool connected() = 0;
 
   // Abort an IN-FLIGHT connect() attempt (makes the blocked call return false
-  // promptly). Safe to call from another thread — this is how a link about to
-  // scan preempts its peer's pending connect, since most stacks refuse to scan
-  // while any connect is in progress. No-op when nothing is connecting.
+  // promptly). Safe to call from another thread. No-op when nothing is
+  // connecting. CALLERS: only core::RadioArbiter (through its hold hook) —
+  // on NimBLE the cancel is GLOBAL (it aborts whichever link is initiating),
+  // so a link must never cancel on its own behalf; the arbiter cancels the
+  // holder and nobody else.
   virtual void cancel_connect() {}
 
   // LEVEL version of the above: while held, connect() fails fast — the current

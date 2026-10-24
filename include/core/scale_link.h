@@ -9,6 +9,7 @@
 
 #include "core/ble.h"
 #include "core/provisioner.h"  // core::ScanResult
+#include "core/radio_arbiter.h"
 #include "core/scale.h"
 #include "core/scale_driver.h"
 
@@ -28,7 +29,12 @@ namespace core {
 
 class ScaleLink : public IScale, public IScaleSink {
  public:
-  explicit ScaleLink(ble::ICentral& ble) : ble_(ble) {}
+  // `slot` names this link to the radio arbiter (espresso or bench); every
+  // listen on the radio — reconnects, the finder's scan chunks, the user's
+  // Settings scan — is granted by `arb` and run on this link's own thread.
+  ScaleLink(ble::ICentral& ble, RadioArbiter& arb, RadioSlot slot)
+      : ble_(ble), arb_(arb), slot_(slot) {}
+  RadioSlot slot() const { return slot_; }
 
   // The connection loop; blocks forever — call from a dedicated thread.
   // Empty address -> idle until set.
@@ -79,11 +85,6 @@ class ScaleLink : public IScale, public IScaleSink {
   bool scanning() const;
   std::vector<ScanResult> scan_results() const;
 
-  // Radio arbitration with a peer link sharing the BLE host (see MicraLink's
-  // twin methods): a link about to scan pauses its peer's connect attempts.
-  void pause_connects(bool on);
-  void set_scan_peer_pauser(std::function<void(bool)> p) { peer_pause_ = std::move(p); }
-
   // core::IScaleSink — called from the transport's notify callback (BLE
   // thread) by the driver. Flow is derived from the weight stream by the UI,
   // so only weight is published; on_weight bumps snapshot.seq.
@@ -93,12 +94,15 @@ class ScaleLink : public IScale, public IScaleSink {
   void on_device_setting(int index, int option_idx) override;
 
  private:
-  bool do_connect(const std::string& address, AddrType type);
+  bool do_connect(const std::string& address, AddrType type, uint32_t timeout_ms);
   void do_scan();
   void set_connected(bool c);
   bool link_up() const;  // the raw BLE link, before the weight-stream gate
+  void sync_radio_state();  // feed the arbiter this link's wants (loop thread)
 
   ble::ICentral& ble_;
+  RadioArbiter& arb_;
+  const RadioSlot slot_;
 
   std::string address_;         // guarded by mutex_
   AddrType addr_type_ = AddrType::kUnknown;  // guarded by mutex_
@@ -147,14 +151,11 @@ class ScaleLink : public IScale, public IScaleSink {
   std::atomic<bool> partner_connected_{false};
   std::function<void(int, int)> partner_setting_writer_;
   std::atomic<bool> reconnect_requested_{false};
-  std::atomic<bool> scan_requested_{false};
   std::atomic<bool> scanning_{false};
   std::atomic<bool> pending_tare_{false};
   // Posted on-scale setting writes (option index, -1 = none) — same
   // post-and-flush pattern as pending_tare_, one slot per descriptor.
   std::atomic<int> pending_setting_[kMaxScaleSettings] = {-1, -1, -1, -1};
-  std::atomic<bool> connects_paused_{false};  // peer is scanning — hold off
-  std::function<void(bool)> peer_pause_;      // set once before the loop
 };
 
 }  // namespace core

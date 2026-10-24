@@ -65,6 +65,7 @@ constexpr char kScaleNameKey[] = "sname";
 constexpr char kScalePartnerKey[] = "sprtnr";
 constexpr char kScalePendingKey[] = "sprpend";  // per-unit (config_backup)
 constexpr char kScaleAddrTypeKey[] = "satype";   // core::AddrType as uchar (ADD, v1.1)
+constexpr char kMicraAddrTypeKey[] = "matype";   // the machine's, same encoding (ADD, v1.2)
 constexpr char kTargetKey[] = "tgtg";
 constexpr char kShotModeKey[] = "shotmode";  // LEGACY bool (armed) — migration only
 constexpr char kShotMode3Key[] = "shotmd";   // tri-state core::ShotMode as int
@@ -164,6 +165,7 @@ void Config::clear() {
   p.remove(kMacKey);
   p.remove(kNameKey);
   p.remove(kTokenKey);  // wipe the secret too
+  p.remove(kMicraAddrTypeKey);
   p.end();
 }
 
@@ -222,6 +224,24 @@ void Config::set_scale_addr_type(core::AddrType type) {
   p.begin(kNamespace, /*readOnly=*/false);
   if (type == core::AddrType::kUnknown) p.remove(kScaleAddrTypeKey);
   else p.putUChar(kScaleAddrTypeKey, static_cast<uint8_t>(type));
+  p.end();
+}
+
+core::AddrType Config::micra_addr_type() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return core::AddrType::kUnknown;
+  const uint8_t v = p.isKey(kMicraAddrTypeKey) ? p.getUChar(kMicraAddrTypeKey, 0) : 0;
+  p.end();
+  return v == 1 ? core::AddrType::kPublic
+         : v == 2 ? core::AddrType::kRandom
+                  : core::AddrType::kUnknown;
+}
+
+void Config::set_micra_addr_type(core::AddrType type) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  if (type == core::AddrType::kUnknown) p.remove(kMicraAddrTypeKey);
+  else p.putUChar(kMicraAddrTypeKey, static_cast<uint8_t>(type));
   p.end();
 }
 

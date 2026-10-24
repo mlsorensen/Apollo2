@@ -15,7 +15,8 @@ namespace platform {
 
 class ScaleLink : public core::ScaleLink {
  public:
-  ScaleLink() : core::ScaleLink(central_), partner_(*this) {}
+  ScaleLink(core::RadioArbiter& arb, core::RadioSlot slot)
+      : core::ScaleLink(central_, arb, slot), partner_(*this) {}
 
   // Register the Umbra partner GATT service. Call ONCE, right after
   // NimBLEDevice::init() and BEFORE any link starts: NimBLE refuses GATT
@@ -32,8 +33,15 @@ class ScaleLink : public core::ScaleLink {
   void set_name(std::string name);
   void set_partner_mode(bool enabled);
   void set_connect_enabled(bool enabled);
-  void pause_connects(bool paused);
+  // Screensaver / setup portal: let a partner-mode Umbra doze (it is sent to
+  // sleep and advertising stops). Radio arbitration never comes through here
+  // — yielding the radio to another link must not put the Umbra to sleep,
+  // which the old shared pause level did on every Micra Settings scan.
+  void pause_partner(bool paused);
   void poll_partner() { partner_.poll(); }
+
+  // The transport, for the arbiter's hold / scan-cancel hooks (device main).
+  NimbleCentral& central() { return central_; }
 
  private:
   NimbleCentral central_;

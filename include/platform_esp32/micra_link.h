@@ -15,12 +15,15 @@ namespace platform {
 
 class MicraLink : public core::MicraLink {
  public:
-  MicraLink() : core::MicraLink(central_) {}
+  explicit MicraLink(core::RadioArbiter& arb) : core::MicraLink(central_, arb) {}
 
   // Start the background connection task (non-blocking). With both an address
   // and a token set, connects/authenticates/polls and reconnects on drop. Empty
   // address -> Unconfigured; address but no token -> NeedsToken; both idle.
-  void begin(std::string address);
+  void begin(std::string address, core::AddrType type);
+
+  // The transport, for the arbiter's hold / scan-cancel hooks (device main).
+  NimbleCentral& central() { return central_; }
 
  private:
   NimbleCentral central_;

@@ -16,8 +16,9 @@ void ScaleLink::begin(std::string address, core::AddrType type) {
   set_address(std::move(address), type);
   // 4096: measured peak 2,356 (Acaia) / 2,300 (Bookoo), both connected +
   // subscribed, and including a Settings scan. ~1.7K margin.
-  xTaskCreatePinnedToCore(&task_entry, "scale_link", 4096, this,
-                          /*priority=*/1, nullptr, /*core=*/1);
+  xTaskCreatePinnedToCore(&task_entry, slot() == core::RadioSlot::kScaleBench
+                                           ? "scale_link2" : "scale_link",
+                          4096, this, /*priority=*/1, nullptr, /*core=*/1);
 }
 
 void ScaleLink::set_name(std::string name) {
@@ -36,8 +37,7 @@ void ScaleLink::set_connect_enabled(bool enabled) {
   if (partner_mode()) partner_.set_enabled(enabled);
 }
 
-void ScaleLink::pause_connects(bool paused) {
-  core::ScaleLink::pause_connects(paused);
+void ScaleLink::pause_partner(bool paused) {
   if (partner_mode()) partner_.pause(paused);
 }
 

@@ -27,6 +27,9 @@ constexpr uint32_t kConnectTimeoutMs = 5000;
 constexpr uint32_t kKnownTypeTimeoutMs = 10000;
 constexpr uint32_t kKnownTypeBackoffMs = 1000;
 constexpr int kKnownTypeFailLimit = 3;  // then relearn with a both-types try
+// After a finder sighting the scale is advertising right now: the initiator
+// catches its next advertising event, so one short try is plenty.
+constexpr uint32_t kSightingConnectMs = 3000;
 // After a setting write, ignore readback that still echoes the OLD value for
 // this long: the scale keeps reporting it for a frame or two (Bookoo) up to a
 // full 2 s status-poll cycle (Lunar), and accepting the echo flickered the UI
@@ -57,7 +60,7 @@ void ScaleLink::set_address(std::string address, AddrType type) {
     addr_type_ = type;
   }
   reconnect_requested_.store(true);
-  ble_.cancel_connect();  // a try for the OLD address must not run out its timeout
+  arb_.abort_slot(slot_);  // a try for the OLD address must not run out its timeout
 }
 
 void ScaleLink::set_name(std::string name) {
@@ -90,10 +93,11 @@ void ScaleLink::set_connect_enabled(bool enabled) {
   reconnect_requested_.store(true);
   // Disconnect must land now, not when the current try times out — and
   // Connect right after it starts a fresh try instead of inheriting one.
-  if (!enabled) ble_.cancel_connect();
+  if (!enabled) arb_.abort_slot(slot_);
 }
 
 void ScaleLink::set_connected(bool c) {
+  arb_.set_connected(slot_, c);
   std::lock_guard<std::mutex> lk(mutex_);
   connected_ = c;
   if (!c) weight_g_ = 0.0f;
@@ -160,11 +164,42 @@ void ScaleLink::on_device_setting(int index, int option_idx) {
   setting_value_[index] = option_idx;
 }
 
+// The arbiter needs this link's wants to decide who listens: the saved
+// address + type (finder targets), whether we want a connection at all, and
+// partner mode (an inbound peer: never "missing"). Cheap and idempotent, so
+// it runs every loop pass rather than from every setter.
+void ScaleLink::sync_radio_state() {
+  std::string addr;
+  AddrType type;
+  {
+    std::lock_guard<std::mutex> lk(mutex_);
+    addr = address_;
+    type = addr_type_;
+  }
+  arb_.set_target(slot_, addr, type);
+  arb_.set_wanted(slot_, !addr.empty() && connect_enabled_.load());
+  arb_.set_partner_mode(slot_, partner_mode_.load());
+}
+
 void ScaleLink::run() {
   bool connected = false;
   bool retare = false;  // second tare send armed (see the tare block below)
   for (;;) {
-    if (scan_requested_.exchange(false)) do_scan();  // works in any state
+    sync_radio_state();
+
+    // The user's Settings scan: granted by the arbiter (it preempts whoever
+    // holds the radio, including this link's own connect attempt) and run
+    // here, in any link state.
+    if (arb_.user_scan_pending(slot_)) {
+      const RadioGrant g = arb_.poll(slot_, now_ms());
+      if (g.work == RadioWork::kUserScan) {
+        do_scan();
+        arb_.release(slot_, g.ticket, ReleaseResult::kScanDone, now_ms());
+      } else {
+        sleep_ms(100);
+        continue;
+      }
+    }
 
     // Partner-mode support for Umbra firmware 1.0.8.
     if (partner_mode_.load()) {
@@ -182,12 +217,10 @@ void ScaleLink::run() {
     }
 
     std::string addr;
-    AddrType addr_type;
     std::shared_ptr<IScaleDriver> drv;
     {
       std::lock_guard<std::mutex> lk(mutex_);
       addr = address_;
-      addr_type = addr_type_;
       drv = driver_;
     }
 
@@ -205,31 +238,61 @@ void ScaleLink::run() {
       set_connected(false);
     }
 
-    // Peer link is scanning: hold off on new connect attempts (the host can't
-    // scan with a connect pending). Established links are untouched.
-    if (!connected && connects_paused_.load()) {
-      sleep_ms(200);
-      continue;
-    }
-
     if (!connected) {
       retare = false;  // a resend never crosses a link drop: taring whatever
                        // sits on a freshly relinked scale could zero a mid-shot cup
-      // Safety valve: a stored type that keeps failing is retried as unknown
-      // (both types) and relearned — see known_type_fails_.
-      const bool relearn = addr_type != AddrType::kUnknown &&
+      // Ask the arbiter what this link may do with the radio right now.
+      const RadioGrant g = arb_.poll(slot_, now_ms());
+      if (g.work == RadioWork::kIdle) {
+        sleep_ms(100);  // parked, or another link holds the radio
+        continue;
+      }
+      if (g.work == RadioWork::kFinderChunk) {
+        // Two scales missing: one passive scan for both saved addresses. A
+        // hit is reported as a sighting; that slot's own loop turns it into a
+        // short direct connect on its next poll.
+        const Sighting s = ble_.scan_for(arb_.finder_targets(), RadioArbiter::kChunkMs);
+        if (s.found) {
+          logf("ScaleLink: finder saw %s (%s)\n", radio_slot_name(s.slot),
+               addr_type_name(s.type));
+          arb_.report_sighting(s.slot, s.type, now_ms());
+        }
+        arb_.release(slot_, g.ticket, ReleaseResult::kScanDone, now_ms());
+        continue;
+      }
+      if (g.work != RadioWork::kDirectConnect) {
+        sleep_ms(100);
+        continue;
+      }
+      // Direct connect-by-address. From a sighting: the advertised type, one
+      // short try (the scale is advertising right now). Otherwise the stored
+      // type, with the safety valve: a stored type that keeps failing is
+      // retried as unknown (both types) and relearned — see known_type_fails_.
+      const bool relearn = !g.from_sighting && g.addr_type != AddrType::kUnknown &&
                            known_type_fails_ >= kKnownTypeFailLimit;
-      const AddrType try_type = relearn ? AddrType::kUnknown : addr_type;
-      if (!do_connect(addr, try_type)) {
+      const AddrType try_type = relearn ? AddrType::kUnknown : g.addr_type;
+      const uint32_t timeout = g.from_sighting           ? kSightingConnectMs
+                               : try_type != AddrType::kUnknown ? kKnownTypeTimeoutMs
+                                                                : kConnectTimeoutMs;
+      const bool ok = do_connect(addr, try_type, timeout);
+      const bool preempted = arb_.was_preempted(slot_, g.ticket);
+      arb_.release(slot_, g.ticket,
+                   ok ? ReleaseResult::kConnected
+                      : preempted ? ReleaseResult::kPreempted : ReleaseResult::kFailed,
+                   now_ms());
+      if (!ok) {
         set_connected(false);
-        if (try_type != AddrType::kUnknown) ++known_type_fails_;
+        // A preempted try (user scan, park, Forget) is not a failed one: no
+        // fail count, no backoff — the arbiter decides when we go again.
+        if (preempted) continue;
+        if (g.from_sighting) known_type_fails_ = 0;  // the sighting was authoritative
+        else if (try_type != AddrType::kUnknown) ++known_type_fails_;
         else if (relearn) known_type_fails_ = 0;  // one both-types try per limit
-        // Sliced so a scan requested mid-backoff (this link's own Scan button
-        // cancels the failed attempt above) runs promptly, not seconds later.
+        // Sliced so a Scan tapped mid-backoff runs promptly, not seconds later.
         const uint32_t backoff = try_type != AddrType::kUnknown
                                      ? kKnownTypeBackoffMs
                                      : kReconnectBackoffMs;
-        for (uint32_t waited = 0; waited < backoff && !scan_requested_.load();
+        for (uint32_t waited = 0; waited < backoff && !arb_.user_scan_pending(slot_);
              waited += 100) {
           sleep_ms(100);
         }
@@ -317,7 +380,8 @@ void ScaleLink::run() {
   }
 }
 
-bool ScaleLink::do_connect(const std::string& address, AddrType type) {
+bool ScaleLink::do_connect(const std::string& address, AddrType type,
+                           uint32_t timeout_ms) {
   // Fresh driver per attempt: per-connection state starts clean, and the name
   // may have changed since the last connect.
   std::shared_ptr<IScaleDriver> drv;
@@ -336,20 +400,26 @@ bool ScaleLink::do_connect(const std::string& address, AddrType type) {
   // reconnect then succeeds on the first try (was ~30 s: a PUBLIC-first try
   // timed out fully before falling back to RANDOM).
   const bool known = type != AddrType::kUnknown;
-  if (!ble_.connect(address, type, /*prefer_random=*/true,
-                    known ? kKnownTypeTimeoutMs : kConnectTimeoutMs)) {
-    logf("ScaleLink: connect failed (%s)\n",
-         known ? addr_type_name(type) : "random+public");
+  if (!ble_.connect(address, type, /*prefer_random=*/true, timeout_ms)) {
+    logf("ScaleLink: connect failed (%s, %lu ms)\n",
+         known ? addr_type_name(type) : "random+public",
+         static_cast<unsigned long>(timeout_ms));
     return false;
   }
   // Learn the type the connect actually used: persisted by the platform so
-  // every later connect is a single known-type try.
+  // every later connect is a single known-type try. Compared with the STORED
+  // type, not the try's — a finder sighting hands in the advertised type, and
+  // comparing against that would never record it.
   const AddrType used = ble_.connected_addr_type();
-  if (used != AddrType::kUnknown && used != type) {
-    {
-      std::lock_guard<std::mutex> lk(mutex_);
+  bool learned = false;
+  if (used != AddrType::kUnknown) {
+    std::lock_guard<std::mutex> lk(mutex_);
+    if (used != addr_type_) {
       addr_type_ = used;
+      learned = true;
     }
+  }
+  if (learned) {
     logf("ScaleLink: learned address type %s\n", addr_type_name(used));
     if (addr_type_learned_) addr_type_learned_(used);
   }
@@ -468,10 +538,11 @@ void ScaleLink::set_device_setting(int index, int option_idx) {
 }
 
 void ScaleLink::request_scan() {
-  scanning_.store(true);        // reflect immediately in the UI
-  scan_requested_.store(true);  // the loop performs the actual scan
-  ble_.cancel_connect();        // if OUR loop is camped in a connect attempt,
-                                // unblock it so the scan runs now, not in ~10s
+  scanning_.store(true);  // reflect immediately in the UI
+  // The arbiter grants the scan to our loop next and preempts whoever holds
+  // the radio — including our own connect attempt, which it cancels so the
+  // scan runs now, not in ~10 s.
+  arb_.request_user_scan(slot_);
 }
 
 bool ScaleLink::scanning() const { return scanning_.load(); }
@@ -482,11 +553,10 @@ std::vector<ScanResult> ScaleLink::scan_results() const {
 }
 
 void ScaleLink::do_scan() {
-  // Take the radio: cancel + pause the peer's (Micra's) connect attempts —
-  // the host refuses to scan while any connect is pending, which made scale
-  // scans come back empty whenever the Micra sat in "Connecting". The short
-  // sleep lets the cancel land before the scan starts.
-  if (peer_pause_) { peer_pause_(true); sleep_ms(300); }
+  // Runs only under the arbiter's kUserScan grant: no other link is
+  // connecting or scanning (the host refuses to scan while any connect is
+  // pending, which used to return empty scans whenever the Micra sat in
+  // "Connecting").
   std::vector<ScanResult> found;
   // 10 s window: the ESP32's radio splits airtime with the live Micra link
   // (and WiFi) while scanning, and sparse advertisers (Varia Aku) slipped
@@ -502,21 +572,12 @@ void ScaleLink::do_scan() {
     }
     found.push_back(r);
   }
-  if (peer_pause_) peer_pause_(false);
 
   {
     std::lock_guard<std::mutex> lk(mutex_);
     scan_results_ = std::move(found);
   }
   scanning_.store(false);
-}
-
-void ScaleLink::pause_connects(bool on) {
-  connects_paused_.store(on);
-  // Level-held at the transport: aborts the in-flight attempt AND blocks new
-  // ones (incl. the second address-type try inside a cancelled connect()) —
-  // a plain cancel left those to grab the radio back before the peer's scan.
-  ble_.hold_connects(on);
 }
 
 }  // namespace core

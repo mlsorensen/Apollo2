@@ -27,6 +27,11 @@ class Config {
   void save(const std::string& mac, const std::string& name);
   void set_token(const std::string& token);
   void clear();               // forget the saved machine (incl. its token)
+  // The machine's BLE address type, learned on the first connect (ADD, v1.2):
+  // a known type is one 8 s try instead of two, which matters now that the
+  // scales' finder shares the radio with the Micra's reconnects.
+  core::AddrType micra_addr_type() const;
+  void set_micra_addr_type(core::AddrType type);
 
   // Saved Bluetooth scale (separate from the machine; no token needed).
   std::string scale_mac() const;

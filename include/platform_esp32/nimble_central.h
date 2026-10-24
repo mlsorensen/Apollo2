@@ -21,6 +21,8 @@ class NimbleCentral : public core::ble::ICentral {
   NimbleCentral() = default;
 
   std::vector<core::ScanResult> scan(uint32_t ms) override;
+  core::Sighting scan_for(const core::FinderTargets& targets, uint32_t ms) override;
+  void cancel_scan() override;
   bool connect(const std::string& mac, core::AddrType type, bool prefer_random,
                uint32_t timeout_ms) override;
   core::AddrType connected_addr_type() const override { return conn_type_; }
@@ -44,6 +46,10 @@ class NimbleCentral : public core::ble::ICentral {
   // address-type attempts), not just the current GAP attempt. Cleared at the
   // start of each connect() call.
   std::atomic<bool> cancelled_{false};
+  // Set around client_->connect(): NimBLE's connect-cancel is GLOBAL (it
+  // aborts whichever client is initiating), so cancel_connect() is a no-op
+  // unless THIS instance is the one connecting.
+  std::atomic<bool> connecting_{false};
   core::AddrType conn_type_ = core::AddrType::kUnknown;  // type of the live link
 };
 

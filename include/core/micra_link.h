@@ -9,6 +9,7 @@
 #include "core/ble.h"
 #include "core/machine.h"
 #include "core/provisioner.h"
+#include "core/radio_arbiter.h"
 
 // The La Marzocco Micra BLE protocol, implementing core::IMachine. Portable:
 // written only against the core::ble::ICentral port + core/system.h shims, so
@@ -25,7 +26,9 @@ namespace core {
 
 class MicraLink : public IMachine {
  public:
-  explicit MicraLink(ble::ICentral& ble) : ble_(ble) {}
+  // Every listen on the radio (reconnects, the user's Settings scan) is
+  // granted by `arb` (slot kMicra) and run on this link's own thread.
+  MicraLink(ble::ICentral& ble, RadioArbiter& arb) : ble_(ble), arb_(arb) {}
 
   // The connection loop: connect/authenticate/poll and reconnect on drop.
   // Blocks forever — call from a dedicated thread (the platform's begin()).
@@ -33,10 +36,19 @@ class MicraLink : public IMachine {
   void run();
 
   // Runtime setters (thread-safe; trigger a reconnect). Address/token empty
-  // leave the link idle in the corresponding state.
-  void set_address(std::string address);
+  // leave the link idle in the corresponding state. `type` is the machine's
+  // address type as learned on a previous connect (kUnknown = not yet: the
+  // transport tries both, public first, and the link learns it).
+  void set_address(std::string address, AddrType type = AddrType::kUnknown);
   void set_token(std::string token);
   void set_name(std::string name);  // display name for the snapshot
+  // Called (from the link thread) when a connect LEARNS the address type;
+  // the platform persists it so later connects are one try, not two — a
+  // two-type try holds the radio for 16 s, which the scales' finder must
+  // share.
+  void set_addr_type_learned(std::function<void(AddrType)> cb) {
+    addr_type_learned_ = std::move(cb);
+  }
 
   // Manual connect gate. Disabling drops the link and stops auto-reconnect.
   bool connect_enabled() const { return connect_enabled_.load(); }
@@ -63,15 +75,8 @@ class MicraLink : public IMachine {
   bool scanning() const;
   std::vector<ScanResult> scan_results() const;
 
-  // Radio arbitration with a peer link sharing the BLE host: the host refuses
-  // to scan while ANY connect is pending, so a link about to scan pauses its
-  // peer (cancelling an in-flight attempt) and releases it after. The device
-  // wires each link's pauser to the other's pause_connects. Thread-safe.
-  void pause_connects(bool on);
-  void set_scan_peer_pauser(std::function<void(bool)> p) { peer_pause_ = std::move(p); }
-
  private:
-  bool do_connect(const std::string& address, const std::string& token);
+  bool do_connect(const std::string& address, const std::string& token, AddrType type);
   bool do_refresh();           // loop thread: read + parse into the cache
   void do_set_power(bool on);  // loop thread: write the command
   void do_set_boiler_target(const char* identifier, const char* value);
@@ -81,9 +86,12 @@ class MicraLink : public IMachine {
   bool read_setting(const char* name, std::string& out);
 
   ble::ICentral& ble_;
+  RadioArbiter& arb_;
 
   std::string token_;           // guarded by mutex_
   std::string address_;         // guarded by mutex_
+  AddrType addr_type_ = AddrType::kUnknown;  // guarded by mutex_
+  std::function<void(AddrType)> addr_type_learned_;  // set once before run()
   std::string name_ = "Micra";  // guarded by mutex_
 
   mutable std::mutex mutex_;  // guards the cached fields below
@@ -109,9 +117,6 @@ class MicraLink : public IMachine {
   std::atomic<bool> connect_enabled_{false};  // user gate; false => drop + don't reconnect
   std::atomic<bool> token_bad_{false};  // authed but reads rejected -> needs re-entry
   std::atomic<uint32_t> config_mode_seq_{0};  // bumped when seen in config mode (see snapshot)
-  std::atomic<bool> scan_requested_{false};
-  std::atomic<bool> connects_paused_{false};  // peer is scanning — hold off
-  std::function<void(bool)> peer_pause_;      // set once before the loop
   std::atomic<bool> scanning_{false};
   std::vector<ScanResult> scan_results_;  // guarded by mutex_
 };
