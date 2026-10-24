@@ -2,6 +2,7 @@
 
 #include <lvgl.h>
 
+#include <cstddef>
 #include <functional>
 
 // Shared UI widget factories. Centralizes our tweaks to LVGL's defaults so every
@@ -46,5 +47,10 @@ void set_text(lv_obj_t* label, const char* text);
 void set_bg_color(lv_obj_t* obj, uint32_t hex);
 void set_text_color(lv_obj_t* obj, uint32_t hex);
 void set_border_color(lv_obj_t* obj, uint32_t hex);
+
+// A scale's advertised name made readable: "BOOKOO_THEMIS" -> "Bookoo Themis",
+// "LUNAR-A1B2" -> "Lunar" (the serial suffix after '-' dropped). Writes at most
+// n-1 chars + NUL into out; returns out.
+const char* friendly_scale_name(const char* adv, char* out, size_t n);
 
 }  // namespace ui

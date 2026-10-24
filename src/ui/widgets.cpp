@@ -103,4 +103,28 @@ lv_obj_t* make_step_button(lv_obj_t* parent, const char* symbol, int size,
   return btn;
 }
 
+const char* friendly_scale_name(const char* adv, char* out, size_t n) {
+  if (out == nullptr || n == 0) return "";
+  size_t o = 0;
+  bool start = true;  // next letter starts a word
+  for (const char* p = adv != nullptr ? adv : ""; *p != '\0' && o + 1 < n; ++p) {
+    char c = *p;
+    if (c == '-') break;  // Acaia: "LUNAR-A1B2" -> the serial is noise here
+    if (c == '_') c = ' ';
+    if (c == ' ') {
+      if (o == 0 || out[o - 1] == ' ') continue;  // collapse runs, no leading space
+      out[o++] = ' ';
+      start = true;
+      continue;
+    }
+    if (c >= 'A' && c <= 'Z' && !start) c = static_cast<char>(c - 'A' + 'a');
+    if (c >= 'a' && c <= 'z' && start) c = static_cast<char>(c - 'a' + 'A');
+    out[o++] = c;
+    start = false;
+  }
+  while (o > 0 && out[o - 1] == ' ') --o;  // trailing space
+  out[o] = '\0';
+  return out;
+}
+
 }  // namespace ui

@@ -1043,6 +1043,7 @@ App::~App() {
   if (home_.shot_flash_timer != nullptr) lv_timer_delete(home_.shot_flash_timer);
   if (home_.stop_flash_timer != nullptr) lv_timer_delete(home_.stop_flash_timer);
   if (home_.heat_pulse_timer != nullptr) lv_timer_delete(home_.heat_pulse_timer);
+  if (deferred_rebuild_timer_ != nullptr) lv_timer_delete(deferred_rebuild_timer_);
   if (home_.flow_buf != nullptr) lv_free(home_.flow_buf);
   if (home_.flow_weights != nullptr) lv_free(home_.flow_weights);
   if (home_.flow_flows != nullptr) lv_free(home_.flow_flows);
@@ -2176,7 +2177,19 @@ void App::cycle_bench_home_style() {
   display_->set_bench_home_style(style);
   if (settings_.bench_home_value != nullptr)
     lv_label_set_text(settings_.bench_home_value, kBenchHomeName[style]);
-  request_layout_rebuild(kSectionScaleDisplay);  // Home is built for one placement
+  // Home is built for one placement, so this is a full rebuild — a couple of
+  // seconds on the S3. Let the frame with the new label reach the screen
+  // first, or the tap looks ignored until the rebuild lands.
+  if (deferred_rebuild_timer_ != nullptr) lv_timer_delete(deferred_rebuild_timer_);
+  deferred_rebuild_timer_ = lv_timer_create(
+      [](lv_timer_t* t) {
+        auto* app = static_cast<App*>(lv_timer_get_user_data(t));
+        lv_timer_delete(t);
+        app->deferred_rebuild_timer_ = nullptr;
+        app->request_layout_rebuild(kSectionScaleDisplay);
+      },
+      250, this);
+  lv_timer_set_repeat_count(deferred_rebuild_timer_, 1);
 }
 
 void App::cycle_flush() {
@@ -4697,7 +4710,8 @@ void App::update_scale_view() {
     lv_obj_add_flag(settings_.scale_saved_row, LV_OBJ_FLAG_HIDDEN);
   } else {
     lv_obj_remove_flag(settings_.scale_saved_row, LV_OBJ_FLAG_HIDDEN);
-    ui::set_text(settings_.scale_saved_label, saved.c_str());
+    char fb[32];
+    ui::set_text(settings_.scale_saved_label, ui::friendly_scale_name(saved.c_str(), fb, sizeof(fb)));
     lv_obj_remove_flag(settings_.scale_connect_btn, LV_OBJ_FLAG_HIDDEN);
     const bool on = scale_provisioner_->connect_enabled();
     ui::set_text(settings_.scale_connect_label, on ? "Disconnect" : "Connect");
@@ -4711,7 +4725,9 @@ void App::update_scale_view() {
       lv_obj_add_flag(settings_.bench_saved_row, LV_OBJ_FLAG_HIDDEN);
     } else {
       lv_obj_remove_flag(settings_.bench_saved_row, LV_OBJ_FLAG_HIDDEN);
-      ui::set_text(settings_.bench_saved_label, bench_name.c_str());
+      char fb[32];
+      ui::set_text(settings_.bench_saved_label,
+                   ui::friendly_scale_name(bench_name.c_str(), fb, sizeof(fb)));
       const bool on = bench_connect_enabled();
       ui::set_text(settings_.bench_connect_label, on ? "Disconnect" : "Connect");
       ui::set_bg_color(settings_.bench_connect_btn, on ? ui::theme::rail() : ui::theme::accent());
@@ -4821,7 +4837,9 @@ void App::update_scale_view() {
 
     lv_obj_t* lbl = lv_label_create(row);
     char buf[48];
-    std::snprintf(buf, sizeof(buf), "%s   %d dBm", results[i].name, results[i].rssi);
+    char fb[32];
+    std::snprintf(buf, sizeof(buf), "%s   %d dBm",
+                  ui::friendly_scale_name(results[i].name, fb, sizeof(fb)), results[i].rssi);
     lv_label_set_text(lbl, buf);
     lv_obj_set_style_text_color(lbl, lv_color_hex(ui::theme::text()), 0);
     lv_obj_set_style_text_font(lbl, ui::font_dp(14), 0);
@@ -4849,7 +4867,9 @@ void App::open_save_scale_modal(int index) {
   if (index < 0 || index >= static_cast<int>(results.size())) return;
   pending_scan_index_ = index;
   char body[96];
-  std::snprintf(body, sizeof(body), "Use %s as which scale?", results[index].name);
+  char fb[32];
+  std::snprintf(body, sizeof(body), "Use %s as which scale?",
+                ui::friendly_scale_name(results[index].name, fb, sizeof(fb)));
   lv_obj_t* card = open_modal("Save scale", body);
   lv_obj_t* row = modal_button_row(card);
   modal_button(row, "Cancel", ui::theme::rail(), on_token_cancel, this);

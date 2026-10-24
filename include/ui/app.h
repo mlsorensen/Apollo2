@@ -345,6 +345,7 @@ class App {
   lv_obj_t* backup_token_switch_ = nullptr;  // "Include pairing token"
   lv_obj_t* backup_note_ = nullptr;          // what an opted-out backup leaves out
   lv_timer_t* reboot_timer_ = nullptr;       // holds the restored notice on screen
+  lv_timer_t* deferred_rebuild_timer_ = nullptr;  // placement toggle: rebuild after a frame
   uint32_t backup_started_ms_ = 0;           // when the working modal went up
   void update_backup_note();                 // rewrite that line from the switches
   int update_last_seq_ = -1;         // last seen check_seq(); -1 = not baselined

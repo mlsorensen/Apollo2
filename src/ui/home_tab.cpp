@@ -58,19 +58,21 @@ constexpr int kFlowScopeGapPx = 4;
 // Modes: 0 = flow rate (g/s), 1 = weight (g), 2 = the BENCH scale's weight (g)
 // — the swap card's BENCH side (or a bench-only setup). Each has a unit + a
 // default axis full-scale, which is also the floor the axis shrinks back to.
-// The bench scale weighs milk jugs and breakfast, not shots: its scale is
-// hundreds of grams in 250 g steps.
 const char* flow_unit(int mode) { return mode == 0 ? "g/s" : "g"; }
 float flow_default_max(int mode) {
-  return mode == 2 ? 500.0f : mode == 1 ? 10.0f : 6.0f;
+  return mode == 2 ? 30.0f : mode == 1 ? 10.0f : 6.0f;
 }
 
-// Smallest "nice" axis >= v for the mode (even / multiple of 10 so the labels
-// 0, max/2, max stay clean), floored at the mode default.
+// Smallest "nice" axis >= v for the mode (a multiple of 3 so the labels at
+// thirds stay whole), floored at the mode default. The bench scale ranges
+// from a cup of beans to a full milk jug: its step grows with the value (30 g
+// to 300, 150 g to 1500, then 750) so the labels stay round at every size.
 float flow_nice_max(int mode, float v) {
   const float floor = flow_default_max(mode);
   if (v <= floor) return floor;
-  const float step = mode == 2 ? 250.0f : (mode == 1) ? 15.0f : 3.0f;  // clean thirds
+  float step;
+  if (mode == 2) step = v <= 300.0f ? 30.0f : v <= 1500.0f ? 150.0f : 750.0f;
+  else step = (mode == 1) ? 15.0f : 3.0f;  // multiples of 3 -> clean thirds
   return step * std::ceil(v / step);
 }
 
@@ -975,9 +977,11 @@ lv_obj_t* make_pill(lv_obj_t* seg, const char* text, const lv_font_t* font, uint
                     lv_obj_t** out_label) {
   lv_obj_t* b = ui::make_button(seg);
   lv_obj_set_size(b, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-  lv_obj_set_style_pad_hor(b, ui::dp(10), 0);
-  lv_obj_set_style_pad_ver(b, ui::dp(4), 0);
-  lv_obj_set_style_radius(b, ui::dp(12), 0);
+  lv_obj_set_style_pad_hor(b, ui::dp(12), 0);
+  lv_obj_set_style_pad_ver(b, ui::dp(7), 0);
+  lv_obj_set_style_radius(b, ui::dp(14), 0);
+  // The pill is caption-sized; the thumb isn't. Catch taps well around it.
+  lv_obj_set_ext_click_area(b, ui::dp(10));
   lv_obj_set_style_bg_color(b, lv_color_hex(color), 0);
   lv_obj_set_style_bg_opa(b, LV_OPA_TRANSP, 0);  // show_bench_side fills the active one
   lv_obj_t* l = lv_label_create(b);
@@ -1030,9 +1034,10 @@ void add_bench_battery(lv_obj_t* status_group, const lv_font_t* cap_font,
 // Disconnect + Tare in the panel slot, Tare alone beside the graph (its
 // Connect lives in Settings; the beside card is the readout).
 lv_obj_t* build_bench_panel(lv_obj_t* parent, const lv_font_t* cap_font,
-                            const lv_font_t* status_font, int pad, int action_h,
-                            const lv_font_t* action_font, bool xl, bool with_status_text,
-                            bool with_connect, bool with_switch, HomeWidgets& out) {
+                            const lv_font_t* status_font, const lv_font_t* val_font,
+                            int pad, int action_h, const lv_font_t* action_font,
+                            bool with_status_text, bool with_connect, bool with_switch,
+                            HomeWidgets& out) {
   lv_obj_t* card = make_panel_card(parent, pad);
   make_panel_header(card, "BENCH", cap_font, status_font, &out.bench_status_dot,
                     with_status_text ? &out.bench_status_label : nullptr);
@@ -1046,7 +1051,7 @@ lv_obj_t* build_bench_panel(lv_obj_t* parent, const lv_font_t* cap_font,
                         LV_FLEX_ALIGN_CENTER);
   out.bench_weight = lv_label_create(body);
   lv_label_set_text(out.bench_weight, "-- g");
-  lv_obj_set_style_text_font(out.bench_weight, ui::font_dp(xl ? 48 : 40), 0);
+  lv_obj_set_style_text_font(out.bench_weight, val_font, 0);  // = the other card values
   lv_obj_set_style_text_color(out.bench_weight, lv_color_hex(ui::theme::text()), 0);
   out.bench_name = lv_label_create(body);
   lv_label_set_text(out.bench_name, "");
@@ -1275,9 +1280,10 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   // Shared large-screen panel sizing (the MICRA / SCALE cards + their steppers).
   const lv_font_t* panel_cap = ui::font_dp(14);
   const lv_font_t* panel_status = sub_font;                       // 20 wide / 28 xl
-  // One value size for BOTH panels so the value rows + steppers line up across
-  // MICRA and SCALE (weight/timer are not a bigger "hero" — they match the temps).
-  const lv_font_t* panel_val = ui::font_dp(xl ? 28 : 24);
+  // One value size for EVERY card value — the MICRA temps, the SCALE weight +
+  // timer and the bench weight — so nothing reads as a bigger hero than the
+  // rest and the value rows + steppers line up across the panels.
+  const lv_font_t* panel_val = ui::font_dp(xl ? 32 : 28);
   const lv_font_t* panel_set = ui::font_dp(14);
   const int panel_btn = ui::dp(xl ? 54 : 42);
   const lv_font_t* panel_sym = ui::font_dp(xl ? 28 : 20);
@@ -1356,7 +1362,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   if (out.bench_only) {
     // No espresso scale: the bench card takes the SCALE slot alone (status
     // text, Disconnect + Tare, no switch) and the graph shows it in grams.
-    build_bench_panel(panels, panel_cap, panel_status, panel_pad, action_h, btn_font, xl,
+    build_bench_panel(panels, panel_cap, panel_status, panel_val, panel_pad, action_h, btn_font,
                       /*with_status_text=*/true, /*with_connect=*/true,
                       /*with_switch=*/false, out);
   } else {
@@ -1370,7 +1376,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
       add_segmented_switch(scale_hdr, 0, panel_cap, out);
       lv_obj_add_flag(out.scale_status_label, LV_OBJ_FLAG_HIDDEN);
       out.scale_status_label = nullptr;
-      build_bench_panel(panels, panel_cap, panel_status, panel_pad, action_h, btn_font, xl,
+      build_bench_panel(panels, panel_cap, panel_status, panel_val, panel_pad, action_h, btn_font,
                         /*with_status_text=*/false, /*with_connect=*/true,
                         /*with_switch=*/true, out);
       lv_obj_add_flag(out.bench_card, LV_OBJ_FLAG_HIDDEN);
@@ -1395,7 +1401,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
     lv_obj_set_height(graph_card, lv_pct(100));
     lv_obj_set_width(graph_card, 0);
     lv_obj_set_flex_grow(graph_card, 2);
-    build_bench_panel(lower, panel_cap, panel_status, panel_pad, action_h, btn_font, xl,
+    build_bench_panel(lower, panel_cap, panel_status, panel_val, panel_pad, action_h, btn_font,
                       /*with_status_text=*/false, /*with_connect=*/false,
                       /*with_switch=*/false, out);
     lv_obj_set_flex_grow(out.bench_card, 1);
@@ -1446,7 +1452,8 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     if (bench->connected) std::snprintf(wb, sizeof(wb), "%.1f g", static_cast<double>(bench->weight_g));
     else std::snprintf(wb, sizeof(wb), "-- g");
     ui::set_text(w.bench_weight, wb);
-    ui::set_text(w.bench_name, bench->name != nullptr ? bench->name : "");
+    char nb[32];
+    ui::set_text(w.bench_name, ui::friendly_scale_name(bench->name, nb, sizeof(nb)));
     const char* btxt;
     uint32_t bdot;
     if (bench->connected) {
@@ -2725,15 +2732,17 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale,
       w.flow_flows == nullptr || w.flow_w <= 0)
     return;
 
-  // Which series are live. The espresso trace needs the espresso scale; the
-  // bench series (mode 2, or the beside-mode overlay) needs the bench scale.
-  const bool bench_series = w.bench_weights != nullptr && (w.flow_mode == 2 || w.bench_overlay);
-  const bool esp_on = scale.connected && w.flow_mode != 2;
-  const bool bench_on = bench_series && bench != nullptr && bench->connected;
-  // Nothing connected: blank the plot instead of scrolling a fake zero line
+  // Both rings are fed whenever their scale is connected, whichever side of
+  // the swap card shows — so switching sides reveals the full history, not a
+  // hole for the time spent on the other side. The sweep runs while the
+  // series ON SHOW has data (or, beside the graph, either does).
+  const bool esp_on = scale.connected;
+  const bool bench_on = w.bench_weights != nullptr && bench != nullptr && bench->connected;
+  const bool shown_on = w.flow_mode == 2 ? bench_on : (esp_on || (w.bench_overlay && bench_on));
+  // Nothing to show: blank the plot instead of scrolling a fake zero line
   // in. Clear once on the transition to an empty grid, then idle until a
   // scale reconnects.
-  if (!esp_on && !bench_on) {
+  if (!shown_on) {
     if (!w.flow_blanked) {
       reset_flow_graph(w);
       reset_flow_history(w);  // reconnect weights won't relate to these samples

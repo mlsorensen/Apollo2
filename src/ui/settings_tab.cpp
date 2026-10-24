@@ -1166,7 +1166,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
       lv_obj_set_width(cap, ui::dp(84));
       lv_obj_move_to_index(cap, 0);
     };
-    role_caption(out.scale_saved_row, "ESPRESSO");
+    if (!compact) role_caption(out.scale_saved_row, "ESPRESSO");
     // The bench row: a copy of the saved row's shape.
     out.bench_saved_row = lv_obj_create(out.scale_bt_page);
     lv_obj_remove_style_all(out.bench_saved_row);
@@ -1197,12 +1197,33 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_set_style_text_color(bf, lv_color_hex(ui::theme::text()), 0);
     lv_obj_set_style_text_font(bf, font, 0);
     lv_obj_center(bf);
-    role_caption(out.bench_saved_row, "BENCH");
-    out.scale_swap_btn = action_row(out.scale_bt_page, "Swap roles", LV_SYMBOL_LOOP, font, btn_h);
+    if (!compact) role_caption(out.bench_saved_row, "BENCH");
+    // Scan + Swap roles share one row: Scan grows to fill it, Swap sits at
+    // the right and is hidden (so Scan is full-width, as before) until both
+    // slots are saved.
+    lv_obj_t* scan_row = lv_obj_create(out.scale_bt_page);
+    lv_obj_remove_style_all(scan_row);
+    lv_obj_remove_flag(scan_row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_width(scan_row, lv_pct(100));
+    lv_obj_set_height(scan_row, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(scan_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(scan_row, ui::dp(6), 0);
+    lv_obj_set_parent(out.scale_scan_btn, scan_row);
+    lv_obj_set_width(out.scale_scan_btn, 0);
+    lv_obj_set_flex_grow(out.scale_scan_btn, 1);
+    out.scale_swap_btn = ui::make_button(scan_row);
+    lv_obj_set_height(out.scale_swap_btn, btn_h);
+    lv_obj_set_style_pad_hor(out.scale_swap_btn, ui::dp(14), 0);
+    lv_obj_set_style_bg_color(out.scale_swap_btn, lv_color_hex(ui::theme::card()), 0);
+    lv_obj_t* sw = lv_label_create(out.scale_swap_btn);
+    lv_label_set_text(sw, LV_SYMBOL_LOOP "  Swap roles");
+    lv_obj_set_style_text_color(sw, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(sw, font, 0);
+    lv_obj_center(sw);
     lv_obj_add_flag(out.scale_swap_btn, LV_OBJ_FLAG_HIDDEN);
-    // Order: espresso row, bench row, Swap, then Scan + the results.
+    // Order: espresso row, bench row, Scan + Swap, then the results.
     lv_obj_move_to_index(out.bench_saved_row, 1);
-    lv_obj_move_to_index(out.scale_swap_btn, 2);
+    lv_obj_move_to_index(scan_row, 2);
   }
   // Scale > Settings: target weight + flow-graph options
   {
