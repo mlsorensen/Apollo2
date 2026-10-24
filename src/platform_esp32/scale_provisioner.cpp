@@ -8,21 +8,28 @@ namespace platform {
 
 using core::ScaleSlot;
 
-ScaleProvisioner::ScaleProvisioner(ScaleLink& espresso, ScaleLink& bench, Config& config)
-    : espresso_(espresso), bench_(bench), config_(config) {}
+ScaleProvisioner::ScaleProvisioner(ScaleLink& a, ScaleLink& b, core::ScaleRoles& roles,
+                                   Config& config)
+    : a_(a), b_(b), roles_(roles), config_(config) {}
 
-ScaleLink& ScaleProvisioner::link(ScaleSlot slot) const {
-  return slot == ScaleSlot::kBench ? bench_ : espresso_;
+ScaleLink& ScaleProvisioner::link_for(ScaleSlot slot) const {
+  // The roles know the links as core::IScale; A and B are the only two.
+  return &roles_.link_for(slot) == static_cast<core::IScale*>(&b_) ? b_ : a_;
 }
 
-// Scans run on the espresso link's task (either would do: the arbiter grants
-// the user scan to whichever slot asks); results are read back from it.
-void ScaleProvisioner::start_scan() { espresso_.request_scan(); }
+core::ScaleSlot ScaleProvisioner::slot_of(const ScaleLink& link) const {
+  return roles_.slot_of(link);
+}
 
-bool ScaleProvisioner::scanning() const { return espresso_.scanning(); }
+// Scans run on link A's task (either would do: the arbiter grants the user
+// scan to whichever slot asks, and A's task always runs); results are read
+// back from it.
+void ScaleProvisioner::start_scan() { a_.request_scan(); }
+
+bool ScaleProvisioner::scanning() const { return a_.scanning(); }
 
 std::vector<core::ScanResult> ScaleProvisioner::scan_results() const {
-  return espresso_.scan_results();
+  return a_.scan_results();
 }
 
 void ScaleProvisioner::apply_slot(ScaleSlot slot) {
@@ -55,13 +62,15 @@ std::string ScaleProvisioner::saved_name(ScaleSlot slot) const {
 }
 
 void ScaleProvisioner::swap_roles() {
+  // The saved keys swap (so a rolled-back build reads the espresso keys as
+  // the espresso scale) and the role pointers swap with them; the links —
+  // their connections, names, learned types, a paired Umbra's partner
+  // session — stay exactly where they are. Nothing reconnects, nothing
+  // restarts. The next boot seeds link A from the espresso keys, i.e. the
+  // scale that is espresso NOW (link B's), with the identity mapping: the
+  // two views agree because the keys and the pointers moved together.
   config_.swap_scales();
-  // Drop both links first so neither keeps a connection the other slot now
-  // owns, then seed each from its new config.
-  espresso_.set_connect_enabled(false);
-  bench_.set_connect_enabled(false);
-  apply_slot(ScaleSlot::kEspresso);
-  apply_slot(ScaleSlot::kBench);
+  roles_.swap();
 }
 
 bool ScaleProvisioner::partner_pairing_complete() const {

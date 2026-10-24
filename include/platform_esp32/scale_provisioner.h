@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "core/scale_provisioner.h"
+#include "core/scale_roles.h"
 
 namespace platform {
 
@@ -10,13 +11,21 @@ class ScaleLink;
 class Config;
 
 // Implements core::IScaleProvisioner for the device over the TWO scale links
-// (espresso + bench): scanning is delegated to the espresso link's BLE task,
-// save persists the scale (MAC + name) to the slot's NVS keys and points that
-// slot's link at it. Mirrors Provisioner, minus the token machinery (scales
-// need none).
+// (link A + link B) and the ROLES they hold (core::ScaleRoles): scanning is
+// delegated to link A's BLE task, save persists the scale (MAC + name) to the
+// slot's NVS keys and points the link currently holding that role at it.
+// Swap roles swaps the keys and the role pointers; the links keep their
+// connections. Mirrors Provisioner, minus the token machinery (scales need
+// none).
 class ScaleProvisioner : public core::IScaleProvisioner {
  public:
-  ScaleProvisioner(ScaleLink& espresso, ScaleLink& bench, Config& config);
+  ScaleProvisioner(ScaleLink& a, ScaleLink& b, core::ScaleRoles& roles, Config& config);
+
+  // The link holding a role right now (boot: A = espresso, B = bench), and
+  // the role a link holds — device main needs both (partner registration,
+  // the learned-type persister, the shot park).
+  ScaleLink& link_for(core::ScaleSlot slot) const;
+  core::ScaleSlot slot_of(const ScaleLink& link) const;
 
   void start_scan() override;
   bool scanning() const override;
@@ -37,12 +46,13 @@ class ScaleProvisioner : public core::IScaleProvisioner {
   void set_connect_enabled(core::ScaleSlot slot, bool enabled) override;
 
  private:
-  ScaleLink& link(core::ScaleSlot slot) const;
-  // Seed a link from its slot's saved config (boot, save, swap, forget).
+  ScaleLink& link(core::ScaleSlot slot) const { return link_for(slot); }
+  // Seed the link holding a role from that slot's saved config (save, forget).
   void apply_slot(core::ScaleSlot slot);
 
-  ScaleLink& espresso_;
-  ScaleLink& bench_;
+  ScaleLink& a_;
+  ScaleLink& b_;
+  core::ScaleRoles& roles_;
   Config& config_;
 };
 

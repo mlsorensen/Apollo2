@@ -24,6 +24,7 @@
 #include "core/brew_controller.h"
 #include "core/log_ring.h"
 #include "core/radio_arbiter.h"
+#include "core/scale_roles.h"
 #include "core/system.h"
 #include "platform_esp32/battery.h"
 #include "platform_esp32/board_config.h"
@@ -84,10 +85,14 @@ platform::ScaleLink g_scale{g_radio, core::RadioSlot::kScaleEspresso};  // the e
 // a NimBLEClient and its discovery cache + the driver, ~7-9 KB internal at
 // steady state (measured on the 4.3C before release; see the plan).
 platform::ScaleLink g_scale2{g_radio, core::RadioSlot::kScaleBench};
-platform::ScaleProvisioner g_scale_provisioner{g_scale, g_scale2, g_config};
+// The ROLES (espresso / bench) as stable objects over the two links: every
+// consumer of "the espresso scale" below reads through g_roles, so Swap
+// roles is a pointer swap — no reconnect, no restart (core/scale_roles.h).
+core::ScaleRoles g_roles{g_scale, g_scale2};
+platform::ScaleProvisioner g_scale_provisioner{g_scale, g_scale2, g_roles, g_config};
 // Brew-by-weight: paddle relay + shot state machine over the paddle + scale
 // ports (core logic; polled from loop()).
-core::BrewController g_brew{platform::paddle(), g_scale};
+core::BrewController g_brew{platform::paddle(), g_roles.espresso()};
 // Shot history: SD-backed on boards with a card slot; NullShotStore elsewhere
 // (the History tab shows guidance instead).
 #if defined(BOARD_HAS_SD_MMC)
@@ -458,7 +463,8 @@ void setup() {
         ui::theme::ok(),   ui::theme::warn(),  ui::theme::alert()};
   });
   g_app.build(g_micra, g_provisioner, g_battery, g_display_settings, g_clock, g_history,
-              g_scale, &g_scale2, g_scale_provisioner, g_brew, g_network, platform::sound(),
+              g_roles.espresso(), &g_roles.bench(), g_scale_provisioner, g_brew, g_network,
+              platform::sound(),
               g_shots,
               screen, &g_update_check,
 #if defined(BOARD_HAS_SD_MMC)
@@ -546,7 +552,10 @@ void setup() {
     const unsigned i8 = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     const unsigned dma = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
     const unsigned ps = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
-    const bool ok = (partner_slot == 1 ? g_scale2 : g_scale).register_partner();
+    const bool ok = g_scale_provisioner
+                        .link_for(partner_slot == 1 ? core::ScaleSlot::kBench
+                                                    : core::ScaleSlot::kEspresso)
+                        .register_partner();
     core::logf("heap: partner GATT %s on the %s slot, cost 8bit=%d DMA=%d PSRAM=%d\n",
                ok ? "registered" : "FAILED", partner_slot == 1 ? "bench" : "espresso",
                static_cast<int>(i8) -
@@ -608,8 +617,12 @@ void setup() {
     link.set_partner_mode(g_config.scale_partner_mode(slot));
     // The type the connect actually used is persisted next to the MAC, so a
     // unit paired before it was recorded guesses once and then never again.
-    link.set_addr_type_learned(
-        [slot](core::AddrType t) { g_config.set_scale_addr_type(slot, t); });
+    // Into the keys of the role the link holds at that moment — after a
+    // Swap roles the link's keys are the other slot's.
+    platform::ScaleLink* lp = &link;
+    link.set_addr_type_learned([lp](core::AddrType t) {
+      g_config.set_scale_addr_type(g_scale_provisioner.slot_of(*lp), t);
+    });
     core::logf("Saved %s scale: mac=%s type=%s\n", core::scale_slot_name(slot),
                mac.empty() ? "(none)" : mac.c_str(), core::addr_type_name(type));
     link.begin(mac, type);
@@ -916,11 +929,22 @@ void loop() {
     // radio while a shot runs or sits in review: the espresso scale is
     // streaming at 10 Hz and may itself need to reconnect mid-shot — which
     // stays allowed, so the espresso slot is never shot-parked.
+    // "The bench" is a role: whichever link holds it right now. A swap only
+    // happens with no shot running (App refuses it otherwise), so the bit is
+    // clear whenever the slot changes; the old slot is unparked regardless.
     static bool shot_prev = false;
+    static core::RadioSlot bench_slot_prev = core::RadioSlot::kScaleBench;
     const bool shot = g_brew.snapshot().phase != core::ShotPhase::kIdle;
+    const core::RadioSlot bench_slot =
+        g_roles.swapped() ? core::RadioSlot::kScaleEspresso : core::RadioSlot::kScaleBench;
+    if (bench_slot != bench_slot_prev) {
+      g_radio.set_parked(bench_slot_prev, core::ParkSource::kShot, false);
+      bench_slot_prev = bench_slot;
+      shot_prev = false;
+    }
     if (shot != shot_prev) {
       shot_prev = shot;
-      g_radio.set_parked(core::RadioSlot::kScaleBench, core::ParkSource::kShot, shot);
+      g_radio.set_parked(bench_slot, core::ParkSource::kShot, shot);
     }
   }
 

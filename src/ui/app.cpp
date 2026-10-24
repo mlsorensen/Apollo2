@@ -4945,19 +4945,16 @@ void App::forget_bench() {
 
 void App::swap_scale_roles() {
   if (scale_provisioner_ == nullptr) return;
-  // Not mid-shot (or mid-review): the espresso link is the one the stop
-  // math and the frozen readout run on, and a swap drops it.
+  // Not mid-shot (or mid-review): the espresso role is what the stop math
+  // and the frozen readout run on; moving it under a shot would be wrong
+  // even though the links themselves stay connected.
   if (brew_ != nullptr && brew_->snapshot().phase != core::ShotPhase::kIdle) return;
-  // A partner-mode Umbra changing slots needs the partner service registered
-  // on the other link, which only happens at boot: same restart path as
-  // saving one fresh (the Umbra stays paired, so no pairing prompt).
-  const bool partner = scale_provisioner_->partner_slot() >= 0;
+  // A pointer swap underneath (core::ScaleRoles): both links keep their
+  // connections, a paired Umbra keeps its session. The rebuild re-reads the
+  // roles' names and empties the graph rings, whose history now belongs to
+  // the other scale.
   scale_provisioner_->swap_roles();
   settings_.scale_last_count = -1;
-  if (partner) {
-    reboot_device();
-    return;
-  }
   request_layout_rebuild(kSectionScaleBt);
 }
 
