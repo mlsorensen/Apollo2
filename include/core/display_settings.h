@@ -89,6 +89,12 @@ class IDisplaySettings {
   virtual int scale_battery_style() const = 0;
   virtual void set_scale_battery_style(int style) = 0;
 
+  // Where the bench scale shows on Home: 0 = in the SCALE card behind an
+  // ESPRESSO | BENCH switch (the default), 1 = its own card beside the graph.
+  // Persisted; only meaningful while a bench scale is saved.
+  virtual int bench_home_style() const = 0;
+  virtual void set_bench_home_style(int style) = 0;
+
   // Home MICRA card shows the auto-standby countdown while one is running
   // (Settings > Micra > Schedule > Show auto-standby timer). Default off.
   virtual bool show_standby_timer() const = 0;

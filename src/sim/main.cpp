@@ -197,9 +197,9 @@ int main() {
   // SCALE card as "Sleeping" (muted dot) with Connect armed to wake it.
   scale.set_umbra(true);
   scale.set_connected(false);
-  scale_provisioner.set_connect_enabled(false);
+  scale_provisioner.set_connect_enabled(core::ScaleSlot::kEspresso, false);
   ok &= r({800, 480}, "renders/home_sleeping_800x480.png");
-  scale_provisioner.set_connect_enabled(true);
+  scale_provisioner.set_connect_enabled(core::ScaleSlot::kEspresso, true);
   scale.set_connected(true);
   scale.set_umbra(false);
   // Heating: machine on but boilers still below target — the inferred state
@@ -365,10 +365,10 @@ int main() {
   // link-down state where the rows disable ("--") behind a Connect prompt.
   ok &= r({800, 480}, "renders/scale_device_800x480.png", 1, ui::kSectionScaleDevice);
   scale.set_connected(false);
-  scale_provisioner.set_connect_enabled(false);
+  scale_provisioner.set_connect_enabled(core::ScaleSlot::kEspresso, false);
   ok &= r({800, 480}, "renders/scale_device_disc_800x480.png", 1,
           ui::kSectionScaleDevice);
-  scale_provisioner.set_connect_enabled(true);
+  scale_provisioner.set_connect_enabled(core::ScaleSlot::kEspresso, true);
   scale.set_connected(true);
   // Lunar persona: Unit row + the read-only Mode row (bare text, no chip).
   scale.set_lunar(true);

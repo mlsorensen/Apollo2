@@ -3,7 +3,8 @@
 #include <cstdint>
 #include <string>
 
-#include "core/provisioner.h"  // core::AddrType
+#include "core/provisioner.h"        // core::AddrType
+#include "core/scale_provisioner.h"  // core::ScaleSlot
 
 // Persistent device configuration in NVS flash: the saved machine (BLE MAC +
 // display name) chosen via the Settings scan, and the auth token entered via
@@ -33,19 +34,31 @@ class Config {
   core::AddrType micra_addr_type() const;
   void set_micra_addr_type(core::AddrType type);
 
-  // Saved Bluetooth scale (separate from the machine; no token needed).
-  std::string scale_mac() const;
-  std::string scale_name() const;
-  bool scale_partner_mode() const;
-  bool scale_partner_pending() const;  // pairing prompt owed after a restart
-  void set_scale_partner_pending(bool pending);
-  void save_scale(const std::string& mac, const std::string& name, bool partner_mode,
-                  core::AddrType addr_type);
+  // Saved Bluetooth scales (separate from the machine; no token needed). Two
+  // SLOTS: the espresso scale's keys are the original `smac`/`sname`/`sprtnr`/
+  // `sprpend`/`satype` — an older build rolled back still finds its scale —
+  // and the bench slot (ADD, v1.2) is the same set suffixed `2`. "Swap roles"
+  // exchanges the stored values; it never changes what a key means.
+  std::string scale_mac(core::ScaleSlot slot = core::ScaleSlot::kEspresso) const;
+  std::string scale_name(core::ScaleSlot slot = core::ScaleSlot::kEspresso) const;
+  bool scale_partner_mode(core::ScaleSlot slot = core::ScaleSlot::kEspresso) const;
+  int scale_partner_slot() const;  // the slot in partner mode, or -1
+  bool scale_partner_pending(core::ScaleSlot slot = core::ScaleSlot::kEspresso) const;
+  void set_scale_partner_pending(core::ScaleSlot slot, bool pending);
+  void save_scale(core::ScaleSlot slot, const std::string& mac, const std::string& name,
+                  bool partner_mode, core::AddrType addr_type);
   // The saved scale's BLE address type (kUnknown until learned: units paired
   // before it was recorded learn it on their first connect).
-  core::AddrType scale_addr_type() const;
-  void set_scale_addr_type(core::AddrType type);
-  void clear_scale();
+  core::AddrType scale_addr_type(core::ScaleSlot slot = core::ScaleSlot::kEspresso) const;
+  void set_scale_addr_type(core::ScaleSlot slot, core::AddrType type);
+  void clear_scale(core::ScaleSlot slot = core::ScaleSlot::kEspresso);
+  void swap_scales();  // exchange the two slots' stored values
+
+  // Where the bench scale shows on Home (ADD, v1.2): 0 = in the SCALE card
+  // behind an ESPRESSO | BENCH switch (default), 1 = its own card beside the
+  // graph.
+  int bench_home_style() const;
+  void set_bench_home_style(int style);
 
   // Brew-by-weight target (grams) — persisted so it survives reboots.
   float target_weight_g() const;       // default 36

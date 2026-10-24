@@ -36,6 +36,8 @@ class DisplaySettings : public core::IDisplaySettings {
   void set_shot_window_growth(int mode) override;
   int scale_battery_style() const override;
   void set_scale_battery_style(int style) override;
+  int bench_home_style() const override;
+  void set_bench_home_style(int style) override;
   bool show_standby_timer() const override;
   void set_show_standby_timer(bool on) override;
   bool perf_overlay() const override;

@@ -60,12 +60,25 @@ int migrate_chime_volume(int legacy_percent) {
   const int v = static_cast<int>(lroundf(100.0f + db / kReadyChimeRangeDb * 100.0f));
   return v < 1 ? 1 : v > 100 ? 100 : v;  // never silence a device that wasn't
 }
-constexpr char kScaleMacKey[] = "smac";
-constexpr char kScaleNameKey[] = "sname";
-constexpr char kScalePartnerKey[] = "sprtnr";
-constexpr char kScalePendingKey[] = "sprpend";  // per-unit (config_backup)
-constexpr char kScaleAddrTypeKey[] = "satype";   // core::AddrType as uchar (ADD, v1.1)
+// The two scale slots' keys. The espresso slot keeps the ORIGINAL names (an
+// older build rolled back still finds its scale); the bench slot (ADD, v1.2)
+// is the same set suffixed "2". A swap exchanges values between the sets.
+struct ScaleKeys {
+  const char* mac;
+  const char* name;
+  const char* partner;
+  const char* pending;  // per-unit (config_backup), both slots
+  const char* type;     // core::AddrType as uchar (ADD, v1.1)
+};
+constexpr ScaleKeys kScaleKeys[2] = {
+    {"smac", "sname", "sprtnr", "sprpend", "satype"},
+    {"smac2", "sname2", "sprtnr2", "sprpend2", "satype2"},
+};
+inline const ScaleKeys& keys(core::ScaleSlot slot) {
+  return kScaleKeys[slot == core::ScaleSlot::kBench ? 1 : 0];
+}
 constexpr char kMicraAddrTypeKey[] = "matype";   // the machine's, same encoding (ADD, v1.2)
+constexpr char kBenchHomeKey[] = "benchhome";    // bench scale on Home: 0 card / 1 beside graph (ADD, v1.2)
 constexpr char kTargetKey[] = "tgtg";
 constexpr char kShotModeKey[] = "shotmode";  // LEGACY bool (armed) — migration only
 constexpr char kShotMode3Key[] = "shotmd";   // tri-state core::ShotMode as int
@@ -169,61 +182,133 @@ void Config::clear() {
   p.end();
 }
 
-std::string Config::scale_mac() const { return read_key(kScaleMacKey); }
+std::string Config::scale_mac(core::ScaleSlot slot) const { return read_key(keys(slot).mac); }
 
-std::string Config::scale_name() const { return read_key(kScaleNameKey); }
+std::string Config::scale_name(core::ScaleSlot slot) const { return read_key(keys(slot).name); }
 
-bool Config::scale_partner_mode() const {
+bool Config::scale_partner_mode(core::ScaleSlot slot) const {
   Preferences p;
   if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
-  const bool enabled = p.getBool(kScalePartnerKey, false);
+  const bool enabled = p.getBool(keys(slot).partner, false);
   p.end();
   return enabled;
 }
 
-bool Config::scale_partner_pending() const {
+int Config::scale_partner_slot() const {
+  if (scale_partner_mode(core::ScaleSlot::kEspresso)) return 0;
+  if (scale_partner_mode(core::ScaleSlot::kBench)) return 1;
+  return -1;
+}
+
+bool Config::scale_partner_pending(core::ScaleSlot slot) const {
   Preferences p;
   if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
-  const bool pending = p.isKey(kScalePendingKey) && p.getBool(kScalePendingKey, false);
+  const char* k = keys(slot).pending;
+  const bool pending = p.isKey(k) && p.getBool(k, false);
   p.end();
   return pending;
 }
 
-void Config::set_scale_partner_pending(bool pending) {
+void Config::set_scale_partner_pending(core::ScaleSlot slot, bool pending) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
-  if (pending) p.putBool(kScalePendingKey, true);
-  else p.remove(kScalePendingKey);
+  if (pending) p.putBool(keys(slot).pending, true);
+  else p.remove(keys(slot).pending);
   p.end();
 }
 
-void Config::save_scale(const std::string& mac, const std::string& name, bool partner_mode,
-                        core::AddrType addr_type) {
+namespace {
+// One slot's stored values, for save/swap.
+struct ScaleRecord {
+  std::string mac, name;
+  bool partner = false;
+  uint8_t type = 0;  // 0 = unknown (key absent)
+};
+
+ScaleRecord read_record(Preferences& p, const ScaleKeys& k) {
+  ScaleRecord r;
+  if (p.isKey(k.mac)) r.mac = p.getString(k.mac, "").c_str();
+  if (p.isKey(k.name)) r.name = p.getString(k.name, "").c_str();
+  r.partner = p.getBool(k.partner, false);
+  r.type = p.isKey(k.type) ? p.getUChar(k.type, 0) : 0;
+  return r;
+}
+
+void write_record(Preferences& p, const ScaleKeys& k, const ScaleRecord& r) {
+  if (r.mac.empty()) {
+    p.remove(k.mac);
+    p.remove(k.name);
+    p.remove(k.partner);
+    p.remove(k.type);
+    return;
+  }
+  p.putString(k.mac, r.mac.c_str());
+  p.putString(k.name, r.name.c_str());
+  p.putBool(k.partner, r.partner);
+  if (r.type == 0) p.remove(k.type);
+  else p.putUChar(k.type, r.type);
+}
+}  // namespace
+
+void Config::save_scale(core::ScaleSlot slot, const std::string& mac, const std::string& name,
+                        bool partner_mode, core::AddrType addr_type) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
-  p.putString(kScaleMacKey, mac.c_str());
-  p.putString(kScaleNameKey, name.c_str());
-  p.putBool(kScalePartnerKey, partner_mode);
-  if (addr_type == core::AddrType::kUnknown) p.remove(kScaleAddrTypeKey);
-  else p.putUChar(kScaleAddrTypeKey, static_cast<uint8_t>(addr_type));
+  ScaleRecord r;
+  r.mac = mac;
+  r.name = name;
+  r.partner = partner_mode;
+  r.type = static_cast<uint8_t>(addr_type);
+  write_record(p, keys(slot), r);
   p.end();
 }
 
-core::AddrType Config::scale_addr_type() const {
+void Config::swap_scales() {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  const ScaleRecord a = read_record(p, kScaleKeys[0]);
+  const ScaleRecord b = read_record(p, kScaleKeys[1]);
+  write_record(p, kScaleKeys[0], b);
+  write_record(p, kScaleKeys[1], a);
+  // The pairing-prompt flags are per unit and per slot; they follow the scale.
+  const bool pa = p.isKey(kScaleKeys[0].pending) && p.getBool(kScaleKeys[0].pending, false);
+  const bool pb = p.isKey(kScaleKeys[1].pending) && p.getBool(kScaleKeys[1].pending, false);
+  if (pb) p.putBool(kScaleKeys[0].pending, true); else p.remove(kScaleKeys[0].pending);
+  if (pa) p.putBool(kScaleKeys[1].pending, true); else p.remove(kScaleKeys[1].pending);
+  p.end();
+}
+
+core::AddrType Config::scale_addr_type(core::ScaleSlot slot) const {
   Preferences p;
   if (!p.begin(kNamespace, /*readOnly=*/true)) return core::AddrType::kUnknown;
-  const uint8_t v = p.isKey(kScaleAddrTypeKey) ? p.getUChar(kScaleAddrTypeKey, 0) : 0;
+  const char* k = keys(slot).type;
+  const uint8_t v = p.isKey(k) ? p.getUChar(k, 0) : 0;
   p.end();
   return v == 1 ? core::AddrType::kPublic
          : v == 2 ? core::AddrType::kRandom
                   : core::AddrType::kUnknown;  // garbage reads as unknown
 }
 
-void Config::set_scale_addr_type(core::AddrType type) {
+void Config::set_scale_addr_type(core::ScaleSlot slot, core::AddrType type) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
-  if (type == core::AddrType::kUnknown) p.remove(kScaleAddrTypeKey);
-  else p.putUChar(kScaleAddrTypeKey, static_cast<uint8_t>(type));
+  if (type == core::AddrType::kUnknown) p.remove(keys(slot).type);
+  else p.putUChar(keys(slot).type, static_cast<uint8_t>(type));
+  p.end();
+}
+
+int Config::bench_home_style() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 0;
+  const int v = p.isKey(kBenchHomeKey) ? p.getInt(kBenchHomeKey, 0) : 0;
+  p.end();
+  return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+void Config::set_bench_home_style(int style) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putInt(kBenchHomeKey, style < 0 ? 0 : style > 1 ? 1 : style);
   p.end();
 }
 
@@ -245,14 +330,15 @@ void Config::set_micra_addr_type(core::AddrType type) {
   p.end();
 }
 
-void Config::clear_scale() {
+void Config::clear_scale(core::ScaleSlot slot) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
-  p.remove(kScaleMacKey);
-  p.remove(kScaleNameKey);
-  p.remove(kScalePartnerKey);
-  p.remove(kScalePendingKey);
-  p.remove(kScaleAddrTypeKey);
+  const ScaleKeys& k = keys(slot);
+  p.remove(k.mac);
+  p.remove(k.name);
+  p.remove(k.partner);
+  p.remove(k.pending);
+  p.remove(k.type);
   p.end();
 }
 

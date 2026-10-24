@@ -79,7 +79,12 @@ platform::Network g_network{g_config, g_clock, g_token_setup};  // WiFi station 
 platform::UpdateCheck g_update_check{g_config, g_network};  // daily release check
 platform::History g_history;
 platform::ScaleLink g_scale{g_radio, core::RadioSlot::kScaleEspresso};  // the espresso scale
-platform::ScaleProvisioner g_scale_provisioner{g_scale, g_config};
+// The bench scale (v1.2): a second NimBLE link + task, display-only — every
+// shot role stays on g_scale. Cost per the memory rule: a 4096 B task stack +
+// a NimBLEClient and its discovery cache + the driver, ~7-9 KB internal at
+// steady state (measured on the 4.3C before release; see the plan).
+platform::ScaleLink g_scale2{g_radio, core::RadioSlot::kScaleBench};
+platform::ScaleProvisioner g_scale_provisioner{g_scale, g_scale2, g_config};
 // Brew-by-weight: paddle relay + shot state machine over the paddle + scale
 // ports (core logic; polled from loop()).
 core::BrewController g_brew{platform::paddle(), g_scale};
@@ -531,15 +536,18 @@ void setup() {
   // DMA free 26.0 vs 27.3 KB) — a real cost on the S3, so units without an
   // Umbra never pay it; choosing an Umbra restarts once (App::
   // restart_for_umbra) to get here.
-  if (!g_config.scale_partner_mode()) {
+  // Either slot may hold the partner-mode Umbra, never both (one GATT
+  // service, one inbound session; ScaleProvisioner refuses a second).
+  const int partner_slot = g_config.scale_partner_slot();
+  if (partner_slot < 0) {
     core::logf("heap: partner GATT not registered (partner mode off)\n");
   } else {
     const unsigned i8 = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     const unsigned dma = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
     const unsigned ps = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
-    const bool ok = g_scale.register_partner();
-    core::logf("heap: partner GATT %s, cost 8bit=%d DMA=%d PSRAM=%d\n",
-               ok ? "registered" : "FAILED",
+    const bool ok = (partner_slot == 1 ? g_scale2 : g_scale).register_partner();
+    core::logf("heap: partner GATT %s on the %s slot, cost 8bit=%d DMA=%d PSRAM=%d\n",
+               ok ? "registered" : "FAILED", partner_slot == 1 ? "bench" : "espresso",
                static_cast<int>(i8) -
                    static_cast<int>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
                static_cast<int>(dma) -
@@ -568,6 +576,10 @@ void setup() {
                         [](bool on) { g_scale.central().hold_connects(on); });
   g_radio.set_scan_cancel_hook(core::RadioSlot::kScaleEspresso,
                                []() { g_scale.central().cancel_scan(); });
+  g_radio.set_hold_hook(core::RadioSlot::kScaleBench,
+                        [](bool on) { g_scale2.central().hold_connects(on); });
+  g_radio.set_scan_cancel_hook(core::RadioSlot::kScaleBench,
+                               []() { g_scale2.central().cancel_scan(); });
 
   // Seed the link from saved config, then start the background BLE task. With
   // no MAC -> Unconfigured; MAC but no token -> NeedsToken (Settings "Setup").
@@ -587,19 +599,22 @@ void setup() {
   g_micra.set_addr_type_learned([](core::AddrType t) { g_config.set_micra_addr_type(t); });
   g_micra.begin(mac, g_config.micra_addr_type());
 
-  // Start the Bluetooth scale link from its saved MAC (empty -> idles).
-  const std::string scale_mac = g_config.scale_mac();
-  const core::AddrType scale_type = g_config.scale_addr_type();
-  g_scale.set_name(g_config.scale_name());
-  g_scale.set_partner_mode(g_config.scale_partner_mode());
-  // The type the connect actually used is persisted next to the MAC, so a
-  // unit paired before it was recorded guesses once and then never again.
-  g_scale.set_addr_type_learned(
-      [](core::AddrType t) { g_config.set_scale_addr_type(t); });
-  core::logf("Saved scale: mac=%s type=%s\n",
-             scale_mac.empty() ? "(none)" : scale_mac.c_str(),
-             core::addr_type_name(scale_type));
-  g_scale.begin(scale_mac, scale_type);
+  // Start the two Bluetooth scale links from their saved MACs (empty -> idles).
+  auto start_scale = [](platform::ScaleLink& link, core::ScaleSlot slot) {
+    const std::string mac = g_config.scale_mac(slot);
+    const core::AddrType type = g_config.scale_addr_type(slot);
+    link.set_name(g_config.scale_name(slot));
+    link.set_partner_mode(g_config.scale_partner_mode(slot));
+    // The type the connect actually used is persisted next to the MAC, so a
+    // unit paired before it was recorded guesses once and then never again.
+    link.set_addr_type_learned(
+        [slot](core::AddrType t) { g_config.set_scale_addr_type(slot, t); });
+    core::logf("Saved %s scale: mac=%s type=%s\n", core::scale_slot_name(slot),
+               mac.empty() ? "(none)" : mac.c_str(), core::addr_type_name(type));
+    link.begin(mac, type);
+  };
+  start_scale(g_scale, core::ScaleSlot::kEspresso);
+  start_scale(g_scale2, core::ScaleSlot::kBench);
 }
 
 namespace {
@@ -666,6 +681,7 @@ void poll_serial_id() {
 
 void loop() {
   g_scale.poll_partner();
+  g_scale2.poll_partner();
   poll_serial_id();          // web-flasher "which board is this?" responder
   g_brew.poll(millis());     // paddle relay + shot state machine (edge-critical)
   // Frame-cost telemetry, replacing LVGL's on-screen perf overlay (which is a
@@ -884,12 +900,26 @@ void loop() {
     if (saver != saver_prev) {
       saver_prev = saver;
       g_radio.set_parked(core::RadioSlot::kScaleEspresso, core::ParkSource::kSaver, saver);
+      g_radio.set_parked(core::RadioSlot::kScaleBench, core::ParkSource::kSaver, saver);
       g_scale.pause_partner(saver || portal);
+      g_scale2.pause_partner(saver || portal);
     }
     if (portal != portal_prev) {
       portal_prev = portal;
       g_radio.set_parked(core::RadioSlot::kScaleEspresso, core::ParkSource::kPortal, portal);
+      g_radio.set_parked(core::RadioSlot::kScaleBench, core::ParkSource::kPortal, portal);
       g_scale.pause_partner(saver || portal);
+      g_scale2.pause_partner(saver || portal);
+    }
+    // The BENCH scale's reconnects (and any finder scan) stay out of the
+    // radio while a shot runs or sits in review: the espresso scale is
+    // streaming at 10 Hz and may itself need to reconnect mid-shot — which
+    // stays allowed, so the espresso slot is never shot-parked.
+    static bool shot_prev = false;
+    const bool shot = g_brew.snapshot().phase != core::ShotPhase::kIdle;
+    if (shot != shot_prev) {
+      shot_prev = shot;
+      g_radio.set_parked(core::RadioSlot::kScaleBench, core::ParkSource::kShot, shot);
     }
   }
 

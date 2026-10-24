@@ -89,6 +89,10 @@ void DisplaySettings::set_scale_battery_style(int style) {
   config_.set_scale_battery_style(style);
 }
 
+int DisplaySettings::bench_home_style() const { return config_.bench_home_style(); }
+
+void DisplaySettings::set_bench_home_style(int style) { config_.set_bench_home_style(style); }
+
 bool DisplaySettings::show_standby_timer() const { return config_.show_standby_timer(); }
 
 void DisplaySettings::set_show_standby_timer(bool on) { config_.set_show_standby_timer(on); }

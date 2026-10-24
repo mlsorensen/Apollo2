@@ -4659,7 +4659,7 @@ void App::save_scanned_scale(int index) {
   std::transform(upper.begin(), upper.end(), upper.begin(),
                  [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
   if (upper.find("UMBRA") != std::string::npos) {
-    scale_provisioner_->save_scale(results[index], true);
+    scale_provisioner_->save_scale(results[index], core::ScaleSlot::kEspresso, true);
     settings_.scale_last_count = -1;
     request_layout_rebuild(kSectionScaleBt);
     if (scale_provisioner_->partner_ready()) {
@@ -4678,7 +4678,7 @@ void App::save_scanned_scale(int index) {
     modal_button(row, "Use unpaired", ui::theme::card(), on_umbra_use_unpaired, this);
     modal_button(row, "Restart", ui::theme::accent(), on_umbra_restart, this);
   } else {
-    scale_provisioner_->save_scale(results[index], false);
+    scale_provisioner_->save_scale(results[index], core::ScaleSlot::kEspresso, false);
     settings_.scale_last_count = -1;
     request_layout_rebuild(kSectionScaleBt);
   }
@@ -4779,7 +4779,7 @@ void App::use_umbra_unpaired() {
 
 void App::forget_scale() {
   if (scale_provisioner_ == nullptr) return;
-  scale_provisioner_->forget();
+  scale_provisioner_->forget(core::ScaleSlot::kEspresso);
   settings_.scale_last_count = -1;
   request_layout_rebuild(kSectionScaleBt);  // Home reverts to the classic layout
 }
@@ -4789,7 +4789,8 @@ void App::toggle_scale_connection() {
   // Same mid-shot refusal as tare_scale — also covers the Settings-tab
   // Connect/Disconnect button, which shares this path.
   if (brew_ != nullptr && core::shot_in_flight(brew_->snapshot())) return;
-  scale_provisioner_->set_connect_enabled(!scale_provisioner_->connect_enabled());
+  scale_provisioner_->set_connect_enabled(core::ScaleSlot::kEspresso,
+                                          !scale_provisioner_->connect_enabled());
   update_scale_view();
 }
 

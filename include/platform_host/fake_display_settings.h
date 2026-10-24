@@ -30,6 +30,8 @@ class FakeDisplaySettings : public core::IDisplaySettings {
   void set_shot_window_growth(int mode) override { shot_window_growth_ = mode; }
   int scale_battery_style() const override { return scale_battery_style_; }
   void set_scale_battery_style(int style) override { scale_battery_style_ = style; }
+  int bench_home_style() const override { return bench_home_style_; }
+  void set_bench_home_style(int style) override { bench_home_style_ = style; }
   bool show_standby_timer() const override { return show_standby_timer_; }
   void set_show_standby_timer(bool on) override { show_standby_timer_ = on; }
   bool perf_overlay() const override { return perf_overlay_; }
@@ -52,6 +54,7 @@ class FakeDisplaySettings : public core::IDisplaySettings {
   int flow_smooth_ = 1;      // light
   int shot_window_growth_ = 2;  // continuous, the device default
   int scale_battery_style_ = 0;  // icon, the device default
+  int bench_home_style_ = 0;     // in the SCALE card, the device default
   bool show_standby_timer_ = false;
   bool perf_overlay_ = false;
   bool click_sound_ = true;
