@@ -725,6 +725,9 @@ void make_stepper_group(lv_obj_t* parent, int btn_size, const lv_font_t* symbol_
   lv_obj_set_flex_align(g, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_column(g, ui::dp(3), 0);
+  // Sit a little below the value it adjusts: the value row gets breathing
+  // room and the stepper shares the slack above the action buttons instead.
+  lv_obj_set_style_margin_top(g, ui::dp(8), 0);
   *out_minus = ui::make_step_button(g, LV_SYMBOL_MINUS, btn_size, symbol_font);
   lv_obj_t* lbl = lv_label_create(g);
   // Fixed (not btn-relative) so the buttons hug the value at 14pt instead of
@@ -745,6 +748,9 @@ lv_obj_t* make_panel_body(lv_obj_t* card) {
   lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_width(row, lv_pct(100));
   lv_obj_set_flex_grow(row, 1);
+  // The columns centre in the body; this matches the steppers' top margin so
+  // the value row holds its place and only the steppers sit lower.
+  lv_obj_set_style_pad_top(row, ui::dp(8), 0);
   lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START,
                         LV_FLEX_ALIGN_START);
@@ -906,6 +912,7 @@ void build_scale_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   // the stepper.
   out.shot_btn = ui::make_button(tcol);
   lv_obj_set_size(out.shot_btn, LV_SIZE_CONTENT, btn_size);
+  lv_obj_set_style_margin_top(out.shot_btn, ui::dp(8), 0);  // level with the steppers
   lv_obj_set_style_pad_hor(out.shot_btn, ui::dp(14), 0);
   lv_obj_set_style_radius(out.shot_btn, btn_size / 2, 0);
   // Outlined like the step buttons sharing this row (card fill + ring), so the
