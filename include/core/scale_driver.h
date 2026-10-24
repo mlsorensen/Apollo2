@@ -74,6 +74,10 @@ inline constexpr const char* kPartnerAdvertName = "LUNAR-APOLLO";
 // Model classification from an advertised (or saved) device name. Nullptr-safe;
 // make_scale_driver returns nullptr for unrecognized names.
 bool scale_name_supported(const char* name);
+// The model a scale advertises as, for display: "Bookoo Ultra", "Acaia Lunar",
+// "Varia Aku"... — nullptr for a name no driver recognises (callers fall
+// back to the advertised name).
+const char* scale_display_name(const char* name);
 std::shared_ptr<IScaleDriver> make_scale_driver(const char* name);
 
 }  // namespace core

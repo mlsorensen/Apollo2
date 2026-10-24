@@ -3,6 +3,8 @@
 #include <cstring>
 #include <utility>
 
+#include "core/scale_driver.h"
+
 #include "ui/screen.h"
 #include "ui/theme.h"
 
@@ -105,6 +107,13 @@ lv_obj_t* make_step_button(lv_obj_t* parent, const char* symbol, int size,
 
 const char* friendly_scale_name(const char* adv, char* out, size_t n) {
   if (out == nullptr || n == 0) return "";
+  // A recognised model reads as its model name; only an unknown advertiser
+  // gets the tidied-text fallback below.
+  if (const char* model = core::scale_display_name(adv)) {
+    std::strncpy(out, model, n - 1);
+    out[n - 1] = '\0';
+    return out;
+  }
   size_t o = 0;
   bool start = true;  // next letter starts a word
   for (const char* p = adv != nullptr ? adv : ""; *p != '\0' && o + 1 < n; ++p) {

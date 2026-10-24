@@ -20,7 +20,7 @@ class FakeScaleProvisioner : public core::IScaleProvisioner {
     return true;
   }
   std::string saved_name(core::ScaleSlot slot = core::ScaleSlot::kEspresso) const override {
-    if (slot == core::ScaleSlot::kBench) return bench_saved_ ? "BOOKOO_ULTRA" : "";
+    if (slot == core::ScaleSlot::kBench) return bench_saved_ ? "BOOKOO_SC_U400037" : "";
     return saved_ ? "BOOKOO_THEMIS" : "";
   }
   void swap_roles() override {}

@@ -153,15 +153,14 @@ void fill_flow_below(HomeWidgets& w, int x, float yf, uint16_t trace_color, floa
   int start = static_cast<int>(b) + 1;
   if (start < 0) start = 0;
   if (start >= w.flow_h) return;
-  const uint16_t bg = lv_color_to_u16(lv_color_hex(ui::theme::card()));
-  const uint16_t fill = blend565(bg, trace_color, 102);  // ~40% wash
-  int gy[2];
-  for (int t = 1; t <= 2; ++t) gy[t - 1] = w.flow_h * t / 3;  // gridline rows
+  // Composited over whatever the column holds — the cleared background, a
+  // gridline, or the OTHER series' wash where two scales share the plot —
+  // so a second fill never covers a first line. Over a cleared column this
+  // is the same ~40% wash as before.
   uint16_t* col = w.flow_buf + x;
   for (int yy = start; yy < w.flow_h; ++yy) {
     uint16_t* px = col + static_cast<size_t>(yy) * w.flow_stride;
-    // Gridlines were just repainted by clear_flow_column: wash over them too.
-    *px = (yy == gy[0] || yy == gy[1]) ? blend565(*px, trace_color, 102) : fill;
+    *px = blend565(*px, trace_color, 102);
   }
 }
 void fill_flow_below(HomeWidgets& w, int x, float yf, uint16_t trace_color) {
@@ -247,30 +246,35 @@ float* flow_active_ring(HomeWidgets& w) {
 // `dim` = the aged previous sweep in scope mode.
 void paint_flow_column(HomeWidgets& w, int x, bool dim) {
   clear_flow_column(w, x);
-  if (w.bench_overlay && w.bench_weights != nullptr && w.flow_mode != 2) {
+  // Both fills first, then both lines, so neither line hides under the
+  // other's wash (the fills composite, see fill_flow_below).
+  const bool overlay = w.bench_overlay && w.bench_weights != nullptr && w.flow_mode != 2;
+  float by = -1.0f;
+  uint16_t bc = 0;
+  if (overlay) {
     const float bv = w.bench_weights[x];
-    if (flow_gap(bv)) {
-      w.bench_prev_y = -1;
-    } else {
-      const float y = flow_row(bv, w.flow_h, w.bench_ymax);
-      const uint16_t c = dim ? bench_dim_color() : bench_bright_color();
-      fill_flow_below(w, x, y, c, w.bench_prev_y);
-      draw_flow_segment(w, x, y, c, w.bench_prev_y);
-      w.bench_prev_y = y;
+    if (!flow_gap(bv)) {
+      by = flow_row(bv, w.flow_h, w.bench_ymax);
+      bc = dim ? bench_dim_color() : bench_bright_color();
+      fill_flow_below(w, x, by, bc, w.bench_prev_y);
     }
   }
   const float* ring = flow_active_ring(w);
   const float v = ring != nullptr ? ring[x] : kFlowNoData;
-  if (flow_gap(v)) {
-    w.flow_prev_y = -1;
-    return;
+  float y = -1.0f;
+  uint16_t c = 0;
+  if (!flow_gap(v)) {
+    y = flow_row(v, w.flow_h, w.flow_ymax);
+    const bool bench_series = w.flow_mode == 2;
+    c = bench_series ? (dim ? bench_dim_color() : bench_bright_color())
+                     : (dim ? flow_dim_color() : flow_bright_color());
+    fill_flow_below(w, x, y, c, w.flow_prev_y);
   }
-  const float y = flow_row(v, w.flow_h, w.flow_ymax);
-  const bool bench_series = w.flow_mode == 2;
-  const uint16_t c = bench_series ? (dim ? bench_dim_color() : bench_bright_color())
-                                  : (dim ? flow_dim_color() : flow_bright_color());
-  fill_flow_below(w, x, y, c, w.flow_prev_y);
-  draw_flow_segment(w, x, y, c, w.flow_prev_y);
+  if (overlay) {
+    if (by >= 0.0f) draw_flow_segment(w, x, by, bc, w.bench_prev_y);
+    w.bench_prev_y = by;  // -1 = gap: pen up
+  }
+  if (y >= 0.0f) draw_flow_segment(w, x, y, c, w.flow_prev_y);
   w.flow_prev_y = y;
 }
 
@@ -437,7 +441,7 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
     return;
   }
   for (int x = 0; x < pw; ++x) {
-    out.flow_weights[x] = out.flow_flows[x] = 0.0f;
+    out.flow_weights[x] = out.flow_flows[x] = kFlowNoData;
     if (out.bench_weights != nullptr) out.bench_weights[x] = kFlowNoData;
   }
 
@@ -1049,6 +1053,7 @@ lv_obj_t* build_bench_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_set_flex_flow(body, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(body, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_row(body, ui::dp(8), 0);  // air between the weight and its name
   out.bench_weight = lv_label_create(body);
   lv_label_set_text(out.bench_weight, "-- g");
   lv_obj_set_style_text_font(out.bench_weight, val_font, 0);  // = the other card values
@@ -1501,9 +1506,14 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
       else lv_obj_add_state(w.bench_tare_btn, LV_STATE_DISABLED);
     }
     if (w.bench_connect_btn != nullptr) {
-      ui::set_text(w.bench_connect_label, bench_connect_enabled ? "Disconnect" : "Connect");
+      const bool connecting = bench_connect_enabled && !bench->connected;
+      ui::set_text(w.bench_connect_label, connecting            ? "Connecting..."
+                                          : bench_connect_enabled ? "Disconnect"
+                                                                  : "Connect");
       ui::set_bg_color(w.bench_connect_btn,
                        bench_connect_enabled ? ui::theme::rail() : ui::theme::accent());
+      if (connecting) lv_obj_add_state(w.bench_connect_btn, LV_STATE_DISABLED);
+      else lv_obj_remove_state(w.bench_connect_btn, LV_STATE_DISABLED);
     }
   }
 
@@ -1723,10 +1733,14 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
       lv_obj_add_state(w.tare_btn, LV_STATE_DISABLED);
   }
   if (w.scale_connect_btn != nullptr) {
+    // Enabled but not yet connected = a connect in flight: say so on the
+    // button and take it out of play (Settings keeps its Disconnect for
+    // calling a hunt off).
+    const bool connecting = scale_connect_enabled && !scale.connected;
     ui::set_text(w.scale_connect_label,
-                      scale_connect_enabled ? "Disconnect" : "Connect");
+                 connecting ? "Connecting..." : scale_connect_enabled ? "Disconnect" : "Connect");
     ui::set_bg_color(w.scale_connect_btn, scale_connect_enabled ? ui::theme::rail() : ui::theme::accent());
-    if (shot)
+    if (shot || connecting)
       lv_obj_add_state(w.scale_connect_btn, LV_STATE_DISABLED);
     else
       lv_obj_remove_state(w.scale_connect_btn, LV_STATE_DISABLED);
@@ -2001,8 +2015,8 @@ void reset_flow_graph(HomeWidgets& w) {
       w.flow_flows == nullptr || w.flow_w <= 0)
     return;
   for (int x = 0; x < w.flow_w; ++x) {
-    w.flow_weights[x] = 0.0f;
-    w.flow_flows[x] = 0.0f;
+    w.flow_weights[x] = kFlowNoData;  // not 0: an empty plot draws nothing
+    w.flow_flows[x] = kFlowNoData;
     if (w.bench_weights != nullptr) w.bench_weights[x] = kFlowNoData;
     clear_flow_column(w, x);
   }
@@ -2738,11 +2752,12 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale,
   // series ON SHOW has data (or, beside the graph, either does).
   const bool esp_on = scale.connected;
   const bool bench_on = w.bench_weights != nullptr && bench != nullptr && bench->connected;
-  const bool shown_on = w.flow_mode == 2 ? bench_on : (esp_on || (w.bench_overlay && bench_on));
-  // Nothing to show: blank the plot instead of scrolling a fake zero line
-  // in. Clear once on the transition to an empty grid, then idle until a
-  // scale reconnects.
-  if (!shown_on) {
+  // The sweep runs — and keeps feeding every connected scale's ring — while
+  // EITHER scale is up, even if the side on show has nothing to draw (an
+  // empty grid then; the other scale's history is intact when it comes
+  // back on show). Only with nothing connected does the plot blank and
+  // idle until a scale reconnects.
+  if (!esp_on && !bench_on) {
     if (!w.flow_blanked) {
       reset_flow_graph(w);
       reset_flow_history(w);  // reconnect weights won't relate to these samples
@@ -2970,7 +2985,7 @@ void set_flow_drop_negative(HomeWidgets& w, bool on) {
   if (w.flow_flows == nullptr) return;
   // The g/s ring was recorded under the old policy — clear it so the trace doesn't
   // mix clamped and unclamped history. The weight ring is unaffected.
-  for (int x = 0; x < w.flow_w; ++x) w.flow_flows[x] = 0.0f;
+  for (int x = 0; x < w.flow_w; ++x) w.flow_flows[x] = kFlowNoData;
   if (w.flow_mode == 0 && !w.flow_blanked) {  // g/s shown -> redraw the now-empty plot
     w.flow_ymax = flow_default_max(0);
     set_flow_ylabels(w);
@@ -3007,8 +3022,8 @@ void set_flow_scope_mode(HomeWidgets& w, bool on) {
   w.flow_ymax = flow_default_max(w.flow_mode);
   w.bench_ymax = flow_default_max(2);
   for (int x = 0; x < w.flow_w; ++x) {
-    w.flow_weights[x] = 0.0f;
-    w.flow_flows[x] = 0.0f;
+    w.flow_weights[x] = kFlowNoData;
+    w.flow_flows[x] = kFlowNoData;
     if (w.bench_weights != nullptr) w.bench_weights[x] = kFlowNoData;
     clear_flow_column(w, x);
   }

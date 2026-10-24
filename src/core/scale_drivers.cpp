@@ -45,6 +45,21 @@ bool is_acaia(const char* name) {
 
 }  // namespace
 
+const char* scale_display_name(const char* name) {
+  if (name == nullptr) return nullptr;
+  // Bookoo: the Ultra advertises BOOKOO_SC_U<code>, the Themis / Themis Mini
+  // BOOKOO_SC<code> (the sim's "BOOKOO_THEMIS" is a stand-in).
+  if (has_prefix_ci(name, "BOOKOO_SC_U")) return "Bookoo Ultra";
+  if (is_bookoo(name)) return "Bookoo Themis";
+  if (has_prefix_ci(name, "UMBRA")) return "Acaia Umbra";
+  if (has_prefix_ci(name, "LUNAR")) return "Acaia Lunar";
+  if (has_prefix_ci(name, "PYXIS")) return "Acaia Pyxis";
+  if (has_prefix_ci(name, "PROCH")) return "Acaia Prochef";
+  if (has_prefix_ci(name, "ACAIA")) return "Acaia";
+  if (is_aku(name)) return "Varia Aku";
+  return nullptr;
+}
+
 bool scale_name_supported(const char* name) {
   return name != nullptr && (is_bookoo(name) || is_acaia(name) || is_aku(name));
 }

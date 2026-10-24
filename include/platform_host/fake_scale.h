@@ -13,7 +13,7 @@ class FakeScale : public core::IScale {
  public:
   core::ScaleSnapshot snapshot() const override {
     return core::ScaleSnapshot{
-        .name = bench_ ? "BOOKOO_ULTRA" : lunar_ ? "LUNAR-A1B2" : umbra_ ? "UMBRA-7F3A"
+        .name = bench_ ? "BOOKOO_SC_U400037" : lunar_ ? "LUNAR-A1B2" : umbra_ ? "UMBRA-7F3A"
                                                                        : "BOOKOO_THEMIS",
         .connected = connected_,
         .weight_g = bench_ ? 412.5f : 36.4f,
