@@ -67,6 +67,7 @@ class WebUi {
   void handle_shots();
   void handle_shot_csv();
   void handle_log();
+  void handle_touch();   // GET /api/touch[?reset=1]: controller health + probe
   void handle_coredump();
 
   WebServer server_{80};

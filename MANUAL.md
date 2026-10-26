@@ -950,6 +950,13 @@ action lives directly on the root:
     KB; with WiFi connected, `http://⟨device IP⟩/log` serves the whole
     thing as plain text (there's also a **Log** link on the web page's
     header) — easy to copy into a bug report.
+  - **Touch check** — if the screen ever stops answering touches while
+    the rest of the device still runs (the screensaver keeps playing, the
+    web page still loads), `http://⟨device IP⟩/api/touch` asks the touch
+    controller directly whether it is still alive, and
+    `http://⟨device IP⟩/api/touch?reset=1` resets just the touch controller
+    in place — no reboot, nothing else is touched. Please fetch the first
+    one before the second and include both in a bug report.
   - **Crash dumps** — if the firmware ever crashes and reboots, it saves a
     post‑mortem snapshot (a *coredump*) to internal flash first. On the next
     boot the log notes `crash dump stored`, and with WiFi connected a

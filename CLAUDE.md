@@ -156,6 +156,25 @@ display isn't up.
   itself shipped 256 KB / 128 B on every P4 build Feb-Sep 2026 (lib-builder
   #350, an ESP-SR override; #395 dropped it as a "cleanup"). The ROM offers
   only 64 B and 128 B — there is no larger line to try.
+  THE SWITCH ITSELF MUST RUN FROM IRAM (found 2026-10-26, the X-8 boot
+  loop): between the geometry write and the invalidate the L2's contents
+  are garbage, so any flash fetch in that window is a jump into nowhere or
+  a bus hang. `l2_cache_256k()` had IRAM_ATTR but GCC INLINED it into the
+  ESP_SYSTEM_INIT_FN entry, which is flash code — every build from
+  2026-10-18 to 2026-10-26 (v1.1.0-beta.3 .. v1.2.0-beta.2) ran the switch
+  from flash and booted or not by where the code happened to land (about
+  half of a dozen bench builds of the same source looped at the
+  bootloader's 9 s watchdog with nothing printed; the CI images were the
+  lucky half and, being fixed bytes, stay that way). Now
+  `__attribute__((noinline))`, and the boot log's `l2:` line prints the
+  geometry read back from the controller plus the function's address with
+  an IRAM / NOT IRAM verdict — a build whose line says NOT IRAM must not
+  ship. The sequence is the libs' own startup order (cache enabled, write
+  the two mode registers, invalidate); the ROM's Cache_Set_L2_Cache_Mode is
+  two register writes and ignores its ways argument (pass the enum anyway);
+  Cache_WriteBack_All is the libs' IRAM patch, the rest is ROM. Do NOT
+  suspend the L2 around the write: with the suspend bit set the size write
+  itself never returns.
   BOOTLOADER PIN (owner, 2026-10-18; S3 too since 2026-10-19): we NEVER
   publish a bootloader the fleet doesn't run, on ANY board.
   `tools/pio_flash_layout.py` (every device env but dltest) swaps the core's
@@ -280,6 +299,37 @@ compares the used type with the STORED one (a sighting hands in the
 advertised type); the Micra learns its type too (`matype`). Max 3
 connections (prebuilt libs): Micra + two scales, or Micra + one inbound
 partner Umbra + one scale.
+
+## Touch controller diagnostics (2026-10-26)
+
+The owner's X-8 spent a night under the screensaver ignoring the glass:
+LVGL rendering, heap flat, Micra link fine, HTTP up, NOTHING in the log —
+a GT911 that has gone quiet and one nobody is touching look identical to
+the driver — and a reset restored it (so: a hung controller, not the
+panel). touch.cpp now keeps health counters (polls, I2C failures, the
+current/longest failure streak, last raw status, last press) in
+/api/summary's `touch` block, logs `touch: controller not answering` when a
+streak passes ~2 s and `answering again` when it ends, and GET /api/touch
+runs a live probe (product id "911", "9271" on the X-8, config version, raw status, INT
+level) ON THE LVGL TASK between two polls (a second task's register read
+would move the chip's pointer mid-poll; the S3s serve HTTP from loop() and
+run it inline). `?reset=1` pulses TP_RST (native GPIO or the expander bit;
+the 2-inch has neither) and re-probes — the in-place recovery. NEXT TIME:
+fetch /api/touch BEFORE any reset; ack=false / empty product = the chip stopped
+answering, ack=true with status bit7 never set = answering but not
+sensing. No auto-reset yet, on purpose: which of the two it is decides the
+fix. Cost: 120 B .bss (measured, X-8 build), the summary's stack buffer 736 -> 896 B
+and a 384 B stack buffer in the touch handler (web task on the P4s, loop
+task on the S3s), no task, no heap. A probe of a chip that NAKs costs the
+LVGL task a few ms (the re-find is single-shot); on a WEDGED bus each
+transaction pays Wire's 50 ms timeout (~250 ms, the same timeout every poll
+already pays there); only ?reset=1 adds the ~110 ms reset pulse. A probe
+never FORGETS the address (gt911_find only writes on a hit) — the polls
+must keep talking to the bus to see the chip come back. A probe request
+that times out (LVGL stalled) is withdrawn, with one acknowledged window: a
+tick that took it in that same instant still runs it (a reset included)
+and the caller sees done=false — re-fetch /api/touch before concluding
+nothing happened.
 
 ## SD mount policy + Settings > Apollo > Storage (v1.0.3)
 

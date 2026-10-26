@@ -14,6 +14,8 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 - **Scale settings regrouped.** Battery display and the graph look (Smoothing, Drop negative g/s, Oscilloscope graph, Window growth) moved to a new Settings > Scale > Display page; Shot settings keeps Target, Review hold and Detect lead-in; Device settings is now only the scale's own rows.
 - **Graph legend.** The unit chip shows a coloured dot per scale; with a bench scale beside the graph both weights plot together, the bench scale in amber on its own grams axis.
 - **Steadier Bluetooth.** One radio listener at a time across the machine and the scales: reconnect attempts no longer collide, a Settings scan no longer puts a paired Umbra to sleep, and two missing scales are found with one search.
+- **P4 startup made layout-proof.** The cache tune-up at boot could leave a build looping before the screen came on, depending on where its code happened to land in flash. It now runs from internal RAM as intended, and the boot log records the cache geometry it ends up with.
+- **Touch diagnostics.** If the glass ever stops responding, `http://<device IP>/api/touch` reports whether the touch controller is still answering, and `?reset=1` resets it in place without a reboot. The log also notes when the controller goes quiet and when it comes back.
 
 ## v1.1.0
 

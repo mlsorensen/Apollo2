@@ -20,6 +20,7 @@
 #include "core/shot_csv.h"
 #include "core/system.h"
 #include "platform_esp32/board_config.h"
+#include "platform_esp32/touch.h"
 #include "platform_esp32/webapp_dist.h"
 #include "version.h"
 
@@ -120,6 +121,7 @@ void WebUi::begin(TokenSetup& setup, core::IShotStore& shots, core::IClock& cloc
   server_.on("/log", HTTP_GET, [this]() { handle_log(); });
   server_.on("/api/log", HTTP_GET, [this]() { handle_log(); });
   server_.on("/coredump", HTTP_GET, [this]() { handle_coredump(); });
+  server_.on("/api/touch", HTTP_GET, [this]() { handle_touch(); });
   server_.onNotFound([this]() {
     // During a portal session, funnel everything to the setup page (phones
     // probe random URLs); otherwise a plain 404.
@@ -396,6 +398,24 @@ void WebUi::handle_coredump() {
 #endif
 }
 
+// The touch controller's health counters (touch.h) as a JSON object, shared
+// by /api/summary and /api/touch so the two can't drift. Writes at most
+// ~190 chars; returns what snprintf would.
+static int format_touch_health(char* out, size_t n, const TouchHealth& th,
+                               uint32_t now_ms) {
+  return std::snprintf(
+      out, n,
+      "{\"addr\":%u,\"boot_ack\":%s,\"reads\":%lu,\"errors\":%lu,"
+      "\"streak\":%lu,\"longest_streak\":%lu,\"last_status\":%u,"
+      "\"last_press_s\":%ld,\"last_error_s\":%ld}",
+      th.addr, th.boot_ack ? "true" : "false",
+      static_cast<unsigned long>(th.reads), static_cast<unsigned long>(th.errors),
+      static_cast<unsigned long>(th.streak),
+      static_cast<unsigned long>(th.longest_streak), th.last_status,
+      th.last_press_ms ? static_cast<long>((now_ms - th.last_press_ms) / 1000) : -1L,
+      th.last_error_ms ? static_cast<long>((now_ms - th.last_error_ms) / 1000) : -1L);
+}
+
 void WebUi::handle_summary() {
   const WebTheme t = theme_ ? theme_() : WebTheme{};
   const core::StorageInfo si = shots_->storage();
@@ -415,17 +435,28 @@ void WebUi::handle_summary() {
   const char* bl_idf =
       esp_ota_get_bootloader_description(nullptr, &bd) == ESP_OK ? bd.idf_ver : "";
   bd.idf_ver[sizeof(bd.idf_ver) - 1] = '\0';
-  char buf[736];
-  std::snprintf(
+  // touch: the controller's health counters (see touch.h) — "is the glass
+  // still being heard" without a reset. Three writes into one buffer (head,
+  // the shared touch object, tail): buf grew 736 -> 896 B of stack on the
+  // web task (P4) / loop task (S3) for it, nothing else.
+  const TouchHealth th = touch_health();
+  const uint32_t now_ms = millis();
+  char buf[896];
+  int len = std::snprintf(
       buf, sizeof(buf),
       "{\"name\":\"%s\",\"version\":\"%s\",\"coredump\":%u,"
-      "\"bootloader\":\"%s\",\"epoch\":%d,"
+      "\"bootloader\":\"%s\",\"epoch\":%d,\"touch\":",
+      name_, fw::kVersion, static_cast<unsigned>(cd_size), bl_idf, fw::kFlashEpoch);
+  if (len < 0 || static_cast<size_t>(len) >= sizeof(buf)) len = 0;
+  const int tl = format_touch_health(buf + len, sizeof(buf) - len, th, now_ms);
+  if (tl > 0 && static_cast<size_t>(len + tl) < sizeof(buf)) len += tl;
+  std::snprintf(
+      buf + len, sizeof(buf) - len,
+      ","
       "\"theme\":{\"bg\":%lu,\"rail\":%lu,\"card\":%lu,\"text\":%lu,"
       "\"muted\":%lu,\"accent\":%lu,\"ok\":%lu,\"warn\":%lu,\"alert\":%lu},"
       "\"storage\":{\"total\":%llu,\"free\":%llu,\"full\":%s},"
       "\"stats\":{\"total\":%d,\"life\":%.1f,\"d30\":%.1f,\"since\":%lld}}",
-      name_, fw::kVersion, static_cast<unsigned>(cd_size), bl_idf,
-      fw::kFlashEpoch,
       static_cast<unsigned long>(t.bg),
       static_cast<unsigned long>(t.rail), static_cast<unsigned long>(t.card),
       static_cast<unsigned long>(t.text), static_cast<unsigned long>(t.muted),
@@ -437,6 +468,38 @@ void WebUi::handle_summary() {
       static_cast<double>(st.acc_lifetime_pct),
       static_cast<double>(st.acc_30d_pct),
       static_cast<long long>(shots_->stats_since()));
+  server_.send(200, "application/json", buf);
+}
+
+// GET /api/touch[?reset=1]. The health counters plus a live look at the
+// controller (product id, config version, raw status, INT level), taken on
+// the LVGL task between two polls; reset=1 pulses TP_RST first on boards
+// that have one and re-probes. Diagnostic for a glass that has gone quiet —
+// 2026-10-26's X-8 night under the screensaver — and the recovery lever for
+// it, both without rebooting (a reboot wipes the evidence).
+void WebUi::handle_touch() {
+  const bool reset = server_.hasArg("reset") && server_.arg("reset") != "0";
+  if (reset) core::logf("web: /api/touch reset requested\n");
+  // 384 B of stack on the serving task for the moment of the reply (the
+  // body is under 330 chars); done=false means the LVGL tick never came
+  // within 1.5 s — itself a finding — or another fetch was in progress.
+  const TouchProbe p = touch_probe(reset, 1500);
+  const TouchHealth th = touch_health();
+  const uint32_t now_ms = millis();
+  char buf[384];
+  int len = std::snprintf(
+      buf, sizeof(buf),
+      "{\"probe\":{\"done\":%s,\"ack\":%s,\"addr\":%u,\"product\":\"%s\","
+      "\"cfg_version\":%u,\"status\":%u,\"int\":%d,"
+      "\"reset_supported\":%s,\"reset_done\":%s},\"health\":",
+      p.done ? "true" : "false", p.ack ? "true" : "false", p.addr, p.product,
+      p.cfg_version, p.status, p.int_level,
+      p.reset_supported ? "true" : "false", p.reset_done ? "true" : "false");
+  if (len < 0 || static_cast<size_t>(len) >= sizeof(buf)) len = 0;
+  const int tl = format_touch_health(buf + len, sizeof(buf) - len, th, now_ms);
+  if (tl > 0 && static_cast<size_t>(len + tl) < sizeof(buf)) len += tl;
+  std::snprintf(buf + len, sizeof(buf) - len, ",\"uptime_s\":%lu}",
+                static_cast<unsigned long>(now_ms / 1000));
   server_.send(200, "application/json", buf);
 }
 
