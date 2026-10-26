@@ -29,6 +29,7 @@
 #include "platform_esp32/battery.h"
 #include "platform_esp32/board_config.h"
 #include "platform_esp32/c6_update.h"
+#include "platform_esp32/l2_cache_compat.h"
 #include "platform_esp32/clock.h"
 #include "platform_esp32/config.h"
 #include "platform_esp32/crash_record.h"
@@ -226,6 +227,7 @@ void setup() {
       core::logf("boot: bootloader has no description, flash epoch %d\n",
                  fw::kFlashEpoch);
   }
+  platform::log_l2_cache_mode();
 #if defined(CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH)
   {
     // A panic/watchdog reset leaves an ELF coredump in the `coredump` flash

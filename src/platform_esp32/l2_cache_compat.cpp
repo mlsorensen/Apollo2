@@ -14,7 +14,11 @@
 // startup, but a write to the window from setup() still takes a Store access
 // fault (bench 2026-10-18) — it sits outside the app's linked memory map, so
 // the CPU's memory protection refuses it. Leave it reserved.
+#include "platform_esp32/l2_cache_compat.h"
+
 #include <sdkconfig.h>
+
+#include "core/system.h"
 
 #if CONFIG_IDF_TARGET_ESP32P4 && CONFIG_CACHE_L2_CACHE_SIZE < 0x40000
 #include <esp_attr.h>
@@ -51,11 +55,26 @@ SOC_RESERVE_MEMORY_REGION(0x4ff20000, 0x4ff40000, l2_cache_256k_compat);
 // runs the pinned 256 KB-cache bootloader (tools/pio_flash_layout.py), so the
 // window was cache from power-on and nothing (the startup stack included)
 // can live in it.
-static IRAM_ATTR void l2_cache_256k() {
+// THE SWITCH MUST NOT EXECUTE FROM FLASH. Between the geometry write and
+// the invalidate the L2 holds lines filled under the old geometry, so every
+// flash fetch in that window returns garbage — a jump into nowhere, a store
+// to a wild address, or a bus hang, depending on what happened to be
+// cached: the 2026-10-26 X-8 boot loop (CHIP_LP_WDT_RESET with nothing
+// printed) that one build of the same source produced and the next did
+// not. IRAM_ATTR on the function was not enough: GCC inlined it into the
+// init-table entry, which is ordinary flash code. noinline keeps it a real
+// IRAM function; log_l2_cache_mode() checks the address at boot. Everything
+// it calls is ROM or an IRAM patch (Cache_WriteBack_All is the libs' IRAM
+// patch), and the sequence is the libs' own startup order (cache enabled,
+// mode registers written, then invalidate) — ROM's Cache_Set_L2_Cache_Mode
+// is two register writes and ignores the ways argument (the enum is passed
+// for form's sake; the literal 8 it shipped with was never looked at). Do
+// NOT suspend the L2 around the write: with the suspend bit set the size
+// write itself never returns (bench, 2026-10-26).
+static void IRAM_ATTR __attribute__((noinline)) l2_cache_256k() {
   portDISABLE_INTERRUPTS();
   Cache_WriteBack_All(CACHE_MAP_L1_DCACHE | CACHE_MAP_L2_CACHE);
-  Cache_Set_L2_Cache_Mode(CACHE_SIZE_256K, static_cast<cache_ways_t>(8),
-                          CACHE_LINE_SIZE_128B);
+  Cache_Set_L2_Cache_Mode(CACHE_SIZE_256K, CACHE_8WAYS_ASSOC, CACHE_LINE_SIZE_128B);
   Cache_Invalidate_All(CACHE_MAP_L2_CACHE);
   portENABLE_INTERRUPTS();
 }
@@ -65,3 +84,18 @@ ESP_SYSTEM_INIT_FN(l2_cache_256k_init, CORE, BIT(0), 999) {
   return ESP_OK;
 }
 #endif
+
+namespace platform {
+void log_l2_cache_mode() {
+#if CONFIG_IDF_TARGET_ESP32P4 && CONFIG_CACHE_L2_CACHE_SIZE < 0x40000
+  struct cache_mode m = {};
+  m.cache_type = CACHE_L2_CACHE;
+  Cache_Get_Mode(&m);
+  const uintptr_t fn = reinterpret_cast<uintptr_t>(&l2_cache_256k);
+  core::logf("l2: %lu KB, %u ways, %u B lines (line reg %lu); switch at %p (%s)\n",
+             static_cast<unsigned long>(m.cache_size / 1024), m.cache_ways,
+             m.cache_line_size, static_cast<unsigned long>(Cache_Get_L2_Cache_Line_Size()),
+             reinterpret_cast<void*>(fn), fn >= 0x4ff00000u && fn < 0x4ffc0000u ? "IRAM" : "NOT IRAM");
+#endif
+}
+}  // namespace platform
