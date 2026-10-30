@@ -621,11 +621,14 @@ void setup() {
     // unit paired before it was recorded guesses once and then never again.
     // Into the keys of the role the link holds at that moment — after a
     // Swap roles the link's keys are the other slot's — atomically with a
-    // swap (persist_for).
+    // swap, save or forget (persist_for). A save or forget that got in
+    // between the learn and the lock has moved the link off this scale (its
+    // type is the new record's now): the learn is stale and is dropped.
     platform::ScaleLink* lp = &link;
     link.set_addr_type_learned([lp](core::AddrType t) {
-      g_scale_provisioner.persist_for(
-          *lp, [t](core::ScaleSlot s) { g_config.set_scale_addr_type(s, t); });
+      g_scale_provisioner.persist_for(*lp, [lp, t](core::ScaleSlot s) {
+        if (lp->addr_type() == t) g_config.set_scale_addr_type(s, t);
+      });
     });
     core::logf("Saved %s scale: mac=%s type=%s\n", core::scale_slot_name(slot),
                mac.empty() ? "(none)" : mac.c_str(), core::addr_type_name(type));

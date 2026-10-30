@@ -51,6 +51,10 @@ class ScaleLink : public IScale, public IScaleSink {
   void set_addr_type_learned(std::function<void(AddrType)> cb) {
     addr_type_learned_ = std::move(cb);
   }
+  // The type the link will use for its current address (saved or learned).
+  // A persister compares it with the learned value: a save that moved the
+  // link to another scale since the learn has replaced it.
+  AddrType addr_type() const;
 
   // Partner-mode support for Umbra firmware 1.0.8.
   void set_partner_mode(bool enabled);

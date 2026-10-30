@@ -63,6 +63,11 @@ void ScaleLink::set_address(std::string address, AddrType type) {
   arb_.abort_slot(slot_);  // a try for the OLD address must not run out its timeout
 }
 
+AddrType ScaleLink::addr_type() const {
+  std::lock_guard<std::mutex> lk(mutex_);
+  return addr_type_;
+}
+
 void ScaleLink::set_name(std::string name) {
   std::lock_guard<std::mutex> lk(mutex_);
   name_ = name.empty() ? "Scale" : std::move(name);
@@ -413,12 +418,14 @@ bool ScaleLink::do_connect(const std::string& address, AddrType type,
   // Learn the type the connect actually used: persisted by the platform so
   // every later connect is a single known-type try. Compared with the STORED
   // type, not the try's — a finder sighting hands in the advertised type, and
-  // comparing against that would never record it.
+  // comparing against that would never record it. Only for the address
+  // still saved: a save or forget that landed during the connect has
+  // already set the NEW scale's type, which this one must not overwrite.
   const AddrType used = ble_.connected_addr_type();
   bool learned = false;
   if (used != AddrType::kUnknown) {
     std::lock_guard<std::mutex> lk(mutex_);
-    if (used != addr_type_) {
+    if (address_ == address && used != addr_type_) {
       addr_type_ = used;
       learned = true;
     }

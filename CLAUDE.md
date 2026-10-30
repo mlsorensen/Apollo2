@@ -244,8 +244,13 @@ their connections, no reconnect, no restart. The flip and the key swap
 run under ONE lock (`ScaleProvisioner::swap_mu_`, issue #6): mid-swap the
 pointers and keys disagree in EITHER order, so every per-link persister
 (learned type today) must go through `persist_for(link, fn)`, which takes
-the same lock, resolves `slot_of` and writes. Under that lock: roles'
-atomics + Config (NVS) only — never a link, the arbiter or the UI. At boot the
+the same lock, resolves `slot_of` and writes. save_scale / forget hold it
+too (record + link together), set_partner_mode around its record RMW; a
+learn that a save overtook is dropped (the link's type is the new record's
+by then). It is the OUTERMOST lock — links, arbiter (incl. NimBLE's
+connect cancel, a short HCI round trip), NVS run under it; a persister
+must be called holding nothing (ScaleLink does). Backup/restore are NOT under it
+(restore reboots; accepted). At boot the
 mapping is identity (link A seeded from the espresso keys). Corollary: the
 shot park follows the ROLE — after a swap the bench role sits on radio
 slot kScaleEspresso and main.cpp parks THAT slot; the espresso ROLE is

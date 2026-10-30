@@ -31,9 +31,11 @@ class ScaleProvisioner : public core::IScaleProvisioner {
   core::ScaleSlot slot_of(const ScaleLink& link) const;
 
   // Runs `write(slot)` with the slot `link` holds, atomically with respect
-  // to swap_roles(): every per-link persister (on the link's BLE task) goes
-  // through this, so a write can never land between the pointer flip and
-  // the key swap and stamp one scale's value onto the other's record.
+  // to swap_roles(), save_scale(), forget() and set_partner_mode(): every
+  // per-link persister (on the link's BLE task) goes through this, so a
+  // write can never land between the pointer flip and the key swap, or
+  // between a save's record and its link, and stamp one scale's value onto
+  // the other's record. Call it holding no other lock.
   template <typename Fn>
   void persist_for(const ScaleLink& link, Fn&& write) {
     std::lock_guard<std::mutex> lk(swap_mu_);
@@ -66,9 +68,14 @@ class ScaleProvisioner : public core::IScaleProvisioner {
 
   core::ScaleRoles& roles_;
   Config& config_;
-  // Held across swap_roles()'s two steps and by persist_for(). Under it run
-  // only the roles' atomics and Config (NVS) — never a link, the arbiter or
-  // the UI — so it can't nest with another lock.
+  // Held by persist_for(), across the record + link changes of
+  // swap_roles(), save_scale() and forget(), and around set_partner_mode()'s
+  // record read-modify-write. It is the OUTERMOST lock: under it run the
+  // roles' atomics, Config (NVS) and the links' setters (their own mutex,
+  // the arbiter's, NimBLE's connect cancel — a short HCI round trip, never
+  // a wait on a scale link task). Safe because the only other taker, a
+  // persister, is called by ScaleLink holding nothing. Never call back into
+  // this class (not recursive) or the UI under it.
   std::mutex swap_mu_;
 };
 

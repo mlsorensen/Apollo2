@@ -57,6 +57,8 @@ bool ScaleProvisioner::save_scale(const core::ScanResult& scale, ScaleSlot slot,
                core::scale_slot_name(static_cast<ScaleSlot>(ps)));
     return false;
   }
+  // Record + link under the persist lock (see persist_for).
+  std::lock_guard<std::mutex> lk(swap_mu_);
   config_.save_scale(slot, scale.mac, scale.name, partner_mode, scale.addr_type);
   apply_slot(slot);
   return true;
@@ -118,8 +120,13 @@ void ScaleProvisioner::set_partner_mode(bool enabled) {
   int ps = config_.scale_partner_slot();
   if (ps < 0 && !enabled) return;
   const ScaleSlot slot = ps < 0 ? ScaleSlot::kEspresso : static_cast<ScaleSlot>(ps);
-  config_.save_scale(slot, config_.scale_mac(slot), config_.scale_name(slot), enabled,
-                     config_.scale_addr_type(slot));
+  {
+    // A read-modify-write of the record: a learned type persisted in between
+    // would be lost.
+    std::lock_guard<std::mutex> lk(swap_mu_);
+    config_.save_scale(slot, config_.scale_mac(slot), config_.scale_name(slot), enabled,
+                       config_.scale_addr_type(slot));
+  }
   link(slot).set_partner_mode(enabled);  // address unchanged: central resumes on it
 }
 
@@ -129,6 +136,7 @@ void ScaleProvisioner::hold_partner(bool held) {
 }
 
 void ScaleProvisioner::forget(ScaleSlot slot) {
+  std::lock_guard<std::mutex> lk(swap_mu_);  // record + link (see persist_for)
   config_.clear_scale(slot);
   ScaleLink& l = link(slot);
   l.set_name("");
