@@ -568,7 +568,8 @@ const char* battery_icon(int pct) {
 }
 
 // The level icon; "~" in front when the level is an estimate (a partner
-// Umbra's frozen gauge), so the icon-only style says so too.
+// Umbra's frozen gauge) and the icon is all there is — with the percent
+// beside it, the percent carries the one "~".
 void set_batt_icon(lv_obj_t* label, int pct, bool estimated) {
   char buf[8];
   std::snprintf(buf, sizeof(buf), "%s%s", estimated ? "~" : "", battery_icon(pct));
@@ -1511,7 +1512,8 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
         ui::set_text_color(w.bench_batt_pct_label, color);
       }
       if (show_icon) {
-        set_batt_icon(w.bench_batt_label, bench->battery_pct, bench->battery_estimated);
+        set_batt_icon(w.bench_batt_label, bench->battery_pct,
+                      bench->battery_estimated && !show_pct);
         ui::set_text_color(w.bench_batt_label, color);
       }
       show(w.bench_batt_pct_label, show_pct);
@@ -1733,7 +1735,7 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
       ui::set_text_color(w.scale_batt_pct_label, color);
     }
     if (show_icon) {
-      set_batt_icon(w.scale_batt_label, scale.battery_pct, scale.battery_estimated);
+      set_batt_icon(w.scale_batt_label, scale.battery_pct, scale.battery_estimated && !show_pct);
       ui::set_text_color(w.scale_batt_label, color);
     }
     show(w.scale_batt_pct_label, show_pct);

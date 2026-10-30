@@ -214,6 +214,9 @@ int main() {
   // finished calibration's Store / Discard modal.
   scale.set_battery_estimated(true);
   ok &= r({800, 480}, "renders/home_umbra_estimate_800x480.png");
+  disp.set_scale_battery_style(2);  // Icon + %: one "~", on the percent
+  ok &= r({800, 480}, "renders/home_umbra_estimate_both_800x480.png");
+  disp.set_scale_battery_style(0);
   ok &= r({800, 480}, "renders/scale_device_umbra_800x480.png", 1, ui::kSectionScaleDevice);
   scale.set_calibration_result(8);
   ok &= r({800, 480}, "renders/scale_battery_cal_800x480.png", 1, ui::kSectionScaleDevice);
