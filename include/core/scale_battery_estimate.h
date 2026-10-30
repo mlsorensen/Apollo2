@@ -75,6 +75,7 @@ class ScaleBatteryEstimate {
   void load(const ScaleBatteryState& s);
   const ScaleBatteryState& state() const { return s_; }
   // True once after anything worth persisting changed.
+  bool dirty() const { return dirty_; }
   bool take_dirty() {
     const bool d = dirty_;
     dirty_ = false;

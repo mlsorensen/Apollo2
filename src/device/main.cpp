@@ -631,15 +631,20 @@ void setup() {
       });
     });
     // A partner-mode Umbra's battery estimate, persisted into the keys of the
-    // role the link holds when it changes (they follow the scale on a swap).
+    // role the link holds when it changes (they follow the scale on a swap),
+    // under the same lock; the state is taken inside it, so a save that
+    // replaced the scale meanwhile writes the new scale's state, not the old.
     // Time is trusted only after a real NTP sync this boot — a board without
     // an RTC boots on a seeded guess hours behind (same gate as the schedule).
     core::ScaleBatteryState battery;
     g_config.scale_battery(slot, &battery);
     link.load_battery(battery);
     link.set_battery_clock(&g_clock, [] { return g_network.ntp_seconds_since_sync() >= 0; });
-    link.set_battery_persist([lp](const core::ScaleBatteryState& s) {
-      g_config.set_scale_battery(g_scale_provisioner.slot_of(*lp), s);
+    link.set_battery_persist([lp] {
+      g_scale_provisioner.persist_for(*lp, [lp](core::ScaleSlot s) {
+        core::ScaleBatteryState st;
+        if (lp->take_battery_state(&st)) g_config.set_scale_battery(s, st);
+      });
     });
     core::logf("Saved %s scale: mac=%s type=%s\n", core::scale_slot_name(slot),
                mac.empty() ? "(none)" : mac.c_str(), core::addr_type_name(type));

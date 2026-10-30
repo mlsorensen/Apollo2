@@ -77,8 +77,11 @@ class ScaleLink : public IScale, public IScaleSink {
   void note_partner_sleep() { partner_sleep_sent_.store(true); }
 
   // Battery estimate for the partner-mode Umbra (core/scale_battery_estimate.h).
-  // The platform seeds it from storage before run(); the link thread hands
-  // every change worth keeping to `persist` (never per reading).
+  // The platform seeds it from storage before run(); the link thread calls
+  // `persist` on every change worth keeping (never per reading), and the
+  // platform takes the state with take_battery_state() under whatever lock
+  // ties the link to its keys — a snapshot taken before that lock could be
+  // a scale a save has since replaced.
   // `trusted` says whether the clock is real time (a sync this boot), not a
   // seeded guess; untrusted time stamps nothing (see the estimate's rules).
   void set_battery_clock(const IClock* clock, std::function<bool()> trusted) {
@@ -86,9 +89,10 @@ class ScaleLink : public IScale, public IScaleSink {
     clock_trusted_ = std::move(trusted);
   }
   void load_battery(const ScaleBatteryState& state);
-  void set_battery_persist(std::function<void(const ScaleBatteryState&)> persist) {
+  void set_battery_persist(std::function<void()> persist) {
     battery_persist_ = std::move(persist);
   }
+  bool take_battery_state(ScaleBatteryState* out);  // false = nothing new
 
   // Manual connect gate (a battery remote can drop the scale to save power).
   bool connect_enabled() const { return connect_enabled_.load(); }
@@ -187,7 +191,7 @@ class ScaleLink : public IScale, public IScaleSink {
   std::atomic<bool> partner_sleep_sent_{false};
   const IClock* clock_ = nullptr;  // set once before run()
   std::function<bool()> clock_trusted_;                              // ditto
-  std::function<void(const ScaleBatteryState&)> battery_persist_;  // ditto
+  std::function<void()> battery_persist_;                          // ditto
   std::atomic<bool> reconnect_requested_{false};
   std::atomic<bool> scanning_{false};
   std::atomic<bool> pending_tare_{false};

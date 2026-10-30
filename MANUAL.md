@@ -64,6 +64,7 @@ Settings
 │  ├─ Shot settings   — Target · Review hold · Detect lead-in
 │  ├─ Device settings — Scale (Espresso / Bench picker)
 │  │                    · the scale's own settings (Beep · Auto-off/sleep · Unit …)
+│  │                    · paired Umbra: Battery drain per day · Calibrate drain
 │  └─ Display         — Battery display (Icon / Percent / Icon + %) · Smoothing
 │                       · Drop negative g/s · Oscilloscope graph · Window growth
 │                       · Bench scale on Home (In the scale card / Beside the graph)
@@ -153,7 +154,9 @@ Without a scale, the MICRA card fills the screen as a single hero:
 
 - ① **Status** — `Connected`, `Connecting...`, or `Sleeping` (sleep‑capable
   scales such as the Acaia Umbra with the link switched off). A small battery
-  icon shows the scale's own battery where the scale reports it.
+  icon shows the scale's own battery where the scale reports it. For a
+  paired Umbra that has slept, it is an *estimate* — the percent reads `~41%`
+  (see **Battery drain per day** under Device settings).
 - ② **WEIGHT** — live reading. During a finished shot's review it freezes at the
   net shot weight so lifting the cup doesn't wipe the number you care about.
 - ③ **TARGET** — the brew‑by‑weight stop target in grams (**−/+** on larger
@@ -536,7 +539,7 @@ model (a Bookoo Themis's ① **Beep** and ② **Auto‑off** shown above):
   and **Auto sleep** (Off / 1–30 min). The Acaia app can
   additionally set *power‑off* timers; those aren't offered here (a
   powered‑off scale can't be woken over Bluetooth) and show as `--` if set
-  elsewhere.
+  elsewhere. A **paired** Umbra adds two battery rows, below.
 - **Acaia Lunar / Pyxis** — **Beep** — the row shows the beep volume the
   scale stores (Off / 1–3), but over Bluetooth the beep can only be toggled:
   tapping cycles **off** and **on**, and *on* restores whatever volume was
@@ -563,6 +566,35 @@ instead). Tap a value to advance to the next choice; the write goes to the
 scale immediately and sticks like any change made from the scale's own
 buttons. Like Tare, the espresso scale's rows are disabled while a shot is
 running; the bench scale's never are.
+
+#### Paired Umbra: battery estimate
+
+![Device settings for a paired Umbra](docs/img/manual/scale-device-umbra.png)
+
+Once an Umbra has been put to sleep, it keeps reporting the battery level it
+had when it went to sleep until it is restarted (charging restarts it), on
+every app. So while it is asleep, Apollo works the level out instead: the last
+level it saw change, less a daily drain for each day since. The estimate shows
+with a `~` (`~41%`) and drives the low‑battery warning like a real reading.
+The first reading that changes means the scale is reporting again, and it
+shows as normal.
+
+- ① **Battery drain per day** *(1–30 %, default 15 %)* — how much charge the
+  scale loses per day, asleep or not; for an Umbra, time matters far more than
+  how long it's used each day. 13–15 % suits a stock battery.
+- ② **Calibrate drain** — measures your scale's own figure. Tap **Start**,
+  charge the scale fully, use it as usual until it runs flat, then charge it
+  again. When it comes back, Apollo shows the measured drain next to the
+  current setting: **Store** saves it, **Discard** keeps the setting (discard
+  it if the scale was charged before it ran flat). If the scale is charged
+  before Apollo has measured a whole sleep, you see **Calibration
+  incomplete** instead; start again to retry. While a calibration is running
+  the button reads **Cancel**.
+
+Both rows are greyed out while the Umbra's **Auto sleep** is **Off**: a scale
+that never sleeps keeps reporting its battery, and nothing needs estimating.
+The estimate needs the clock: a board that hasn't set its time from the
+internet since it started keeps showing the last estimate unchanged.
 
 ### Display
 

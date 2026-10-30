@@ -168,13 +168,18 @@ void ScaleLink::load_battery(const ScaleBatteryState& state) {
 }
 
 void ScaleLink::persist_battery() {
-  ScaleBatteryState state;
   {
     std::lock_guard<std::mutex> lk(mutex_);
-    if (!battery_est_.take_dirty()) return;
-    state = battery_est_.state();
+    if (!battery_est_.dirty()) return;
   }
-  if (battery_persist_) battery_persist_(state);
+  if (battery_persist_) battery_persist_();
+}
+
+bool ScaleLink::take_battery_state(ScaleBatteryState* out) {
+  std::lock_guard<std::mutex> lk(mutex_);
+  if (!battery_est_.take_dirty()) return false;
+  *out = battery_est_.state();
+  return true;
 }
 
 ScaleBatteryInfo ScaleLink::battery_info() const {

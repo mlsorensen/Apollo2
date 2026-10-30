@@ -9,6 +9,12 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 Each version lists `### Features` first, then `### Fixes` (the device shows
 the headings as plain lines); leave out a list that would be empty.
 
+## Unreleased
+
+### Features
+
+- **Umbra battery estimate.** A paired Umbra's battery level freezes once it sleeps, so Apollo now estimates it from a daily drain (Settings > Scale > Device settings), shown as `~41%`, with the usual low-battery warning. Calibrate drain measures your scale's real figure over one charge.
+
 ## v1.2.0
 
 ### Features

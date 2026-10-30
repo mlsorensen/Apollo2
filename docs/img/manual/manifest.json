@@ -472,6 +472,30 @@
     ]
   },
   {
+    "src": "renders/scale_device_umbra_800x480.png",
+    "out": "scale-device-umbra.png",
+    "size": [
+      800,
+      480
+    ],
+    "callouts": [
+      {
+        "n": 1,
+        "x": 100,
+        "y": 210,
+        "w": 695,
+        "h": 61
+      },
+      {
+        "n": 2,
+        "x": 100,
+        "y": 272,
+        "w": 695,
+        "h": 61
+      }
+    ]
+  },
+  {
     "src": "renders/device_display_800x480.png",
     "out": "device-display.png",
     "size": [
