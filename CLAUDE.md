@@ -514,6 +514,10 @@ existing buffer) over adding memory. Applies to fixes as much as features.
    **Concise (owner, 2026-09-12): a bolded lead-in plus one or two sentences
    per bullet, ~50 words at the very most.** Say what the user sees.
    Mechanism, history and measurements belong in the commit message.
+   **Two lists, features first (owner, 2026-10-30):** `### Features`, then
+   `### Fixes`, inside the version's section (the workflow's extraction
+   stops only at `## `; the device's sanitize_notes() shows a `###` heading
+   as a plain line). Omit an empty list.
    **NEVER invent a version heading for unreleased work.** Notes for work that
    isn't tagged yet go under `## Unreleased` at the top; the release commit
    renames that heading to the tag. A `## vX.Y.Z` heading with no matching
