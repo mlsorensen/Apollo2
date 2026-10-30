@@ -6,16 +6,23 @@ heading format `## vX.Y.Z` exactly — write for someone using the machine, not
 for someone reading the diff. These notes are also shown ON THE DEVICE, whose
 fonts are ASCII-only: stick to characters `sanitize_notes()` (src/ui/app.cpp)
 maps — plain ASCII plus `— – → … × ' "` — or they render as empty boxes.
+Each version lists `### Features` first, then `### Fixes` (the device shows
+the headings as plain lines); leave out a list that would be empty.
 
 ## v1.2.0
 
+### Features
+
 - **A second scale for the counter.** Pair a bench scale (the one your milk jug or beans sit on) and read its weight on Home: behind an ESPRESSO | BENCH switch on the scale card, or in its own card beside the graph (Settings > Scale > Display). It has its own Tare; shots stay with the espresso scale.
 - **Choose a scale's job when you save it.** Tapping a scanned scale now asks Espresso or Bench, and the Bluetooth page lists both with Swap roles, which trades their jobs without disconnecting either scale.
-- **Scale settings regrouped.** Battery display and the graph look (Smoothing, Drop negative g/s, Oscilloscope graph, Window growth) moved to a new Settings > Scale > Display page; Shot settings keeps Target, Review hold and Detect lead-in; Device settings is now only the scale's own rows.
 - **Graph legend.** The unit chip shows a coloured dot per scale; with a bench scale beside the graph both weights plot together, the bench scale in amber on its own grams axis.
+- **Scale settings regrouped.** Battery display and the graph look (Smoothing, Drop negative g/s, Oscilloscope graph, Window growth) moved to a new Settings > Scale > Display page; Shot settings keeps Target, Review hold and Detect lead-in; Device settings is now only the scale's own rows.
+- **Touch diagnostics.** If the glass ever stops responding, `http://<device IP>/api/touch` reports whether the touch controller is still answering, and `?reset=1` resets it in place without a reboot. The log also notes when the controller goes quiet and when it comes back.
+
+### Fixes
+
 - **Steadier Bluetooth.** One radio listener at a time across the machine and the scales: reconnect attempts no longer collide, a Settings scan no longer puts a paired Umbra to sleep, and two missing scales are found with one search.
 - **P4 startup made layout-proof.** The cache tune-up at boot could leave a build looping before the screen came on, depending on where its code happened to land in flash. It now runs from internal RAM as intended, and the boot log records the cache geometry it ends up with.
-- **Touch diagnostics.** If the glass ever stops responding, `http://<device IP>/api/touch` reports whether the touch controller is still answering, and `?reset=1` resets it in place without a reboot. The log also notes when the controller goes quiet and when it comes back.
 
 ## v1.1.0
 

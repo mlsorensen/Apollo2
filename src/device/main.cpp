@@ -620,10 +620,15 @@ void setup() {
     // The type the connect actually used is persisted next to the MAC, so a
     // unit paired before it was recorded guesses once and then never again.
     // Into the keys of the role the link holds at that moment — after a
-    // Swap roles the link's keys are the other slot's.
+    // Swap roles the link's keys are the other slot's — atomically with a
+    // swap, save or forget (persist_for). A save or forget that got in
+    // between the learn and the lock has moved the link off this scale (its
+    // type is the new record's now): the learn is stale and is dropped.
     platform::ScaleLink* lp = &link;
     link.set_addr_type_learned([lp](core::AddrType t) {
-      g_config.set_scale_addr_type(g_scale_provisioner.slot_of(*lp), t);
+      g_scale_provisioner.persist_for(*lp, [lp, t](core::ScaleSlot s) {
+        if (lp->addr_type() == t) g_config.set_scale_addr_type(s, t);
+      });
     });
     // A partner-mode Umbra's battery estimate, persisted into the keys of the
     // role the link holds when it changes (they follow the scale on a swap).
