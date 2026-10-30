@@ -520,7 +520,12 @@ existing buffer) over adding memory. Applies to fixes as much as features.
    GitHub Release is a vestigial version (we've shipped several — v0.13.1 was
    the last), and the workflow warns if `## Unreleased` is still there at
    release time.
-3. `make build-release` green (or `make build-all` for a platform change).
+3. `make sim` green locally. The device images are CI's job: the run builds
+   every release env (and the kVersion/slug asserts) before the approval
+   gate, so a red build publishes nothing and creates no tag — no local
+   `make build-release` sweep (owner, 2026-10-30). Exception: a platform,
+   bootloader or partition-table change still runs `make build-all`
+   locally, since those images go on a bench unit for the OTA proof anyway.
    Changed a pinned bootloader or a partition table? Bump that env's
    `custom_flash_epoch` (the run's `meta` job fails otherwise) — the release
    then becomes web-flash-only for those boards (see FLASH EPOCH above).
@@ -643,8 +648,9 @@ silicon), `build-s3-4-3c`, `build-p4-x-8`. Internal-only:
 `build-p4-4-3`, `build-p4-x-7`, `build-p4-x-10-1`. Matching `flash-*` targets
 auto-detect the port and can probe a running board's serial banner (pre-rename
 names like `build-p4`/`flash-7b` remain as aliases). Two sweeps:
-`make build-release` (the three released envs + sim — run this before pushing a
-platform change or cutting a release) and `make build-all` (every env + sim).
+`make build-release` (the released envs + sim — no longer a release step:
+CI's matrix builds them, see the Release checklist) and `make build-all`
+(every env + sim).
 
 WHEN to run full builds: `make build-all` must pass before you PUSH or cut a
 RELEASE of a platform change — not on every edit. During debug/development stay
