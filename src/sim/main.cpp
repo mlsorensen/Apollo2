@@ -217,6 +217,8 @@ int main() {
   ok &= r({800, 480}, "renders/scale_device_umbra_800x480.png", 1, ui::kSectionScaleDevice);
   scale.set_calibration_result(8);
   ok &= r({800, 480}, "renders/scale_battery_cal_800x480.png", 1, ui::kSectionScaleDevice);
+  scale.set_calibration_result(0);  // charged before a full period: "incomplete"
+  ok &= r({800, 480}, "renders/scale_battery_cal_short_800x480.png", 1, ui::kSectionScaleDevice);
   scale.set_battery_estimated(false);
   scale.set_umbra(false);
   // Heating: machine on but boilers still below target — the inferred state

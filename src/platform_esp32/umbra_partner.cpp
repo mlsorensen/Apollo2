@@ -286,9 +286,11 @@ void UmbraPartner::stop_and_sleep() {
   // Partner-mode support for Umbra firmware 1.0.8.
   if (connected_.load()) {
     if (subscribed_.load()) {
+      // Noted BEFORE the frame: the Umbra may drop the link on receipt, and
+      // the disconnect callback must find the note (its gauge freezes now).
+      scale_.note_partner_sleep();
       const uint8_t sleep[] = {0xEF, 0xDD, 0x18, 0x08, 0x08, 0x00};
       send_frame(sleep, sizeof(sleep));
-      scale_.note_partner_sleep();  // its battery gauge freezes from here
     }
     const int handle = conn_handle_.load();
     if (handle >= 0) {

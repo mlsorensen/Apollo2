@@ -6,7 +6,37 @@ namespace core {
 
 namespace {
 constexpr std::time_t kSecondsPerDay = 24 * 60 * 60;
+
+int clamp_rate(int r) {
+  if (r < kScaleDrainMinPctPerDay) return kScaleDrainMinPctPerDay;
+  if (r > kScaleDrainMaxPctPerDay) return kScaleDrainMaxPctPerDay;
+  return r;
+}
+
+uint32_t mac_tag(const char* mac) {
+  uint32_t h = 2166136261u;
+  for (const char* c = mac != nullptr ? mac : ""; *c != '\0'; ++c) {
+    h ^= static_cast<uint8_t>(*c);
+    h *= 16777619u;
+  }
+  return h;
+}
+
+void put32(uint8_t* q, uint32_t v) {
+  for (int i = 0; i < 4; ++i) q[i] = static_cast<uint8_t>(v >> (8 * i));
+}
+
+uint32_t get32(const uint8_t* q) {
+  return static_cast<uint32_t>(q[0]) | static_cast<uint32_t>(q[1]) << 8 |
+         static_cast<uint32_t>(q[2]) << 16 | static_cast<uint32_t>(q[3]) << 24;
+}
 }  // namespace
+
+void ScaleBatteryEstimate::load(const ScaleBatteryState& s) {
+  s_ = s;
+  s_.rate = static_cast<uint8_t>(clamp_rate(s_.rate));
+  dirty_ = false;
+}
 
 void ScaleBatteryEstimate::on_reading(int pct) {
   if (pct < 0) pct = 0;
@@ -25,15 +55,12 @@ void ScaleBatteryEstimate::on_reading(int pct) {
     if (s_.cal_running) {
       const std::time_t span = static_cast<std::time_t>(s_.last_seen) -
                                static_cast<std::time_t>(s_.stale_since);
-      int rate = -1;
-      if (span > 0) {
-        rate = static_cast<int>((s_.cal_start_pct * kSecondsPerDay + span / 2) / span);
-        if (rate < kScaleDrainMinPctPerDay) rate = kScaleDrainMinPctPerDay;
-        if (rate > kScaleDrainMaxPctPerDay) rate = kScaleDrainMaxPctPerDay;
-      }
+      int rate = kCalibrationTooShort;
+      if (span > 0)
+        rate = clamp_rate(static_cast<int>((s_.cal_start_pct * kSecondsPerDay + span / 2) / span));
       core::logf("ScaleBattery: calibration %d%% over %lds -> %d%%/day\n",
                  s_.cal_start_pct, static_cast<long>(span), rate);
-      cal_result_ = rate;
+      s_.cal_result = static_cast<int8_t>(rate);
       s_.cal_armed = false;
       s_.cal_running = false;
     }
@@ -60,7 +87,7 @@ void ScaleBatteryEstimate::on_session_end(bool slept, std::time_t now) {
   dirty_ = true;
 }
 
-ScaleBatteryView ScaleBatteryEstimate::view(int rate_pct_per_day, std::time_t now) const {
+ScaleBatteryView ScaleBatteryEstimate::view(std::time_t now) const {
   ScaleBatteryView v;
   if (!s_.have_live) return v;
   v.valid = true;
@@ -69,15 +96,22 @@ ScaleBatteryView ScaleBatteryEstimate::view(int rate_pct_per_day, std::time_t no
   v.estimated = true;
   if (now <= static_cast<std::time_t>(s_.stale_since)) return v;
   const std::time_t elapsed = now - static_cast<std::time_t>(s_.stale_since);
-  const std::time_t used = rate_pct_per_day * elapsed / kSecondsPerDay;
+  const std::time_t used = s_.rate * elapsed / kSecondsPerDay;
   v.pct = used >= s_.live_pct ? 0 : s_.live_pct - static_cast<int>(used);
   return v;
+}
+
+void ScaleBatteryEstimate::set_rate(int pct_per_day) {
+  const int r = clamp_rate(pct_per_day);
+  if (r == s_.rate) return;
+  s_.rate = static_cast<uint8_t>(r);
+  dirty_ = true;
 }
 
 void ScaleBatteryEstimate::arm() {
   s_.cal_armed = true;
   s_.cal_running = false;
-  cal_result_ = -1;
+  s_.cal_result = kCalibrationNone;
   dirty_ = true;
 }
 
@@ -86,6 +120,49 @@ void ScaleBatteryEstimate::disarm() {
   s_.cal_armed = false;
   s_.cal_running = false;
   dirty_ = true;
+}
+
+int ScaleBatteryEstimate::take_calibration_result() {
+  const int r = s_.cal_result;
+  if (r != kCalibrationNone) {
+    s_.cal_result = kCalibrationNone;
+    dirty_ = true;
+  }
+  return r;
+}
+
+void pack_scale_battery(const ScaleBatteryState& s, const char* mac,
+                        uint8_t out[kScaleBatteryBlobLen]) {
+  for (int i = 0; i < kScaleBatteryBlobLen; ++i) out[i] = 0;
+  out[0] = static_cast<uint8_t>((s.have_live ? 1 : 0) | (s.cal_armed ? 2 : 0) |
+                                (s.cal_running ? 4 : 0));
+  out[1] = s.live_pct;
+  out[2] = s.cal_start_pct;
+  out[3] = static_cast<uint8_t>(s.cal_result + 1);
+  put32(out + 4, s.stale_since);
+  put32(out + 8, s.last_seen);
+  put32(out + 12, mac_tag(mac));
+  out[16] = s.rate;
+}
+
+bool unpack_scale_battery(const uint8_t* data, int len, const char* mac,
+                          ScaleBatteryState* s) {
+  if (data == nullptr || len != kScaleBatteryBlobLen) return false;
+  if (get32(data + 12) != mac_tag(mac)) return false;
+  ScaleBatteryState r;
+  r.have_live = (data[0] & 1) != 0;
+  r.cal_armed = (data[0] & 2) != 0;
+  r.cal_running = (data[0] & 4) != 0;
+  r.live_pct = data[1] <= 100 ? data[1] : 100;
+  r.cal_start_pct = data[2] <= 100 ? data[2] : 100;
+  const int result = static_cast<int>(data[3]) - 1;
+  r.cal_result = static_cast<int8_t>(
+      result >= kCalibrationNone && result <= kScaleDrainMaxPctPerDay ? result : kCalibrationNone);
+  r.stale_since = get32(data + 4);
+  r.last_seen = get32(data + 8);
+  r.rate = static_cast<uint8_t>(clamp_rate(data[16]));
+  *s = r;
+  return true;
 }
 
 }  // namespace core

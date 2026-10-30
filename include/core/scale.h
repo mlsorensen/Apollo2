@@ -111,7 +111,8 @@ class IScale {
   virtual void set_device_setting(int index, int option_idx) = 0;
 
   // Battery estimate (ScaleBatteryInfo). Setters are no-ops when unsupported.
-  // The calibration result is handed out once (%/day), -1 when none is due.
+  // The calibration result is handed out once: %/day, kCalibrationTooShort (0)
+  // for a run that couldn't be measured, kCalibrationNone (-1) when none is due.
   virtual ScaleBatteryInfo battery_info() const = 0;
   virtual void set_battery_drain_rate(int pct_per_day) = 0;
   virtual void set_battery_calibration(bool armed) = 0;

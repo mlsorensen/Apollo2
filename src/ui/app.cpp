@@ -2213,7 +2213,15 @@ void App::poll_battery_calibration() {
   for (core::IScale* sc : {scale_, bench_}) {
     if (sc == nullptr) continue;
     const int rate = sc->take_battery_calibration_result();
-    if (rate < 0) continue;
+    if (rate == core::kCalibrationNone) continue;
+    if (rate == core::kCalibrationTooShort) {  // charged before a full period
+      lv_obj_t* card = open_modal(
+          "Calibration incomplete",
+          "The scale was recharged before a full drain could be measured. "
+          "Start the calibration again to retry.");
+      modal_button(modal_button_row(card), "OK", ui::theme::rail(), on_token_cancel, this);
+      return;
+    }
     cal_scale_ = sc;
     cal_result_ = rate;
     char body[160];

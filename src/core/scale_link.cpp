@@ -61,8 +61,6 @@ void ScaleLink::set_address(std::string address, AddrType type) {
     // over (the platform dropped the stored ones when it saved the new MAC).
     if (!address_.empty() && address_ != address) {
       battery_est_ = ScaleBatteryEstimate{};
-      battery_rate_ = kScaleDrainDefaultPctPerDay;
-      battery_rate_dirty_ = false;
     }
     address_ = std::move(address);
     addr_type_ = type;
@@ -82,7 +80,16 @@ void ScaleLink::set_name(std::string name) {
 void ScaleLink::set_partner_mode(bool enabled) {
   partner_mode_.store(enabled);
   partner_paired_.store(false);
-  partner_connected_.store(false);
+  // Leaving (or entering) partner mode ends any partner session here, not in
+  // the disconnect callback that follows — which then sees no session. The
+  // sleep note is cleared with it so it can't attach to a later, ordinary
+  // drop (the mode switch's own sleep frame lands after this).
+  const bool was = partner_connected_.exchange(false);
+  partner_sleep_sent_.store(false);
+  if (was) {
+    std::lock_guard<std::mutex> lk(mutex_);
+    battery_est_.on_session_end(/*slept=*/false, now_unix());
+  }
   reconnect_requested_.store(true);
   if (enabled) {
     std::lock_guard<std::mutex> lk(mutex_);
@@ -93,6 +100,10 @@ void ScaleLink::set_partner_mode(bool enabled) {
 
 void ScaleLink::set_partner_connected(bool connected) {
   const bool was = partner_connected_.exchange(connected);
+  // A note only ever belongs to the session it was sent in: a new session
+  // starts clean, so a sleep frame that never led to a disconnect can't mark
+  // a later, ordinary drop as a sleep.
+  if (!was && connected) partner_sleep_sent_.store(false);
   if (was && !connected) {
     const bool slept = partner_sleep_sent_.exchange(false);
     std::lock_guard<std::mutex> lk(mutex_);
@@ -146,25 +157,19 @@ void ScaleLink::on_battery(int pct) {
   if (partner_mode_.load()) battery_est_.on_reading(pct);
 }
 
-void ScaleLink::load_battery(const ScaleBatteryState& state, int rate_pct_per_day) {
+void ScaleLink::load_battery(const ScaleBatteryState& state) {
   std::lock_guard<std::mutex> lk(mutex_);
   battery_est_.load(state);
-  if (rate_pct_per_day >= kScaleDrainMinPctPerDay && rate_pct_per_day <= kScaleDrainMaxPctPerDay)
-    battery_rate_ = rate_pct_per_day;
 }
 
 void ScaleLink::persist_battery() {
   ScaleBatteryState state;
-  int rate;
   {
     std::lock_guard<std::mutex> lk(mutex_);
-    const bool dirty = battery_est_.take_dirty();
-    if (!dirty && !battery_rate_dirty_) return;
-    battery_rate_dirty_ = false;
+    if (!battery_est_.take_dirty()) return;
     state = battery_est_.state();
-    rate = battery_rate_;
   }
-  if (battery_persist_) battery_persist_(state, rate);
+  if (battery_persist_) battery_persist_(state);
 }
 
 ScaleBatteryInfo ScaleLink::battery_info() const {
@@ -172,7 +177,7 @@ ScaleBatteryInfo ScaleLink::battery_info() const {
   if (!partner_mode_.load()) return info;
   std::lock_guard<std::mutex> lk(mutex_);
   info.supported = true;
-  info.rate_pct_per_day = battery_rate_;
+  info.rate_pct_per_day = battery_est_.rate();
   info.armed = battery_est_.armed();
   info.sleep_off = setting_value_[kPartnerSleepSetting] == 0;
   return info;
@@ -183,9 +188,7 @@ void ScaleLink::set_battery_drain_rate(int pct_per_day) {
       pct_per_day > kScaleDrainMaxPctPerDay)
     return;
   std::lock_guard<std::mutex> lk(mutex_);
-  if (battery_rate_ == pct_per_day) return;
-  battery_rate_ = pct_per_day;
-  battery_rate_dirty_ = true;
+  battery_est_.set_rate(pct_per_day);
 }
 
 void ScaleLink::set_battery_calibration(bool armed) {
@@ -547,7 +550,7 @@ ScaleSnapshot ScaleLink::snapshot() const {
   // A partner-mode Umbra's gauge freezes once it has slept: show the estimate
   // (which is the reading itself while the gauge is live).
   if (partner_mode_.load()) {
-    const ScaleBatteryView v = battery_est_.view(battery_rate_, now_unix());
+    const ScaleBatteryView v = battery_est_.view(now_unix());
     if (v.valid) {
       snap.battery_valid = true;
       snap.battery_pct = v.pct;

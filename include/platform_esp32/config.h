@@ -55,13 +55,12 @@ class Config {
   void clear_scale(core::ScaleSlot slot = core::ScaleSlot::kEspresso);
   void swap_scales();  // exchange the two slots' stored values
   // A partner-mode Umbra's battery estimate + drain setting (ADD, v1.3:
-  // `sbatt`/`sdrain`, bench `2`). They follow the scale: a swap exchanges
-  // them, a re-save of the same MAC keeps them, a different scale or Forget
-  // drops them. False = no stored estimate (the rate still reads, default 15).
-  bool scale_battery(core::ScaleSlot slot, core::ScaleBatteryState* state,
-                     int* rate_pct_per_day) const;
-  void set_scale_battery(core::ScaleSlot slot, const core::ScaleBatteryState& state,
-                         int rate_pct_per_day);
+  // `sbatest`, bench `sbatest2` — core::pack_scale_battery's blob, tagged
+  // with the scale's MAC). It follows the scale: a swap exchanges it, a
+  // re-save of the same MAC keeps it, a different scale or Forget drops it.
+  // False = nothing stored for THIS scale (start from the defaults).
+  bool scale_battery(core::ScaleSlot slot, core::ScaleBatteryState* state) const;
+  void set_scale_battery(core::ScaleSlot slot, const core::ScaleBatteryState& state);
 
   // Where the bench scale shows on Home (ADD, v1.2): 0 = in the SCALE card
   // behind an ESPRESSO | BENCH switch (default), 1 = its own card beside the

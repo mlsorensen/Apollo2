@@ -75,9 +75,14 @@ class ScaleLink : public IScale, public IScaleSink {
   // Battery estimate for the partner-mode Umbra (core/scale_battery_estimate.h).
   // The platform seeds it from storage before run(); the link thread hands
   // every change worth keeping to `persist` (never per reading).
-  void set_battery_clock(const IClock* clock) { clock_ = clock; }
-  void load_battery(const ScaleBatteryState& state, int rate_pct_per_day);
-  void set_battery_persist(std::function<void(const ScaleBatteryState&, int)> persist) {
+  // `trusted` says whether the clock is real time (a sync this boot), not a
+  // seeded guess; untrusted time stamps nothing (see the estimate's rules).
+  void set_battery_clock(const IClock* clock, std::function<bool()> trusted) {
+    clock_ = clock;
+    clock_trusted_ = std::move(trusted);
+  }
+  void load_battery(const ScaleBatteryState& state);
+  void set_battery_persist(std::function<void(const ScaleBatteryState&)> persist) {
     battery_persist_ = std::move(persist);
   }
 
@@ -117,7 +122,9 @@ class ScaleLink : public IScale, public IScaleSink {
   void set_connected(bool c);
   bool link_up() const;  // the raw BLE link, before the weight-stream gate
   void sync_radio_state();  // feed the arbiter this link's wants (loop thread)
-  std::time_t now_unix() const { return clock_ != nullptr ? clock_->now_unix() : 0; }
+  std::time_t now_unix() const {  // trusted Unix time, or 0
+    return clock_ != nullptr && clock_trusted_ && clock_trusted_() ? clock_->now_unix() : 0;
+  }
   void persist_battery();   // hand a dirty estimate to the platform (loop thread)
 
   ble::ICentral& ble_;
@@ -147,11 +154,9 @@ class ScaleLink : public IScale, public IScaleSink {
   int battery_pct_ = 0;
   bool battery_valid_ = false;
   uint32_t seq_ = 0;  // increments per weight update (snapshot.seq)
-  // Partner mode only: the estimate replaces the raw reading. rate_ is the
-  // drain setting (%/day); the state is persisted by persist_battery().
+  // Partner mode only: the estimate (and its drain setting) replaces the raw
+  // reading; persisted by persist_battery().
   ScaleBatteryEstimate battery_est_;
-  int battery_rate_ = kScaleDrainDefaultPctPerDay;
-  bool battery_rate_dirty_ = false;
   // On-scale setting values as last reported (-1 = unknown). Reset on every
   // connect/disconnect: the scale is the owner, so a stale cache must never
   // outlive the link that read it. Written optimistically by
@@ -177,7 +182,8 @@ class ScaleLink : public IScale, public IScaleSink {
   std::function<void(int, int)> partner_setting_writer_;
   std::atomic<bool> partner_sleep_sent_{false};
   const IClock* clock_ = nullptr;  // set once before run()
-  std::function<void(const ScaleBatteryState&, int)> battery_persist_;  // ditto
+  std::function<bool()> clock_trusted_;                              // ditto
+  std::function<void(const ScaleBatteryState&)> battery_persist_;  // ditto
   std::atomic<bool> reconnect_requested_{false};
   std::atomic<bool> scanning_{false};
   std::atomic<bool> pending_tare_{false};

@@ -70,17 +70,15 @@ struct ScaleKeys {
   const char* partner;
   const char* pending;  // per-unit (config_backup), both slots
   const char* type;     // core::AddrType as uchar (ADD, v1.1)
-  const char* battery;  // partner Umbra battery estimate, packed blob (ADD, v1.3)
-  const char* drain;    // its drain setting, %/day as uchar (ADD, v1.3)
+  // A partner Umbra's battery estimate + drain setting: the blob of
+  // core::pack_scale_battery, tagged with the scale's MAC (ADD, v1.3).
+  const char* battery;
 };
 constexpr ScaleKeys kScaleKeys[2] = {
-    {"smac", "sname", "sprtnr", "sprpend", "satype", "sbatt", "sdrain"},
-    {"smac2", "sname2", "sprtnr2", "sprpend2", "satype2", "sbatt2", "sdrain2"},
+    {"smac", "sname", "sprtnr", "sprpend", "satype", "sbatest"},
+    {"smac2", "sname2", "sprtnr2", "sprpend2", "satype2", "sbatest2"},
 };
-// The battery blob's layout is fixed (never the struct's memory layout):
-// flags (bit0 have_live, bit1 cal_armed, bit2 cal_running), live %, cal start
-// %, reserved, stale_since u32 LE, last_seen u32 LE.
-constexpr size_t kBatteryBlobLen = 12;
+constexpr int kBatteryBlobLen = core::kScaleBatteryBlobLen;
 inline const ScaleKeys& keys(core::ScaleSlot slot) {
   return kScaleKeys[slot == core::ScaleSlot::kBench ? 1 : 0];
 }
@@ -235,7 +233,6 @@ struct ScaleRecord {
   uint8_t type = 0;  // 0 = unknown (key absent)
   uint8_t battery[kBatteryBlobLen] = {};
   bool has_battery = false;
-  uint8_t drain = 0;  // 0 = key absent (the default rate)
 };
 
 ScaleRecord read_record(Preferences& p, const ScaleKeys& k) {
@@ -245,17 +242,15 @@ ScaleRecord read_record(Preferences& p, const ScaleKeys& k) {
   r.partner = p.getBool(k.partner, false);
   r.type = p.isKey(k.type) ? p.getUChar(k.type, 0) : 0;
   r.has_battery = p.isKey(k.battery) &&
-                  p.getBytesLength(k.battery) == kBatteryBlobLen &&
-                  p.getBytes(k.battery, r.battery, kBatteryBlobLen) == kBatteryBlobLen;
-  r.drain = p.isKey(k.drain) ? p.getUChar(k.drain, 0) : 0;
+                  p.getBytesLength(k.battery) == static_cast<size_t>(kBatteryBlobLen) &&
+                  p.getBytes(k.battery, r.battery, kBatteryBlobLen) ==
+                      static_cast<size_t>(kBatteryBlobLen);
   return r;
 }
 
 void write_battery(Preferences& p, const ScaleKeys& k, const ScaleRecord& r) {
   if (r.has_battery) p.putBytes(k.battery, r.battery, kBatteryBlobLen);
   else p.remove(k.battery);
-  if (r.drain != 0) p.putUChar(k.drain, r.drain);
-  else p.remove(k.drain);
 }
 
 void write_record(Preferences& p, const ScaleKeys& k, const ScaleRecord& r) {
@@ -265,7 +260,6 @@ void write_record(Preferences& p, const ScaleKeys& k, const ScaleRecord& r) {
     p.remove(k.partner);
     p.remove(k.type);
     p.remove(k.battery);
-    p.remove(k.drain);
     return;
   }
   p.putString(k.mac, r.mac.c_str());
@@ -283,12 +277,11 @@ void Config::save_scale(core::ScaleSlot slot, const std::string& mac, const std:
   p.begin(kNamespace, /*readOnly=*/false);
   ScaleRecord r;
   // Re-saving the same scale keeps its battery estimate and drain setting;
-  // a different scale starts fresh.
+  // a different scale starts fresh (its tag wouldn't match anyway).
   const ScaleRecord old = read_record(p, keys(slot));
   if (old.mac == mac) {
     std::memcpy(r.battery, old.battery, kBatteryBlobLen);
     r.has_battery = old.has_battery;
-    r.drain = old.drain;
   }
   r.mac = mac;
   r.name = name;
@@ -375,52 +368,29 @@ void Config::clear_scale(core::ScaleSlot slot) {
   p.remove(k.pending);
   p.remove(k.type);
   p.remove(k.battery);
-  p.remove(k.drain);
   p.end();
 }
 
-bool Config::scale_battery(core::ScaleSlot slot, core::ScaleBatteryState* state,
-                           int* rate_pct_per_day) const {
+bool Config::scale_battery(core::ScaleSlot slot, core::ScaleBatteryState* state) const {
   Preferences p;
   if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
   const ScaleRecord r = read_record(p, keys(slot));
   p.end();
-  *rate_pct_per_day = r.drain != 0 ? r.drain : core::kScaleDrainDefaultPctPerDay;
-  if (!r.has_battery) return false;
-  const uint8_t* b = r.battery;
-  auto u32 = [](const uint8_t* q) {
-    return static_cast<uint32_t>(q[0]) | static_cast<uint32_t>(q[1]) << 8 |
-           static_cast<uint32_t>(q[2]) << 16 | static_cast<uint32_t>(q[3]) << 24;
-  };
-  state->have_live = (b[0] & 1) != 0;
-  state->cal_armed = (b[0] & 2) != 0;
-  state->cal_running = (b[0] & 4) != 0;
-  state->live_pct = b[1] <= 100 ? b[1] : 100;
-  state->cal_start_pct = b[2] <= 100 ? b[2] : 100;
-  state->stale_since = u32(b + 4);
-  state->last_seen = u32(b + 8);
-  return true;
+  // A blob tagged for another MAC (left by a rolled-back build that re-saved
+  // the slot) or of another length is ignored: that scale starts fresh.
+  return r.has_battery &&
+         core::unpack_scale_battery(r.battery, kBatteryBlobLen, r.mac.c_str(), state);
 }
 
-void Config::set_scale_battery(core::ScaleSlot slot, const core::ScaleBatteryState& state,
-                               int rate_pct_per_day) {
-  ScaleRecord r;
-  uint8_t* b = r.battery;
-  b[0] = (state.have_live ? 1 : 0) | (state.cal_armed ? 2 : 0) | (state.cal_running ? 4 : 0);
-  b[1] = state.live_pct;
-  b[2] = state.cal_start_pct;
-  auto put32 = [](uint8_t* q, uint32_t v) {
-    for (int i = 0; i < 4; ++i) q[i] = static_cast<uint8_t>(v >> (8 * i));
-  };
-  put32(b + 4, state.stale_since);
-  put32(b + 8, state.last_seen);
-  r.has_battery = true;
-  r.drain = rate_pct_per_day == core::kScaleDrainDefaultPctPerDay
-                ? 0
-                : static_cast<uint8_t>(rate_pct_per_day);
+void Config::set_scale_battery(core::ScaleSlot slot, const core::ScaleBatteryState& state) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
-  write_battery(p, keys(slot), r);
+  ScaleRecord r = read_record(p, keys(slot));
+  if (!r.mac.empty()) {  // a slot Forget emptied keeps nothing
+    core::pack_scale_battery(state, r.mac.c_str(), r.battery);
+    r.has_battery = true;
+    write_battery(p, keys(slot), r);
+  }
   p.end();
 }
 
