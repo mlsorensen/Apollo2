@@ -1347,6 +1347,27 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
       lv_obj_center(out.scale_dev_values[i]);
       lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN);
     }
+    // Battery estimate (partner-mode Umbra): the drain rate the estimate runs
+    // on, and the one-shot calibration that measures it. Greyed while the
+    // scale's sleep is Off (App::update_scale_view).
+    out.scale_drain_row = make_setting_row(out.scale_device_page, "Battery drain per day", font);
+    make_inline_stepper(out.scale_drain_row, font, symbol_font, btn_size, &out.scale_drain_minus,
+                        &out.scale_drain_value, &out.scale_drain_plus, nullptr);
+    lv_obj_set_style_opa(out.scale_drain_minus, LV_OPA_40, LV_STATE_DISABLED);
+    lv_obj_set_style_opa(out.scale_drain_plus, LV_OPA_40, LV_STATE_DISABLED);
+    out.scale_cal_row = make_setting_row(out.scale_device_page, "Calibrate drain", font);
+    out.scale_cal_btn = ui::make_button(out.scale_cal_row);
+    lv_obj_set_height(out.scale_cal_btn, btn_size);
+    lv_obj_set_style_pad_hor(out.scale_cal_btn, ui::dp(14), 0);
+    lv_obj_set_style_bg_color(out.scale_cal_btn, lv_color_hex(ui::theme::card()), 0);
+    lv_obj_set_style_opa(out.scale_cal_btn, LV_OPA_40, LV_STATE_DISABLED);
+    out.scale_cal_label = lv_label_create(out.scale_cal_btn);
+    lv_label_set_text(out.scale_cal_label, "Start");
+    lv_obj_set_style_text_color(out.scale_cal_label, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(out.scale_cal_label, font, 0);
+    lv_obj_center(out.scale_cal_label);
+    lv_obj_add_flag(out.scale_drain_row, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(out.scale_cal_row, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(out.scale_dev_hint, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(out.scale_dev_connect_row, LV_OBJ_FLAG_HIDDEN);
   }

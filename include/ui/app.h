@@ -87,6 +87,13 @@ class App {
   // Scale > Settings "On the scale" rows: advance descriptor slot `index` to
   // its next option (writes to the scale; refused offline or mid-shot).
   void cycle_scale_device_setting(int index);
+  // Partner Umbra battery estimate (Device settings): step the drain rate,
+  // the Calibrate button (arm prompt / cancel), and the result modal.
+  void adjust_battery_drain(int delta);
+  void battery_calibration_tapped();
+  void arm_battery_calibration();
+  void store_battery_calibration(bool store);
+  void poll_battery_calibration();  // a finished run -> the Store / Discard modal
   void toggle_flow_units();    // Home graph unit button (g/s <-> g)
   void start_scan();           // Settings "Scan" button
   void save_scanned(int index);  // a result row in the Settings list
@@ -332,6 +339,8 @@ class App {
   core::IScale* scale_ = nullptr;
   core::IScale* bench_ = nullptr;   // the bench slot's port (optional)
   core::IScale* dev_scale() const;  // the slot Scale > Device settings addresses
+  core::IScale* cal_scale_ = nullptr;  // whose calibration result is on screen
+  int cal_result_ = -1;                // that result, %/day
   int pending_scan_index_ = -1;     // the tapped result while the save modal is up
   core::IScaleProvisioner* scale_provisioner_ = nullptr;
   core::IBrewController* brew_ = nullptr;

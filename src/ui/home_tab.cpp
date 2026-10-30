@@ -567,6 +567,14 @@ const char* battery_icon(int pct) {
   return LV_SYMBOL_BATTERY_EMPTY;
 }
 
+// The level icon; "~" in front when the level is an estimate (a partner
+// Umbra's frozen gauge), so the icon-only style says so too.
+void set_batt_icon(lv_obj_t* label, int pct, bool estimated) {
+  char buf[8];
+  std::snprintf(buf, sizeof(buf), "%s%s", estimated ? "~" : "", battery_icon(pct));
+  ui::set_text(label, buf);
+}
+
 // The full-width power button at the bottom (both layouts).
 void build_power_button(lv_obj_t* parent, int btn_h, const lv_font_t* btn_font,
                         ui::HomeWidgets& out) {
@@ -1498,12 +1506,12 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
       };
       if (show_pct) {
         char sb[8];
-        std::snprintf(sb, sizeof(sb), "%d%%", bench->battery_pct);
+        std::snprintf(sb, sizeof(sb), "%s%d%%", bench->battery_estimated ? "~" : "", bench->battery_pct);
         ui::set_text(w.bench_batt_pct_label, sb);
         ui::set_text_color(w.bench_batt_pct_label, color);
       }
       if (show_icon) {
-        ui::set_text(w.bench_batt_label, battery_icon(bench->battery_pct));
+        set_batt_icon(w.bench_batt_label, bench->battery_pct, bench->battery_estimated);
         ui::set_text_color(w.bench_batt_label, color);
       }
       show(w.bench_batt_pct_label, show_pct);
@@ -1720,12 +1728,12 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     };
     if (show_pct) {
       char sb[8];
-      std::snprintf(sb, sizeof(sb), "%d%%", scale.battery_pct);
+      std::snprintf(sb, sizeof(sb), "%s%d%%", scale.battery_estimated ? "~" : "", scale.battery_pct);
       ui::set_text(w.scale_batt_pct_label, sb);
       ui::set_text_color(w.scale_batt_pct_label, color);
     }
     if (show_icon) {
-      ui::set_text(w.scale_batt_label, battery_icon(scale.battery_pct));
+      set_batt_icon(w.scale_batt_label, scale.battery_pct, scale.battery_estimated);
       ui::set_text_color(w.scale_batt_label, color);
     }
     show(w.scale_batt_pct_label, show_pct);

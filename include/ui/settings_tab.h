@@ -117,6 +117,15 @@ struct SettingsWidgets {
   lv_obj_t* scale_dev_labels[core::kMaxScaleSettings] = {};  // row name labels
   lv_obj_t* scale_dev_btns[core::kMaxScaleSettings] = {};    // cycle buttons
   lv_obj_t* scale_dev_values[core::kMaxScaleSettings] = {};  // value labels
+  // Battery estimate rows (a partner-mode Umbra only: its gauge freezes after
+  // it sleeps, so Apollo estimates). Apollo-side settings, not the scale's.
+  lv_obj_t* scale_drain_row = nullptr;    // "Battery drain per day" [-] 15% [+]
+  lv_obj_t* scale_drain_minus = nullptr;
+  lv_obj_t* scale_drain_value = nullptr;
+  lv_obj_t* scale_drain_plus = nullptr;
+  lv_obj_t* scale_cal_row = nullptr;      // "Calibrate drain" [Start | Cancel]
+  lv_obj_t* scale_cal_btn = nullptr;
+  lv_obj_t* scale_cal_label = nullptr;
   lv_obj_t* device_page = nullptr;          // chooser: Display | Time & date | WiFi
   lv_obj_t* device_display_page = nullptr;  // brightness/dim/theme/units/sound
   lv_obj_t* device_time_page = nullptr;     // clock + calendar steppers

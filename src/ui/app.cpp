@@ -10,6 +10,7 @@
 #include <lvgl.h>
 
 #include "core/log_ring.h"
+#include "core/scale_battery_estimate.h"
 #include "core/system.h"
 #include "ui/saver_art.h"
 #include "ui/shot_card.h"
@@ -204,6 +205,24 @@ void on_scale_dev_setting2(lv_event_t* e) {
 }
 void on_scale_dev_setting3(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_scale_device_setting(3);
+}
+void on_drain_minus(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->adjust_battery_drain(-1);
+}
+void on_drain_plus(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->adjust_battery_drain(1);
+}
+void on_cal_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->battery_calibration_tapped();
+}
+void on_cal_arm(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->arm_battery_calibration();
+}
+void on_cal_store(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->store_battery_calibration(true);
+}
+void on_cal_discard(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->store_battery_calibration(false);
 }
 void on_target_minus(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->target_adjust(-1);
@@ -1320,6 +1339,11 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
       lv_obj_add_event_cb(settings_.scale_dev_btns[i], kDevSettingCbs[i],
                           LV_EVENT_CLICKED, this);
   }
+  if (settings_.scale_drain_minus != nullptr) {
+    lv_obj_add_event_cb(settings_.scale_drain_minus, on_drain_minus, LV_EVENT_CLICKED, this);
+    lv_obj_add_event_cb(settings_.scale_drain_plus, on_drain_plus, LV_EVENT_CLICKED, this);
+    lv_obj_add_event_cb(settings_.scale_cal_btn, on_cal_clicked, LV_EVENT_CLICKED, this);
+  }
   lv_obj_add_event_cb(settings_.target_minus, on_target_minus, LV_EVENT_CLICKED, this);
   if (settings_.review_minus != nullptr) {
     lv_obj_add_event_cb(settings_.review_minus, on_review_minus, LV_EVENT_CLICKED, this);
@@ -1597,6 +1621,7 @@ void App::update_heating(const core::MachineSnapshot& state) {
 
 void App::refresh() {
   check_umbra_pair_pending();
+  poll_battery_calibration();
   if (machine_ != nullptr) {
     const core::MachineSnapshot snap = machine_->snapshot();
     if (battery_ != nullptr) {
@@ -2141,6 +2166,76 @@ void App::show_bench_side(bool bench) {
 // unless the picker says Bench).
 core::IScale* App::dev_scale() const {
   return settings_.dev_slot == 1 && bench_ != nullptr ? bench_ : scale_;
+}
+
+void App::adjust_battery_drain(int delta) {
+  core::IScale* sc = dev_scale();
+  if (sc == nullptr) return;
+  const core::ScaleBatteryInfo bi = sc->battery_info();
+  if (!bi.supported || bi.sleep_off) return;
+  int rate = bi.rate_pct_per_day + delta;
+  if (rate < core::kScaleDrainMinPctPerDay) rate = core::kScaleDrainMinPctPerDay;
+  if (rate > core::kScaleDrainMaxPctPerDay) rate = core::kScaleDrainMaxPctPerDay;
+  sc->set_battery_drain_rate(rate);
+  update_scale_view();
+}
+
+void App::battery_calibration_tapped() {
+  core::IScale* sc = dev_scale();
+  if (sc == nullptr) return;
+  const core::ScaleBatteryInfo bi = sc->battery_info();
+  if (!bi.supported) return;
+  if (bi.armed) {  // the button reads Cancel while a run is armed
+    sc->set_battery_calibration(false);
+    update_scale_view();
+    return;
+  }
+  if (bi.sleep_off) return;
+  lv_obj_t* card = open_modal(
+      "Calibrate battery drain",
+      "Charge the scale fully, then use it as usual until it runs flat, then "
+      "charge it again. Apollo measures the drain over that time and offers "
+      "the result when the scale comes back.");
+  lv_obj_t* row = modal_button_row(card);
+  modal_button(row, "Start", ui::theme::accent(), on_cal_arm, this);
+  modal_button(row, "Cancel", ui::theme::rail(), on_token_cancel, this);
+}
+
+void App::arm_battery_calibration() {
+  core::IScale* sc = dev_scale();
+  if (sc != nullptr) sc->set_battery_calibration(true);
+  close_modal();
+  update_scale_view();
+}
+
+void App::poll_battery_calibration() {
+  if (modal_ != nullptr) return;  // offered once nothing else is on screen
+  for (core::IScale* sc : {scale_, bench_}) {
+    if (sc == nullptr) continue;
+    const int rate = sc->take_battery_calibration_result();
+    if (rate < 0) continue;
+    cal_scale_ = sc;
+    cal_result_ = rate;
+    char body[160];
+    std::snprintf(body, sizeof(body),
+                  "The scale was recharged. It drained about %d%% per day; "
+                  "the setting is %d%%.",
+                  rate, sc->battery_info().rate_pct_per_day);
+    lv_obj_t* card = open_modal("Store measured drain?", body);
+    lv_obj_t* row = modal_button_row(card);
+    modal_button(row, "Store", ui::theme::accent(), on_cal_store, this);
+    modal_button(row, "Discard", ui::theme::rail(), on_cal_discard, this);
+    return;
+  }
+}
+
+void App::store_battery_calibration(bool store) {
+  if (store && cal_scale_ != nullptr && cal_result_ >= 0)
+    cal_scale_->set_battery_drain_rate(cal_result_);
+  cal_scale_ = nullptr;
+  cal_result_ = -1;
+  close_modal();
+  update_scale_view();
 }
 
 void App::cycle_scale_device_setting(int index) {
@@ -4815,6 +4910,26 @@ void App::update_scale_view() {
         else
           lv_obj_add_state(settings_.scale_dev_btns[i], LV_STATE_DISABLED);
       }
+    }
+    // Battery estimate rows: a partner-mode Umbra only. Apollo's own settings,
+    // so they work offline too; greyed while the scale reports its sleep Off
+    // (it never sleeps, so its reading never goes stale).
+    const core::ScaleBatteryInfo bi =
+        have_scale ? dsc->battery_info() : core::ScaleBatteryInfo{};
+    show(settings_.scale_drain_row, bi.supported);
+    show(settings_.scale_cal_row, bi.supported);
+    if (bi.supported) {
+      char rb[8];
+      std::snprintf(rb, sizeof(rb), "%d%%", bi.rate_pct_per_day);
+      ui::set_text(settings_.scale_drain_value, rb);
+      ui::set_text(settings_.scale_cal_label, bi.armed ? "Cancel" : "Start");
+      const auto enable = [](lv_obj_t* o, bool on) {
+        if (on) lv_obj_remove_state(o, LV_STATE_DISABLED);
+        else lv_obj_add_state(o, LV_STATE_DISABLED);
+      };
+      enable(settings_.scale_drain_minus, !bi.sleep_off);
+      enable(settings_.scale_drain_plus, !bi.sleep_off);
+      enable(settings_.scale_cal_btn, bi.armed || !bi.sleep_off);  // Cancel stays live
     }
   }
 

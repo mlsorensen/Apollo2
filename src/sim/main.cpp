@@ -117,6 +117,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
                    "Connect the scale or switch to Manual mode.");
   if (screensaver) app.pose_screensaver();  // bouncing-art saver, start pose
   if (update_modal) app.open_update_modal();
+  app.poll_battery_calibration();  // a posed calibration result (FakeScale)
   // 1 = back-up confirm, 2 = the same with WiFi opted out, 3 = restore confirm
   // (4 = its "backup is newer than this firmware" refusal, posed by the fake),
   // 5 = backup done, 6 = restore done, 7 = no card in the slot, 8 = the
@@ -208,6 +209,15 @@ int main() {
   ok &= r({800, 480}, "renders/home_sleeping_800x480.png");
   scale_provisioner.set_connect_enabled(core::ScaleSlot::kEspresso, true);
   scale.set_connected(true);
+  // Partner Umbra after a sleep: the frozen gauge's battery shown as an
+  // estimate ("~"), the Device settings page with the drain rows, and a
+  // finished calibration's Store / Discard modal.
+  scale.set_battery_estimated(true);
+  ok &= r({800, 480}, "renders/home_umbra_estimate_800x480.png");
+  ok &= r({800, 480}, "renders/scale_device_umbra_800x480.png", 1, ui::kSectionScaleDevice);
+  scale.set_calibration_result(8);
+  ok &= r({800, 480}, "renders/scale_battery_cal_800x480.png", 1, ui::kSectionScaleDevice);
+  scale.set_battery_estimated(false);
   scale.set_umbra(false);
   // Heating: machine on but boilers still below target — the inferred state
   // shows an amber (pulsing on-device) dot + "Heating" instead of "Ready".

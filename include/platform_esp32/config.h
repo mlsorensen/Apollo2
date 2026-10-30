@@ -4,6 +4,7 @@
 #include <string>
 
 #include "core/provisioner.h"        // core::AddrType
+#include "core/scale_battery_estimate.h"
 #include "core/scale_provisioner.h"  // core::ScaleSlot
 
 // Persistent device configuration in NVS flash: the saved machine (BLE MAC +
@@ -53,6 +54,14 @@ class Config {
   void set_scale_addr_type(core::ScaleSlot slot, core::AddrType type);
   void clear_scale(core::ScaleSlot slot = core::ScaleSlot::kEspresso);
   void swap_scales();  // exchange the two slots' stored values
+  // A partner-mode Umbra's battery estimate + drain setting (ADD, v1.3:
+  // `sbatt`/`sdrain`, bench `2`). They follow the scale: a swap exchanges
+  // them, a re-save of the same MAC keeps them, a different scale or Forget
+  // drops them. False = no stored estimate (the rate still reads, default 15).
+  bool scale_battery(core::ScaleSlot slot, core::ScaleBatteryState* state,
+                     int* rate_pct_per_day) const;
+  void set_scale_battery(core::ScaleSlot slot, const core::ScaleBatteryState& state,
+                         int rate_pct_per_day);
 
   // Where the bench scale shows on Home (ADD, v1.2): 0 = in the SCALE card
   // behind an ESPRESSO | BENCH switch (default), 1 = its own card beside the

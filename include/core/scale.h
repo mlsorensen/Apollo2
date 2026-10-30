@@ -65,9 +65,21 @@ struct ScaleSnapshot {
   uint32_t    timer_ms;      // built-in shot timer, ms (0 if !features.timer)
   bool        battery_valid;
   int         battery_pct;   // 0..100 when battery_valid
+  bool        battery_estimated;  // battery_pct is an estimate, not a reading
+                                  // (a frozen gauge, see ScaleBatteryInfo)
   uint32_t    seq;           // increments per received update — consumers use it
                              // to draw event-locked and to measure the stream
                              // rate (scales differ: ~2..20Hz)
+};
+
+// The battery estimate for a scale whose gauge freezes after it sleeps — an
+// Umbra in partner mode, the only scale Apollo sends to sleep (see
+// core/scale_battery_estimate.h). Apollo-side settings, not on-scale ones.
+struct ScaleBatteryInfo {
+  bool supported = false;   // the rows exist (partner-mode Umbra)
+  int rate_pct_per_day = 0; // the drain setting
+  bool armed = false;       // a calibration is armed or running
+  bool sleep_off = false;   // the scale reports its sleep Off: no calibration
 };
 
 // The port the UI depends on for scale data + commands. The BLE ScaleLink and
@@ -97,6 +109,13 @@ class IScale {
   virtual ScaleSettingDesc device_setting(int index) const = 0;
   virtual int device_setting_value(int index) const = 0;
   virtual void set_device_setting(int index, int option_idx) = 0;
+
+  // Battery estimate (ScaleBatteryInfo). Setters are no-ops when unsupported.
+  // The calibration result is handed out once (%/day), -1 when none is due.
+  virtual ScaleBatteryInfo battery_info() const = 0;
+  virtual void set_battery_drain_rate(int pct_per_day) = 0;
+  virtual void set_battery_calibration(bool armed) = 0;
+  virtual int take_battery_calibration_result() = 0;
 };
 
 }  // namespace core

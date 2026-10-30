@@ -12,6 +12,7 @@ constexpr core::ScaleSettingDesc kPartnerSettings[] = {
     {"Auto sleep", kPartnerSleepLabels, 5},
 };
 constexpr int kPartnerSettingCount = 2;  // no Unit row: the Umbra streams grams
+constexpr int kPartnerSleepSetting = 1;  // option 0 = Off: it never sleeps
 
 // Address type UNKNOWN (a unit paired before the type was recorded, or the
 // relearn attempt below): the transport tries both types, so each try is
@@ -56,6 +57,13 @@ namespace core {
 void ScaleLink::set_address(std::string address, AddrType type) {
   {
     std::lock_guard<std::mutex> lk(mutex_);
+    // A different scale: its battery estimate and drain setting don't carry
+    // over (the platform dropped the stored ones when it saved the new MAC).
+    if (!address_.empty() && address_ != address) {
+      battery_est_ = ScaleBatteryEstimate{};
+      battery_rate_ = kScaleDrainDefaultPctPerDay;
+      battery_rate_dirty_ = false;
+    }
     address_ = std::move(address);
     addr_type_ = type;
   }
@@ -84,7 +92,12 @@ void ScaleLink::set_partner_mode(bool enabled) {
 }
 
 void ScaleLink::set_partner_connected(bool connected) {
-  partner_connected_.store(connected);
+  const bool was = partner_connected_.exchange(connected);
+  if (was && !connected) {
+    const bool slept = partner_sleep_sent_.exchange(false);
+    std::lock_guard<std::mutex> lk(mutex_);
+    battery_est_.on_session_end(slept, now_unix());
+  }
   if (link_up() != connected) set_connected(connected);
 }
 
@@ -130,6 +143,61 @@ void ScaleLink::on_battery(int pct) {
   std::lock_guard<std::mutex> lk(mutex_);
   battery_pct_ = pct;
   battery_valid_ = true;
+  if (partner_mode_.load()) battery_est_.on_reading(pct);
+}
+
+void ScaleLink::load_battery(const ScaleBatteryState& state, int rate_pct_per_day) {
+  std::lock_guard<std::mutex> lk(mutex_);
+  battery_est_.load(state);
+  if (rate_pct_per_day >= kScaleDrainMinPctPerDay && rate_pct_per_day <= kScaleDrainMaxPctPerDay)
+    battery_rate_ = rate_pct_per_day;
+}
+
+void ScaleLink::persist_battery() {
+  ScaleBatteryState state;
+  int rate;
+  {
+    std::lock_guard<std::mutex> lk(mutex_);
+    const bool dirty = battery_est_.take_dirty();
+    if (!dirty && !battery_rate_dirty_) return;
+    battery_rate_dirty_ = false;
+    state = battery_est_.state();
+    rate = battery_rate_;
+  }
+  if (battery_persist_) battery_persist_(state, rate);
+}
+
+ScaleBatteryInfo ScaleLink::battery_info() const {
+  ScaleBatteryInfo info;
+  if (!partner_mode_.load()) return info;
+  std::lock_guard<std::mutex> lk(mutex_);
+  info.supported = true;
+  info.rate_pct_per_day = battery_rate_;
+  info.armed = battery_est_.armed();
+  info.sleep_off = setting_value_[kPartnerSleepSetting] == 0;
+  return info;
+}
+
+void ScaleLink::set_battery_drain_rate(int pct_per_day) {
+  if (!partner_mode_.load() || pct_per_day < kScaleDrainMinPctPerDay ||
+      pct_per_day > kScaleDrainMaxPctPerDay)
+    return;
+  std::lock_guard<std::mutex> lk(mutex_);
+  if (battery_rate_ == pct_per_day) return;
+  battery_rate_ = pct_per_day;
+  battery_rate_dirty_ = true;
+}
+
+void ScaleLink::set_battery_calibration(bool armed) {
+  if (!partner_mode_.load()) return;
+  std::lock_guard<std::mutex> lk(mutex_);
+  if (armed) battery_est_.arm();
+  else battery_est_.disarm();
+}
+
+int ScaleLink::take_battery_calibration_result() {
+  std::lock_guard<std::mutex> lk(mutex_);
+  return battery_est_.take_calibration_result();
 }
 
 void ScaleLink::on_device_setting(int index, int option_idx) {
@@ -212,6 +280,7 @@ void ScaleLink::run() {
       if (link_up() != partner) set_connected(partner);
       if (partner && pending_tare_.exchange(false) && partner_setting_writer_)
         partner_setting_writer_(-1, 0);
+      persist_battery();
       sleep_ms(100);
       continue;
     }
@@ -465,15 +534,27 @@ ScaleSnapshot ScaleLink::snapshot() const {
   // Lunar), and everything downstream keys on this one bit — Home's status/
   // readout/Tare, Settings, Auto shot arming, the shot detector, the stop
   // logic — so none of them act on a scale that isn't sending weight yet.
-  return ScaleSnapshot{
+  ScaleSnapshot snap{
       .name = name_.c_str(),
       .connected = connected_ && weight_streaming_,
       .weight_g = weight_g_,
       .timer_ms = timer_ms_,
       .battery_valid = battery_valid_,
       .battery_pct = battery_pct_,
+      .battery_estimated = false,
       .seq = seq_,
   };
+  // A partner-mode Umbra's gauge freezes once it has slept: show the estimate
+  // (which is the reading itself while the gauge is live).
+  if (partner_mode_.load()) {
+    const ScaleBatteryView v = battery_est_.view(battery_rate_, now_unix());
+    if (v.valid) {
+      snap.battery_valid = true;
+      snap.battery_pct = v.pct;
+      snap.battery_estimated = v.estimated;
+    }
+  }
+  return snap;
 }
 
 ScaleFeatures ScaleLink::features() const {

@@ -625,6 +625,16 @@ void setup() {
     link.set_addr_type_learned([lp](core::AddrType t) {
       g_config.set_scale_addr_type(g_scale_provisioner.slot_of(*lp), t);
     });
+    // A partner-mode Umbra's battery estimate, persisted into the keys of the
+    // role the link holds when it changes (they follow the scale on a swap).
+    core::ScaleBatteryState battery;
+    int drain = core::kScaleDrainDefaultPctPerDay;
+    g_config.scale_battery(slot, &battery, &drain);
+    link.load_battery(battery, drain);
+    link.set_battery_clock(&g_clock);
+    link.set_battery_persist([lp](const core::ScaleBatteryState& s, int rate) {
+      g_config.set_scale_battery(g_scale_provisioner.slot_of(*lp), s, rate);
+    });
     core::logf("Saved %s scale: mac=%s type=%s\n", core::scale_slot_name(slot),
                mac.empty() ? "(none)" : mac.c_str(), core::addr_type_name(type));
     link.begin(mac, type);
