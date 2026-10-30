@@ -620,10 +620,12 @@ void setup() {
     // The type the connect actually used is persisted next to the MAC, so a
     // unit paired before it was recorded guesses once and then never again.
     // Into the keys of the role the link holds at that moment — after a
-    // Swap roles the link's keys are the other slot's.
+    // Swap roles the link's keys are the other slot's — atomically with a
+    // swap (persist_for).
     platform::ScaleLink* lp = &link;
     link.set_addr_type_learned([lp](core::AddrType t) {
-      g_config.set_scale_addr_type(g_scale_provisioner.slot_of(*lp), t);
+      g_scale_provisioner.persist_for(
+          *lp, [t](core::ScaleSlot s) { g_config.set_scale_addr_type(s, t); });
     });
     core::logf("Saved %s scale: mac=%s type=%s\n", core::scale_slot_name(slot),
                mac.empty() ? "(none)" : mac.c_str(), core::addr_type_name(type));

@@ -74,12 +74,12 @@ void ScaleProvisioner::swap_roles() {
   // restarts. The next boot seeds link A from the espresso keys, i.e. the
   // scale that is espresso NOW (link B's), with the identity mapping: the
   // two views agree because the keys and the pointers moved together.
-  // POINTERS FIRST: a link's learned-type persister (on its BLE task)
-  // resolves its slot through the roles and writes that slot's keys. With
-  // the pointers already flipped, a write landing between the two steps
-  // goes to the keys that still hold that link's own record; the key swap
-  // then carries it along. Keys first would have stamped it onto the other
-  // scale's record.
+  // ONE LOCK across both steps: a link's per-link persister (on its BLE
+  // task) resolves its slot through the roles and writes that slot's keys.
+  // Between the two steps the pointers and the keys disagree in EITHER
+  // order — a write landing there stamps the link's value onto the other
+  // scale's record — so persisters run under the same lock (persist_for).
+  std::lock_guard<std::mutex> lk(swap_mu_);
   roles_.swap();
   config_.swap_scales();
 }

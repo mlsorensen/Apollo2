@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutex>
 #include <vector>
 
 #include "core/scale_provisioner.h"
@@ -29,6 +30,16 @@ class ScaleProvisioner : public core::IScaleProvisioner {
   ScaleLink& link_for(core::ScaleSlot slot) const;
   core::ScaleSlot slot_of(const ScaleLink& link) const;
 
+  // Runs `write(slot)` with the slot `link` holds, atomically with respect
+  // to swap_roles(): every per-link persister (on the link's BLE task) goes
+  // through this, so a write can never land between the pointer flip and
+  // the key swap and stamp one scale's value onto the other's record.
+  template <typename Fn>
+  void persist_for(const ScaleLink& link, Fn&& write) {
+    std::lock_guard<std::mutex> lk(swap_mu_);
+    write(slot_of(link));
+  }
+
   void start_scan() override;
   bool scanning() const override;
   std::vector<core::ScanResult> scan_results() const override;
@@ -55,6 +66,10 @@ class ScaleProvisioner : public core::IScaleProvisioner {
 
   core::ScaleRoles& roles_;
   Config& config_;
+  // Held across swap_roles()'s two steps and by persist_for(). Under it run
+  // only the roles' atomics and Config (NVS) — never a link, the arbiter or
+  // the UI — so it can't nest with another lock.
+  std::mutex swap_mu_;
 };
 
 }  // namespace platform

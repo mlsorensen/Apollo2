@@ -240,8 +240,12 @@ consumer of "the espresso scale" (BrewController, the Home cards, Device
 settings) reads through a `RoleScale` proxy, and `Swap roles` flips the
 two role pointers AND exchanges the stored keys (so a rolled-back build
 still finds its espresso scale under the original keys) — both links keep
-their connections, no reconnect, no restart. Pointers flip BEFORE the keys
-(the learned-type persister resolves its slot via the roles). At boot the
+their connections, no reconnect, no restart. The flip and the key swap
+run under ONE lock (`ScaleProvisioner::swap_mu_`, issue #6): mid-swap the
+pointers and keys disagree in EITHER order, so every per-link persister
+(learned type today) must go through `persist_for(link, fn)`, which takes
+the same lock, resolves `slot_of` and writes. Under that lock: roles'
+atomics + Config (NVS) only — never a link, the arbiter or the UI. At boot the
 mapping is identity (link A seeded from the espresso keys). Corollary: the
 shot park follows the ROLE — after a swap the bench role sits on radio
 slot kScaleEspresso and main.cpp parks THAT slot; the espresso ROLE is
