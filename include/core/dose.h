@@ -13,13 +13,24 @@
 //     stored container NOT HEAVIER than the reading; none below it = the
 //     reading IS the dose (a tared cup); an empty container is 0 g. Every container must weigh at least
 //     kContainerMinG, and any two containers more than kDoseMaxG apart: with
-//     the floor a bare dose (5..50 g) can never exceed a container, and with
+//     the floor a bare dose (5..30 g) can never exceed a container, and with
 //     the spacing a dose in the lighter of two containers can never reach the
 //     heavier one, so the rule is unambiguous. Capture refuses the rest
 //     (container_ok / container_spacing_ok).
-//   - CANDIDATE: the reading has held still for kDoseStableMs AND its net dose
-//     is dose-sized (kDoseMinG..kDoseMaxG, singles included). Only then does
-//     the bench card offer Record — a milk jug or an empty scale shows nothing.
+//   - THE STEP, not the reading (owner, 2026-10-31: "the user has to tare
+//     before placing the portafilter, unless we detect the jump"). The scale
+//     settles on plateaus; the dose basis is the step from the PREVIOUS
+//     plateau to the current one, so the scale's zero never matters: a tared
+//     scale steps from 0 (same as the raw reading), an untared scale with a
+//     cup already on it steps by exactly what was put down, and grinding
+//     into an empty portafilter already on the scale steps by the dose. With
+//     no earlier plateau (connected with the load already on) the raw
+//     reading is the basis, as before. A negative step (something lifted)
+//     is never a dose.
+//   - CANDIDATE: the reading has held still for kDoseStableMs AND the net
+//     dose of its basis is dose-sized (kDoseMinG..kDoseMaxG, singles
+//     included). Only then does the bench card offer Record — a milk jug or
+//     an empty scale shows nothing.
 //   - RECORD stores the net dose as PENDING for the next shot to START, which
 //     spends it (take_for_shot). Re-record replaces. While the same weight
 //     still sits on the scale the card says "recorded" instead of offering
@@ -39,7 +50,7 @@ namespace core {
 constexpr int kMaxDoseContainers = 3;
 constexpr float kContainerMinG = 50.0f;   // Capture floor (see above)
 constexpr float kDoseMinG = 5.0f;         // candidate gate, net grams
-constexpr float kDoseMaxG = 50.0f;
+constexpr float kDoseMaxG = 30.0f;  // the biggest basket (owner: 48 g was offered — never a dose)
 constexpr float kDoseStableBandG = 0.2f;  // "held still" = within this band
 constexpr uint32_t kDoseStableMs = 1000;
 constexpr float kDoseRecordedBandG = 1.0f;  // same weight still on the scale
@@ -75,8 +86,11 @@ class DoseTracker {
   // (`skip` = the slot being rewritten). Returns the clashing slot, or -1.
   static int container_clash(const float* grams, int n, int skip, float candidate);
 
-  // The container rule on an arbitrary reading (grams on the bench).
-  float net_dose(float reading) const;
+  // The container rule on a basis (grams put on the bench).
+  float net_dose(float basis) const;
+  // What the current reading is measured against: the step from the previous
+  // plateau when one was seen, else the raw reading (for tests / logs).
+  float dose_basis() const;
 
   // Feed one poll (any cadence) and apply the walk-away rules. Returns why a
   // pending dose was cleared this tick, or None.
@@ -108,6 +122,13 @@ class DoseTracker {
   uint32_t stable_since_ms_ = 0;
   uint32_t now_ms_ = 0;
   bool fed_ = false;
+  // Plateaus: the reading the scale last held still at, and the one before
+  // it — their difference is the step the current load made.
+  bool was_stable_ = false;
+  float plateau_g_ = 0.0f;
+  bool plateau_valid_ = false;
+  float prev_plateau_g_ = 0.0f;
+  bool prev_plateau_valid_ = false;
 
   float pending_g_ = 0.0f;
   float recorded_reading_g_ = 0.0f;

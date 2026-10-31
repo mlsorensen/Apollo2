@@ -3975,7 +3975,11 @@ void App::update_history_view() {
                       static_cast<double>(s.final_g));
         diff_txt[0] = '\0';
       }
-      lv_obj_t* row = ui::history_add_row(stats_, when, mode_txt, result_txt,
+      char ratio_txt[12] = "";
+      const float ratio = core::brew_ratio(s.final_g, s.dose_g);
+      if (ratio > 0.0f)
+        std::snprintf(ratio_txt, sizeof(ratio_txt), "1:%.1f", static_cast<double>(ratio));
+      lv_obj_t* row = ui::history_add_row(stats_, when, mode_txt, ratio_txt, result_txt,
                                           diff_txt, diff_color, dur_txt,
                                           screen_);
       lv_obj_set_user_data(row, reinterpret_cast<void*>(static_cast<uintptr_t>(s.id)));
@@ -5368,7 +5372,13 @@ void App::dose_tick(const core::MachineSnapshot& snap) {
     }
     ui::set_dose_chip(home_, 3, shot_dose_g_, review_out_g_);
   } else {
-    ui::set_dose_chip(home_, 2, shot_dose_g_, 0.0f);
+    // Running / settling: the yield and ratio grow live with the net weight
+    // (owner: "see the ratio growing"); the placeholder until the first gram.
+    const core::ScaleSnapshot s = scale_ != nullptr ? scale_->snapshot() : core::ScaleSnapshot{};
+    const float out = bs.baseline_set ? s.weight_g - (bs.paddle_wired ? 0.0f : bs.start_weight_g)
+                                      : 0.0f;
+    if (out >= 1.0f) ui::set_dose_chip(home_, 3, shot_dose_g_, out);
+    else ui::set_dose_chip(home_, 2, shot_dose_g_, 0.0f);
   }
 }
 

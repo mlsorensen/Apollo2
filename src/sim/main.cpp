@@ -377,6 +377,12 @@ int main() {
   brew.set_shot_ms(27000);
   ok &= r({800, 480}, "renders/home_dose_review_800x480.png", 0, -1, false, 0, -1,
           false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 4);
+  disp.set_bench_home_style(1);  // the narrow graph: the chip's smaller size
+  ok &= r({800, 480}, "renders/home_dose_review_beside_800x480.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 4);
+  ok &= r({1280, 800, 1.6f}, "renders/home_dose_review_beside_1280x800.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 4);
+  disp.set_bench_home_style(0);
   brew.set_phase(core::ShotPhase::kIdle);
   ok &= r({800, 480}, "renders/scale_shot_dose_800x480.png", 1, ui::kSectionScaleSettings);
   // The same states in the Ferrari theme (10): the owner's design page.

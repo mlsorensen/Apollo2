@@ -516,12 +516,16 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
       lv_obj_set_style_text_font(l, ui::font_dp(size), 0);
       return l;
     };
-    out.dose_in_label = label(ui::theme::text(), 20);
-    out.dose_out_label = label(ui::theme::muted(), 20);
+    // Beside the graph the plot is narrower and the legend has two entries:
+    // the full "in / out / ratio" chip at the legend's size ran into the
+    // bench axis labels (owner, X-8), so it steps down a size there.
+    const int chip_font = out.bench_overlay ? 16 : 20;
+    out.dose_in_label = label(ui::theme::text(), chip_font);
+    out.dose_out_label = label(ui::theme::muted(), chip_font);
     lv_obj_set_style_pad_left(out.dose_out_label, ui::dp(6), 0);
-    out.dose_ratio_label = label(ui::theme::bench(), 20);
+    out.dose_ratio_label = label(ui::theme::bench(), chip_font);
     lv_obj_set_style_pad_left(out.dose_ratio_label, ui::dp(6), 0);
-    out.dose_x_label = label(ui::theme::muted(), 14);
+    out.dose_x_label = label(ui::theme::muted(), out.bench_overlay ? 12 : 14);
     lv_label_set_text(out.dose_x_label, LV_SYMBOL_CLOSE);
     lv_obj_add_flag(chip, LV_OBJ_FLAG_HIDDEN);
     out.dose_chip = chip;
@@ -1195,17 +1199,21 @@ void set_dose_chip(HomeWidgets& w, int state, float in_g, float out_g) {
     w.dose_chip_state = 0;
     return;
   }
+  // Beside the graph (the narrow plot, two-entry legend) the chip drops the
+  // unit on in/out: "18.2 in  36.4 out  1:2.0" — it ran into the bench axis
+  // labels at 800 px otherwise.
+  const bool terse = w.bench_overlay;
   char b[24];
-  std::snprintf(b, sizeof(b), "%.1f g in", static_cast<double>(in_g));
+  std::snprintf(b, sizeof(b), terse ? "%.1f in" : "%.1f g in", static_cast<double>(in_g));
   ui::set_text(w.dose_in_label, b);
   if (state == 1) {
     ui::set_text(w.dose_out_label, "");
     ui::set_text(w.dose_ratio_label, "");
   } else if (state == 2) {
-    ui::set_text(w.dose_out_label, "--.- g out");
+    ui::set_text(w.dose_out_label, terse ? "--.- out" : "--.- g out");
     ui::set_text(w.dose_ratio_label, "");
   } else {
-    std::snprintf(b, sizeof(b), "%.1f g out", static_cast<double>(out_g));
+    std::snprintf(b, sizeof(b), terse ? "%.1f out" : "%.1f g out", static_cast<double>(out_g));
     ui::set_text(w.dose_out_label, b);
     const float r = core::brew_ratio(out_g, in_g);
     if (r > 0.0f) std::snprintf(b, sizeof(b), "1:%.1f", static_cast<double>(r));

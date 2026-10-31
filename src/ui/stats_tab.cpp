@@ -378,7 +378,7 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
     // re-render every layer beneath it each frame (the settings-page lesson).
     out.history_list = lv_obj_create(bottom);
     lv_obj_remove_style_all(out.history_list);
-    lv_obj_set_flex_grow(out.history_list, compact ? 1 : 2);
+    lv_obj_set_flex_grow(out.history_list, compact ? 1 : 3);  // 3:1 over the Show card (see above)
     lv_obj_set_height(out.history_list, lv_pct(100));
     lv_obj_set_style_bg_color(out.history_list, lv_color_hex(ui::theme::card()), 0);
     lv_obj_set_style_bg_opa(out.history_list, LV_OPA_COVER, 0);
@@ -529,7 +529,7 @@ void stats_select_section(StatsWidgets& w, int section) {
 }
 
 lv_obj_t* history_add_row(StatsWidgets& w, const char* when, const char* mode,
-                          const char* result, const char* diff,
+                          const char* ratio, const char* result, const char* diff,
                           uint32_t diff_color, const char* duration,
                           const ScreenProfile& screen) {
   const bool compact = is_compact(screen);
@@ -586,6 +586,17 @@ lv_obj_t* history_add_row(StatsWidgets& w, const char* when, const char* mode,
   lv_obj_set_width(mode_lbl, mode_w);
   lv_obj_set_style_text_color(mode_lbl, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(mode_lbl, font, 0);
+
+  // The brew ratio, for shots that recorded a dose (the bench colour, like
+  // the chip and the card's column); a fixed cell so the numbers after it
+  // stay put, left out of the compact layout where the row is already full.
+  if (!compact) {
+    lv_obj_t* ratio_lbl = lv_label_create(row);
+    lv_label_set_text(ratio_lbl, ratio != nullptr ? ratio : "");
+    lv_obj_set_width(ratio_lbl, text_w("1:10.0"));
+    lv_obj_set_style_text_color(ratio_lbl, lv_color_hex(ui::theme::bench()), 0);
+    lv_obj_set_style_text_font(ratio_lbl, font, 0);
+  }
 
   lv_obj_t* right = lv_obj_create(row);
   lv_obj_remove_style_all(right);

@@ -237,18 +237,20 @@ reads **Record 18.3 g** — the dose Apollo would store ①. Tap the block to
 record it; the caption turns to **✓ 18.3 g recorded** until you lift the
 portafilter, and a chip appears in the graph ② with the dose: **18.3 g in**.
 That dose belongs to the **next shot you start**: when the shot begins the
-chip adds a placeholder for the yield (**--.- g out**), and when the shot
-settles it fills in the yield and the brew ratio (**36.4 g out · 1:2.0**),
-frozen with the graph for review. Both are kept in History (a **Ratio**
+chip adds a placeholder for the yield (**--.- g out**), fills it in live as
+the shot runs with the ratio growing beside it, and freezes with the graph
+for review (**36.4 g out · 1:2.0**). Both are kept in History (a **Ratio**
 column on the shot's card and the web page).
 
 - Nothing is subtracted for a tared cup. For a portafilter or a dosing cup
   that is *not* tared, store its weight once under **Settings → Scale → Shot
   settings → Container** and Apollo subtracts it by itself: the reading is
   matched to the heaviest stored container lighter than it, so a 498 g
-  reading with a 480 g portafilter stored records 18 g. The block only
-  appears for readings whose dose would be 5–50 g — a milk jug never offers
-  Record.
+  reading with a 480 g portafilter stored records 18 g. Apollo measures the
+  *step* the load made on the scale (from whatever it read before), so you
+  don't have to tare first — a spoon already on the scale, or a cup you
+  tared earlier, makes no difference. The block only appears for a step
+  whose dose would be 5–30 g — a milk jug never offers Record.
 - Recording again replaces the pending dose; the **×** on the chip clears
   it. A dose nobody pulls a shot with also clears itself when you've
   evidently walked away: the screensaver starting, a scale going to sleep
@@ -564,7 +566,7 @@ which is a weight readout with its own Tare (see the BENCH card above).
   before recording a dose: a portafilter, a dosing cup. Put the empty
   container on the bench scale and tap **Capture**; **×** forgets it. A
   container has to weigh at least 50 g, and two containers have to be more
-  than 50 g apart — lighter or closer than that, a dose could be read as
+  than 30 g apart — lighter or closer than that, a dose could be read as
   the wrong thing, so Capture refuses and says why. Tare anything lighter
   instead.
 

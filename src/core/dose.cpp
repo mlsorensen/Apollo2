@@ -21,14 +21,18 @@ int DoseTracker::container_clash(const float* grams, int n, int skip, float cand
   return -1;
 }
 
-float DoseTracker::net_dose(float reading) const {
-  // The heaviest stored container not heavier than the reading, if any (an
+float DoseTracker::net_dose(float basis) const {
+  // The heaviest stored container not heavier than the basis, if any (an
   // empty container reads as 0 g, not as a container-sized dose).
   float best = 0.0f;
   for (int i = 0; i < n_containers_; ++i) {
-    if (containers_[i] <= reading && containers_[i] > best) best = containers_[i];
+    if (containers_[i] <= basis && containers_[i] > best) best = containers_[i];
   }
-  return reading - best;
+  return basis - best;
+}
+
+float DoseTracker::dose_basis() const {
+  return prev_plateau_valid_ ? last_g_ - prev_plateau_g_ : last_g_;
 }
 
 DoseClear DoseTracker::tick(const DoseInputs& in) {
@@ -44,6 +48,24 @@ DoseClear DoseTracker::tick(const DoseInputs& in) {
   last_g_ = in.bench_g;
   last_connected_ = in.bench_connected;
   fed_ = true;
+
+  // Plateaus. A link drop forgets them (a reconnect starts from the raw
+  // reading); a new plateau more than the band away from the current one
+  // pushes it back to "previous".
+  if (!in.bench_connected) {
+    plateau_valid_ = prev_plateau_valid_ = false;
+    was_stable_ = false;
+  } else {
+    const bool st = in.now_ms - stable_since_ms_ >= kDoseStableMs;
+    if (st && !was_stable_ &&
+        (!plateau_valid_ || fabs_f(stable_ref_g_ - plateau_g_) > kDoseStableBandG)) {
+      prev_plateau_g_ = plateau_g_;
+      prev_plateau_valid_ = plateau_valid_;
+      plateau_g_ = stable_ref_g_;
+      plateau_valid_ = true;
+    }
+    was_stable_ = st;
+  }
 
   DoseClear why = DoseClear::None;
   if (has_pending()) {
@@ -93,11 +115,15 @@ bool DoseTracker::reading_stable() const {
 bool DoseTracker::candidate() const {
   if (!reading_stable()) return false;
   if (recorded_showing()) return false;  // the same weight: "recorded", not Record
-  const float d = net_dose(last_g_);
+  const float basis = dose_basis();
+  if (basis <= 0.0f) return false;  // something lifted, nothing put down
+  const float d = net_dose(basis);
   return d >= kDoseMinG && d <= kDoseMaxG;
 }
 
-float DoseTracker::candidate_dose() const { return candidate() ? net_dose(last_g_) : 0.0f; }
+float DoseTracker::candidate_dose() const {
+  return candidate() ? net_dose(dose_basis()) : 0.0f;
+}
 
 bool DoseTracker::recorded_showing() const {
   return has_pending() && last_connected_ &&
@@ -106,7 +132,7 @@ bool DoseTracker::recorded_showing() const {
 
 float DoseTracker::record() {
   if (!candidate()) return 0.0f;
-  pending_g_ = net_dose(last_g_);
+  pending_g_ = net_dose(dose_basis());
   recorded_reading_g_ = last_g_;
   recorded_at_ms_ = now_ms_;
   // Downtime starts counting from here, and only for a link seen up first.

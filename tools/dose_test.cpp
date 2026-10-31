@@ -49,7 +49,7 @@ int test_container_rule() {
   CHECK(near(t.net_dose(498.3f), 18.3f));  // loaded portafilter
   CHECK(near(t.net_dose(118.0f), 7.0f));   // a 7 g single in the Niche cup
   CHECK(near(t.net_dose(18.0f), 18.0f));   // bare dose in a tared cup: no container below it
-  CHECK(near(t.net_dose(49.0f), 49.0f));   // a heavy dose still under the lightest container
+  CHECK(near(t.net_dose(29.0f), 29.0f));   // a heavy dose still under the lightest container
   CHECK(near(t.net_dose(111.0f), 0.0f));   // the empty container: nothing in it
   CHECK(DoseTracker::container_ok(50.0f) && !DoseTracker::container_ok(49.9f));
   // Two containers closer than a dose apart would misread a dose larger than
@@ -57,10 +57,10 @@ int test_container_rule() {
   // Capture refuses them.
   const float stored[] = {480.0f, 111.0f, 0.0f};
   CHECK(DoseTracker::container_clash(stored, 3, 2, 130.0f) == 1);
-  CHECK(DoseTracker::container_clash(stored, 3, 2, 161.0f) == 1);   // exactly 50 apart: still a clash
-  CHECK(DoseTracker::container_clash(stored, 3, 2, 161.1f) == -1);
+  CHECK(DoseTracker::container_clash(stored, 3, 2, 141.0f) == 1);   // exactly a dose apart: still a clash
+  CHECK(DoseTracker::container_clash(stored, 3, 2, 141.1f) == -1);
   CHECK(DoseTracker::container_clash(stored, 3, 1, 115.0f) == -1);  // rewriting slot 1 itself
-  CHECK(DoseTracker::container_clash(stored, 3, 2, 440.0f) == 0);
+  CHECK(DoseTracker::container_clash(stored, 3, 2, 455.0f) == 0);
   return 0;
 }
 
@@ -80,23 +80,30 @@ int test_candidate_gate() {
   CHECK(t.candidate());
   CHECK(near(t.candidate_dose(), 18.3f));
 
-  // The gate's edges are inclusive: 5.0 and 50.0 g qualify, 4.9 and 50.1 don't.
-  hold(t, 485.0f, 2200, 2000);
+  // The gate's edges are inclusive: 5.0 and 30.0 g qualify, 4.9 and 30.1
+  // don't. Each load is lifted (a 0 plateau) before the next lands, so the
+  // step rule measures each one from empty.
+  uint32_t now = 2200;
+  auto lift_then = [&](float g) { now = hold(t, 0.0f, now, 1500); now = hold(t, g, now, 2000); };
+  lift_then(485.0f);
   CHECK(t.candidate() && near(t.candidate_dose(), 5.0f));
-  hold(t, 484.9f, 4300, 2000);
+  lift_then(484.9f);
   CHECK(!t.candidate());
-  hold(t, 530.0f, 6400, 2000);
-  CHECK(t.candidate() && near(t.candidate_dose(), 50.0f));
-  hold(t, 530.1f, 8500, 2000);
+  lift_then(510.0f);
+  CHECK(t.candidate() && near(t.candidate_dose(), 30.0f));
+  lift_then(510.1f);
   CHECK(!t.candidate());
   // At the device's 500 ms refresh the third tick (1.0 s) offers Record.
-  t.tick(in(498.3f, 20000));
-  t.tick(in(498.3f, 20500));
+  now = hold(t, 0.0f, now, 1500);
+  t.tick(in(498.3f, now + 500));
+  t.tick(in(498.3f, now + 1000));
   CHECK(!t.candidate());
-  t.tick(in(498.3f, 21000));
+  t.tick(in(498.3f, now + 1500));
   CHECK(t.candidate());
+  now += 1500;
   // A milk jug (412.5 g, no container below it -> 412.5 g net): never a candidate.
-  uint32_t now = hold(t, 412.5f, 2200, 2000);
+  now = hold(t, 0.0f, now, 1500);
+  now = hold(t, 412.5f, now, 2000);
   CHECK(!t.candidate());
   // An empty bench: nothing.
   now = hold(t, 0.0f, now, 2000);
@@ -285,19 +292,28 @@ int test_realistic_sweep() {
     }
     DoseTracker t;
     t.set_containers(k.containers, k.n);
-    auto settled = [&](float reading) { hold(t, reading, 0, 1500); };
+    uint32_t clock = 0;
+    auto settled = [&](float reading) { clock = hold(t, reading, clock, 1500); };
     // Doses 8..28 g in 0.5 g steps, in every container untared, and in a
-    // tared cup: each must be offered at exactly its grams.
-    for (float d = 8.0f; d <= 28.01f; d += 0.5f) {
-      for (int i = 0; i < k.n; ++i) {
-        settled(k.containers[i] + d);
+    // tared cup: each must be offered at exactly its grams — with the scale
+    // reading 0 before the load lands, and with 37 g or 212 g of something
+    // else already sitting on an untared scale (the step rule).
+    const float junk[] = {0.0f, 37.0f, 212.0f};
+    for (float j : junk) {
+      for (float d = 8.0f; d <= 28.01f; d += 0.5f) {
+        for (int i = 0; i < k.n; ++i) {
+          settled(j);
+          settled(j + k.containers[i] + d);
+          CHECK(t.candidate());
+          CHECK(near(t.candidate_dose(), d, 0.05f));
+        }
+        settled(j);
+        settled(j + d);  // a tared cup (or beans straight onto the junk)
         CHECK(t.candidate());
         CHECK(near(t.candidate_dose(), d, 0.05f));
       }
-      settled(d);  // tared
-      CHECK(t.candidate());
-      CHECK(near(t.candidate_dose(), d, 0.05f));
     }
+    settled(0.0f);
     // Each container empty, and an empty bench: nothing offered.
     for (int i = 0; i < k.n; ++i) {
       settled(k.containers[i]);
@@ -305,32 +321,87 @@ int test_realistic_sweep() {
     }
     settled(0.0f);
     CHECK(!t.candidate());
-    // Milk in a TARED jug or cup, 30..400 g in 10 g steps: a look-alike
-    // whenever the reading lands 5..50 g above a stored container (or is
-    // itself 30..50 g). Never a wrong number for a real dose, just an offer
+    // Milk in a TARED jug or cup, 30..400 g in 10 g steps, each pour from
+    // an empty scale: a look-alike whenever the step lands 5..30 g above a
+    // stored container. Never a wrong number for a real dose, just an offer
     // nobody has to take.
     for (float m = 30.0f; m <= 400.01f; m += 10.0f) {
+      settled(0.0f);
       settled(m);
       if (t.candidate()) { ++lookalikes; ++lookalike_milk; }
     }
-    // Milk poured into an UNTARED stored cup (the cup's weight included):
-    // 30..300 g of milk. A look-alike only while the milk itself weighs
-    // 30..50 g.
+    // Milk poured into a stored cup already sitting on the scale: the step
+    // is the milk alone, so a look-alike only while the milk itself weighs
+    // 5..30 g (the first second of a pour, which the stillness gate hides).
     for (int i = 0; i < k.n; ++i) {
       for (float m = 30.0f; m <= 300.01f; m += 10.0f) {
+        settled(0.0f);
+        settled(k.containers[i]);
         settled(k.containers[i] + m);
         if (t.candidate()) { ++lookalikes; ++lookalike_untared_milk; }
       }
     }
-    // A full milk jug (jug ~600 g + 300 g milk) and a bag of beans: never.
+    // A full milk jug (jug ~600 g + 300 g milk) and a bag of beans, each
+    // landing on the empty scale: never.
+    settled(0.0f);
     settled(900.0f);
     CHECK(!t.candidate());
+    settled(0.0f);
     settled(1000.0f);
     CHECK(!t.candidate());
   }
   std::printf("dose_test: realistic sweep — %d look-alike offers (tared milk/water %d, "
-              "untared milk 30-50 g %d), 0 wrong doses\n",
+              "milk into a cup on the scale %d), 0 wrong doses\n",
               lookalikes, lookalike_milk, lookalike_untared_milk);
+  return 0;
+}
+
+// The step rule: the dose is what landed, measured from the previous
+// plateau, so the scale's zero doesn't matter.
+int test_step_rule() {
+  const float c[] = {480.0f, 111.0f};
+  DoseTracker t;
+  t.set_containers(c, 2);
+  uint32_t now = 0;
+  // Untared scale with a 37 g spoon on it: the loaded portafilter lands.
+  now = hold(t, 37.0f, now, 1500);
+  CHECK(!t.candidate());
+  now = hold(t, 535.3f, now, 1500);
+  CHECK(near(t.dose_basis(), 498.3f));
+  CHECK(t.candidate() && near(t.candidate_dose(), 18.3f));
+  // Lifted: a negative step is never a dose; put back: a dose again.
+  now = hold(t, 37.0f, now, 1500);
+  CHECK(!t.candidate());
+  now = hold(t, 535.3f, now, 1500);
+  CHECK(t.candidate() && near(t.candidate_dose(), 18.3f));
+  // An EMPTY portafilter put down (step = the container: 0 g, nothing), then
+  // ground into on the scale: the 18 g step is the dose.
+  now = hold(t, 0.0f, now, 1500);
+  now = hold(t, 480.0f, now, 1500);
+  CHECK(!t.candidate());
+  now = hold(t, 498.0f, now, 1500);
+  CHECK(near(t.dose_basis(), 18.0f));
+  CHECK(t.candidate() && near(t.candidate_dose(), 18.0f));
+  // The Niche cup placed untared (111 g step: empty), beans poured in.
+  now = hold(t, 0.0f, now, 1500);
+  now = hold(t, 111.0f, now, 1500);
+  CHECK(!t.candidate());
+  now = hold(t, 129.5f, now, 1500);
+  CHECK(t.candidate() && near(t.candidate_dose(), 18.5f));
+  // No plateau seen before this reading (connected with the load on): the
+  // raw reading is the basis, as before.
+  DoseTracker fresh;
+  fresh.set_containers(c, 2);
+  now = hold(fresh, 498.3f, 0, 1500);
+  CHECK(near(fresh.dose_basis(), 498.3f));
+  CHECK(fresh.candidate() && near(fresh.candidate_dose(), 18.3f));
+  // A link drop forgets the plateaus: after a reconnect the raw reading
+  // is the basis again (no stale step from before the drop).
+  DoseInputs i = in(498.3f, now + 100, /*connected=*/false);
+  fresh.tick(i);
+  now = hold(fresh, 535.3f, now + 200, 1500);  // 37 g of junk + the load, no step seen
+  CHECK(near(fresh.dose_basis(), 535.3f));
+  CHECK(!fresh.candidate());  // 535.3 - 480 = 55.3: over the gate, honestly unknown
   return 0;
 }
 
@@ -345,7 +416,7 @@ int test_ratio() {
 
 int main() {
   if (test_container_rule() || test_candidate_gate() || test_record_and_spend() ||
-      test_walk_away() || test_realistic_sweep() || test_ratio())
+      test_walk_away() || test_realistic_sweep() || test_step_rule() || test_ratio())
     return 1;
   std::printf("dose_test: all %d checks passed\n", checks);
   return 0;
