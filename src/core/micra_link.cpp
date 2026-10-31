@@ -173,6 +173,7 @@ void MicraLink::run() {
     }
 
     if (reconnect_requested_.exchange(false) && connected) {
+      logf("MicraLink: re-dial requested (address/token/connect switch) -> dropping the link\n");
       ble_.disconnect();
       mark(false);
     }
@@ -340,8 +341,21 @@ bool MicraLink::do_connect(const std::string& address, const std::string& token,
 bool MicraLink::do_refresh() {
   std::string mode_json;
   std::string boilers_json;
-  if (!read_setting("machineMode", mode_json)) return false;
-  if (!read_setting("boilers", boilers_json)) return false;
+  // Timed: a read the machine never answers ends in NimBLE's GATT timeout
+  // (~30 s) and the host dropping the link as "local host terminated" —
+  // the X-8's drops of 2026-10-31 — so a slow or failed read is logged with
+  // its duration to tell that apart from a deliberate re-dial.
+  auto timed = [&](const char* name, std::string& out) {
+    const uint32_t t0 = now_ms();
+    const bool ok = read_setting(name, out);
+    const uint32_t dt = now_ms() - t0;
+    if (!ok || dt > 2000)
+      logf("MicraLink: refresh read '%s' %s after %lu ms\n", name, ok ? "slow" : "FAILED",
+           static_cast<unsigned long>(dt));
+    return ok;
+  };
+  if (!timed("machineMode", mode_json)) return false;
+  if (!timed("boilers", boilers_json)) return false;
 
   // An authenticated machine answers with parseable JSON; a rejected token
   // yields a 1-byte NUL / garbage. Unparseable reads => NOT really authenticated,
