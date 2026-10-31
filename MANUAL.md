@@ -969,7 +969,8 @@ action lives directly on the root:
   weight) or an eye for a **Detect**ed one (inferred from the scale). Only
   those two modes record — a fully manual shot has no armed start/stop, so
   nothing is saved. Tap a shot for a full‑screen card with its
-  result/target/diff, time, average flow, and the weight + flow graph:
+  result/target/diff, time, average flow, the brew ratio when the shot
+  recorded a dose, and the weight + flow graph:
 
   <img src="docs/img/manual/shot-card.png" width="70%" alt="A shot's full-screen card">
 
