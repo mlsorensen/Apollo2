@@ -523,14 +523,14 @@ void WebUi::handle_shots() {
       std::snprintf(row, sizeof(row),
                     "%s{\"id\":%lu,\"unix\":%lld,\"duration_ms\":%lu,"
                     "\"target_g\":%.1f,\"final_g\":%.1f,\"avg_gps\":%.2f,"
-                    "\"mode\":\"%s\",\"wired\":%s}",
+                    "\"mode\":\"%s\",\"wired\":%s,\"dose_g\":%.1f}",
                     first ? "" : ",", static_cast<unsigned long>(s.id),
                     static_cast<long long>(s.unix_time),
                     static_cast<unsigned long>(s.duration_ms),
                     static_cast<double>(s.target_g),
                     static_cast<double>(s.final_g),
                     static_cast<double>(s.avg_gps), mode_name(s.mode),
-                    s.wired ? "true" : "false");
+                    s.wired ? "true" : "false", static_cast<double>(s.dose_g));
       batch.add(row);
       first = false;
     }
