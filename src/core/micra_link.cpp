@@ -51,15 +51,18 @@ bool MicraLink::read_setting(const char* name, std::string& out) {
   // (a read). Each is timed so a stall names which one the machine — or the
   // hosted transport between the C6 and the P4 — never answered.
   const uint32_t t0 = now_ms();
+  request_started_ms_.store(t0);
   const bool wrote = write_with_nul(ble_, kReadUuid, name);
   const uint32_t t_write = now_ms() - t0;
   if (!wrote || t_write > 2000)
     logf("MicraLink: request write '%s' %s after %lu ms\n", name, wrote ? "slow" : "FAILED",
          static_cast<unsigned long>(t_write));
-  if (!wrote) return false;
+  if (!wrote) { request_started_ms_.store(0); return false; }
   sleep_ms(150);  // let the machine replace the characteristic value with its answer
   const uint32_t t1 = now_ms();
+  request_started_ms_.store(t1);
   const bool read = ble_.read(kReadUuid, out);
+  request_started_ms_.store(0);
   const uint32_t t_read = now_ms() - t1;
   if (!read || t_read > 2000)
     logf("MicraLink: answer read '%s' %s after %lu ms\n", name, read ? "slow" : "FAILED",
@@ -99,7 +102,27 @@ void MicraLink::set_name(std::string name) {
   name_ = name.empty() ? "Micra" : std::move(name);
 }
 
+bool MicraLink::abort_stalled_request(uint32_t now_ms) {
+  const uint32_t t = request_started_ms_.load();
+  if (t == 0 || now_ms - t < kRequestStallMs) return false;
+  request_started_ms_.store(0);
+  recovering_.store(true);
+  logf("MicraLink: request unanswered for %lu ms -> dropping the link to re-dial\n",
+       static_cast<unsigned long>(now_ms - t));
+  ble_.disconnect();  // the blocked request returns; the loop re-dials at once
+  return true;
+}
+
 void MicraLink::set_link(Link link) {
+  // A re-dial after a stalled request stays Connected on the outside until
+  // it resolves: Disconnected/Connecting are swallowed, Connected ends the
+  // recovery, anything else (NeedsToken, a failed re-dial — see the loop) is
+  // real and clears it.
+  if (recovering_.load()) {
+    if (link == Link::Disconnected || link == Link::Connecting) return;
+    recovering_.store(false);
+    if (link == Link::Connected) logf("MicraLink: re-dialled after a stalled request\n");
+  }
   std::lock_guard<std::mutex> lk(mutex_);
   if (link != link_) {
     // Silent drops matter: the paddle's wake-vs-shot decision needs Connected,
@@ -215,6 +238,7 @@ void MicraLink::run() {
                       : preempted ? ReleaseResult::kPreempted : ReleaseResult::kFailed,
                    now_ms());
       if (!ok) {
+        recovering_.store(false);      // a failed re-dial is a real disconnect
         set_link(Link::Disconnected);  // unreachable -> back off and retry
         if (preempted) continue;       // a yielded try is not a failed one
         if (try_type != AddrType::kUnknown) ++known_type_fails_;

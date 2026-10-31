@@ -736,6 +736,7 @@ void loop() {
   g_scale2.poll_partner();
   poll_serial_id();          // web-flasher "which board is this?" responder
   g_brew.poll(millis());     // paddle relay + shot state machine (edge-critical)
+  g_micra.abort_stalled_request(millis());  // a Micra request stuck 5 s: re-dial now, not in 30
   // Frame-cost telemetry, replacing LVGL's on-screen perf overlay (which is a
   // DEBUG tool that had been shipping enabled -- see lv_conf.h -- and which
   // redraws every frame, inflating the very numbers it reports). This costs
