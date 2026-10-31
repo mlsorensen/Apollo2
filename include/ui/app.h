@@ -216,7 +216,7 @@ class App {
   void record_dose();       // the bench card's Record block
   void clear_dose();        // the chip's x
   void set_dose_enabled(bool on);
-  void capture_dose_container(int index);  // Settings: store the bench reading
+  void capture_dose_container(int index);  // Settings: store the bench reading (arms if moving)
   void clear_dose_container(int index);
   void sync_dose_settings_rows();
   // Sim-only: 1 = Record offered (a loaded portafilter held on the bench),
@@ -516,6 +516,9 @@ class App {
   bool dose_enabled_ = true;
   float shot_dose_g_ = 0.0f;  // the dose the running / reviewed shot spent
   float review_out_g_ = 0.0f; // the settled yield, latched at the freeze (0 = not yet)
+  int capture_slot_ = -1;     // a Capture waiting for the bench reading to hold still
+  uint32_t capture_deadline_ms_ = 0;
+  void finish_capture(int index, float grams);
   core::ScheduleConfig schedule_cfg_;      // the page's working copy
   bool schedule_loaded_ = false;           // schedule_cfg_ read from the port once
   bool schedule_warned_ = false;           // cloud-app notice shown this session

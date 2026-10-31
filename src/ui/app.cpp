@@ -5325,6 +5325,20 @@ void App::dose_tick(const core::MachineSnapshot& snap) {
   in.machine_on = snap.power == core::Power::On;
   in.now_ms = lv_tick_get();
   const core::DoseClear why = dose_.tick(in);
+  // A Capture tapped while the reading was still moving completes by itself
+  // once it holds still, or gives up after its window.
+  if (capture_slot_ >= 0) {
+    if (dose_.reading_stable()) {
+      const int slot = capture_slot_;
+      capture_slot_ = -1;
+      finish_capture(slot, b.weight_g);
+    } else if (static_cast<int32_t>(in.now_ms - capture_deadline_ms_) >= 0) {
+      core::logf("dose: capture of container %d cancelled (reading never held still)\n",
+                 capture_slot_ + 1);
+      capture_slot_ = -1;
+      show_toast("Capture cancelled: the scale never held still.");
+    }
+  }
   if (why != core::DoseClear::None)
     core::logf("dose: pending dose cleared (%s)\n",
                why == core::DoseClear::Screensaver ? "screensaver"
@@ -5389,6 +5403,8 @@ void App::record_dose() {
     return;
   }
   ui::play_button_press();
+  core::logf("dose: recorded %.1f g (bench %.1f g)\n", static_cast<double>(d),
+             static_cast<double>(bench_->snapshot().weight_g));
   char t[48];
   std::snprintf(t, sizeof(t), "Dose %.1f g", static_cast<double>(d));
   show_toast(t);
@@ -5396,6 +5412,7 @@ void App::record_dose() {
 }
 
 void App::clear_dose() {
+  if (dose_.has_pending()) core::logf("dose: pending dose cleared (user)\n");
   dose_.clear();
   show_toast("Dose cleared");
   dose_tick(machine_ != nullptr ? machine_->snapshot() : core::MachineSnapshot{});
@@ -5416,34 +5433,49 @@ void App::capture_dose_container(int index) {
     return;
   }
   if (!dose_.reading_stable()) {
-    show_toast("Scale settling...");
+    // Tapped while the scale is still converging on the new load (a second
+    // or two on a Bookoo at 500 g): arm it, dose_tick finishes the capture
+    // the moment the reading holds still. Waiting has to work — the toast
+    // reads like "wait", so it must not need a second tap.
+    capture_slot_ = index;
+    capture_deadline_ms_ = lv_tick_get() + 10000;
+    show_toast("Capturing once the scale holds still...");
     return;
   }
-  if (!core::DoseTracker::container_ok(b.weight_g)) {
+  finish_capture(index, b.weight_g);
+}
+
+void App::finish_capture(int index, float grams) {
+  if (!core::DoseTracker::container_ok(grams)) {
     char t[96];
     std::snprintf(t, sizeof(t),
                   "%.1f g is too light to tell apart from a dose (under %.0f g). Tare it instead.",
-                  static_cast<double>(b.weight_g), static_cast<double>(core::kContainerMinG));
+                  static_cast<double>(grams), static_cast<double>(core::kContainerMinG));
+    core::logf("dose: capture of container %d refused: %.1f g is under the %.0f g floor\n",
+               index + 1, static_cast<double>(grams), static_cast<double>(core::kContainerMinG));
     show_toast(t);
     return;
   }
   core::DoseConfig dc = dose_settings_->config();
   const int clash =
-      core::DoseTracker::container_clash(dc.containers, core::kMaxDoseContainers, index, b.weight_g);
+      core::DoseTracker::container_clash(dc.containers, core::kMaxDoseContainers, index, grams);
   if (clash >= 0) {
     char t[96];
     std::snprintf(t, sizeof(t),
                   "%.1f g is within %.0f g of container %d: a dose in one could read as the other.",
-                  static_cast<double>(b.weight_g), static_cast<double>(core::kDoseMaxG), clash + 1);
+                  static_cast<double>(grams), static_cast<double>(core::kDoseMaxG), clash + 1);
+    core::logf("dose: capture of container %d refused: %.1f g within %.0f g of container %d\n",
+               index + 1, static_cast<double>(grams), static_cast<double>(core::kDoseMaxG), clash + 1);
     show_toast(t);
     return;
   }
-  dose_settings_->set_container(index, b.weight_g);
+  dose_settings_->set_container(index, grams);
+  core::logf("dose: container %d = %.1f g\n", index + 1, static_cast<double>(grams));
   dc = dose_settings_->config();
   dose_.set_containers(dc.containers, core::kMaxDoseContainers);
   sync_dose_settings_rows();
   char t[48];
-  std::snprintf(t, sizeof(t), "Container %d: %.1f g", index + 1, static_cast<double>(b.weight_g));
+  std::snprintf(t, sizeof(t), "Container %d: %.1f g", index + 1, static_cast<double>(grams));
   show_toast(t);
 }
 
