@@ -64,6 +64,8 @@
 // responsive whether the machine is connected, connecting, or offline.
 
 namespace {
+// Steady-state telemetry cadence (the perf and heap lines in the log ring).
+constexpr uint32_t kTelemetryMs = 5u * 60u * 1000u;
 
 platform::Display g_display;
 platform::Touch g_touch;
@@ -743,17 +745,20 @@ void loop() {
     ++iters;
     if (dt > worst) worst = dt;
     if (pump_dt > pworst) pworst = pump_dt;
-    if (millis() - last >= 60000) {  // telltale cadence, matches the heap line
+    // One line every kTelemetryMs (was two lines a minute: with the heap
+    // line they were 78 % of the 64 KB ring, 3.5 h of history — owner,
+    // 2026-10-31). The worst figures are maxima over the window, so a stall
+    // still shows; the averages are per frame as before.
+    if (millis() - last >= kTelemetryMs) {
       last = millis();
-      core::logf("lvgl: %u frames, avg %u us, worst %u us (%u%% of wall)\n",
+      core::logf("perf: lvgl %u frames avg %u worst %u us (%u%%) | pump avg %u worst %u us (%u%%)\n",
                  static_cast<unsigned>(iters),
                  static_cast<unsigned>(iters ? acc / iters : 0),
                  static_cast<unsigned>(worst),
-                 static_cast<unsigned>(acc / 600000));  // % of the 60s window
-      core::logf("pump: avg %u us, worst %u us (%u%% of wall)\n",
+                 static_cast<unsigned>(acc / (kTelemetryMs * 10)),  // % of the window
                  static_cast<unsigned>(iters ? pacc / iters : 0),
                  static_cast<unsigned>(pworst),
-                 static_cast<unsigned>(pacc / 600000));
+                 static_cast<unsigned>(pacc / (kTelemetryMs * 10)));
       acc = iters = worst = 0;
       pacc = pworst = 0;
     }
@@ -818,14 +823,15 @@ void loop() {
   // than largest block (the allocator doesn't track that), which is the one
   // thing the sampler did give us -- so largest is still read at log time.
   static uint32_t last_heap_log_ms = 0;
-  if (millis() - last_heap_log_ms >= 60u * 1000u) {
+  if (millis() - last_heap_log_ms >= kTelemetryMs) {
     last_heap_log_ms = millis();
     // loop_hw = bytes of THIS task's stack never touched. ARDUINO_LOOP_STACK_SIZE
     // is 16KB by guess (a past overflow on theme rebuild + WiFi bring-up); this
-    // is the number to size it from.
+    // is the number to size it from. PSRAM free is here so the figure is
+    // always in the ring (it was only in a boot-time line before).
     core::logf(
         "heap: 8bit free=%u largest=%u lowest=%u | DMA free=%u largest=%u lowest=%u | "
-        "loop_hw=%u\n",
+        "psram free=%u | loop_hw=%u\n",
         static_cast<unsigned>(
             heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
         static_cast<unsigned>(heap_caps_get_largest_free_block(
@@ -838,6 +844,7 @@ void loop() {
             MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)),
         static_cast<unsigned>(heap_caps_get_minimum_free_size(
             MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)),
+        static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM)),
         static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
 
 
