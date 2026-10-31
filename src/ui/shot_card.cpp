@@ -443,11 +443,14 @@ lv_obj_t* build_shot_card(lv_obj_t* parent, const core::ShotRecord& rec,
   hero_stat(hero, b, compact ? "Avg" : "Avg flow", value_font, small);
 
   // A sixth column only for shots that recorded a dose from the bench scale
-  // (and not on the compact layout, where five already fill the width).
+  // (and not on the compact layout, where five already fill the width): the
+  // ratio as the value, the dose as its caption, so both fit in one column.
   const float ratio = core::brew_ratio(rec.summary.final_g, rec.summary.dose_g);
   if (ratio > 0.0f && !compact) {
+    char cap[24];
     std::snprintf(b, sizeof(b), "1:%.1f", static_cast<double>(ratio));
-    lv_obj_t* rv = hero_stat(hero, b, "Ratio", value_font, small);
+    std::snprintf(cap, sizeof(cap), "%.1f g in", static_cast<double>(rec.summary.dose_g));
+    lv_obj_t* rv = hero_stat(hero, b, cap, value_font, small);
     lv_obj_set_style_text_color(rv, lv_color_hex(theme::bench()), 0);
   }
 
