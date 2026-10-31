@@ -67,6 +67,12 @@ class Config {
   // graph.
   int bench_home_style() const;
   void set_bench_home_style(int style);
+  // Dose from the bench scale (v1.3): the Record switch and up to three
+  // stored container weights (0 = empty slot).
+  bool dose_enabled() const;           // default true
+  void set_dose_enabled(bool on);
+  float dose_container(int index) const;
+  void set_dose_container(int index, float grams);
 
   // Brew-by-weight target (grams) — persisted so it survives reboots.
   float target_weight_g() const;       // default 36

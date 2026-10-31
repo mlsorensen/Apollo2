@@ -36,6 +36,7 @@
 #include "platform_esp32/display.h"
 #include "platform_esp32/display_settings.h"
 #include "platform_esp32/schedule_settings.h"
+#include "platform_esp32/dose_settings.h"
 #include "platform_esp32/history.h"
 #include "platform_esp32/install_mode.h"
 #include "platform_esp32/io_extension.h"
@@ -76,6 +77,7 @@ platform::Provisioner g_provisioner{g_micra, g_config, g_token_setup};
 platform::Battery g_battery;
 platform::DisplaySettings g_display_settings{g_display, g_config};
 platform::ScheduleSettings g_schedule{g_config};  // Settings > Micra > Schedule (NVS)
+platform::DoseSettings g_dose{g_config};          // Settings > Scale > Shot settings > Dose (NVS)
 platform::Clock g_clock{g_config};
 platform::Network g_network{g_config, g_clock, g_token_setup};  // WiFi station + NTP
 platform::UpdateCheck g_update_check{g_config, g_network};  // daily release check
@@ -476,7 +478,7 @@ void setup() {
 #else
               nullptr,  // no card slot: no Backup page
 #endif
-              g_schedule);
+              g_schedule, &g_dose);
 
   // Settings "Restart display": on RGB boards this is a panel DMA resync, not
   // a reboot — the shifted/ghosted raster is a latched bounce-buffer underrun,

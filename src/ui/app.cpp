@@ -149,6 +149,28 @@ void on_scale_connect_clicked(lv_event_t* e) {
 void on_bench_tare_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->tare_bench();
 }
+void on_dose_block_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->record_dose();
+}
+void on_dose_chip_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->clear_dose();
+}
+void on_dose_switch(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))
+      ->set_dose_enabled(lv_obj_has_state(static_cast<lv_obj_t*>(lv_event_get_target(e)),
+                                          LV_STATE_CHECKED));
+}
+void on_dose_capture_clicked(lv_event_t* e) {
+  // user_data = App; the row index rides on the button's user data slot.
+  auto* btn = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  static_cast<ui::App*>(lv_event_get_user_data(e))
+      ->capture_dose_container(static_cast<int>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(btn))));
+}
+void on_dose_clear_clicked(lv_event_t* e) {
+  auto* btn = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  static_cast<ui::App*>(lv_event_get_user_data(e))
+      ->clear_dose_container(static_cast<int>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(btn))));
+}
 void on_bench_connect_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->toggle_bench_connection();
 }
@@ -1077,7 +1099,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
                 core::INetwork& network, core::ISound& sound, core::IShotStore& shots,
                 const ScreenProfile& screen, core::IUpdateSource* updates,
                 core::ISettingsBackup* backup,
-                core::ISchedule& schedule) {
+                core::ISchedule& schedule, core::IDoseSettings* dose) {
   machine_ = &machine;
   updates_ = updates;
   backup_ = backup;
@@ -1264,6 +1286,10 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     lv_obj_add_event_cb(home_.shot_btn, on_shot_clicked, LV_EVENT_CLICKED, this);
   if (home_.flow_unit_btn != nullptr)
     lv_obj_add_event_cb(home_.flow_unit_btn, on_flow_unit_clicked, LV_EVENT_CLICKED, this);
+  if (home_.bench_block != nullptr)
+    lv_obj_add_event_cb(home_.bench_block, on_dose_block_clicked, LV_EVENT_CLICKED, this);
+  if (home_.dose_chip != nullptr)
+    lv_obj_add_event_cb(home_.dose_chip, on_dose_chip_clicked, LV_EVENT_CLICKED, this);
   // Inline set-point steppers (large screens): reuse the Settings handlers so Home
   // edits flow through the same brew_adjust/boiler_adjust + deferred-commit path.
   if (home_.brew_minus != nullptr) {
@@ -1396,6 +1422,16 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   lv_obj_add_event_cb(settings_.clock_mode_switch, on_clock_mode_switch,
                       LV_EVENT_VALUE_CHANGED, this);
   lv_obj_add_event_cb(settings_.units_switch, on_units_switch, LV_EVENT_VALUE_CHANGED, this);
+  if (settings_.dose_switch != nullptr) {
+    lv_obj_add_event_cb(settings_.dose_switch, on_dose_switch, LV_EVENT_VALUE_CHANGED, this);
+    for (int i = 0; i < core::kMaxDoseContainers; ++i) {
+      lv_obj_set_user_data(settings_.dose_capture_btn[i], reinterpret_cast<void*>(static_cast<intptr_t>(i)));
+      lv_obj_set_user_data(settings_.dose_clear_btn[i], reinterpret_cast<void*>(static_cast<intptr_t>(i)));
+      lv_obj_add_event_cb(settings_.dose_capture_btn[i], on_dose_capture_clicked, LV_EVENT_CLICKED, this);
+      lv_obj_add_event_cb(settings_.dose_clear_btn[i], on_dose_clear_clicked, LV_EVENT_CLICKED, this);
+    }
+    sync_dose_settings_rows();
+  }
   lv_obj_add_event_cb(settings_.drop_neg_flow_switch, on_drop_neg_flow_switch,
                       LV_EVENT_VALUE_CHANGED, this);
   lv_obj_add_event_cb(settings_.scope_graph_switch, on_scope_graph_switch,
@@ -1469,6 +1505,13 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   // keeps it (and the engine's latches — set_config is a no-op on an
   // unchanged config).
   schedule_ = &schedule;
+  dose_settings_ = dose;
+  if (dose_settings_ != nullptr) {
+    const core::DoseConfig dc = dose_settings_->config();
+    dose_enabled_ = dc.enabled;
+    dose_.set_containers(dc.containers, core::kMaxDoseContainers);
+    sync_dose_settings_rows();  // the rows were wired before the port was known
+  }
   if (!schedule_loaded_) {
     schedule_cfg_ = schedule_->config();
     schedule_loaded_ = true;
@@ -1649,6 +1692,7 @@ void App::refresh() {
     }
     update_temp_panels(snap);
     schedule_tick(snap);
+    dose_tick(snap);
     // The MICRA card's countdown: only while auto-standby is really counting
     // (armed, connected, on) and the user asked to see it.
     {
@@ -2991,6 +3035,9 @@ void App::pump_scale_chart() {
     stop_hint_seen_ = bsnap.stop_hint;
     const bool entering_brew =
         bsnap.phase == core::ShotPhase::kBrewing && shot_phase_ != core::ShotPhase::kBrewing;
+    // The shot STARTING spends the pending dose: it is in the portafilter in
+    // the machine by now. Kept for the record and the review chip.
+    if (entering_brew) shot_dose_g_ = dose_active() ? dose_.take_for_shot() : 0.0f;
     // A bench-only unit has no espresso scale to plot a shot from: its graph
     // keeps sweeping the bench weight and the shot plot never starts.
     if (entering_brew && home_.bench_only) {
@@ -4006,6 +4053,7 @@ void App::capture_shot_record(const core::BrewSnapshot& bsnap,
                           : 0.0f;
   r.summary.mode = bsnap.mode;
   r.summary.wired = bsnap.paddle_wired;
+  r.summary.dose_g = shot_dose_g_;
   shots_->save(r);
   // The History list notices count() changed on its next visible refresh.
 }
@@ -5245,6 +5293,172 @@ void App::schedule_tick(const core::MachineSnapshot& snap) {
     case core::ScheduleAction::Standby:     apply_scheduled_power(false, false); break;
     case core::ScheduleAction::AutoStandby: apply_scheduled_power(false, true);  break;
     case core::ScheduleAction::None:        break;
+  }
+}
+
+// ---- Dose from the bench scale ----------------------------------------
+
+namespace {
+constexpr uint32_t kDoseStableMsPose = core::kDoseStableMs + 500;  // pose_dose's hold
+}  // namespace
+
+void App::dose_tick(const core::MachineSnapshot& snap) {
+  if (!dose_active()) {
+    if (dose_.has_pending()) dose_.clear();
+    ui::set_bench_dose(home_, 0, 0.0f);
+    ui::set_dose_chip(home_, 0, 0.0f, 0.0f);
+    return;
+  }
+  const core::ScaleSnapshot b = bench_->snapshot();
+  core::DoseInputs in;
+  in.bench_g = b.weight_g;
+  in.bench_connected = b.connected;
+  in.bench_up = b.connected;
+  // The espresso link counts as "lost" only if a scale is saved there.
+  const bool espresso_saved =
+      scale_provisioner_ != nullptr && !scale_provisioner_->saved_name().empty();
+  in.espresso_up = scale_ == nullptr || !espresso_saved || scale_->snapshot().connected;
+  in.screensaver = screensaver_on_;
+  in.power_known = snap.link == core::Link::Connected;
+  in.machine_on = snap.power == core::Power::On;
+  in.now_ms = lv_tick_get();
+  const core::DoseClear why = dose_.tick(in);
+  if (why != core::DoseClear::None)
+    core::logf("dose: pending dose cleared (%s)\n",
+               why == core::DoseClear::Screensaver ? "screensaver"
+               : why == core::DoseClear::ScaleLost ? "scale lost"
+               : why == core::DoseClear::Standby   ? "standby"
+                                                   : "expired");
+
+  // The bench card's block: dormant / Record <dose> / recorded.
+  if (dose_.recorded_showing()) ui::set_bench_dose(home_, 2, dose_.pending());
+  else if (dose_.candidate()) ui::set_bench_dose(home_, 1, dose_.candidate_dose());
+  else ui::set_bench_dose(home_, 0, 0.0f);
+
+  // The graph chip builds up: in -> in + placeholder out -> in + out + ratio.
+  const core::BrewSnapshot bs = brew_ != nullptr ? brew_->snapshot() : core::BrewSnapshot{};
+  if (bs.phase == core::ShotPhase::kIdle) {
+    ui::set_dose_chip(home_, dose_.has_pending() ? 1 : 0, dose_.pending(), 0.0f);
+  } else if (shot_dose_g_ <= 0.0f) {
+    ui::set_dose_chip(home_, 0, 0.0f, 0.0f);  // a shot without a dose
+  } else if (bs.phase == core::ShotPhase::kReview) {
+    // The settled yield, net like the frozen readout (unwired shots never
+    // tare: subtract the detector's baseline).
+    const core::ScaleSnapshot s = scale_ != nullptr ? scale_->snapshot() : core::ScaleSnapshot{};
+    const float out = s.weight_g - (bs.paddle_wired ? 0.0f : bs.start_weight_g);
+    ui::set_dose_chip(home_, 3, shot_dose_g_, out);
+  } else {
+    ui::set_dose_chip(home_, 2, shot_dose_g_, 0.0f);
+  }
+}
+
+void App::pose_dose(int pose) {
+  if (pose <= 0 || bench_ == nullptr) return;
+  if (pose <= 2) {
+    // Hold the bench reading still for longer than the stability window.
+    core::DoseInputs in;
+    in.bench_g = bench_->snapshot().weight_g;
+    in.bench_connected = true;
+    in.bench_up = true;
+    for (uint32_t t = 0; t <= kDoseStableMsPose; t += 100) {
+      in.now_ms = t;
+      dose_.tick(in);
+    }
+    if (pose == 2) dose_.record();
+  } else {
+    shot_dose_g_ = 18.2f;
+  }
+  dose_tick(machine_ != nullptr ? machine_->snapshot() : core::MachineSnapshot{});
+}
+
+void App::record_dose() {
+  if (!dose_active()) return;
+  const float d = dose_.record();
+  if (d <= 0.0f) {
+    // The reading is still moving or isn't dose-sized: the block shouldn't
+    // have been offered, but a tap landing on the transition is harmless.
+    show_toast("Scale settling...");
+    return;
+  }
+  ui::play_button_press();
+  char t[48];
+  std::snprintf(t, sizeof(t), "Dose %.1f g", static_cast<double>(d));
+  show_toast(t);
+  dose_tick(machine_ != nullptr ? machine_->snapshot() : core::MachineSnapshot{});
+}
+
+void App::clear_dose() {
+  dose_.clear();
+  show_toast("Dose cleared");
+  dose_tick(machine_ != nullptr ? machine_->snapshot() : core::MachineSnapshot{});
+}
+
+void App::set_dose_enabled(bool on) {
+  dose_enabled_ = on;
+  if (dose_settings_ != nullptr) dose_settings_->set_enabled(on);
+  sync_dose_settings_rows();
+  dose_tick(machine_ != nullptr ? machine_->snapshot() : core::MachineSnapshot{});
+}
+
+void App::capture_dose_container(int index) {
+  if (dose_settings_ == nullptr || bench_ == nullptr) return;
+  const core::ScaleSnapshot b = bench_->snapshot();
+  if (!b.connected) {
+    show_toast("Connect the bench scale first.");
+    return;
+  }
+  if (!core::DoseTracker::container_ok(b.weight_g)) {
+    char t[96];
+    std::snprintf(t, sizeof(t),
+                  "%.1f g is too light to tell apart from a dose (under %.0f g). Tare it instead.",
+                  static_cast<double>(b.weight_g), static_cast<double>(core::kContainerMinG));
+    show_toast(t);
+    return;
+  }
+  core::DoseConfig dc = dose_settings_->config();
+  const int clash =
+      core::DoseTracker::container_clash(dc.containers, core::kMaxDoseContainers, index, b.weight_g);
+  if (clash >= 0) {
+    char t[96];
+    std::snprintf(t, sizeof(t),
+                  "%.1f g is within %.0f g of container %d: a dose in one could read as the other.",
+                  static_cast<double>(b.weight_g), static_cast<double>(core::kDoseMaxG), clash + 1);
+    show_toast(t);
+    return;
+  }
+  dose_settings_->set_container(index, b.weight_g);
+  dc = dose_settings_->config();
+  dose_.set_containers(dc.containers, core::kMaxDoseContainers);
+  sync_dose_settings_rows();
+  char t[48];
+  std::snprintf(t, sizeof(t), "Container %d: %.1f g", index + 1, static_cast<double>(b.weight_g));
+  show_toast(t);
+}
+
+void App::clear_dose_container(int index) {
+  if (dose_settings_ == nullptr) return;
+  dose_settings_->set_container(index, 0.0f);
+  const core::DoseConfig dc = dose_settings_->config();
+  dose_.set_containers(dc.containers, core::kMaxDoseContainers);
+  sync_dose_settings_rows();
+}
+
+void App::sync_dose_settings_rows() {
+  if (settings_.dose_switch == nullptr || dose_settings_ == nullptr) return;
+  if (dose_enabled_) lv_obj_add_state(settings_.dose_switch, LV_STATE_CHECKED);
+  else lv_obj_remove_state(settings_.dose_switch, LV_STATE_CHECKED);
+  const core::DoseConfig dc = dose_settings_->config();
+  for (int i = 0; i < core::kMaxDoseContainers; ++i) {
+    const float g = dc.containers[i];
+    char b[16];
+    if (g > 0.0f) std::snprintf(b, sizeof(b), "%.1f g", static_cast<double>(g));
+    else std::snprintf(b, sizeof(b), "--");
+    lv_label_set_text(settings_.dose_container_value[i], b);
+    if (g > 0.0f) lv_obj_remove_flag(settings_.dose_clear_btn[i], LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(settings_.dose_clear_btn[i], LV_OBJ_FLAG_HIDDEN);
+    // The rows only matter while the feature is on.
+    if (dose_enabled_) lv_obj_remove_flag(settings_.dose_container_row[i], LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(settings_.dose_container_row[i], LV_OBJ_FLAG_HIDDEN);
   }
 }
 

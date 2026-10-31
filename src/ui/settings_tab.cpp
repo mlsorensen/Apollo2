@@ -2,6 +2,8 @@
 
 #include <string>
 
+#include <cstdio>
+
 #include "core/schedule.h"
 
 #include "ui/theme.h"
@@ -1239,6 +1241,46 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_t* rl = make_setting_row(out.scale_settings_page, "Detect lead-in", font);
     make_inline_stepper(rl, font, symbol_font, btn_size, &out.lead_minus,
                         &out.lead_value, &out.lead_plus, nullptr);
+
+    // Dose from the bench scale: the Record switch, then the container
+    // weights (a portafilter, a dosing cup) captured from the bench scale.
+    // Record subtracts the heaviest stored container lighter than the
+    // reading; a container under 50 g is refused (it could be a dose).
+    lv_obj_t* rd = make_setting_row(out.scale_settings_page, "Record dose", font);
+    out.dose_switch = lv_switch_create(rd);
+    lv_obj_set_size(out.dose_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
+    for (int i = 0; i < 3; ++i) {
+      char title[16];
+      std::snprintf(title, sizeof(title), "Container %d", i + 1);
+      lv_obj_t* rc = make_setting_row(out.scale_settings_page, title, font);
+      out.dose_container_row[i] = rc;
+      lv_obj_t* grp = lv_obj_create(rc);
+      lv_obj_remove_style_all(grp);
+      lv_obj_remove_flag(grp, LV_OBJ_FLAG_SCROLLABLE);
+      lv_obj_set_size(grp, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+      lv_obj_set_flex_flow(grp, LV_FLEX_FLOW_ROW);
+      lv_obj_set_flex_align(grp, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+      lv_obj_set_style_pad_column(grp, ui::dp(10), 0);
+      out.dose_container_value[i] = lv_label_create(grp);
+      lv_label_set_text(out.dose_container_value[i], "--");
+      lv_obj_set_style_text_color(out.dose_container_value[i], lv_color_hex(ui::theme::text()), 0);
+      lv_obj_set_style_text_font(out.dose_container_value[i], font, 0);
+      auto button = [&](const char* text, uint32_t bg) {
+        lv_obj_t* b = ui::make_button(grp);
+        lv_obj_set_height(b, btn_size);
+        lv_obj_set_style_pad_hor(b, ui::dp(14), 0);
+        lv_obj_set_style_bg_color(b, lv_color_hex(bg), 0);
+        lv_obj_t* l = lv_label_create(b);
+        lv_label_set_text(l, text);
+        lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::text()), 0);
+        lv_obj_set_style_text_font(l, font, 0);
+        lv_obj_center(l);
+        return b;
+      };
+      out.dose_capture_btn[i] = button("Capture", ui::theme::accent());
+      out.dose_clear_btn[i] = button(LV_SYMBOL_CLOSE, ui::theme::card());
+      lv_obj_add_flag(out.dose_clear_btn[i], LV_OBJ_FLAG_HIDDEN);
+    }
   }
 
   // Scale > Display: how the scales SHOW — Apollo's own preferences, none of

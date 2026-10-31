@@ -2,6 +2,8 @@
 
 #include <cmath>
 #include <cstdio>
+
+#include "core/dose.h"
 #include <cstring>
 
 #include "ui/theme.h"
@@ -451,7 +453,17 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   // which sits in the left margin): a coloured dot + the unit per series. Tap
   // flips the espresso trace g/s <-> g, re-scaling and redrawing the existing
   // trace in the new unit; the bench entry is always grams.
-  lv_obj_t* btn = lv_button_create(card);
+  // The legend and the dose chip sit in one row, so the chip follows the
+  // legend's real width whatever the unit / series count.
+  lv_obj_t* legend_row = lv_obj_create(card);
+  lv_obj_remove_style_all(legend_row);
+  lv_obj_remove_flag(legend_row, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_size(legend_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(legend_row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(legend_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(legend_row, ui::dp(8), 0);
+  lv_obj_align(legend_row, LV_ALIGN_TOP_LEFT, ui::dp(6), ui::dp(6));
+  lv_obj_t* btn = lv_button_create(legend_row);
   lv_obj_remove_style_all(btn);
   lv_obj_set_style_bg_color(btn, lv_color_hex(ui::theme::bg()), 0);
   lv_obj_set_style_bg_opa(btn, LV_OPA_70, 0);
@@ -462,7 +474,6 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   lv_obj_set_size(btn, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_align(btn, LV_ALIGN_TOP_LEFT, ui::dp(6), ui::dp(6));
   out.flow_legend_dot = make_dot(btn, ui::dp(10), ui::theme::accent());
   lv_obj_t* blab = lv_label_create(btn);
   lv_label_set_text(blab, flow_unit(out.flow_mode));
@@ -481,6 +492,41 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
     lv_obj_set_style_text_font(out.flow_unit_label2, ui::font_dp(20), 0);
   }
   update_flow_legend(out);
+
+  // The dose chip, after the legend: same shell, bench dot, built up by
+  // set_dose_chip (in -> placeholder out -> out + ratio). Hidden until a
+  // dose is recorded; the x clears it.
+  {
+    lv_obj_t* chip = lv_button_create(legend_row);
+    lv_obj_remove_style_all(chip);
+    lv_obj_set_style_bg_color(chip, lv_color_hex(ui::theme::bg()), 0);
+    lv_obj_set_style_bg_opa(chip, LV_OPA_70, 0);
+    lv_obj_set_style_radius(chip, ui::dp(8), 0);
+    lv_obj_set_style_pad_hor(chip, ui::dp(12), 0);
+    lv_obj_set_style_pad_ver(chip, ui::dp(7), 0);
+    lv_obj_set_style_pad_column(chip, ui::dp(8), 0);
+    lv_obj_set_size(chip, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(chip, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(chip, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    make_dot(chip, ui::dp(10), ui::theme::bench());
+    auto label = [&](uint32_t color, int size) {
+      lv_obj_t* l = lv_label_create(chip);
+      lv_label_set_text(l, "");
+      lv_obj_set_style_text_color(l, lv_color_hex(color), 0);
+      lv_obj_set_style_text_font(l, ui::font_dp(size), 0);
+      return l;
+    };
+    out.dose_in_label = label(ui::theme::text(), 20);
+    out.dose_out_label = label(ui::theme::muted(), 20);
+    lv_obj_set_style_pad_left(out.dose_out_label, ui::dp(6), 0);
+    out.dose_ratio_label = label(ui::theme::bench(), 20);
+    lv_obj_set_style_pad_left(out.dose_ratio_label, ui::dp(6), 0);
+    out.dose_x_label = label(ui::theme::muted(), 14);
+    lv_label_set_text(out.dose_x_label, LV_SYMBOL_CLOSE);
+    lv_obj_add_flag(chip, LV_OBJ_FLAG_HIDDEN);
+    out.dose_chip = chip;
+    out.dose_chip_state = 0;
+  }
 
   // Four Y labels (0, max/3, 2max/3, max) in the left margin, aligned to the plot
   // rows. The top three are dynamic (updated on rescale); the bottom "0" is static.
@@ -1070,12 +1116,34 @@ lv_obj_t* build_bench_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_obj_set_flex_flow(body, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(body, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_row(body, ui::dp(8), 0);  // air between the weight and its name
-  out.bench_weight = lv_label_create(body);
+  // The weight and its caption share ONE block: dormant it is invisible
+  // (no border, no fill) and the caption is the scale's name; while the
+  // reading is a dose candidate it is the Record control (set_bench_dose).
+  // The block is sized to the body, not the body to the block: the actions
+  // row below is laid out after the body and draws over anything taller.
+  lv_obj_t* blk = lv_obj_create(body);
+  lv_obj_remove_style_all(blk);
+  lv_obj_remove_flag(blk, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(blk, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_set_size(blk, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(blk, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(blk, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_hor(blk, ui::dp(16), 0);
+  lv_obj_set_style_pad_top(blk, ui::dp(2), 0);
+  lv_obj_set_style_pad_bottom(blk, ui::dp(6), 0);
+  lv_obj_set_style_pad_row(blk, ui::dp(4), 0);
+  lv_obj_set_style_radius(blk, ui::dp(12), 0);
+  lv_obj_set_style_border_width(blk, 0, 0);
+  lv_obj_set_style_border_color(blk, lv_color_hex(ui::theme::bench()), 0);
+  lv_obj_set_style_bg_color(blk, lv_color_hex(ui::theme::bench()), 0);
+  lv_obj_set_style_bg_opa(blk, LV_OPA_TRANSP, 0);
+  out.bench_block = blk;
+  out.bench_dose_state = 0;
+  out.bench_weight = lv_label_create(blk);
   lv_label_set_text(out.bench_weight, "-- g");
   lv_obj_set_style_text_font(out.bench_weight, val_font, 0);  // = the other card values
   lv_obj_set_style_text_color(out.bench_weight, lv_color_hex(ui::theme::text()), 0);
-  out.bench_name = lv_label_create(body);
+  out.bench_name = lv_label_create(blk);
   lv_label_set_text(out.bench_name, "");
   lv_obj_set_style_text_font(out.bench_name, cap_font, 0);
   lv_obj_set_style_text_color(out.bench_name, lv_color_hex(ui::theme::muted()), 0);
@@ -1099,6 +1167,64 @@ lv_obj_t* build_bench_panel(lv_obj_t* parent, const lv_font_t* cap_font,
 }  // namespace
 
 namespace ui {
+
+void set_bench_dose(HomeWidgets& w, int state, float dose_g) {
+  if (w.bench_block == nullptr) return;
+  char cap[40];
+  if (state == 1) std::snprintf(cap, sizeof(cap), "Record %.1f g", static_cast<double>(dose_g));
+  else if (state == 2)
+    std::snprintf(cap, sizeof(cap), LV_SYMBOL_OK "  %.1f g recorded", static_cast<double>(dose_g));
+  if (state != 0) ui::set_text(w.bench_name, cap);
+  if (state == w.bench_dose_state) return;
+  w.bench_dose_state = state;
+  // Dormant: no border, no fill, muted caption (update_home restores the
+  // scale's name on its next pass). Candidate: amber outline + faint fill.
+  // Recorded: a deeper fill.
+  lv_obj_set_style_border_width(w.bench_block, state == 0 ? 0 : ui::dp(2), 0);
+  lv_obj_set_style_bg_opa(w.bench_block, state == 0 ? LV_OPA_TRANSP
+                                         : state == 1 ? LV_OPA_10 : LV_OPA_30, 0);
+  lv_obj_set_style_text_color(w.bench_name,
+                              lv_color_hex(state == 0 ? ui::theme::muted() : ui::theme::bench()), 0);
+  if (state == 0) ui::set_text(w.bench_name, "");  // the name comes back on the next update
+}
+
+void set_dose_chip(HomeWidgets& w, int state, float in_g, float out_g) {
+  if (w.dose_chip == nullptr) return;
+  if (state == 0) {
+    if (w.dose_chip_state != 0) lv_obj_add_flag(w.dose_chip, LV_OBJ_FLAG_HIDDEN);
+    w.dose_chip_state = 0;
+    return;
+  }
+  char b[24];
+  std::snprintf(b, sizeof(b), "%.1f g in", static_cast<double>(in_g));
+  ui::set_text(w.dose_in_label, b);
+  if (state == 1) {
+    ui::set_text(w.dose_out_label, "");
+    ui::set_text(w.dose_ratio_label, "");
+  } else if (state == 2) {
+    ui::set_text(w.dose_out_label, "--.- g out");
+    ui::set_text(w.dose_ratio_label, "");
+  } else {
+    std::snprintf(b, sizeof(b), "%.1f g out", static_cast<double>(out_g));
+    ui::set_text(w.dose_out_label, b);
+    const float r = core::brew_ratio(out_g, in_g);
+    if (r > 0.0f) std::snprintf(b, sizeof(b), "1:%.1f", static_cast<double>(r));
+    else b[0] = '\0';
+    ui::set_text(w.dose_ratio_label, b);
+  }
+  if (state != w.dose_chip_state) {
+    w.dose_chip_state = state;
+    lv_obj_remove_flag(w.dose_chip, LV_OBJ_FLAG_HIDDEN);
+    // The out / ratio labels only take room once they have text; the x
+    // shows while the dose can still be cleared (before the shot spends it).
+    if (state == 1) lv_obj_remove_flag(w.dose_x_label, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(w.dose_x_label, LV_OBJ_FLAG_HIDDEN);
+    if (state >= 2) lv_obj_remove_flag(w.dose_out_label, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(w.dose_out_label, LV_OBJ_FLAG_HIDDEN);
+    if (state == 3) lv_obj_remove_flag(w.dose_ratio_label, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(w.dose_ratio_label, LV_OBJ_FLAG_HIDDEN);
+  }
+}
 
 void build_rail_tray(lv_obj_t* rail, const lv_font_t* font, HomeWidgets& out) {
   // The caller switches the rail to SPACE_BETWEEN, so the three tab buttons spread
@@ -1217,7 +1343,8 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   // Bench scale widgets: large scale-aware layout only (bench_weights is
   // freed by App before each rebuild, with the other rings).
   out.scale_card = out.bench_card = nullptr;
-  out.bench_weight = out.bench_name = nullptr;
+  out.bench_weight = out.bench_name = out.bench_block = nullptr;
+  out.bench_dose_state = 0;
   out.bench_status_dot = out.bench_status_label = nullptr;
   out.bench_batt_label = out.bench_batt_pct_label = nullptr;
   out.bench_tare_btn = out.bench_connect_btn = out.bench_connect_label = nullptr;
@@ -1475,7 +1602,8 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     else std::snprintf(wb, sizeof(wb), "-- g");
     ui::set_text(w.bench_weight, wb);
     char nb[32];
-    ui::set_text(w.bench_name, ui::friendly_scale_name(bench->name, nb, sizeof(nb)));
+    if (w.bench_dose_state == 0)  // the dose block owns the caption otherwise
+      ui::set_text(w.bench_name, ui::friendly_scale_name(bench->name, nb, sizeof(nb)));
     const char* btxt;
     uint32_t bdot;
     if (bench->connected) {

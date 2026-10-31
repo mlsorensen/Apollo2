@@ -126,6 +126,12 @@ struct HomeWidgets {
   lv_obj_t* bench_card = nullptr;
   lv_obj_t* bench_weight = nullptr;  // hero weight
   lv_obj_t* bench_name = nullptr;    // the scale's name under it
+  // Dose: the weight + its caption share one block that becomes the Record
+  // control (outlined, amber) while the reading is a dose candidate, and a
+  // filled "recorded" block once tapped. bench_dose_state: 0 dormant (the
+  // scale's name shows), 1 Record offered, 2 recorded.
+  lv_obj_t* bench_block = nullptr;
+  int bench_dose_state = 0;
   lv_obj_t* bench_status_dot = nullptr;
   lv_obj_t* bench_status_label = nullptr;  // null where the header is dot-only
   lv_obj_t* bench_batt_label = nullptr;
@@ -202,6 +208,14 @@ struct HomeWidgets {
   lv_obj_t* flow_legend_dot = nullptr;    // coloured dot before the unit
   lv_obj_t* flow_legend_dot2 = nullptr;   // beside mode: the bench entry
   lv_obj_t* flow_unit_label2 = nullptr;
+  // The dose chip beside the legend: builds up over the shot (see
+  // set_dose_chip). Hidden with no dose.
+  lv_obj_t* dose_chip = nullptr;
+  lv_obj_t* dose_in_label = nullptr;
+  lv_obj_t* dose_out_label = nullptr;
+  lv_obj_t* dose_ratio_label = nullptr;
+  lv_obj_t* dose_x_label = nullptr;
+  int dose_chip_state = -1;
   lv_obj_t* flow_ylabels[3] = {nullptr, nullptr, nullptr};  // Y = max, 2max/3, max/3
   // Bench series on the live sweep. A third per-column ring (NaN = no bench
   // data in that column: disconnected). flow_mode 2 = the BENCH side of the
@@ -319,6 +333,13 @@ void show_bench_side(HomeWidgets& w, bool bench);
 // for that case; the labels live in `out` and are updated by update_home every
 // refresh, so they stay live on every tab. The tray + its spacer are plain
 // objects, so the tabview (which counts/indexes tabs by button class) ignores them.
+// The bench card's dose block: state 0 = dormant (scale name), 1 = "Record
+// <dose> g" offered, 2 = "<dose> g recorded". Cheap when unchanged.
+void set_bench_dose(HomeWidgets& w, int state, float dose_g);
+// The graph's dose chip: 0 hidden, 1 "<in> g in", 2 + a placeholder out,
+// 3 "<in> g in  <out> g out  1:<ratio>".
+void set_dose_chip(HomeWidgets& w, int state, float in_g, float out_g);
+
 void build_rail_tray(lv_obj_t* rail, const lv_font_t* font, HomeWidgets& out);
 
 // Compact counterpart: clock + battery pushed to the right of the bottom tab bar

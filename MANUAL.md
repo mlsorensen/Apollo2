@@ -43,9 +43,10 @@ Home
 │  ├─ [Connect/Disconnect] · [Tare]
 │  └─ [ESPRESSO | BENCH]  swaps in the BENCH card   *(bench scale paired,
 │                         "In the scale card")*
-├─ BENCH card — status · WEIGHT · [Disconnect] · [Tare]   *(bench scale paired;
-│                beside the graph, or behind the switch above)*
+├─ BENCH card — status · WEIGHT (→ Record <dose>) · [Disconnect] · [Tare]
+│                *(bench scale paired; beside the graph, or behind the switch above)*
 └─ Flow graph — legend chip: g/s ↔ g (espresso) · bench weight in g
+                · dose chip: <in> g in → <out> g out · 1:ratio (×  clears)
                 · freezes for review after a shot
 
 Settings
@@ -62,6 +63,7 @@ Settings
 │  ├─ Bluetooth       — Scan → Espresso / Bench · saved scales (ESPRESSO / BENCH:
 │  │                    Connect / Forget) · Swap roles · Umbra pairing
 │  ├─ Shot settings   — Target · Review hold · Detect lead-in
+│  │                    · Record dose · Container 1–3 (Capture / ×)
 │  ├─ Device settings — Scale (Espresso / Bench picker)
 │  │                    · the scale's own settings (Beep · Auto-off/sleep · Unit …)
 │  │                    · paired Umbra: Battery drain per day · Calibrate drain
@@ -210,7 +212,9 @@ auto flush), and nothing on this card is ever disabled by a shot.
   starting swaps back by itself, so a shot is never hidden. The status dot
   and battery stay in the header in both positions.
 - ② **WEIGHT** — the bench scale's live reading, with the scale's name under
-  it. Battery and status follow the same rules as the SCALE card's.
+  it. Battery and status follow the same rules as the SCALE card's. When
+  what sits on the scale looks like a dose, this block becomes the **Record**
+  button — see *Recording your dose* below.
 - ③ **Disconnect / Connect** and **Tare** — the bench scale's own.
 - With **Bench scale on Home** set to *Beside the graph*, the bench card sits
   to the right of the flow graph instead (with just **Tare**), and the graph
@@ -222,6 +226,38 @@ auto flush), and nothing on this card is ever disabled by a shot.
 A bench scale with *no* espresso scale paired takes the SCALE card's place by
 itself, and the graph shows it in grams.
 
+#### Recording your dose
+
+![Dose recorded — the block on the bench card and the chip in the graph](docs/img/manual/home-dose-recorded.png)
+
+Put the dosed portafilter (or your dosing cup, or beans in a tared cup) on
+the bench scale. Once the reading has held still for a second and is
+dose‑sized, the weight and its caption gain an amber outline and the caption
+reads **Record 18.3 g** — the dose Apollo would store ①. Tap the block to
+record it; the caption turns to **✓ 18.3 g recorded** until you lift the
+portafilter, and a chip appears in the graph ② with the dose: **18.3 g in**.
+That dose belongs to the **next shot you start**: when the shot begins the
+chip adds a placeholder for the yield (**--.- g out**), and when the shot
+settles it fills in the yield and the brew ratio (**36.4 g out · 1:2.0**),
+frozen with the graph for review. Both are kept in History (a **Ratio**
+column on the shot's card and the web page).
+
+- Nothing is subtracted for a tared cup. For a portafilter or a dosing cup
+  that is *not* tared, store its weight once under **Settings → Scale → Shot
+  settings → Container** and Apollo subtracts it by itself: the reading is
+  matched to the heaviest stored container lighter than it, so a 498 g
+  reading with a 480 g portafilter stored records 18 g. The block only
+  appears for readings whose dose would be 5–50 g — a milk jug never offers
+  Record.
+- Recording again replaces the pending dose; the **×** on the chip clears
+  it. A dose nobody pulls a shot with also clears itself when you've
+  evidently walked away: the screensaver starting, a scale going to sleep
+  (a link that drops and stays down half a minute), the Micra going to
+  standby, or an hour passing.
+- The whole feature can be switched off under **Settings → Scale → Shot
+  settings → Record dose**; it needs an espresso scale paired, since the
+  ratio needs the shot's yield.
+
 ### Flow graph
 
 ![Flow graph](docs/img/manual/home-flow-graph.png)
@@ -230,7 +266,9 @@ Plots the live flow rate (or weight) from the scale.
 
 - The chip ① is a legend: a coloured dot per scale and its unit. Tap it to
   switch the espresso trace between flow rate (g/s) and weight (g); the
-  caption ② names the time window in view.
+  caption ② names the time window in view. A recorded dose adds a second
+  chip beside it that builds up over the shot — see *Recording your dose*
+  under the BENCH card.
 - With a bench scale, the **BENCH** side of the swap card shows the bench
   scale's weight in grams instead (its own amber trace, hundreds of grams on
   the axis). *Beside the graph*, both scales share the plot: the espresso
@@ -519,6 +557,16 @@ which is a weight readout with its own Tare (see the BENCH card above).
   started the shot. Adjust it to match your machine's preinfusion setting as
   needed (roughly your typical paddle‑to‑first‑drip time); 0 starts the shot
   at the first drip.
+- ④ **Record dose** *(on by default; needs a bench scale)* — the Record block
+  on the bench card and the dose chip in the graph (see *Recording your dose*
+  under the BENCH card). Off hides both and records nothing.
+- ⑤ **Container 1–3** — the weights Apollo subtracts from a bench reading
+  before recording a dose: a portafilter, a dosing cup. Put the empty
+  container on the bench scale and tap **Capture**; **×** forgets it. A
+  container has to weigh at least 50 g, and two containers have to be more
+  than 50 g apart — lighter or closer than that, a dose could be read as
+  the wrong thing, so Capture refuses and says why. Tare anything lighter
+  instead.
 
 These are all about how a shot *runs*; how the graph *looks* is under
 **Display** below.

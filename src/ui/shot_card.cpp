@@ -2,6 +2,8 @@
 
 #include <cmath>
 #include <cstdio>
+
+#include "core/dose.h"
 #include <ctime>
 
 #include "ui/theme.h"
@@ -439,6 +441,15 @@ lv_obj_t* build_shot_card(lv_obj_t* parent, const core::ShotRecord& rec,
 
   std::snprintf(b, sizeof(b), "%.2f g/s", static_cast<double>(rec.summary.avg_gps));
   hero_stat(hero, b, compact ? "Avg" : "Avg flow", value_font, small);
+
+  // A sixth column only for shots that recorded a dose from the bench scale
+  // (and not on the compact layout, where five already fill the width).
+  const float ratio = core::brew_ratio(rec.summary.final_g, rec.summary.dose_g);
+  if (ratio > 0.0f && !compact) {
+    std::snprintf(b, sizeof(b), "1:%.1f", static_cast<double>(ratio));
+    lv_obj_t* rv = hero_stat(hero, b, "Ratio", value_font, small);
+    lv_obj_set_style_text_color(rv, lv_color_hex(theme::bench()), 0);
+  }
 
   // Graph: custom-painted from the record (see shot_graph_cb).
   lv_obj_t* graph = lv_obj_create(card);

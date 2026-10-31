@@ -14,6 +14,8 @@
 #include "core/settings_backup.h"
 #include "core/update_check.h"
 #include "core/ready_chime.h"
+#include "core/dose.h"
+#include "core/dose_settings.h"
 #include "core/schedule.h"
 #include "core/scale.h"
 #include "core/scale_provisioner.h"
@@ -44,7 +46,8 @@ class App {
              core::IBrewController& brew,
              core::INetwork& network, core::ISound& sound, core::IShotStore& shots,
              const ScreenProfile& screen, core::IUpdateSource* updates,
-             core::ISettingsBackup* backup, core::ISchedule& schedule);
+             core::ISettingsBackup* backup, core::ISchedule& schedule,
+             core::IDoseSettings* dose = nullptr);
   // NOTE: `updates` is deliberately NOT defaulted. It used to be, and the
   // internal layout-rebuild call omitted it -- so every rebuild silently set
   // updates_ = nullptr, hiding the Info page's "Check for updates" button and
@@ -207,6 +210,19 @@ class App {
   // maps it onto a dB curve so the steps are even by ear.
   void set_ready_chime_vol(int percent, bool audition);
   void ready_chime_vol_adjust(int dir);  // one step per [-]/[+] tap
+  // Dose from the bench scale (core::DoseTracker, fed from refresh()): the
+  // bench card's Record block, the graph chip, and the shot record's dose.
+  void dose_tick(const core::MachineSnapshot& snap);
+  void record_dose();       // the bench card's Record block
+  void clear_dose();        // the chip's x
+  void set_dose_enabled(bool on);
+  void capture_dose_container(int index);  // Settings: store the bench reading
+  void clear_dose_container(int index);
+  void sync_dose_settings_rows();
+  // Sim-only: 1 = Record offered (a loaded portafilter held on the bench),
+  // 2 = recorded (pending dose + chip), 3 = a shot running on that dose
+  // (chip with the placeholder out), 4 = the shot in review (out + ratio).
+  void pose_dose(int pose);
   void cycle_ready_melody();             // Micra "Chime melody": Off/Blue/Pink/...
   void theme_select(int index);          // Device theme roller selection
   void apply_pending_theme();            // deferred rebuild (from lv_async_call)
@@ -283,6 +299,9 @@ class App {
   bool ntp_ready() const;      // WiFi on + NTP on + a real sync landed this boot
   core::ScheduleInputs schedule_inputs(const core::MachineSnapshot& snap) const;
   void schedule_tick(const core::MachineSnapshot& snap);
+  bool dose_active() const {  // feature on AND an espresso scale to brew with
+    return dose_enabled_ && dose_settings_ != nullptr && bench_ != nullptr && !home_.bench_only;
+  }
   void apply_scheduled_power(bool on, bool auto_standby);
   core::DaySchedule& sched_edit_day();
   static void format_clock_min(char* out, size_t n, int min_of_day, bool h24);
@@ -491,6 +510,10 @@ class App {
   // internal .bss for the engine + the working config copy; no heap, no task.
   core::ISchedule* schedule_ = nullptr;
   core::ScheduleEngine schedule_engine_;
+  core::IDoseSettings* dose_settings_ = nullptr;
+  core::DoseTracker dose_;
+  bool dose_enabled_ = true;
+  float shot_dose_g_ = 0.0f;  // the dose the running / reviewed shot spent
   core::ScheduleConfig schedule_cfg_;      // the page's working copy
   bool schedule_loaded_ = false;           // schedule_cfg_ read from the port once
   bool schedule_warned_ = false;           // cloud-app notice shown this session

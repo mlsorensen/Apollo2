@@ -84,6 +84,8 @@ inline const ScaleKeys& keys(core::ScaleSlot slot) {
 }
 constexpr char kMicraAddrTypeKey[] = "matype";   // the machine's, same encoding (ADD, v1.2)
 constexpr char kBenchHomeKey[] = "benchhome";    // bench scale on Home: 0 card / 1 beside graph (ADD, v1.2)
+constexpr char kDoseEnabledKey[] = "dosen";      // Record dose from the bench scale (ADD, v1.3)
+constexpr const char* kDoseContainerKeys[] = {"dosec0", "dosec1", "dosec2"};  // grams (ADD, v1.3)
 constexpr char kTargetKey[] = "tgtg";
 constexpr char kShotModeKey[] = "shotmode";  // LEGACY bool (armed) — migration only
 constexpr char kShotMode3Key[] = "shotmd";   // tri-state core::ShotMode as int
@@ -337,6 +339,40 @@ void Config::set_bench_home_style(int style) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   p.putInt(kBenchHomeKey, style < 0 ? 0 : style > 1 ? 1 : style);
+  p.end();
+}
+
+bool Config::dose_enabled() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return true;
+  const bool v = p.isKey(kDoseEnabledKey) ? p.getBool(kDoseEnabledKey, true) : true;
+  p.end();
+  return v;
+}
+
+void Config::set_dose_enabled(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kDoseEnabledKey, on);
+  p.end();
+}
+
+float Config::dose_container(int index) const {
+  if (index < 0 || index >= 3) return 0.0f;
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 0.0f;
+  const char* k = kDoseContainerKeys[index];
+  const float v = p.isKey(k) ? p.getFloat(k, 0.0f) : 0.0f;
+  p.end();
+  return v > 0.0f && v < 5000.0f ? v : 0.0f;  // garbage reads as empty
+}
+
+void Config::set_dose_container(int index, float grams) {
+  if (index < 0 || index >= 3) return;
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  if (grams > 0.0f) p.putFloat(kDoseContainerKeys[index], grams);
+  else p.remove(kDoseContainerKeys[index]);
   p.end();
 }
 

@@ -16,7 +16,7 @@ class FakeScale : public core::IScale {
         .name = bench_ ? "BOOKOO_SC_U400037" : lunar_ ? "LUNAR-A1B2" : umbra_ ? "UMBRA-7F3A"
                                                                        : "BOOKOO_THEMIS",
         .connected = connected_,
-        .weight_g = bench_ ? 412.5f : 36.4f,
+        .weight_g = bench_ ? bench_weight_ : 36.4f,
         .timer_ms = 27000,
         .battery_valid = true,
         .battery_pct = bench_ ? 84 : battery_estimated_ ? 41 : 78,
@@ -102,6 +102,7 @@ class FakeScale : public core::IScale {
   void set_calibration_result(int pct_per_day) { cal_result_ = pct_per_day; }
   // Bench persona: the counter scale (a Bookoo Ultra with a milk jug on it).
   void set_bench(bool b) { bench_ = b; }
+  void set_bench_weight(float g) { bench_weight_ = g; }  // dose poses: a loaded portafilter
   // Umbra persona: sleep-capable scale, for rendering the "Sleeping" Home state.
   void set_umbra(bool u) { umbra_ = u; }
   // Lunar persona: Acaia with a Unit row + the read-only weighing-mode row.
@@ -115,6 +116,7 @@ class FakeScale : public core::IScale {
   bool umbra_ = false;
   bool lunar_ = false;
   bool bench_ = false;
+  float bench_weight_ = 412.5f;
   bool battery_estimated_ = false;
   bool armed_ = false;
   int drain_ = 15;
