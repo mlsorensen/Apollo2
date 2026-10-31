@@ -160,6 +160,28 @@ void UmbraPartner::poll() {
       (connected_.load() || advertising_->isAdvertising()))
     stop_and_sleep();
   if (wanted) stopping_.store(false);
+  // The experiment's answer: log the link's parameters whenever they change
+  // (a granted update shows up here a few connection events later).
+  if (connected_.load() && server_ != nullptr) {
+    static uint16_t s_logged_interval = 0;
+    static uint32_t s_last_check_ms = 0;
+    if (millis() - s_last_check_ms >= 2000) {
+      s_last_check_ms = millis();
+      const int h = conn_handle_.load();
+      if (h >= 0) {
+        const NimBLEConnInfo info = server_->getPeerInfoByHandle(static_cast<uint16_t>(h));
+        const uint16_t iv = info.getConnInterval();
+        if (iv != 0 && iv != s_logged_interval) {
+          s_logged_interval = iv;
+          core::logf("UmbraPartner: conn params now interval %.2f ms, latency %u, timeout %u ms\n",
+                     static_cast<double>(iv) * 1.25, static_cast<unsigned>(info.getConnLatency()),
+                     static_cast<unsigned>(info.getConnTimeout()) * 10);
+        }
+      }
+    }
+  } else {
+    // (no link: nothing to compare)
+  }
   if (wanted) {
     // Handshake replies owed by the callbacks, in protocol order.
     if (owe_info_.exchange(false)) send_frame(kInfo, sizeof(kInfo));
@@ -194,6 +216,15 @@ void UmbraPartner::on_connect(uint16_t handle) {
   last_info_ms_.store(millis());
   scale_.set_partner_connected(true);
   core::logf("UmbraPartner: Umbra connected\n");
+  // EXPERIMENT (owner, 2026-10-31): the Umbra, central on this link, dials
+  // in at 11.25 ms; with the Micra and a scale also connected the X-8's
+  // Micra polls started going unanswered for 30 s stretches. Ask it for
+  // 30-50 ms (ample for a 10 Hz weight stream) and log what it grants —
+  // a peripheral can only request; the central decides.
+  if (server_ != nullptr) {
+    server_->updateConnParams(handle, /*min*/ 24, /*max*/ 40, /*latency*/ 0, /*timeout*/ 400);
+    core::logf("UmbraPartner: requested conn interval 30-50 ms (latency 0, timeout 4 s)\n");
+  }
 }
 
 void UmbraPartner::on_disconnect() {
