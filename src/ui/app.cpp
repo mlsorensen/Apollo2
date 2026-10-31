@@ -5402,19 +5402,17 @@ void App::record_dose() {
     show_toast("Scale settling...");
     return;
   }
+  // No confirmation toast (owner): the block's "recorded" caption and the
+  // chip in the graph are the feedback.
   ui::play_button_press();
   core::logf("dose: recorded %.1f g (bench %.1f g)\n", static_cast<double>(d),
              static_cast<double>(bench_->snapshot().weight_g));
-  char t[48];
-  std::snprintf(t, sizeof(t), "Dose %.1f g", static_cast<double>(d));
-  show_toast(t);
   dose_tick(machine_ != nullptr ? machine_->snapshot() : core::MachineSnapshot{});
 }
 
 void App::clear_dose() {
   if (dose_.has_pending()) core::logf("dose: pending dose cleared (user)\n");
-  dose_.clear();
-  show_toast("Dose cleared");
+  dose_.clear();  // the chip going away is the feedback
   dose_tick(machine_ != nullptr ? machine_->snapshot() : core::MachineSnapshot{});
 }
 
@@ -5439,8 +5437,7 @@ void App::capture_dose_container(int index) {
     // reads like "wait", so it must not need a second tap.
     capture_slot_ = index;
     capture_deadline_ms_ = lv_tick_get() + 10000;
-    show_toast("Capturing once the scale holds still...");
-    return;
+    return;  // the row fills in by itself; only a cancel gets a toast
   }
   finish_capture(index, b.weight_g);
 }
@@ -5473,10 +5470,7 @@ void App::finish_capture(int index, float grams) {
   core::logf("dose: container %d = %.1f g\n", index + 1, static_cast<double>(grams));
   dc = dose_settings_->config();
   dose_.set_containers(dc.containers, core::kMaxDoseContainers);
-  sync_dose_settings_rows();
-  char t[48];
-  std::snprintf(t, sizeof(t), "Container %d: %.1f g", index + 1, static_cast<double>(grams));
-  show_toast(t);
+  sync_dose_settings_rows();  // the row showing the value is the feedback (owner: no toast)
 }
 
 void App::clear_dose_container(int index) {
