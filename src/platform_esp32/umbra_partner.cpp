@@ -61,9 +61,17 @@ class UmbraPartner::ServerCallbacks final : public NimBLEServerCallbacks {
  public:
   explicit ServerCallbacks(UmbraPartner& owner) : owner_(owner) {}
   void onConnect(NimBLEServer*, NimBLEConnInfo& info) override {
+    // The Umbra is the CENTRAL here and dictates these; with the Micra and
+    // a scale also connected they decide how crowded the radio schedule is
+    // (owner, 2026-10-31: Micra drops only while the Umbra was connected).
+    core::logf("UmbraPartner: conn interval %.2f ms, latency %u, timeout %u ms\n",
+               static_cast<double>(info.getConnInterval()) * 1.25,
+               static_cast<unsigned>(info.getConnLatency()),
+               static_cast<unsigned>(info.getConnTimeout()) * 10);
     owner_.on_connect(info.getConnHandle());
   }
-  void onDisconnect(NimBLEServer*, NimBLEConnInfo&, int) override {
+  void onDisconnect(NimBLEServer*, NimBLEConnInfo&, int reason) override {
+    core::logf("UmbraPartner: disconnected, reason 0x%x\n", static_cast<unsigned>(reason));
     owner_.on_disconnect();
   }
  private:
