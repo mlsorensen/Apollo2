@@ -58,6 +58,7 @@ const char* hci_reason_name(int reason) {
   switch (reason >= 0x200 ? reason - 0x200 : reason) {  // BLE_HS_HCI_ERR() base
     case 0x08: return "supervision timeout";
     case 0x13: return "remote terminated";
+    case 0x15: return "remote powered off";
     case 0x16: return "local host terminated";
     case 0x22: return "LMP response timeout";
     case 0x3B: return "unacceptable conn interval";
