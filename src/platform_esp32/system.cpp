@@ -61,7 +61,7 @@ int idf_log_to_ring(const char* fmt, va_list args) {
 void log_init() {
   // PSRAM keeps a generous window; the internal fallback still covers a full
   // boot plus several minutes of steady-state chatter.
-  constexpr size_t kPsramCap = 64 * 1024;
+  constexpr size_t kPsramCap = 128 * 1024;  // ~13 h of a minute's telemetry (owner, 2026-10-31)
   constexpr size_t kInternalCap = 12 * 1024;
   size_t cap = kPsramCap;
   char* buf = static_cast<char*>(
@@ -76,8 +76,8 @@ void log_init() {
   });
   if (buf != nullptr) ring.init(buf, cap);
   s_chain_vprintf = esp_log_set_vprintf(idf_log_to_ring);
-  core::logf("log: ring %u KB (%s)\n", static_cast<unsigned>(cap / 1024),
-             cap == kPsramCap ? "PSRAM" : "internal");
+  core::logf("log: ring %u KB (%s); heap lines are free/largest/lowest per pool\n",
+             static_cast<unsigned>(cap / 1024), cap == kPsramCap ? "PSRAM" : "internal");
 }
 
 }  // namespace platform

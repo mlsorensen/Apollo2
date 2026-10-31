@@ -65,7 +65,9 @@
 
 namespace {
 // Steady-state telemetry cadence (the perf and heap lines in the log ring).
-constexpr uint32_t kTelemetryMs = 5u * 60u * 1000u;
+// Once a minute (owner: don't lose resolution); the lines are kept short
+// instead — the three old ones were 78 % of the ring.
+constexpr uint32_t kTelemetryMs = 60u * 1000u;
 
 platform::Display g_display;
 platform::Touch g_touch;
@@ -745,13 +747,12 @@ void loop() {
     ++iters;
     if (dt > worst) worst = dt;
     if (pump_dt > pworst) pworst = pump_dt;
-    // One line every kTelemetryMs (was two lines a minute: with the heap
-    // line they were 78 % of the 64 KB ring, 3.5 h of history — owner,
-    // 2026-10-31). The worst figures are maxima over the window, so a stall
-    // still shows; the averages are per frame as before.
+    // One compact line a minute (was two: with the heap line they were 78 %
+    // of the ring — owner, 2026-10-31). Fields: frames, avg us, worst us,
+    // % of the window, for lvgl and the graph pump.
     if (millis() - last >= kTelemetryMs) {
       last = millis();
-      core::logf("perf: lvgl %u frames avg %u worst %u us (%u%%) | pump avg %u worst %u us (%u%%)\n",
+      core::logf("perf: lvgl %uf avg %u worst %uus %u%% | pump avg %u worst %uus %u%%\n",
                  static_cast<unsigned>(iters),
                  static_cast<unsigned>(iters ? acc / iters : 0),
                  static_cast<unsigned>(worst),
@@ -829,9 +830,10 @@ void loop() {
     // is 16KB by guess (a past overflow on theme rebuild + WiFi bring-up); this
     // is the number to size it from. PSRAM free is here so the figure is
     // always in the ring (it was only in a boot-time line before).
+    // Fields are free/largest/lowest for the 8-bit and DMA pools (a legend
+    // is logged once at boot), then PSRAM free and this task's stack slack.
     core::logf(
-        "heap: 8bit free=%u largest=%u lowest=%u | DMA free=%u largest=%u lowest=%u | "
-        "psram free=%u | loop_hw=%u\n",
+        "heap: 8bit %u/%u/%u dma %u/%u/%u psram %u hw %u\n",
         static_cast<unsigned>(
             heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
         static_cast<unsigned>(heap_caps_get_largest_free_block(
