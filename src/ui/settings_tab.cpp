@@ -1247,6 +1247,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     // Record subtracts the heaviest stored container lighter than the
     // reading; a container under 50 g is refused (it could be a dose).
     lv_obj_t* rd = make_setting_row(out.scale_settings_page, "Record dose", font);
+    out.dose_switch_row = rd;
     out.dose_switch = lv_switch_create(rd);
     lv_obj_set_size(out.dose_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
     for (int i = 0; i < 3; ++i) {

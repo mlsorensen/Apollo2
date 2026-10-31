@@ -47,7 +47,7 @@ class App {
              core::INetwork& network, core::ISound& sound, core::IShotStore& shots,
              const ScreenProfile& screen, core::IUpdateSource* updates,
              core::ISettingsBackup* backup, core::ISchedule& schedule,
-             core::IDoseSettings* dose = nullptr);
+             core::IDoseSettings* dose);  // not defaulted: see the `updates` NOTE
   // NOTE: `updates` is deliberately NOT defaulted. It used to be, and the
   // internal layout-rebuild call omitted it -- so every rebuild silently set
   // updates_ = nullptr, hiding the Info page's "Check for updates" button and
@@ -299,8 +299,9 @@ class App {
   bool ntp_ready() const;      // WiFi on + NTP on + a real sync landed this boot
   core::ScheduleInputs schedule_inputs(const core::MachineSnapshot& snap) const;
   void schedule_tick(const core::MachineSnapshot& snap);
-  bool dose_active() const {  // feature on AND an espresso scale to brew with
-    return dose_enabled_ && dose_settings_ != nullptr && bench_ != nullptr && !home_.bench_only;
+  bool dose_active() const {  // feature on, a bench card, an espresso scale to brew with
+    return dose_enabled_ && dose_settings_ != nullptr && bench_ != nullptr &&
+           home_.bench_enabled && !home_.bench_only;
   }
   void apply_scheduled_power(bool on, bool auto_standby);
   core::DaySchedule& sched_edit_day();
@@ -514,6 +515,7 @@ class App {
   core::DoseTracker dose_;
   bool dose_enabled_ = true;
   float shot_dose_g_ = 0.0f;  // the dose the running / reviewed shot spent
+  float review_out_g_ = 0.0f; // the settled yield, latched at the freeze (0 = not yet)
   core::ScheduleConfig schedule_cfg_;      // the page's working copy
   bool schedule_loaded_ = false;           // schedule_cfg_ read from the port once
   bool schedule_warned_ = false;           // cloud-app notice shown this session

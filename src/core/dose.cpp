@@ -22,10 +22,11 @@ int DoseTracker::container_clash(const float* grams, int n, int skip, float cand
 }
 
 float DoseTracker::net_dose(float reading) const {
-  // The heaviest stored container lighter than the reading, if any.
+  // The heaviest stored container not heavier than the reading, if any (an
+  // empty container reads as 0 g, not as a container-sized dose).
   float best = 0.0f;
   for (int i = 0; i < n_containers_; ++i) {
-    if (containers_[i] < reading && containers_[i] > best) best = containers_[i];
+    if (containers_[i] <= reading && containers_[i] > best) best = containers_[i];
   }
   return reading - best;
 }
@@ -85,9 +86,12 @@ DoseClear DoseTracker::tick(const DoseInputs& in) {
   return why;
 }
 
+bool DoseTracker::reading_stable() const {
+  return fed_ && last_connected_ && now_ms_ - stable_since_ms_ >= kDoseStableMs;
+}
+
 bool DoseTracker::candidate() const {
-  if (!fed_ || !last_connected_) return false;
-  if (now_ms_ - stable_since_ms_ < kDoseStableMs) return false;
+  if (!reading_stable()) return false;
   if (recorded_showing()) return false;  // the same weight: "recorded", not Record
   const float d = net_dose(last_g_);
   return d >= kDoseMinG && d <= kDoseMaxG;

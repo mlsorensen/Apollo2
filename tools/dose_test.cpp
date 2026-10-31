@@ -50,7 +50,7 @@ int test_container_rule() {
   CHECK(near(t.net_dose(118.0f), 7.0f));   // a 7 g single in the Niche cup
   CHECK(near(t.net_dose(18.0f), 18.0f));   // bare dose in a tared cup: no container below it
   CHECK(near(t.net_dose(49.0f), 49.0f));   // a heavy dose still under the lightest container
-  CHECK(near(t.net_dose(111.0f), 111.0f)); // exactly the container: not "lighter than"
+  CHECK(near(t.net_dose(111.0f), 0.0f));   // the empty container: nothing in it
   CHECK(DoseTracker::container_ok(50.0f) && !DoseTracker::container_ok(49.9f));
   // Two containers closer than a dose apart would misread a dose larger than
   // their gap (25 g in a 111 g cup = 136 g -> "6 g" against a 130 g one):
@@ -254,6 +254,86 @@ int test_walk_away() {
   return 0;
 }
 
+// The owner's question: with realistic containers and doses, where does the
+// weight-only rule get it wrong? Every reading a real counter produces is
+// run through the container rule + the candidate gate and classified
+// against what was actually on the scale. Hard failures (a real dose read
+// as the wrong grams, or not offered) fail the test; the unavoidable
+// look-alikes (a non-dose that happens to weigh like a dose) are counted
+// and printed, since the only cure for those is not tapping Record.
+int test_realistic_sweep() {
+  struct Kit {
+    const char* name;
+    float containers[kMaxDoseContainers];
+    int n;
+  };
+  // Portafilters: 58 mm bottomless ~400-460 g, spouted ~480-560 g. Dosing
+  // cups: Niche 111 g, Weber Bird ~120 g, a heavy steel cup ~180 g, light
+  // plastic ~35 g (refused by the floor: tare it).
+  const Kit kits[] = {
+      {"bottomless only", {430.0f, 0.0f, 0.0f}, 1},
+      {"spouted + Niche cup", {520.0f, 111.0f, 0.0f}, 2},
+      {"bottomless + Niche + steel cup", {430.0f, 111.0f, 180.0f}, 3},
+      {"two portafilters + cup", {430.0f, 520.0f, 120.0f}, 3},
+  };
+  int lookalikes = 0, lookalike_milk = 0, lookalike_untared_milk = 0;
+  for (const Kit& k : kits) {
+    // Every kit must pass Capture's own rules, or the sweep means nothing.
+    for (int i = 0; i < k.n; ++i) {
+      CHECK(DoseTracker::container_ok(k.containers[i]));
+      CHECK(DoseTracker::container_clash(k.containers, k.n, i, k.containers[i]) == -1);
+    }
+    DoseTracker t;
+    t.set_containers(k.containers, k.n);
+    auto settled = [&](float reading) { hold(t, reading, 0, 1500); };
+    // Doses 8..28 g in 0.5 g steps, in every container untared, and in a
+    // tared cup: each must be offered at exactly its grams.
+    for (float d = 8.0f; d <= 28.01f; d += 0.5f) {
+      for (int i = 0; i < k.n; ++i) {
+        settled(k.containers[i] + d);
+        CHECK(t.candidate());
+        CHECK(near(t.candidate_dose(), d, 0.05f));
+      }
+      settled(d);  // tared
+      CHECK(t.candidate());
+      CHECK(near(t.candidate_dose(), d, 0.05f));
+    }
+    // Each container empty, and an empty bench: nothing offered.
+    for (int i = 0; i < k.n; ++i) {
+      settled(k.containers[i]);
+      CHECK(!t.candidate());
+    }
+    settled(0.0f);
+    CHECK(!t.candidate());
+    // Milk in a TARED jug or cup, 30..400 g in 10 g steps: a look-alike
+    // whenever the reading lands 5..50 g above a stored container (or is
+    // itself 30..50 g). Never a wrong number for a real dose, just an offer
+    // nobody has to take.
+    for (float m = 30.0f; m <= 400.01f; m += 10.0f) {
+      settled(m);
+      if (t.candidate()) { ++lookalikes; ++lookalike_milk; }
+    }
+    // Milk poured into an UNTARED stored cup (the cup's weight included):
+    // 30..300 g of milk. A look-alike only while the milk itself weighs
+    // 30..50 g.
+    for (int i = 0; i < k.n; ++i) {
+      for (float m = 30.0f; m <= 300.01f; m += 10.0f) {
+        settled(k.containers[i] + m);
+        if (t.candidate()) { ++lookalikes; ++lookalike_untared_milk; }
+      }
+    }
+    // A full milk jug (jug ~600 g + 300 g milk) and a bag of beans: never.
+    settled(900.0f);
+    CHECK(!t.candidate());
+    settled(1000.0f);
+    CHECK(!t.candidate());
+  }
+  std::printf("dose_test: realistic sweep — %d look-alike offers (tared milk/water %d, "
+              "untared milk 30-50 g %d), 0 wrong doses\n",
+              lookalikes, lookalike_milk, lookalike_untared_milk);
+  return 0;
+}
+
 int test_ratio() {
   CHECK(near(brew_ratio(36.4f, 18.2f), 2.0f));
   CHECK(near(brew_ratio(36.4f, 0.0f), 0.0f));
@@ -265,7 +345,7 @@ int test_ratio() {
 
 int main() {
   if (test_container_rule() || test_candidate_gate() || test_record_and_spend() ||
-      test_walk_away() || test_ratio())
+      test_walk_away() || test_realistic_sweep() || test_ratio())
     return 1;
   std::printf("dose_test: all %d checks passed\n", checks);
   return 0;

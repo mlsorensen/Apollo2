@@ -10,8 +10,8 @@
 // Rules, settled with the owner (2026-10-30, see the dose-ratio design):
 //   - CONTAINERS, no mode switch at record time. Up to three stored container
 //     weights (a portafilter, a dosing cup). dose = reading minus the heaviest
-//     stored container LIGHTER than the reading; none below it = the reading
-//     IS the dose (a tared cup). Every container must weigh at least
+//     stored container NOT HEAVIER than the reading; none below it = the
+//     reading IS the dose (a tared cup); an empty container is 0 g. Every container must weigh at least
 //     kContainerMinG, and any two containers more than kDoseMaxG apart: with
 //     the floor a bare dose (5..50 g) can never exceed a container, and with
 //     the spacing a dose in the lighter of two containers can never reach the
@@ -82,6 +82,8 @@ class DoseTracker {
   // pending dose was cleared this tick, or None.
   DoseClear tick(const DoseInputs& in);
 
+  // The bench reading has held still for kDoseStableMs (Capture uses this too).
+  bool reading_stable() const;
   // What the bench card shows.
   bool candidate() const;          // stable, connected, dose-sized: offer Record
   float candidate_dose() const;    // the dose Record would store right now

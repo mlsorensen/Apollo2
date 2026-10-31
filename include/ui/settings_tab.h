@@ -182,6 +182,7 @@ struct SettingsWidgets {
   lv_obj_t* lead_plus = nullptr;
   // Shot settings > Dose: the Record switch and three container rows
   // (value, Capture from the bench scale, Clear).
+  lv_obj_t* dose_switch_row = nullptr;
   lv_obj_t* dose_switch = nullptr;
   lv_obj_t* dose_container_row[3] = {nullptr, nullptr, nullptr};
   lv_obj_t* dose_container_value[3] = {nullptr, nullptr, nullptr};

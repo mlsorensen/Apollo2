@@ -1672,6 +1672,7 @@ void App::refresh() {
       update_heating(snap);
       const core::ScaleSnapshot bsnap = bench_snapshot();
       const core::ScaleFeatures bfeat = bench_features();
+      dose_tick(snap);  // before update_home: a block going dormant gets its name back now
       update_home(home_, snap, battery_state_, clock_->now(), clock_->use_24h(),
                   display_->use_fahrenheit(), scale_->snapshot(), scale_->features(),
                   scale_connect_enabled(), brew_->snapshot(), net_status(), heating_,
@@ -1692,7 +1693,6 @@ void App::refresh() {
     }
     update_temp_panels(snap);
     schedule_tick(snap);
-    dose_tick(snap);
     // The MICRA card's countdown: only while auto-standby is really counting
     // (armed, connected, on) and the user asked to see it.
     {
@@ -2081,7 +2081,7 @@ void App::rebuild() {
   // through g_update_check directly, not through the App.)
   build(*machine_, *provisioner_, *battery_, *display_, *clock_, *history_, *scale_,
         bench_, *scale_provisioner_, *brew_, *network_, *sound_, *shots_, screen_, updates_,
-        backup_, *schedule_);
+        backup_, *schedule_, dose_settings_);
   show_tab(1);                       // back to Settings...
   select_settings_section(section);  // ...on the section that triggered the rebuild
 
@@ -3037,7 +3037,10 @@ void App::pump_scale_chart() {
         bsnap.phase == core::ShotPhase::kBrewing && shot_phase_ != core::ShotPhase::kBrewing;
     // The shot STARTING spends the pending dose: it is in the portafilter in
     // the machine by now. Kept for the record and the review chip.
-    if (entering_brew) shot_dose_g_ = dose_active() ? dose_.take_for_shot() : 0.0f;
+    if (entering_brew) {
+      shot_dose_g_ = dose_active() ? dose_.take_for_shot() : 0.0f;
+      review_out_g_ = 0.0f;
+    }
     // A bench-only unit has no espresso scale to plot a shot from: its graph
     // keeps sweeping the bench weight and the shot plot never starts.
     if (entering_brew && home_.bench_only) {
@@ -4054,6 +4057,7 @@ void App::capture_shot_record(const core::BrewSnapshot& bsnap,
   r.summary.mode = bsnap.mode;
   r.summary.wired = bsnap.paddle_wired;
   r.summary.dose_g = shot_dose_g_;
+  review_out_g_ = final_g;  // the review chip shows the stored yield, frozen
   shots_->save(r);
   // The History list notices count() changed on its next visible refresh.
 }
@@ -5314,10 +5318,8 @@ void App::dose_tick(const core::MachineSnapshot& snap) {
   in.bench_g = b.weight_g;
   in.bench_connected = b.connected;
   in.bench_up = b.connected;
-  // The espresso link counts as "lost" only if a scale is saved there.
-  const bool espresso_saved =
-      scale_provisioner_ != nullptr && !scale_provisioner_->saved_name().empty();
-  in.espresso_up = scale_ == nullptr || !espresso_saved || scale_->snapshot().connected;
+  // dose_active() already implies an espresso scale is saved (not bench-only).
+  in.espresso_up = scale_ == nullptr || scale_->snapshot().connected;
   in.screensaver = screensaver_on_;
   in.power_known = snap.link == core::Link::Connected;
   in.machine_on = snap.power == core::Power::On;
@@ -5342,11 +5344,15 @@ void App::dose_tick(const core::MachineSnapshot& snap) {
   } else if (shot_dose_g_ <= 0.0f) {
     ui::set_dose_chip(home_, 0, 0.0f, 0.0f);  // a shot without a dose
   } else if (bs.phase == core::ShotPhase::kReview) {
-    // The settled yield, net like the frozen readout (unwired shots never
-    // tare: subtract the detector's baseline).
-    const core::ScaleSnapshot s = scale_ != nullptr ? scale_->snapshot() : core::ScaleSnapshot{};
-    const float out = s.weight_g - (bs.paddle_wired ? 0.0f : bs.start_weight_g);
-    ui::set_dose_chip(home_, 3, shot_dose_g_, out);
+    // The settled yield, FROZEN like the graph: the stored record's final
+    // weight when a record was captured, else the readout's net weight at
+    // the first review tick (unwired shots never tare: minus the baseline).
+    // Lifting the cup mid-review must not change it.
+    if (review_out_g_ <= 0.0f) {
+      const core::ScaleSnapshot s = scale_ != nullptr ? scale_->snapshot() : core::ScaleSnapshot{};
+      review_out_g_ = s.weight_g - (bs.paddle_wired ? 0.0f : bs.start_weight_g);
+    }
+    ui::set_dose_chip(home_, 3, shot_dose_g_, review_out_g_);
   } else {
     ui::set_dose_chip(home_, 2, shot_dose_g_, 0.0f);
   }
@@ -5372,7 +5378,9 @@ void App::pose_dose(int pose) {
 }
 
 void App::record_dose() {
-  if (!dose_active()) return;
+  // Only the offered block takes a tap: dormant (nothing dose-sized on the
+  // bench) and recorded (no double record) blocks ignore it.
+  if (!dose_active() || home_.bench_dose_state != 1) return;
   const float d = dose_.record();
   if (d <= 0.0f) {
     // The reading is still moving or isn't dose-sized: the block shouldn't
@@ -5405,6 +5413,10 @@ void App::capture_dose_container(int index) {
   const core::ScaleSnapshot b = bench_->snapshot();
   if (!b.connected) {
     show_toast("Connect the bench scale first.");
+    return;
+  }
+  if (!dose_.reading_stable()) {
+    show_toast("Scale settling...");
     return;
   }
   if (!core::DoseTracker::container_ok(b.weight_g)) {
@@ -5445,6 +5457,10 @@ void App::clear_dose_container(int index) {
 
 void App::sync_dose_settings_rows() {
   if (settings_.dose_switch == nullptr || dose_settings_ == nullptr) return;
+  // The rows only mean something with a bench scale saved.
+  const bool show = bench_saved();
+  if (show) lv_obj_remove_flag(settings_.dose_switch_row, LV_OBJ_FLAG_HIDDEN);
+  else lv_obj_add_flag(settings_.dose_switch_row, LV_OBJ_FLAG_HIDDEN);
   if (dose_enabled_) lv_obj_add_state(settings_.dose_switch, LV_STATE_CHECKED);
   else lv_obj_remove_state(settings_.dose_switch, LV_STATE_CHECKED);
   const core::DoseConfig dc = dose_settings_->config();
@@ -5457,7 +5473,7 @@ void App::sync_dose_settings_rows() {
     if (g > 0.0f) lv_obj_remove_flag(settings_.dose_clear_btn[i], LV_OBJ_FLAG_HIDDEN);
     else lv_obj_add_flag(settings_.dose_clear_btn[i], LV_OBJ_FLAG_HIDDEN);
     // The rows only matter while the feature is on.
-    if (dose_enabled_) lv_obj_remove_flag(settings_.dose_container_row[i], LV_OBJ_FLAG_HIDDEN);
+    if (show && dose_enabled_) lv_obj_remove_flag(settings_.dose_container_row[i], LV_OBJ_FLAG_HIDDEN);
     else lv_obj_add_flag(settings_.dose_container_row[i], LV_OBJ_FLAG_HIDDEN);
   }
 }

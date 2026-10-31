@@ -1345,6 +1345,9 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   out.scale_card = out.bench_card = nullptr;
   out.bench_weight = out.bench_name = out.bench_block = nullptr;
   out.bench_dose_state = 0;
+  out.dose_chip = out.dose_in_label = out.dose_out_label = out.dose_ratio_label =
+      out.dose_x_label = nullptr;
+  out.dose_chip_state = 0;
   out.bench_status_dot = out.bench_status_label = nullptr;
   out.bench_batt_label = out.bench_batt_pct_label = nullptr;
   out.bench_tare_btn = out.bench_connect_btn = out.bench_connect_label = nullptr;
