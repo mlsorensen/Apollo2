@@ -48,6 +48,43 @@ class FinderCallbacks final : public NimBLEScanCallbacks {
 
 }  // namespace
 
+namespace {
+// Evidence for link drops (owner, 2026-10-31: four Micra drops in 14 min
+// on the X-8 with an Umbra connected as a peripheral): the HCI reason the
+// controller gives for every disconnect, and the parameters each link
+// settled on. Supervision timeout = the radio lost it; "remote terminated"
+// = the peer closed it; "local host terminated" = we did.
+const char* hci_reason_name(int reason) {
+  switch (reason >= 0x200 ? reason - 0x200 : reason) {  // BLE_HS_HCI_ERR() base
+    case 0x08: return "supervision timeout";
+    case 0x13: return "remote terminated";
+    case 0x16: return "local host terminated";
+    case 0x22: return "LMP response timeout";
+    case 0x3B: return "unacceptable conn interval";
+    case 0x3E: return "failed to establish";
+    default: return "?";
+  }
+}
+
+class LinkCallbacks : public NimBLEClientCallbacks {
+ public:
+  void onConnect(NimBLEClient* c) override {
+    const NimBLEConnInfo info = c->getConnInfo();
+    core::logf("NimbleCentral: %s connected, interval %.2f ms, latency %u, timeout %u ms\n",
+               c->getPeerAddress().toString().c_str(),
+               static_cast<double>(info.getConnInterval()) * 1.25,
+               static_cast<unsigned>(info.getConnLatency()),
+               static_cast<unsigned>(info.getConnTimeout()) * 10);
+  }
+  void onDisconnect(NimBLEClient* c, int reason) override {
+    core::logf("NimbleCentral: %s disconnected, reason 0x%x (%s)\n",
+               c->getPeerAddress().toString().c_str(), static_cast<unsigned>(reason),
+               hci_reason_name(reason));
+  }
+};
+LinkCallbacks g_link_callbacks;  // stateless; shared by every client
+}  // namespace
+
 namespace platform {
 
 std::vector<core::ScanResult> NimbleCentral::scan(uint32_t ms) {
@@ -106,7 +143,10 @@ void NimbleCentral::cancel_scan() {
 bool NimbleCentral::connect(const std::string& mac, core::AddrType type,
                             bool prefer_random, uint32_t timeout_ms) {
   ensure_host();
-  if (client_ == nullptr) client_ = NimBLEDevice::createClient();
+  if (client_ == nullptr) {
+    client_ = NimBLEDevice::createClient();
+    client_->setClientCallbacks(&g_link_callbacks, /*deleteCallbacks=*/false);
+  }
   if (timeout_ms > 0) client_->setConnectTimeout(timeout_ms);
   conn_type_ = core::AddrType::kUnknown;
   // Arbiter telltale: a connect starting while a scan runs means two links
