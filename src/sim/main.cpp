@@ -379,6 +379,33 @@ int main() {
           false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 4);
   brew.set_phase(core::ShotPhase::kIdle);
   ok &= r({800, 480}, "renders/scale_shot_dose_800x480.png", 1, ui::kSectionScaleSettings);
+  // The same states in the Ferrari theme (10): the owner's design page.
+  {
+    constexpr int kFerrari = 10;
+    bench.set_bench_weight(498.3f);
+    ok &= r({800, 480}, "renders/dose_ferrari_record_800x480.png", 0, -1, false, kFerrari, -1,
+            false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 1, 1);
+    disp.set_bench_home_style(1);
+    ok &= r({800, 480}, "renders/dose_ferrari_recorded_800x480.png", 0, -1, false, kFerrari, -1,
+            false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 2);
+    ok &= r({1280, 800, 1.6f}, "renders/dose_ferrari_recorded_1280x800.png", 0, -1, false, kFerrari,
+            -1, false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 2);
+    disp.set_bench_home_style(0);
+    bench.set_bench_weight(412.5f);
+    brew.set_phase(core::ShotPhase::kBrewing);
+    brew.set_shot_ms(9000);
+    ok &= r({800, 480}, "renders/dose_ferrari_shot_800x480.png", 0, -1, false, kFerrari, -1,
+            false, -1, 0, false, false, 9000, false, false, false, false, 0, -1, false, -1, 0, 3);
+    brew.set_phase(core::ShotPhase::kReview);
+    brew.set_shot_ms(27000);
+    ok &= r({800, 480}, "renders/dose_ferrari_review_800x480.png", 0, -1, false, kFerrari, -1,
+            false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 4);
+    brew.set_phase(core::ShotPhase::kIdle);
+    ok &= r({800, 480}, "renders/dose_ferrari_settings_800x480.png", 1, ui::kSectionScaleSettings,
+            false, kFerrari);
+    ok &= r({800, 480}, "renders/dose_ferrari_shot_card_800x480.png", 2, -1, false, kFerrari, 2,
+            false, 14);
+  }
   scale_provisioner.set_saved(false);
   ok &= r({800, 480}, "renders/home_bench_only_800x480.png");
   scale_provisioner.set_saved(true);
