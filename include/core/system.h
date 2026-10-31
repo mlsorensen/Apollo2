@@ -17,5 +17,13 @@ void sleep_ms(uint32_t ms);
 
 // printf-style diagnostic log. No implicit newline.
 void logf(const char* fmt, ...);
+// "Detailed log" (Settings > Apollo > Display): the steady-state chatter —
+// per-minute perf line, saver/paddle/update-check housekeeping, finder and
+// detector traces, IDF's info-level lines — is written only while this is
+// on. Event lines (links, shots, dose, schedule, memory tripwires, errors)
+// always are. Live-switchable; the platform also sizes the ring from it at
+// boot (512 KB on / 128 KB off, PSRAM).
+bool log_detail();
+void set_log_detail(bool on);
 
 }  // namespace core

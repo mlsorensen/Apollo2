@@ -92,6 +92,7 @@ class MicraLink : public IMachine {
   std::string address_;         // guarded by mutex_
   AddrType addr_type_ = AddrType::kUnknown;  // guarded by mutex_
   std::function<void(AddrType)> addr_type_learned_;  // set once before run()
+  uint32_t connect_fails_ = 0;  // consecutive; the log keeps the 1st, 2nd, then every 20th
   // Consecutive failed known-type connects. After kKnownTypeFailLimit the
   // next try goes back to BOTH types and relearns — a stored type can never
   // strand the link (the scale link has the same valve). Link thread only.

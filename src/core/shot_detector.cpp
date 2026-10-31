@@ -88,7 +88,8 @@ ShotDetector::Status ShotDetector::poll(uint32_t now_ms, float weight_g,
         t_cand_ = t_ref;  // retroactive: flow was already running at the window's tail
         w_cand_ = w_ref;
         t_cross_ = now_ms;
-        logf("ShotDetector: candidate (flow %.2f g/s)\n", static_cast<double>(flow));
+        if (log_detail())
+          logf("ShotDetector: candidate (flow %.2f g/s)\n", static_cast<double>(flow));
       }
       break;
 

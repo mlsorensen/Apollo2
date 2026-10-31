@@ -283,10 +283,14 @@ void UmbraPartner::send_setting(int index, int value) {
 
 void UmbraPartner::start_advertising() {
   if (advertising_ != nullptr && !advertising_->isAdvertising()) {
-    if (advertising_->start())
+    static bool s_fail_logged = false;  // one line per run of failures
+    if (advertising_->start()) {
       core::logf("UmbraPartner: advertising LUNAR-APOLLO\n");
-    else
-      core::logf("UmbraPartner: advertising start failed\n");
+      s_fail_logged = false;
+    } else if (!s_fail_logged) {
+      core::logf("UmbraPartner: advertising start failed (retrying quietly)\n");
+      s_fail_logged = true;
+    }
   }
 }
 

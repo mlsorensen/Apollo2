@@ -148,6 +148,7 @@ class ScaleLink : public IScale, public IScaleSink {
   // have been known to change it). Link thread only.
   int known_type_fails_ = 0;
   std::function<void(AddrType)> addr_type_learned_;  // set once before run()
+  uint32_t connect_fails_ = 0;  // consecutive; the log keeps the 1st, 2nd, then every 20th
 
   // Model driver for the saved scale; refreshed per connection attempt.
   // Guarded by mutex_; shared_ptr so the notify callback + link loop keep a

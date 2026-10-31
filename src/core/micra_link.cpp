@@ -273,8 +273,13 @@ bool MicraLink::do_connect(const std::string& address, const std::string& token,
   // A learned type is one try; unknown tries both, public first (Micras
   // advertise a public address more often than not).
   if (!ble_.connect(address, type, /*prefer_random=*/false, kConnectTimeoutMs)) {
-    logf("MicraLink: connect failed (%s)\n",
-         type != AddrType::kUnknown ? addr_type_name(type) : "public+random");
+    // Every 8 s while the machine is off would fill the ring: 1st, 2nd, then
+    // every 20th (~3 min) — the link state line marks the start anyway.
+    ++connect_fails_;
+    if (connect_fails_ <= 2 || connect_fails_ % 20 == 0)
+      logf("MicraLink: connect failed (%s) x%u\n",
+           type != AddrType::kUnknown ? addr_type_name(type) : "public+random",
+           static_cast<unsigned>(connect_fails_));
     return false;
   }
   // Learn the type the connect used so later connects are a single try (a
@@ -325,6 +330,8 @@ bool MicraLink::do_connect(const std::string& address, const std::string& token,
     ble_.read(kDisFirmware, dis_firmware_);
     ble_.read(kDisSoftware, dis_software_);
   }
+
+  connect_fails_ = 0;
 
   logf("MicraLink: connected + authenticated\n");
   return true;

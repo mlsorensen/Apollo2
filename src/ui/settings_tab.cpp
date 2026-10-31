@@ -299,6 +299,12 @@ void build_device_display_rows(lv_obj_t* page, const lv_font_t* text_font,
   lv_obj_t* rp = make_setting_row(page, "Performance overlay", text_font);
   out.perf_overlay_switch = lv_switch_create(rp);
   lv_obj_set_size(out.perf_overlay_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
+
+  // Detailed log: the per-minute perf/heap lines and other housekeeping in
+  // the log ring (events are always logged). Also sizes the ring at boot.
+  lv_obj_t* rdl = make_setting_row(page, "Detailed log", text_font);
+  out.detailed_log_switch = lv_switch_create(rdl);
+  lv_obj_set_size(out.detailed_log_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 }
 
 // A bare dropdown for a time/date field: tier font on the button AND the popup

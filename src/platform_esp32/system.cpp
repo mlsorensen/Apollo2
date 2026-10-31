@@ -52,16 +52,20 @@ int idf_log_to_ring(const char* fmt, va_list args) {
   va_copy(copy, args);
   const int n = vsnprintf(buf, sizeof(buf), fmt, copy);
   va_end(copy);
-  if (n > 0) core::log_ring().write(buf, /*echo=*/false);
+  // IDF's own info/debug lines are chatter; warnings and errors always go in.
+  const bool info = n > 0 && (buf[0] == 'I' || buf[0] == 'D' || buf[0] == 'V');
+  if (n > 0 && (!info || core::log_detail())) core::log_ring().write(buf, /*echo=*/false);
   return s_chain_vprintf != nullptr ? s_chain_vprintf(fmt, args) : n;
 }
 
 }  // namespace
 
-void log_init() {
-  // PSRAM keeps a generous window; the internal fallback still covers a full
-  // boot plus several minutes of steady-state chatter.
-  constexpr size_t kPsramCap = 128 * 1024;  // ~13 h of a minute's telemetry (owner, 2026-10-31)
+void log_init(bool detailed) {
+  // PSRAM keeps a generous window, sized by the Detailed log setting (read
+  // from NVS before this; a resize takes the next boot): 512 KB with the
+  // per-minute chatter on (~2 days), 128 KB without (events only — weeks).
+  // The internal fallback still covers a full boot plus several minutes.
+  const size_t kPsramCap = (detailed ? 512 : 128) * 1024;
   constexpr size_t kInternalCap = 12 * 1024;
   size_t cap = kPsramCap;
   char* buf = static_cast<char*>(

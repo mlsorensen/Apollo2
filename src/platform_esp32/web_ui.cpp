@@ -221,9 +221,10 @@ void WebUi::handle_log() {
   // display is frozen for the duration -- that freeze is deliberate (see
   // web_ui.h: serving while LVGL renders starves the panel's bounce buffer),
   // so the lever we have is to serve less. 4KB keeps it brief; `?full=1` still
-  // gets the whole ring for a real diagnosis. The ring is a FIXED 64KB, so the
-  // full response never grows beyond that however long the device has been up
-  // (measured ~329 B/min, i.e. the ring holds roughly 3.3 hours).
+  // gets the whole ring for a real diagnosis. The ring is sized at boot by the
+  // Detailed log setting (128 KB / 512 KB, see log_init), so the full
+  // response is bounded by that — on an RGB board the 512 KB page freezes
+  // the screen for a few seconds, which is the price of asking for it.
   constexpr size_t kTailBytes = 4 * 1024;
   const bool full = server_.hasArg("full");
   size_t start = (!full && n > kTailBytes) ? n - kTailBytes : 0;
@@ -445,8 +446,9 @@ void WebUi::handle_summary() {
   int len = std::snprintf(
       buf, sizeof(buf),
       "{\"name\":\"%s\",\"version\":\"%s\",\"coredump\":%u,"
-      "\"bootloader\":\"%s\",\"epoch\":%d,\"touch\":",
-      name_, fw::kVersion, static_cast<unsigned>(cd_size), bl_idf, fw::kFlashEpoch);
+      "\"bootloader\":\"%s\",\"epoch\":%d,\"log_detail\":%s,\"touch\":",
+      name_, fw::kVersion, static_cast<unsigned>(cd_size), bl_idf, fw::kFlashEpoch,
+      core::log_detail() ? "true" : "false");
   if (len < 0 || static_cast<size_t>(len) >= sizeof(buf)) len = 0;
   const int tl = format_touch_health(buf + len, sizeof(buf) - len, th, now_ms);
   if (tl > 0 && static_cast<size_t>(len + tl) < sizeof(buf)) len += tl;

@@ -155,6 +155,8 @@ class Config {
 
   bool perf_overlay() const;  // LVGL FPS/CPU overlay (default false)
   void set_perf_overlay(bool on);
+  bool detailed_log() const;  // steady-state chatter in the log ring + a 512 KB ring (default false)
+  void set_detailed_log(bool on);
   bool click_sound() const;  // button-press click (default true; audio boards)
   void set_click_sound(bool on);
   int ready_chime_volume() const;  // warm-up chime level 0..100, 0 = off

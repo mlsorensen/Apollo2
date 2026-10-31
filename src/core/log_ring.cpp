@@ -1,5 +1,18 @@
 #include "core/log_ring.h"
 
+#include <atomic>
+
+#include "core/system.h"
+
+namespace {
+std::atomic<bool> s_log_detail{false};
+}  // namespace
+
+namespace core {
+bool log_detail() { return s_log_detail.load(std::memory_order_relaxed); }
+void set_log_detail(bool on) { s_log_detail.store(on, std::memory_order_relaxed); }
+}  // namespace core
+
 #include <cstdio>
 #include <cstring>
 #include <ctime>

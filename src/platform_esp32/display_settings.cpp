@@ -116,5 +116,7 @@ void DisplaySettings::set_ready_chime_volume(int percent) {
 }
 
 void DisplaySettings::set_perf_overlay(bool on) { config_.set_perf_overlay(on); }
+bool DisplaySettings::detailed_log() const { return config_.detailed_log(); }
+void DisplaySettings::set_detailed_log(bool on) { config_.set_detailed_log(on); }
 
 }  // namespace platform

@@ -335,7 +335,8 @@ void ScaleLink::run() {
         // short direct connect on its next poll.
         const Sighting s = ble_.scan_for(arb_.finder_targets(), RadioArbiter::kChunkMs);
         if (s.found) {
-          logf("ScaleLink: finder saw %s (%s)\n", radio_slot_name(s.slot),
+          if (log_detail())
+            logf("ScaleLink: finder saw %s (%s)\n", radio_slot_name(s.slot),
                addr_type_name(s.type));
           arb_.report_sighting(s.slot, s.type, now_ms());
         }
@@ -487,9 +488,11 @@ bool ScaleLink::do_connect(const std::string& address, AddrType type,
   // timed out fully before falling back to RANDOM).
   const bool known = type != AddrType::kUnknown;
   if (!ble_.connect(address, type, /*prefer_random=*/true, timeout_ms)) {
-    logf("ScaleLink: connect failed (%s, %lu ms)\n",
-         known ? addr_type_name(type) : "random+public",
-         static_cast<unsigned long>(timeout_ms));
+    ++connect_fails_;  // a scale asleep all day: 1st, 2nd, then every 20th
+    if (connect_fails_ <= 2 || connect_fails_ % 20 == 0)
+      logf("ScaleLink: connect failed (%s, %lu ms) x%u\n",
+           known ? addr_type_name(type) : "random+public",
+           static_cast<unsigned long>(timeout_ms), static_cast<unsigned>(connect_fails_));
     return false;
   }
   // Learn the type the connect actually used: persisted by the platform so
@@ -531,6 +534,8 @@ bool ScaleLink::do_connect(const std::string& address, AddrType type,
     ble_.disconnect();
     return false;
   }
+
+  connect_fails_ = 0;
 
   logf("ScaleLink: %s connected + subscribed (%s)\n", drv->model(),
        addr_type_name(used));
@@ -667,7 +672,8 @@ void ScaleLink::do_scan() {
       // Logged so an unsupported scale's advertised name can be read off the
       // Log page instead of guessed at — new models keep appearing with
       // names the filter doesn't know yet.
-      logf("ScaleLink: scan skipped '%s' (%d dBm)\n", r.name, r.rssi);
+      if (log_detail())
+        logf("ScaleLink: scan skipped '%s' (%d dBm)\n", r.name, r.rssi);
       continue;
     }
     found.push_back(r);

@@ -73,6 +73,7 @@ Settings
 ├─ Apollo
 │  ├─ Display     — Brightness* · Screen timeout · Idle screen (Lion/Apollo/Alternate/Dim/Off)
 │  │               · Theme · Fahrenheit · Button sounds* · Performance overlay
+│  │               · Detailed log
 │  ├─ Time & date — Time · Date · 24-hour · Timezone
 │  ├─ WiFi        — Enable · Status · Set up WiFi → QR portal (network, time zone,
 │  │                 DHCP / static address) · Forget
@@ -753,6 +754,13 @@ page fits on screen with little to no scrolling.
   powered down until the next restart.
 - ⑦ **Performance overlay** *(default off)* — LVGL FPS/CPU overlay, for
   debugging.
+- ⑧ **Detailed log** *(default off)* — keeps the minute-by-minute
+  housekeeping in the diagnostic log (performance and memory lines, the
+  screensaver's art changes, update checks, the scale finder's traces) and
+  gives the log a 512 KB buffer (about two days) from the next restart.
+  Off, the log holds events only — connections and their reasons, shots,
+  doses, the schedule, memory warnings — in 128 KB, which lasts weeks. Turn
+  it on when asked to help diagnose something.
 
 ### Time & date
 

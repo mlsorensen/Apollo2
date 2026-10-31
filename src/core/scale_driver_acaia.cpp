@@ -635,7 +635,8 @@ class AcaiaDriver : public IScaleDriver {
       if (w < -0.5f && w > -20.0f && baseline_g_ - w > 2.5f) {
         holding_ = true;
         hold_since_ms_ = now;
-        logf("AcaiaDriver: [%u] auto-zero hold (w=%.1f baseline=%.1f)\n",
+        if (log_detail())
+          logf("AcaiaDriver: [%u] auto-zero hold (w=%.1f baseline=%.1f)\n",
              static_cast<unsigned>(now), static_cast<double>(w),
              static_cast<double>(baseline_g_));
         return false;
@@ -660,7 +661,8 @@ class AcaiaDriver : public IScaleDriver {
     }
     if (now - hold_since_ms_ > kHoldTimeoutMs) {
       holding_ = false;  // no return, no contact spike: a real change — adopt it
-      logf("AcaiaDriver: [%u] auto-zero hold released (real change w=%.1f)\n",
+      if (log_detail())
+        logf("AcaiaDriver: [%u] auto-zero hold released (real change w=%.1f)\n",
            static_cast<unsigned>(now), static_cast<double>(w));
       baseline_g_ = w;
       return true;

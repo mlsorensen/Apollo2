@@ -205,6 +205,7 @@ class App {
   void set_drop_negative_flow(bool on);  // Scale "Drop negative g/s" switch
   void set_scope_graph(bool on);         // Scale "Oscilloscope graph" switch
   void set_perf_overlay(bool on);        // Device "Performance overlay" switch
+  void set_detailed_log(bool on);        // Device "Detailed log" switch
   void set_click_sound(bool on);         // Device "Button sounds" switch
   // Micra "Chime volume": linear 0-100 (0 = Off), slider + [-]/[+]. sound.cpp
   // maps it onto a dB curve so the steps are even by ear.

@@ -186,7 +186,11 @@ void setup() {
 
   // Log ring before the first diagnostic, so the banner onward is replayable
   // from Stats > Info or http://<ip>/log after the fact.
-  platform::log_init();
+  // The Detailed log setting decides the ring's size and what goes in it;
+  // read before anything logs (Preferences works before Config::begin —
+  // an absent namespace reads as the default, off).
+  core::set_log_detail(g_config.detailed_log());
+  platform::log_init(g_config.detailed_log());
   platform::crash_record::install();  // failed-allocation flight recorder
 
   delay(300);  // let USB-CDC enumerate
@@ -408,7 +412,8 @@ void setup() {
     if (static_cast<int>(s.link) != last_link || static_cast<int>(s.power) != last_power) {
       last_link = static_cast<int>(s.link);
       last_power = static_cast<int>(s.power);
-      core::logf("Paddle standby check: link=%d power=%s -> %s\n", last_link,
+      if (core::log_detail())
+        core::logf("Paddle standby check: link=%d power=%s -> %s\n", last_link,
                  s.power == core::Power::On        ? "On"
                  : s.power == core::Power::Standby ? "Standby"
                                                    : "Off",
@@ -752,6 +757,7 @@ void loop() {
     // % of the window, for lvgl and the graph pump.
     if (millis() - last >= kTelemetryMs) {
       last = millis();
+      if (core::log_detail())
       core::logf("perf: lvgl %uf avg %u worst %uus %u%% | pump avg %u worst %uus %u%%\n",
                  static_cast<unsigned>(iters),
                  static_cast<unsigned>(iters ? acc / iters : 0),
@@ -823,8 +829,10 @@ void loop() {
   // sampling blind spot and costs nothing to read. It tracks free bytes rather
   // than largest block (the allocator doesn't track that), which is the one
   // thing the sampler did give us -- so largest is still read at log time.
+  // Every minute with Detailed log on, every 15 min off (the memwatch
+  // tripwires and the failed-allocation census log regardless).
   static uint32_t last_heap_log_ms = 0;
-  if (millis() - last_heap_log_ms >= kTelemetryMs) {
+  if (millis() - last_heap_log_ms >= (core::log_detail() ? kTelemetryMs : 15 * kTelemetryMs)) {
     last_heap_log_ms = millis();
     // loop_hw = bytes of THIS task's stack never touched. ARDUINO_LOOP_STACK_SIZE
     // is 16KB by guess (a past overflow on theme rebuild + WiFi bring-up); this
@@ -1006,7 +1014,8 @@ void loop() {
         boot_done = true;
         core::logf("UpdateCheck: boot check unreachable after retries\n");
       } else {
-        core::logf("UpdateCheck: automatic check at boot (try %d)\n", ++boot_tries);
+        if (core::log_detail())
+          core::logf("UpdateCheck: automatic check at boot (try %d)\n", ++boot_tries);
         g_update_check.begin_check();
         next_boot_try_ms = millis() + 6000;  // space retries while DNS settles
       }
@@ -1026,7 +1035,8 @@ void loop() {
         !core::shot_in_flight(g_brew.snapshot()) &&
         millis() - last_repeat_ms >= repeat_ms) {
       last_repeat_ms = millis();
-      core::logf("UpdateCheck: %s automatic check\n",
+      if (core::log_detail())
+        core::logf("UpdateCheck: %s automatic check\n",
                  cadence == 3 ? "hourly" : "daily");
       g_update_check.begin_check();
     }

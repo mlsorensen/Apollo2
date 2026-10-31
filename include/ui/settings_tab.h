@@ -201,6 +201,7 @@ struct SettingsWidgets {
   lv_obj_t* sbatt_btn = nullptr;    // Scale > Device settings > Battery display
   lv_obj_t* sbatt_value = nullptr;  // (Apollo's own preference: Icon / Percent / Icon + %)
   lv_obj_t* perf_overlay_switch = nullptr;   // on = show LVGL FPS/CPU overlay
+  lv_obj_t* detailed_log_switch = nullptr;   // on = steady-state chatter in the log ring
   lv_obj_t* clean_lock_btn = nullptr;        // 30 s touch lockout for wiping the screen
   lv_obj_t* auto_connect_switch = nullptr;   // Micra > Bluetooth: connect to the
                                              // saved machine at boot

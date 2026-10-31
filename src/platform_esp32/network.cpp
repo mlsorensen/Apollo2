@@ -60,7 +60,8 @@ void Network::start_station() {
   // 4.3C): log what internal RAM the stack actually has to work with at init
   // time — total free + largest contiguous block (fragmentation shows up as a
   // big gap between them).
-  core::logf("Network: internal heap free=%u largest=%u\n",
+  if (core::log_detail())
+    core::logf("Network: internal heap free=%u largest=%u\n",
              static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)),
              static_cast<unsigned>(
                  heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)));

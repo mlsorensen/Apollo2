@@ -590,6 +590,11 @@ void on_scope_graph_switch(lv_event_t* e) {
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
   app->set_scope_graph(lv_obj_has_state(sw, LV_STATE_CHECKED));
 }
+void on_detailed_log_switch(lv_event_t* e) {
+  auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
+  static_cast<ui::App*>(lv_event_get_user_data(e))
+      ->set_detailed_log(lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
 void on_perf_overlay_switch(lv_event_t* e) {
   auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
   auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
@@ -1464,6 +1469,8 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     lv_obj_add_event_cb(settings_.backflush_btn, on_backflush_open, LV_EVENT_CLICKED, this);
   lv_obj_add_event_cb(settings_.perf_overlay_switch, on_perf_overlay_switch,
                       LV_EVENT_VALUE_CHANGED, this);
+  lv_obj_add_event_cb(settings_.detailed_log_switch, on_detailed_log_switch,
+                      LV_EVENT_VALUE_CHANGED, this);
   if (settings_.click_sound_switch != nullptr) {
     if (click_sound_on_) lv_obj_add_state(settings_.click_sound_switch, LV_STATE_CHECKED);
     lv_obj_add_event_cb(settings_.click_sound_switch, on_click_sound_switch,
@@ -1616,6 +1623,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   home_.flow_scope_mode = scope;
   const bool perf = display_->perf_overlay();
   if (perf) lv_obj_add_state(settings_.perf_overlay_switch, LV_STATE_CHECKED);
+  if (display_->detailed_log()) lv_obj_add_state(settings_.detailed_log_switch, LV_STATE_CHECKED);
   apply_perf_overlay(perf);  // match the saved preference (LVGL auto-shows it at init)
   if (network_ != nullptr) {
     if (network_->enabled()) lv_obj_add_state(settings_.wifi_switch, LV_STATE_CHECKED);
@@ -2023,6 +2031,12 @@ void App::set_ready_chime_vol(int percent, bool audition) {
 
 void App::ready_chime_vol_adjust(int dir) {
   set_ready_chime_vol(ready_chime_vol_ + dir * kChimeVolStep, /*audition=*/true);
+}
+
+void App::set_detailed_log(bool on) {
+  if (display_ != nullptr) display_->set_detailed_log(on);  // persist
+  core::set_log_detail(on);  // what gets written changes now; the ring's size at the next boot
+  core::logf("log: detailed %s (ring resizes at the next restart)\n", on ? "on" : "off");
 }
 
 void App::set_perf_overlay(bool on) {
@@ -2584,7 +2598,8 @@ void App::set_saver_art(int art) {
   lv_obj_set_style_image_recolor(saver_img_, lv_color_hex(kSaverColors[saver_color_i_]), 0);
   lv_obj_set_style_image_recolor_opa(saver_img_, LV_OPA_COVER, 0);
   lv_image_set_src(saver_img_, src);  // same pointer every time; contents changed
-  core::logf("saver: art %d %dx%d\n", art, map.w, map.h);
+  if (core::log_detail())
+    core::logf("saver: art %d %dx%d\n", art, map.w, map.h);
   const int src_w = static_cast<int>(src->header.w);
   const int src_h = static_cast<int>(src->header.h);
   // Explicit box + STRETCH rather than lv_image_set_scale() for the fallback:

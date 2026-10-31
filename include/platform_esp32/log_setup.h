@@ -7,6 +7,6 @@
 
 namespace platform {
 
-void log_init();
+void log_init(bool detailed);  // sizes the PSRAM ring: 512 KB detailed / 128 KB
 
 }  // namespace platform

@@ -14,6 +14,7 @@ the headings as plain lines); leave out a list that would be empty.
 ### Features
 
 - **Record your dose, see the ratio.** Put the dosed portafilter (or a dosing cup) on the bench scale: the weight becomes a Record button that stores the dose for the next shot. The graph shows `18.2 g in`, then the yield and the brew ratio (`1:2.0`) when the shot settles; History and the web page keep both. Settings > Scale > Shot settings holds the switch and your container weights.
+- **Detailed log switch.** Settings > Apollo > Display > Detailed log keeps the minute-by-minute housekeeping in the diagnostic log (and gives it a two-day buffer); off, the log holds events only and lasts weeks. The log now records why a Bluetooth link ended and the parameters each link uses.
 - **Umbra battery estimate.** A paired Umbra's battery level freezes once it sleeps, so Apollo now estimates it from a daily drain (Settings > Scale > Device settings), shown as `~41%`, with the usual low-battery warning. Calibrate drain measures your scale's real figure over one charge.
 
 ## v1.2.0

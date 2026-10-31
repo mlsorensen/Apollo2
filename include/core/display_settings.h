@@ -105,6 +105,9 @@ class IDisplaySettings {
   // sysmon label at runtime to match this.
   virtual bool perf_overlay() const = 0;
   virtual void set_perf_overlay(bool on) = 0;
+  // Detailed log: the steady-state chatter in the log ring (see core::log_detail).
+  virtual bool detailed_log() const = 0;
+  virtual void set_detailed_log(bool on) = 0;
 
   // Button-press click sound (boards with a speaker — core::ISound). Default on;
   // the row is hidden entirely when the board can't make sound.
