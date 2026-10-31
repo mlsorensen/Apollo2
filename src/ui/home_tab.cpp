@@ -474,19 +474,44 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   lv_obj_set_size(btn, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  out.flow_legend_dot = make_dot(btn, ui::dp(10), ui::theme::accent());
-  lv_obj_t* blab = lv_label_create(btn);
+  // Beside the graph the legend has two entries; stacked (one per row) it
+  // takes half the width, which the dose chip after it needs (owner).
+  lv_obj_t* entry1 = btn;
+  if (out.bench_overlay) {
+    lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(btn, ui::dp(2), 0);
+    lv_obj_set_style_pad_ver(btn, ui::dp(4), 0);
+    auto entry = [&]() {
+      lv_obj_t* e = lv_obj_create(btn);
+      lv_obj_remove_style_all(e);
+      lv_obj_remove_flag(e, LV_OBJ_FLAG_SCROLLABLE);
+      lv_obj_add_flag(e, LV_OBJ_FLAG_EVENT_BUBBLE);  // the tap reaches the button
+      lv_obj_set_size(e, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+      lv_obj_set_flex_flow(e, LV_FLEX_FLOW_ROW);
+      lv_obj_set_flex_align(e, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+      lv_obj_set_style_pad_column(e, ui::dp(8), 0);
+      return e;
+    };
+    entry1 = entry();
+  }
+  out.flow_legend_dot = make_dot(entry1, ui::dp(10), ui::theme::accent());
+  lv_obj_t* blab = lv_label_create(entry1);
   lv_label_set_text(blab, flow_unit(out.flow_mode));
   lv_obj_set_style_text_color(blab, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(blab, ui::font_dp(20), 0);
   out.flow_unit_btn = btn;
   out.flow_unit_label = blab;
   if (out.bench_overlay) {
-    lv_obj_t* spacer = lv_obj_create(btn);
-    lv_obj_remove_style_all(spacer);
-    lv_obj_set_size(spacer, ui::dp(6), 1);
-    out.flow_legend_dot2 = make_dot(btn, ui::dp(10), ui::theme::bench());
-    out.flow_unit_label2 = lv_label_create(btn);
+    lv_obj_t* entry2 = lv_obj_create(btn);
+    lv_obj_remove_style_all(entry2);
+    lv_obj_remove_flag(entry2, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(entry2, LV_OBJ_FLAG_EVENT_BUBBLE);
+    lv_obj_set_size(entry2, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(entry2, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(entry2, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(entry2, ui::dp(8), 0);
+    out.flow_legend_dot2 = make_dot(entry2, ui::dp(10), ui::theme::bench());
+    out.flow_unit_label2 = lv_label_create(entry2);
     lv_label_set_text(out.flow_unit_label2, "g");
     lv_obj_set_style_text_color(out.flow_unit_label2, lv_color_hex(ui::theme::text()), 0);
     lv_obj_set_style_text_font(out.flow_unit_label2, ui::font_dp(20), 0);
@@ -516,16 +541,13 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
       lv_obj_set_style_text_font(l, ui::font_dp(size), 0);
       return l;
     };
-    // Beside the graph the plot is narrower and the legend has two entries:
-    // the full "in / out / ratio" chip at the legend's size ran into the
-    // bench axis labels (owner, X-8), so it steps down a size there.
-    const int chip_font = out.bench_overlay ? 16 : 20;
+    const int chip_font = 20;  // the legend stacks beside the graph, so the chip keeps its size
     out.dose_in_label = label(ui::theme::text(), chip_font);
     out.dose_out_label = label(ui::theme::muted(), chip_font);
     lv_obj_set_style_pad_left(out.dose_out_label, ui::dp(6), 0);
     out.dose_ratio_label = label(ui::theme::bench(), chip_font);
     lv_obj_set_style_pad_left(out.dose_ratio_label, ui::dp(6), 0);
-    out.dose_x_label = label(ui::theme::muted(), out.bench_overlay ? 12 : 14);
+    out.dose_x_label = label(ui::theme::muted(), 14);
     lv_label_set_text(out.dose_x_label, LV_SYMBOL_CLOSE);
     lv_obj_add_flag(chip, LV_OBJ_FLAG_HIDDEN);
     out.dose_chip = chip;
@@ -1199,21 +1221,17 @@ void set_dose_chip(HomeWidgets& w, int state, float in_g, float out_g) {
     w.dose_chip_state = 0;
     return;
   }
-  // Beside the graph (the narrow plot, two-entry legend) the chip drops the
-  // unit on in/out: "18.2 in  36.4 out  1:2.0" — it ran into the bench axis
-  // labels at 800 px otherwise.
-  const bool terse = w.bench_overlay;
   char b[24];
-  std::snprintf(b, sizeof(b), terse ? "%.1f in" : "%.1f g in", static_cast<double>(in_g));
+  std::snprintf(b, sizeof(b), "%.1f g in", static_cast<double>(in_g));
   ui::set_text(w.dose_in_label, b);
   if (state == 1) {
     ui::set_text(w.dose_out_label, "");
     ui::set_text(w.dose_ratio_label, "");
   } else if (state == 2) {
-    ui::set_text(w.dose_out_label, terse ? "--.- out" : "--.- g out");
+    ui::set_text(w.dose_out_label, "--.- g out");
     ui::set_text(w.dose_ratio_label, "");
   } else {
-    std::snprintf(b, sizeof(b), terse ? "%.1f out" : "%.1f g out", static_cast<double>(out_g));
+    std::snprintf(b, sizeof(b), "%.1f g out", static_cast<double>(out_g));
     ui::set_text(w.dose_out_label, b);
     const float r = core::brew_ratio(out_g, in_g);
     if (r > 0.0f) std::snprintf(b, sizeof(b), "1:%.1f", static_cast<double>(r));

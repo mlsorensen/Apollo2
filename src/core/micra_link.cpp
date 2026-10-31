@@ -47,9 +47,24 @@ bool write_with_nul(core::ble::ICentral& ble, const char* uuid,
 namespace core {
 
 bool MicraLink::read_setting(const char* name, std::string& out) {
-  if (!write_with_nul(ble_, kReadUuid, name)) return false;
+  // Two GATT procedures: the request (a write with response) and the answer
+  // (a read). Each is timed so a stall names which one the machine — or the
+  // hosted transport between the C6 and the P4 — never answered.
+  const uint32_t t0 = now_ms();
+  const bool wrote = write_with_nul(ble_, kReadUuid, name);
+  const uint32_t t_write = now_ms() - t0;
+  if (!wrote || t_write > 2000)
+    logf("MicraLink: request write '%s' %s after %lu ms\n", name, wrote ? "slow" : "FAILED",
+         static_cast<unsigned long>(t_write));
+  if (!wrote) return false;
   sleep_ms(150);  // let the machine replace the characteristic value with its answer
-  if (!ble_.read(kReadUuid, out)) return false;
+  const uint32_t t1 = now_ms();
+  const bool read = ble_.read(kReadUuid, out);
+  const uint32_t t_read = now_ms() - t1;
+  if (!read || t_read > 2000)
+    logf("MicraLink: answer read '%s' %s after %lu ms\n", name, read ? "slow" : "FAILED",
+         static_cast<unsigned long>(t_read));
+  if (!read) return false;
   return !out.empty();
 }
 
