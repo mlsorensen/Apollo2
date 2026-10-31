@@ -84,7 +84,40 @@ class LinkCallbacks : public NimBLEClientCallbacks {
   }
 };
 LinkCallbacks g_link_callbacks;  // stateless; shared by every client
+
+// NimBLE's GAP events the client/server callbacks don't surface: the result
+// of a connection parameter update (ours or the peer's) with the parameters
+// in force afterwards, and a peer's own update request.
+int gap_event_log(ble_gap_event* event, void*) {
+  switch (event->type) {
+    case BLE_GAP_EVENT_CONN_UPDATE: {
+      ble_gap_conn_desc d{};
+      const bool have = ble_gap_conn_find(event->conn_update.conn_handle, &d) == 0;
+      core::logf("BLE: conn update on handle %u: status %d%s%.2f ms, latency %u, timeout %u ms\n",
+                 static_cast<unsigned>(event->conn_update.conn_handle), event->conn_update.status,
+                 have ? " -> interval " : " (no desc) ", have ? d.conn_itvl * 1.25 : 0.0,
+                 have ? static_cast<unsigned>(d.conn_latency) : 0u,
+                 have ? static_cast<unsigned>(d.supervision_timeout) * 10 : 0u);
+      break;
+    }
+    case BLE_GAP_EVENT_CONN_UPDATE_REQ:
+    case BLE_GAP_EVENT_L2CAP_UPDATE_REQ:
+      core::logf("BLE: peer requests conn params on handle %u: interval %.2f-%.2f ms, latency %u\n",
+                 static_cast<unsigned>(event->conn_update_req.conn_handle),
+                 event->conn_update_req.peer_params->itvl_min * 1.25,
+                 event->conn_update_req.peer_params->itvl_max * 1.25,
+                 static_cast<unsigned>(event->conn_update_req.peer_params->latency));
+      break;
+    default:
+      break;
+  }
+  return 0;
+}
 }  // namespace
+
+namespace platform {
+void install_gap_event_log() { NimBLEDevice::setCustomGapHandler(gap_event_log); }
+}  // namespace platform
 
 namespace platform {
 

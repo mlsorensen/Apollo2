@@ -16,6 +16,10 @@ class NimBLEClient;  // fwd — keep NimBLE headers out of everything upstream
 
 namespace platform {
 
+// Log connection parameter updates and peer requests through NimBLE's custom
+// GAP handler. Call once after NimBLEDevice::init().
+void install_gap_event_log();
+
 class NimbleCentral : public core::ble::ICentral {
  public:
   NimbleCentral() = default;

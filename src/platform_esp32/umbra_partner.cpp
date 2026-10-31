@@ -160,8 +160,26 @@ void UmbraPartner::poll() {
       (connected_.load() || advertising_->isAdvertising()))
     stop_and_sleep();
   if (wanted) stopping_.store(false);
-  // The experiment's answer: log the link's parameters whenever they change
-  // (a granted update shows up here a few connection events later).
+  // The Umbra, central on this link, dials in at 11.25 ms and ignored a
+  // request for a slower interval sent at connect (2026-10-31). Micra + two
+  // Bookoos (all with us as master) ran for days without the Micra's polls
+  // stalling; with the Umbra connected our controller is a SLAVE scheduled
+  // every 11.25 ms, and the stalls began. SLAVE LATENCY is the tool for
+  // that: the Umbra keeps its interval, we are allowed to skip up to 4
+  // events (listening every 56 ms, still 5x the 10 Hz stream). Requested
+  // once the handshake is done (a central may refuse updates mid-setup);
+  // the GAP event log says what the Umbra answers.
+  if (connected_.load() && server_ != nullptr && handshake_done_.load() && !params_requested_) {
+    params_requested_ = true;
+    const int h = conn_handle_.load();
+    if (h >= 0) {
+      server_->updateConnParams(static_cast<uint16_t>(h), /*min*/ 9, /*max*/ 9, /*latency*/ 4,
+                                /*timeout*/ 400);
+      core::logf("UmbraPartner: requested slave latency 4 at 11.25 ms (timeout 4 s)\n");
+    }
+  }
+  // Log the link's parameters whenever they change (a granted update shows
+  // up here a few connection events later).
   if (connected_.load() && server_ != nullptr) {
     static uint16_t s_logged_interval = 0;
     static uint32_t s_last_check_ms = 0;
@@ -171,8 +189,11 @@ void UmbraPartner::poll() {
       if (h >= 0) {
         const NimBLEConnInfo info = server_->getPeerInfoByHandle(static_cast<uint16_t>(h));
         const uint16_t iv = info.getConnInterval();
-        if (iv != 0 && iv != s_logged_interval) {
+        const uint16_t lat = info.getConnLatency();
+        static uint16_t s_logged_latency = 0;
+        if (iv != 0 && (iv != s_logged_interval || lat != s_logged_latency)) {
           s_logged_interval = iv;
+          s_logged_latency = lat;
           core::logf("UmbraPartner: conn params now interval %.2f ms, latency %u, timeout %u ms\n",
                      static_cast<double>(iv) * 1.25, static_cast<unsigned>(info.getConnLatency()),
                      static_cast<unsigned>(info.getConnTimeout()) * 10);
@@ -216,15 +237,7 @@ void UmbraPartner::on_connect(uint16_t handle) {
   last_info_ms_.store(millis());
   scale_.set_partner_connected(true);
   core::logf("UmbraPartner: Umbra connected\n");
-  // EXPERIMENT (owner, 2026-10-31): the Umbra, central on this link, dials
-  // in at 11.25 ms; with the Micra and a scale also connected the X-8's
-  // Micra polls started going unanswered for 30 s stretches. Ask it for
-  // 30-50 ms (ample for a 10 Hz weight stream) and log what it grants —
-  // a peripheral can only request; the central decides.
-  if (server_ != nullptr) {
-    server_->updateConnParams(handle, /*min*/ 24, /*max*/ 40, /*latency*/ 0, /*timeout*/ 400);
-    core::logf("UmbraPartner: requested conn interval 30-50 ms (latency 0, timeout 4 s)\n");
-  }
+  params_requested_ = false;  // the slave-latency request goes out after the handshake (poll)
 }
 
 void UmbraPartner::on_disconnect() {
