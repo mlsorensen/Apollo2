@@ -12,8 +12,11 @@
 //     weights (a portafilter, a dosing cup). dose = reading minus the heaviest
 //     stored container LIGHTER than the reading; none below it = the reading
 //     IS the dose (a tared cup). Every container must weigh at least
-//     kContainerMinG: with that floor a bare dose (5..50 g) can never exceed a
-//     container, so the rule is unambiguous. Capture refuses lighter ones.
+//     kContainerMinG, and any two containers more than kDoseMaxG apart: with
+//     the floor a bare dose (5..50 g) can never exceed a container, and with
+//     the spacing a dose in the lighter of two containers can never reach the
+//     heavier one, so the rule is unambiguous. Capture refuses the rest
+//     (container_ok / container_spacing_ok).
 //   - CANDIDATE: the reading has held still for kDoseStableMs AND its net dose
 //     is dose-sized (kDoseMinG..kDoseMaxG, singles included). Only then does
 //     the bench card offer Record — a milk jug or an empty scale shows nothing.
@@ -22,9 +25,12 @@
 //     still sits on the scale the card says "recorded" instead of offering
 //     Record again (recorded_showing).
 //   - An unused pending dose clears on WALK-AWAY signals: the screensaver
-//     starting, either scale link down for kDoseLinkLostMs (grace for radio
-//     blips), the machine going to standby, and a kDoseBackstopMs backstop
-//     for setups with no saver and a scale that never sleeps. Silent.
+//     starting, either scale link DROPPING and staying down kDoseLinkLostMs
+//     (grace for radio blips — and a link already down at Record time is not
+//     a drop: an espresso scale asleep while the dose is weighed must not eat
+//     it; its downtime counts only once it has been seen up), the machine
+//     going to standby, and a kDoseBackstopMs backstop for setups with no
+//     saver and a scale that never sleeps. Silent.
 //   - Ratio = yield / dose, printed "1:2.0".
 // Cost: ~40 B of state, no allocation.
 
@@ -65,6 +71,9 @@ class DoseTracker {
   int container_count() const { return n_containers_; }
   float container(int i) const { return i >= 0 && i < n_containers_ ? containers_[i] : 0.0f; }
   static bool container_ok(float grams) { return grams >= kContainerMinG; }
+  // A new container must sit more than kDoseMaxG from every OTHER stored one
+  // (`skip` = the slot being rewritten). Returns the clashing slot, or -1.
+  static int container_clash(const float* grams, int n, int skip, float candidate);
 
   // The container rule on an arbitrary reading (grams on the bench).
   float net_dose(float reading) const;
@@ -102,8 +111,10 @@ class DoseTracker {
   float recorded_reading_g_ = 0.0f;
   uint32_t recorded_at_ms_ = 0;
 
-  // Walk-away bookkeeping.
+  // Walk-away bookkeeping. A link's downtime counts only after it was seen
+  // UP since the record (seen_up), so one asleep at Record time can't clear.
   bool espresso_down_ = false, bench_down_ = false;
+  bool espresso_seen_up_ = false, bench_seen_up_ = false;
   uint32_t espresso_down_since_ = 0, bench_down_since_ = 0;
   bool saver_was_on_ = false;
   bool power_was_known_ = false, machine_was_on_ = false;

@@ -13,6 +13,14 @@ void DoseTracker::set_containers(const float* grams, int n) {
   }
 }
 
+int DoseTracker::container_clash(const float* grams, int n, int skip, float candidate) {
+  for (int i = 0; i < n; ++i) {
+    if (i == skip || grams[i] <= 0.0f) continue;
+    if (fabs_f(grams[i] - candidate) <= kDoseMaxG) return i;
+  }
+  return -1;
+}
+
 float DoseTracker::net_dose(float reading) const {
   // The heaviest stored container lighter than the reading, if any.
   float best = 0.0f;
@@ -42,14 +50,16 @@ DoseClear DoseTracker::tick(const DoseInputs& in) {
     // isn't eaten by the level that's about to drop).
     if (in.screensaver && !saver_was_on_) why = DoseClear::Screensaver;
 
-    // Either scale link down for the grace period.
-    auto lost = [&](bool up, bool& down, uint32_t& since) {
-      if (up) { down = false; return false; }
+    // Either scale link DROPPING and staying down for the grace period. A
+    // link that has not been up since the record is not a drop.
+    auto lost = [&](bool up, bool& seen_up, bool& down, uint32_t& since) {
+      if (up) { seen_up = true; down = false; return false; }
+      if (!seen_up) return false;
       if (!down) { down = true; since = in.now_ms; return false; }
       return in.now_ms - since >= kDoseLinkLostMs;
     };
-    const bool e_lost = lost(in.espresso_up, espresso_down_, espresso_down_since_);
-    const bool b_lost = lost(in.bench_up, bench_down_, bench_down_since_);
+    const bool e_lost = lost(in.espresso_up, espresso_seen_up_, espresso_down_, espresso_down_since_);
+    const bool b_lost = lost(in.bench_up, bench_seen_up_, bench_down_, bench_down_since_);
     if (why == DoseClear::None && (e_lost || b_lost)) why = DoseClear::ScaleLost;
 
     // Machine On -> Standby while the power is known on both sides of the edge.
@@ -95,7 +105,9 @@ float DoseTracker::record() {
   pending_g_ = net_dose(last_g_);
   recorded_reading_g_ = last_g_;
   recorded_at_ms_ = now_ms_;
+  // Downtime starts counting from here, and only for a link seen up first.
   espresso_down_ = bench_down_ = false;
+  espresso_seen_up_ = bench_seen_up_ = false;
   return pending_g_;
 }
 

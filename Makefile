@@ -32,6 +32,7 @@
 #   make test-schedule      host check of the schedule engine (plain g++, <1 s)
 #   make test-battery       host check of the scale battery estimate (plain g++, <1 s)
 #   make test-dose          host check of the dose tracker (plain g++, <1 s)
+#   make test-csv           host check of the shot index row format (plain g++, <1 s)
 #   make docs-img           regenerate the manual's annotated screenshots
 #                           (docs/img/manual/) from the sim renders
 #   make webapp             rebuild the embedded web app (needs node; every
@@ -78,7 +79,7 @@ site-vendor:
         build-p4-x-7 build-p4-x-8 build-p4-x-10-1 \
         build-7b build-4-3b build-4-3c build-p4 \
         build-release build-all \
-        webapp site-vendor monitor padsense paddrive sim test-schedule test-battery test-dose docs-img lmtoken lmtoken-release lmtoken-publish clean
+        webapp site-vendor monitor padsense paddrive sim test-schedule test-battery test-dose test-csv docs-img lmtoken lmtoken-release lmtoken-publish clean
 
 flash: $(WEBAPP_HDR)
 	@tools/flash.sh $(BOARD)
@@ -224,6 +225,11 @@ test-dose:
 	@mkdir -p .pio/build
 	g++ -std=c++20 -Wall -Wextra -Iinclude tools/dose_test.cpp src/core/dose.cpp \
 	    -o .pio/build/dose_test && ./.pio/build/dose_test
+
+test-csv:
+	@mkdir -p .pio/build
+	g++ -std=c++20 -Wall -Wextra -Iinclude tools/shot_csv_test.cpp \
+	    -o .pio/build/shot_csv_test && ./.pio/build/shot_csv_test
 
 # Regenerate the manual's annotated screenshots from the sim renders. The
 # manifest (docs/img/manual/manifest.json) holds the callout coordinates; see

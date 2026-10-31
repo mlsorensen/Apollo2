@@ -52,6 +52,15 @@ int test_container_rule() {
   CHECK(near(t.net_dose(49.0f), 49.0f));   // a heavy dose still under the lightest container
   CHECK(near(t.net_dose(111.0f), 111.0f)); // exactly the container: not "lighter than"
   CHECK(DoseTracker::container_ok(50.0f) && !DoseTracker::container_ok(49.9f));
+  // Two containers closer than a dose apart would misread a dose larger than
+  // their gap (25 g in a 111 g cup = 136 g -> "6 g" against a 130 g one):
+  // Capture refuses them.
+  const float stored[] = {480.0f, 111.0f, 0.0f};
+  CHECK(DoseTracker::container_clash(stored, 3, 2, 130.0f) == 1);
+  CHECK(DoseTracker::container_clash(stored, 3, 2, 161.0f) == 1);   // exactly 50 apart: still a clash
+  CHECK(DoseTracker::container_clash(stored, 3, 2, 161.1f) == -1);
+  CHECK(DoseTracker::container_clash(stored, 3, 1, 115.0f) == -1);  // rewriting slot 1 itself
+  CHECK(DoseTracker::container_clash(stored, 3, 2, 440.0f) == 0);
   return 0;
 }
 
@@ -71,6 +80,21 @@ int test_candidate_gate() {
   CHECK(t.candidate());
   CHECK(near(t.candidate_dose(), 18.3f));
 
+  // The gate's edges are inclusive: 5.0 and 50.0 g qualify, 4.9 and 50.1 don't.
+  hold(t, 485.0f, 2200, 2000);
+  CHECK(t.candidate() && near(t.candidate_dose(), 5.0f));
+  hold(t, 484.9f, 4300, 2000);
+  CHECK(!t.candidate());
+  hold(t, 530.0f, 6400, 2000);
+  CHECK(t.candidate() && near(t.candidate_dose(), 50.0f));
+  hold(t, 530.1f, 8500, 2000);
+  CHECK(!t.candidate());
+  // At the device's 500 ms refresh the third tick (1.0 s) offers Record.
+  t.tick(in(498.3f, 20000));
+  t.tick(in(498.3f, 20500));
+  CHECK(!t.candidate());
+  t.tick(in(498.3f, 21000));
+  CHECK(t.candidate());
   // A milk jug (412.5 g, no container below it -> 412.5 g net): never a candidate.
   uint32_t now = hold(t, 412.5f, 2200, 2000);
   CHECK(!t.candidate());
@@ -167,6 +191,30 @@ int test_walk_away() {
       why = t.tick(i);
     }
     CHECK(why == DoseClear::ScaleLost && !t.has_pending());
+  }
+  // A link already DOWN at Record time is not a drop: an espresso scale
+  // asleep while the dose is weighed must not eat it. Its downtime counts
+  // only once it has been seen up.
+  {
+    DoseTracker t;
+    t.set_containers(c, 1);
+    uint32_t now = 0;
+    DoseInputs i;
+    for (int k = 0; k < 20; ++k) { i = in(498.3f, now += 100); i.espresso_up = false; t.tick(i); }
+    CHECK(t.candidate());
+    t.record();
+    for (int k = 0; k < 400; ++k) {  // 40 s still down
+      i = in(498.3f, now += 100); i.espresso_up = false;
+      CHECK(t.tick(i) == DoseClear::None);
+    }
+    CHECK(t.has_pending());
+    i = in(498.3f, now += 100); t.tick(i);  // up once (cup on the scale)
+    DoseClear why = DoseClear::None;
+    for (int k = 0; k < 310 && why == DoseClear::None; ++k) {
+      i = in(498.3f, now += 100); i.espresso_up = false;
+      why = t.tick(i);
+    }
+    CHECK(why == DoseClear::ScaleLost);  // a real drop after that still counts
   }
   // Machine on -> standby clears; unknown power never does.
   {

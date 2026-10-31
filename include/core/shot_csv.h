@@ -28,7 +28,9 @@
 //     refuse a file whose header differs, so a new header would lock every
 //     card written by older firmware out (and an older firmware, rolled back
 //     to, out of the new one). dose_g (v1.3) is the first column added this
-//     way: rows carry a 10th field the header doesn't name.
+//     way: rows carry a 10th field the header doesn't name. Corollary: an
+//     OLDER firmware that rewrites the index (a delete) re-formats every row
+//     from its own struct and drops the field — accepted.
 //   - A breaking change (reorder/remove/retype) gets a NEW header string and
 //     a migrating loader that reads the old header and rewrites the index
 //     (keep the original as shots.csv.bak).
@@ -86,7 +88,7 @@ inline bool parse_shot_index_row(const char* line, ShotSummary& out) {
              : std::strcmp(mode, "manual") == 0 ? ShotMode::kManual
                                                 : ShotMode::kAuto;
   out.wired = wired != 0;
-  out.dose_g = got >= 9 && dose > 0 ? static_cast<float>(dose) : 0.0f;
+  out.dose_g = got >= 9 && dose > 0 && dose < 1000 ? static_cast<float>(dose) : 0.0f;  // inf/garbage = none
   return true;
 }
 
