@@ -149,6 +149,8 @@ bool NimbleCentral::connect(const std::string& mac, core::AddrType type,
     client_->setClientCallbacks(&g_link_callbacks, /*deleteCallbacks=*/false);
   }
   if (timeout_ms > 0) client_->setConnectTimeout(timeout_ms);
+  if (pref_min_ != 0)
+    client_->setConnectionParams(pref_min_, pref_max_, pref_latency_, pref_timeout_);
   conn_type_ = core::AddrType::kUnknown;
   // Arbiter telltale: a connect starting while a scan runs means two links
   // hold the radio at once (the connect would silently kill the scan).
@@ -180,7 +182,14 @@ bool NimbleCentral::connect(const std::string& mac, core::AddrType type,
 
   // Discover everything now so the by-UUID lookups below hit the cache.
   for (NimBLERemoteService* svc : client_->getServices(true)) {
-    svc->getCharacteristics(true);
+    for (NimBLERemoteCharacteristic* c : svc->getCharacteristics(true)) {
+      // Detailed log: which characteristics would take a write WITHOUT a
+      // response (a request the host never waits on — the fallback if the
+      // Micra's acknowledged writes keep stalling).
+      if (core::log_detail() && c->canWriteNoResponse())
+        core::logf("NimbleCentral: %s char %s: write%s, write-no-rsp\n", mac.c_str(),
+                   c->getUUID().toString().c_str(), c->canWrite() ? "" : "(no)");
+    }
   }
   return true;
 }

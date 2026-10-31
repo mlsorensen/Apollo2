@@ -479,6 +479,8 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   lv_obj_t* entry1 = btn;
   if (out.bench_overlay) {
     lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START,
+                          LV_FLEX_ALIGN_START);  // rows flush left: the dots line up (owner)
     lv_obj_set_style_pad_row(btn, ui::dp(2), 0);
     lv_obj_set_style_pad_ver(btn, ui::dp(4), 0);
     auto entry = [&]() {

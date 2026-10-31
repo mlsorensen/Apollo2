@@ -30,6 +30,14 @@ class NimbleCentral : public core::ble::ICentral {
   bool connected() override;
   void cancel_connect() override;
   void hold_connects(bool on) override;
+  // Connection parameters this central asks for when it dials (units: 1.25 ms
+  // intervals, 10 ms timeout). Unset = NimBLE's defaults (50 ms / 2.56 s).
+  // The Micra's link uses a tighter interval so its events compete with a
+  // partner Umbra's 11.25 ms stream (see micra-gatt-stall-drops).
+  void set_preferred_conn_params(uint16_t min_itvl, uint16_t max_itvl, uint16_t latency,
+                                 uint16_t timeout) {
+    pref_min_ = min_itvl; pref_max_ = max_itvl; pref_latency_ = latency; pref_timeout_ = timeout;
+  }
 
   bool has_characteristic(const char* uuid) override;
   bool read(const char* uuid, std::string& out) override;
@@ -51,6 +59,7 @@ class NimbleCentral : public core::ble::ICentral {
   // unless THIS instance is the one connecting.
   std::atomic<bool> connecting_{false};
   core::AddrType conn_type_ = core::AddrType::kUnknown;  // type of the live link
+  uint16_t pref_min_ = 0, pref_max_ = 0, pref_latency_ = 0, pref_timeout_ = 0;  // 0 = default
 };
 
 }  // namespace platform

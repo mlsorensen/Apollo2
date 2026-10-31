@@ -591,6 +591,12 @@ void setup() {
   // Without arbitration a Settings scan silently returned nothing whenever
   // the other device sat in "Connecting" (user-reported on the 4.3C), and the
   // Micra's and the scale's reconnect attempts collided and interleaved by luck.
+  // The Micra's link at a 30 ms interval (NimBLE's default is 50 ms) with a
+  // 4 s supervision timeout: EXPERIMENT (owner, 2026-10-31) — with an Umbra
+  // connected as a partner at 11.25 ms, the Micra's acknowledged writes went
+  // unanswered for 30 s stretches and NimBLE dropped the link; more events
+  // for this link is the lever we hold (the Umbra refused a slower one).
+  g_micra.central().set_preferred_conn_params(/*24 x 1.25 =*/ 24, 24, 0, /*400 x 10 ms =*/ 400);
   g_radio.set_hold_hook(core::RadioSlot::kMicra,
                         [](bool on) { g_micra.central().hold_connects(on); });
   g_radio.set_scan_cancel_hook(core::RadioSlot::kMicra,
