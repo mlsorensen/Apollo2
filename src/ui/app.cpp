@@ -1700,6 +1700,7 @@ void App::refresh() {
                   scale_connect_enabled(), brew_->snapshot(), net_status(), heating_,
                   bench_ != nullptr ? &bsnap : nullptr, bench_ != nullptr ? &bfeat : nullptr,
                   bench_connect_enabled());
+      refit_bench_outline();  // the weight text update_home just wrote may have resized
       update_battery_runtime(battery_state_);
 
       // Critically-low pack (on battery, sustained) -> hand off to deep sleep.
@@ -2235,6 +2236,16 @@ void App::show_bench_side(bool bench) {
   // the BENCH side waits (update_home greys its pill meanwhile).
   if (bench && brew_ != nullptr && brew_->snapshot().phase != core::ShotPhase::kIdle) return;
   ui::show_bench_side(home_, bench);
+  if (bench) refit_bench_outline();  // a card fitted while hidden was fitted to no layout
+}
+
+// The panel column's Record outline is fitted over the caption + value
+// labels (set_bench_dose); an idempotent refit after anything that moves
+// them — a new weight text, the card being shown.
+void App::refit_bench_outline() {
+  if (home_.bench_dose_state == 0 || home_.bench_dose_on_caption) return;
+  ui::set_bench_dose(home_, home_.bench_dose_state,
+                     home_.bench_dose_state == 2 ? dose_.pending() : dose_.candidate_dose());
 }
 
 // Scale > Device settings addresses the picked slot (the espresso scale

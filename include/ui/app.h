@@ -215,6 +215,7 @@ class App {
   // bench card's Record block, the graph chip, and the shot record's dose.
   void dose_tick(const core::MachineSnapshot& snap);
   void record_dose();       // the bench card's Record block
+  void refit_bench_outline();  // re-fit the Record outline to its labels
   void clear_dose();        // the chip's x
   void default_dose_adjust(int dir);  // the Default dose stepper: Off, 5..30 g by 0.5
   void set_dose_enabled(bool on);

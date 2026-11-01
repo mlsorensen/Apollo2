@@ -9,7 +9,7 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 Each version lists `### Features` first, then `### Fixes` (the device shows
 the headings as plain lines); leave out a list that would be empty.
 
-## Unreleased
+## v1.3.0
 
 ### Features
 
@@ -17,6 +17,11 @@ the headings as plain lines); leave out a list that would be empty.
 - **Live readings in the graph legend.** The legend shows the espresso scale's current flow rate (or weight) and the bench scale's grams, not just the units.
 - **Detailed log switch.** Settings > Apollo > Display > Detailed log keeps the minute-by-minute housekeeping in the diagnostic log (and gives it a two-day buffer); off, the log holds events only and lasts weeks. The log now records why a Bluetooth link ended and the parameters each link uses.
 - **Umbra battery estimate.** A paired Umbra's battery level freezes once it sleeps, so Apollo now estimates it from a daily drain (Settings > Scale > Device settings), shown as `~41%`, with the usual low-battery warning. Calibrate drain measures your scale's real figure over one charge.
+
+### Fixes
+
+- **Fewer nuisance disconnects with a paired Umbra.** With the Umbra connected, a Micra request can go unanswered; Apollo used to wait 30 s, drop the link visibly and reconnect. It now re-dials after 5 s without showing a disconnect, and a scale that connects but sends nothing is re-dialled the same way. A queued command (standby, a temperature) still lands.
+- **Graph no longer comes up empty on the 8" box.** Changing Bench scale on Home could leave the flow graph blank until a restart; the graph's drawing buffer now comes from the larger memory pool.
 
 ## v1.2.0
 
@@ -30,7 +35,6 @@ the headings as plain lines); leave out a list that would be empty.
 
 ### Fixes
 
-- **Fewer nuisance disconnects with a paired Umbra.** With the Umbra connected, a Micra request can go unanswered; Apollo used to wait 30 s, drop the link visibly and reconnect. It now re-dials after 5 s without showing a disconnect, and a scale that connects but sends nothing is re-dialled the same way. A queued command (standby, a temperature) still lands.
 - **Steadier Bluetooth.** One radio listener at a time across the machine and the scales: reconnect attempts no longer collide, a Settings scan no longer puts a paired Umbra to sleep, and two missing scales are found with one search.
 - **P4 startup made layout-proof.** The cache tune-up at boot could leave a build looping before the screen came on, depending on where its code happened to land in flash. It now runs from internal RAM as intended, and the boot log records the cache geometry it ends up with.
 

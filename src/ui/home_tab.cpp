@@ -1329,9 +1329,11 @@ void set_bench_dose(HomeWidgets& w, int state, float dose_g) {
   else if (state == 2)
     std::snprintf(cap, sizeof(cap), LV_SYMBOL_OK "  %.1f g recorded", static_cast<double>(dose_g));
   if (state != 0) ui::set_text(w.bench_name, cap);
-  if (state != 0 && !w.bench_dose_on_caption) {
+  if (state != 0 && !w.bench_dose_on_caption && !lv_obj_has_flag(w.bench_card, LV_OBJ_FLAG_HIDDEN)) {
     // Panel column: the outline is a layout-ignoring box behind the caption
     // and value; fit it to them (the weight's width changes per reading).
+    // Not while the card is hidden: flex skips hidden items, so the labels
+    // sit wherever they last were (App refits when the side shows).
     lv_obj_t* col = lv_obj_get_parent(w.bench_block);
     lv_obj_update_layout(col);
     lv_area_t n, v, c;
@@ -1382,7 +1384,10 @@ void log_bench_card_geometry(HomeWidgets& w) {
   core::logf("home: bench card h=%d body=%d clipped=%d stepper=%d caption=%d\n",
              static_cast<int>(lv_obj_get_height(w.bench_card)), static_cast<int>(lv_area_get_height(&b)),
              static_cast<int>(low - b.y2),
-             w.bench_dose_group != nullptr && !lv_obj_has_flag(w.bench_dose_group, LV_OBJ_FLAG_HIDDEN) ? 1 : 0,
+             w.bench_dose_group != nullptr &&
+                     !lv_obj_has_flag(w.bench_dose_on_caption ? w.bench_dose_group
+                                                              : lv_obj_get_child(w.bench_dose_group, 0),
+                                      LV_OBJ_FLAG_HIDDEN) ? 1 : 0,
              w.bench_name != nullptr && !lv_obj_has_flag(w.bench_name, LV_OBJ_FLAG_HIDDEN) ? 1 : 0);
 }
 
