@@ -208,14 +208,19 @@ struct HomeWidgets {
   lv_obj_t* flow_legend_dot = nullptr;    // coloured dot before the unit
   lv_obj_t* flow_legend_dot2 = nullptr;   // beside mode: the bench entry
   lv_obj_t* flow_unit_label2 = nullptr;
-  // The dose chip beside the legend: builds up over the shot (see
-  // set_dose_chip). Hidden with no dose.
+  // The dose chip ABOVE the legend (its own box; only its x is a control):
+  // builds up over the shot (see set_dose_chip). Hidden with no dose.
   lv_obj_t* dose_chip = nullptr;
   lv_obj_t* dose_in_label = nullptr;
   lv_obj_t* dose_out_label = nullptr;
   lv_obj_t* dose_ratio_label = nullptr;
   lv_obj_t* dose_x_label = nullptr;
   int dose_chip_state = -1;
+  // Live values for the legend's rows (set by flow_graph_tick, formatted by
+  // update_flow_legend): the espresso scale in the unit shown, the bench in g.
+  float legend_gps = -1.0f;   // < 0 = no data
+  float legend_g = -1.0f;
+  float legend_bench_g = -1.0f;
   lv_obj_t* flow_ylabels[3] = {nullptr, nullptr, nullptr};  // Y = max, 2max/3, max/3
   // Bench series on the live sweep. A third per-column ring (NaN = no bench
   // data in that column: disconnected). flow_mode 2 = the BENCH side of the
@@ -337,8 +342,9 @@ void show_bench_side(HomeWidgets& w, bool bench);
 // <dose> g" offered, 2 = "<dose> g recorded". Cheap when unchanged.
 void set_bench_dose(HomeWidgets& w, int state, float dose_g);
 // The graph's dose chip: 0 hidden, 1 "<in> g in", 2 + a placeholder out,
-// 3 "<in> g in  <out> g out  1:<ratio>".
-void set_dose_chip(HomeWidgets& w, int state, float in_g, float out_g);
+// 3 "<in> g in  <out> g out  1:<ratio>". A default (not weighed) dose says
+// "set" instead of "in".
+void set_dose_chip(HomeWidgets& w, int state, float in_g, float out_g, bool is_default);
 
 void build_rail_tray(lv_obj_t* rail, const lv_font_t* font, HomeWidgets& out);
 

@@ -449,7 +449,9 @@ lv_obj_t* build_shot_card(lv_obj_t* parent, const core::ShotRecord& rec,
   if (ratio > 0.0f && !compact) {
     char cap[24];
     std::snprintf(b, sizeof(b), "1:%.1f", static_cast<double>(ratio));
-    std::snprintf(cap, sizeof(cap), "%.1f g in", static_cast<double>(rec.summary.dose_g));
+    // "in" = weighed on the bench scale; "default" = the setting, not measured.
+    std::snprintf(cap, sizeof(cap), rec.summary.dose_src == 2 ? "%.1f g default" : "%.1f g in",
+                  static_cast<double>(rec.summary.dose_g));
     lv_obj_t* rv = hero_stat(hero, b, cap, value_font, small);
     lv_obj_set_style_text_color(rv, lv_color_hex(theme::bench()), 0);
   }

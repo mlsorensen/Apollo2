@@ -68,7 +68,7 @@ DoseClear DoseTracker::tick(const DoseInputs& in) {
   }
 
   DoseClear why = DoseClear::None;
-  if (has_pending()) {
+  if (pending_g_ > 0.0f) {
     // The screensaver STARTING (an edge, so a Record right after a wake
     // isn't eaten by the level that's about to drop).
     if (in.screensaver && !saver_was_on_) why = DoseClear::Screensaver;
@@ -95,6 +95,20 @@ DoseClear DoseTracker::tick(const DoseInputs& in) {
       why = DoseClear::Expired;
 
     if (why != DoseClear::None) pending_g_ = 0.0f;
+  } else if (default_skipped_) {
+    // A skipped default comes back on the same walk-away signals (a fresh
+    // session), without the recorded dose's backstop.
+    auto lost = [&](bool up, bool& seen_up, bool& down, uint32_t& since) {
+      if (up) { seen_up = true; down = false; return false; }
+      if (!seen_up) return false;
+      if (!down) { down = true; since = in.now_ms; return false; }
+      return in.now_ms - since >= kDoseLinkLostMs;
+    };
+    const bool e_lost = lost(in.espresso_up, espresso_seen_up_, espresso_down_, espresso_down_since_);
+    const bool b_lost = lost(in.bench_up, bench_seen_up_, bench_down_, bench_down_since_);
+    if ((in.screensaver && !saver_was_on_) || e_lost || b_lost ||
+        (in.power_known && power_was_known_ && machine_was_on_ && !in.machine_on))
+      default_skipped_ = false;
   } else {
     // Keep the link bookkeeping honest even with nothing pending, so a link
     // that went down before Record doesn't count its downtime against a
@@ -126,7 +140,7 @@ float DoseTracker::candidate_dose() const {
 }
 
 bool DoseTracker::recorded_showing() const {
-  return has_pending() && last_connected_ &&
+  return pending_g_ > 0.0f && last_connected_ &&
          fabs_f(last_g_ - recorded_reading_g_) <= kDoseRecordedBandG;
 }
 
@@ -141,10 +155,32 @@ float DoseTracker::record() {
   return pending_g_;
 }
 
-float DoseTracker::take_for_shot() {
-  const float d = pending_g_;
+float DoseTracker::pending() const {
+  if (pending_g_ > 0.0f) return pending_g_;
+  if (default_g_ > 0.0f && !default_skipped_) return default_g_;
+  return 0.0f;
+}
+
+DoseSource DoseTracker::pending_source() const {
+  if (pending_g_ > 0.0f) return DoseSource::kRecorded;
+  if (default_g_ > 0.0f && !default_skipped_) return DoseSource::kDefault;
+  return DoseSource::kNone;
+}
+
+void DoseTracker::clear() {
+  if (pending_g_ > 0.0f) pending_g_ = 0.0f;
+  else if (default_g_ > 0.0f) {
+    default_skipped_ = true;
+    espresso_down_ = bench_down_ = false;  // its return counts downtime from here
+    espresso_seen_up_ = bench_seen_up_ = false;
+  }
+}
+
+SpentDose DoseTracker::take_for_shot() {
+  SpentDose s{pending(), pending_source()};
   pending_g_ = 0.0f;
-  return d;
+  default_skipped_ = false;  // the shot after this one gets the default again
+  return s;
 }
 
 float brew_ratio(float final_g, float dose_g) {

@@ -55,12 +55,12 @@ int test_container_rule() {
   // Two containers closer than a dose apart would misread a dose larger than
   // their gap (25 g in a 111 g cup = 136 g -> "6 g" against a 130 g one):
   // Capture refuses them.
-  const float stored[] = {480.0f, 111.0f, 0.0f};
-  CHECK(DoseTracker::container_clash(stored, 3, 2, 130.0f) == 1);
-  CHECK(DoseTracker::container_clash(stored, 3, 2, 141.0f) == 1);   // exactly a dose apart: still a clash
-  CHECK(DoseTracker::container_clash(stored, 3, 2, 141.1f) == -1);
-  CHECK(DoseTracker::container_clash(stored, 3, 1, 115.0f) == -1);  // rewriting slot 1 itself
-  CHECK(DoseTracker::container_clash(stored, 3, 2, 455.0f) == 0);
+  const float stored[] = {480.0f, 111.0f};
+  CHECK(DoseTracker::container_clash(stored, 2, -1, 130.0f) == 1);
+  CHECK(DoseTracker::container_clash(stored, 2, -1, 141.0f) == 1);   // exactly a dose apart: still a clash
+  CHECK(DoseTracker::container_clash(stored, 2, -1, 141.1f) == -1);
+  CHECK(DoseTracker::container_clash(stored, 2, 1, 115.0f) == -1);   // rewriting slot 1 itself
+  CHECK(DoseTracker::container_clash(stored, 2, -1, 455.0f) == 0);
   return 0;
 }
 
@@ -144,9 +144,10 @@ int test_record_and_spend() {
   CHECK(near(t.record(), 16.0f));
   CHECK(near(t.pending(), 16.0f));
   // The shot starts: the dose is spent.
-  CHECK(near(t.take_for_shot(), 16.0f));
+  const SpentDose spent = t.take_for_shot();
+  CHECK(near(spent.grams, 16.0f) && spent.source == DoseSource::kRecorded);
   CHECK(!t.has_pending());
-  CHECK(near(t.take_for_shot(), 0.0f));
+  CHECK(near(t.take_for_shot().grams, 0.0f) && t.take_for_shot().source == DoseSource::kNone);
   // The user's tap clears too.
   hold(t, 496.0f, now + 100, 2000);
   // (496 g is within the recorded band of the last record, but nothing is
@@ -278,10 +279,10 @@ int test_realistic_sweep() {
   // cups: Niche 111 g, Weber Bird ~120 g, a heavy steel cup ~180 g, light
   // plastic ~35 g (refused by the floor: tare it).
   const Kit kits[] = {
-      {"bottomless only", {430.0f, 0.0f, 0.0f}, 1},
-      {"spouted + Niche cup", {520.0f, 111.0f, 0.0f}, 2},
-      {"bottomless + Niche + steel cup", {430.0f, 111.0f, 180.0f}, 3},
-      {"two portafilters + cup", {430.0f, 520.0f, 120.0f}, 3},
+      {"bottomless only", {430.0f, 0.0f}, 1},
+      {"spouted + Niche cup", {520.0f, 111.0f}, 2},
+      {"bottomless + steel cup", {430.0f, 180.0f}, 2},
+      {"two portafilters", {430.0f, 520.0f}, 2},
   };
   int lookalikes = 0, lookalike_milk = 0, lookalike_untared_milk = 0;
   for (const Kit& k : kits) {
@@ -405,6 +406,48 @@ int test_step_rule() {
   return 0;
 }
 
+// The default dose: staged whenever nothing is recorded, overridden by a
+// recorded one, skipped once by the x, back after the shot or a walk-away.
+int test_default_dose() {
+  const float c[] = {480.0f};
+  DoseTracker t;
+  t.set_containers(c, 1);
+  CHECK(!t.has_pending());
+  t.set_default_dose(18.0f);
+  CHECK(t.has_pending() && near(t.pending(), 18.0f) && t.pending_source() == DoseSource::kDefault);
+  // A recorded dose overrides it for the shot; after the shot the default is back.
+  uint32_t now = hold(t, 0.0f, 0, 1500);
+  now = hold(t, 498.3f, now, 1500);
+  CHECK(near(t.record(), 18.3f));
+  CHECK(near(t.pending(), 18.3f) && t.pending_source() == DoseSource::kRecorded);
+  SpentDose s = t.take_for_shot();
+  CHECK(near(s.grams, 18.3f) && s.source == DoseSource::kRecorded);
+  CHECK(near(t.pending(), 18.0f) && t.pending_source() == DoseSource::kDefault);
+  // The x on a staged default: nothing for the next shot, then back.
+  t.clear();
+  CHECK(!t.has_pending());
+  s = t.take_for_shot();
+  CHECK(s.source == DoseSource::kNone && near(s.grams, 0.0f));
+  CHECK(t.pending_source() == DoseSource::kDefault);
+  // The x, then a walk-away (screensaver) restores it without a shot.
+  t.clear();
+  CHECK(!t.has_pending());
+  DoseInputs i = in(0.0f, now += 100);
+  i.screensaver = true;
+  t.tick(i);
+  CHECK(t.pending_source() == DoseSource::kDefault);
+  // The x on a RECORDED dose drops only the recorded one: the default stays staged.
+  now = hold(t, 0.0f, now + 100, 1500);
+  now = hold(t, 498.3f, now, 1500);
+  t.record();
+  t.clear();
+  CHECK(t.pending_source() == DoseSource::kDefault && near(t.pending(), 18.0f));
+  // Off again: nothing staged.
+  t.set_default_dose(0.0f);
+  CHECK(!t.has_pending());
+  return 0;
+}
+
 int test_ratio() {
   CHECK(near(brew_ratio(36.4f, 18.2f), 2.0f));
   CHECK(near(brew_ratio(36.4f, 0.0f), 0.0f));
@@ -416,7 +459,8 @@ int test_ratio() {
 
 int main() {
   if (test_container_rule() || test_candidate_gate() || test_record_and_spend() ||
-      test_walk_away() || test_realistic_sweep() || test_step_rule() || test_ratio())
+      test_walk_away() || test_realistic_sweep() || test_step_rule() || test_default_dose() ||
+      test_ratio())
     return 1;
   std::printf("dose_test: all %d checks passed\n", checks);
   return 0;

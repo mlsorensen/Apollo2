@@ -42,8 +42,8 @@ to the machine instead of a phone app.
   and Varia Aku: live weight, shot timer, flow graph, tare, and the scale's
   own settings from the screen. A second, **bench** scale for the counter
   shows its weight on Home too — in the scale card or beside the graph —
-  and records your dose for the next shot, so the graph and History show
-  the brew ratio.
+  and records your dose for the next shot (or use a default dose), so the
+  graph and History show the brew ratio.
 - **Brew by weight** — stop the shot at a target weight on boards wired into
   the paddle circuit, or detect shots from the weight stream alone on any
   board. Finished shots freeze into a review graph.

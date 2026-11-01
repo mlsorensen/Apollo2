@@ -18,6 +18,7 @@ class FakeDoseSettings : public core::IDoseSettings {
   void set_container(int index, float grams) override {
     if (index >= 0 && index < core::kMaxDoseContainers) cfg_.containers[index] = grams;
   }
+  void set_default_dose(float grams) override { cfg_.default_dose = grams; }
 
  private:
   core::DoseConfig cfg_;

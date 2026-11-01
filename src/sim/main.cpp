@@ -385,6 +385,13 @@ int main() {
   disp.set_bench_home_style(0);
   brew.set_phase(core::ShotPhase::kIdle);
   ok &= r({800, 480}, "renders/scale_shot_dose_800x480.png", 1, ui::kSectionScaleSettings);
+  // The default dose with NO bench scale: the chip says "set", the settings
+  // page shows the switch + Default dose only (no Capture / containers).
+  scale_provisioner.set_bench_saved(false);
+  ok &= r({800, 480}, "renders/home_dose_default_800x480.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 5);
+  ok &= r({800, 480}, "renders/scale_shot_dose_nobench_800x480.png", 1, ui::kSectionScaleSettings);
+  scale_provisioner.set_bench_saved(true);
   // The same states in the Ferrari theme (10): the owner's design page.
   {
     constexpr int kFerrari = 10;

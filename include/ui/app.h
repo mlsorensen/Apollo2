@@ -216,6 +216,7 @@ class App {
   void dose_tick(const core::MachineSnapshot& snap);
   void record_dose();       // the bench card's Record block
   void clear_dose();        // the chip's x
+  void default_dose_adjust(int dir);  // the Default dose stepper: Off, 5..30 g by 0.5
   void set_dose_enabled(bool on);
   void capture_dose_container(int index);  // Settings: store the bench reading (arms if moving)
   void clear_dose_container(int index);
@@ -300,10 +301,19 @@ class App {
   bool ntp_ready() const;      // WiFi on + NTP on + a real sync landed this boot
   core::ScheduleInputs schedule_inputs(const core::MachineSnapshot& snap) const;
   void schedule_tick(const core::MachineSnapshot& snap);
-  bool dose_active() const {  // feature on, a bench card, an espresso scale to brew with
-    return dose_enabled_ && dose_settings_ != nullptr && bench_ != nullptr &&
-           home_.bench_enabled && !home_.bench_only;
+  // The dose feature (chip, ratio, default dose) needs the feature on and
+  // an espresso scale to brew with; RECORDING (the bench block, Capture, the
+  // containers) needs a bench scale on top.
+  bool dose_active() const {
+    return dose_enabled_ && dose_settings_ != nullptr && !home_.bench_only && espresso_saved();
   }
+  bool dose_record_active() const {
+    return dose_active() && bench_ != nullptr && home_.bench_enabled;
+  }
+  bool espresso_saved() const {
+    return scale_provisioner_ != nullptr && !scale_provisioner_->saved_name().empty();
+  }
+
   void apply_scheduled_power(bool on, bool auto_standby);
   core::DaySchedule& sched_edit_day();
   static void format_clock_min(char* out, size_t n, int min_of_day, bool h24);
@@ -516,6 +526,7 @@ class App {
   core::DoseTracker dose_;
   bool dose_enabled_ = true;
   float shot_dose_g_ = 0.0f;  // the dose the running / reviewed shot spent
+  core::DoseSource shot_dose_src_ = core::DoseSource::kNone;  // ... and where it came from
   float review_out_g_ = 0.0f; // the settled yield, latched at the freeze (0 = not yet)
   int capture_slot_ = -1;     // a Capture waiting for the bench reading to hold still
   uint32_t capture_deadline_ms_ = 0;

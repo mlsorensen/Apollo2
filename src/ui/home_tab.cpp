@@ -224,14 +224,25 @@ void set_flow_ylabels(HomeWidgets& w) {
 // The unit chip is a legend: a coloured dot per series + its unit. Mode 0/1
 // = the espresso trace in the accent; mode 2 = the bench trace in the bench
 // colour; beside mode shows both entries.
+// The legend's rows carry LIVE values (owner, 2026-11-01: nowhere else
+// shows the flow rate): the espresso row in the unit on show, the bench row
+// in grams. "--" while there is no data.
 void update_flow_legend(HomeWidgets& w) {
   if (w.flow_unit_label == nullptr) return;
   const bool bench_active = w.flow_mode == 2;
-  ui::set_text(w.flow_unit_label, flow_unit(w.flow_mode));
+  char b[24];
+  const float v = bench_active ? w.legend_bench_g : (w.flow_mode == 1 ? w.legend_g : w.legend_gps);
+  if (v < 0.0f) std::snprintf(b, sizeof(b), "-- %s", flow_unit(w.flow_mode));
+  else std::snprintf(b, sizeof(b), "%.1f %s", static_cast<double>(v), flow_unit(w.flow_mode));
+  ui::set_text(w.flow_unit_label, b);
   if (w.flow_legend_dot != nullptr)
     ui::set_bg_color(w.flow_legend_dot,
                      bench_active ? ui::theme::bench() : ui::theme::accent());
-  if (w.flow_unit_label2 != nullptr) ui::set_text(w.flow_unit_label2, "g");
+  if (w.flow_unit_label2 != nullptr) {
+    if (w.legend_bench_g < 0.0f) std::snprintf(b, sizeof(b), "-- g");
+    else std::snprintf(b, sizeof(b), "%.1f g", static_cast<double>(w.legend_bench_g));
+    ui::set_text(w.flow_unit_label2, b);
+  }
   if (w.flow_legend_dot2 != nullptr) ui::set_bg_color(w.flow_legend_dot2, ui::theme::bench());
 }
 
@@ -453,15 +464,19 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   // which sits in the left margin): a coloured dot + the unit per series. Tap
   // flips the espresso trace g/s <-> g, re-scaling and redrawing the existing
   // trace in the new unit; the bench entry is always grams.
-  // The legend and the dose chip sit in one row, so the chip follows the
-  // legend's real width whatever the unit / series count.
+  // The top-left block is a column: the dose chip (when there is a dose)
+  // ABOVE the legend, both boxes flush left. Two boxes because they are two
+  // controls — the x on the chip clears the dose, a tap on the legend flips
+  // the unit — and because each box starting at the left edge keeps the
+  // longest line (the review's "in / out / ratio") clear of the bench axis
+  // in the beside layout (owner, 2026-11-01).
   lv_obj_t* legend_row = lv_obj_create(card);
   lv_obj_remove_style_all(legend_row);
   lv_obj_remove_flag(legend_row, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_size(legend_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-  lv_obj_set_flex_flow(legend_row, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(legend_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_column(legend_row, ui::dp(8), 0);
+  lv_obj_set_flex_flow(legend_row, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(legend_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+  lv_obj_set_style_pad_row(legend_row, ui::dp(4), 0);
   lv_obj_align(legend_row, LV_ALIGN_TOP_LEFT, ui::dp(6), ui::dp(6));
   lv_obj_t* btn = lv_button_create(legend_row);
   lv_obj_remove_style_all(btn);
@@ -474,8 +489,8 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   lv_obj_set_size(btn, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  // Beside the graph the legend has two entries; stacked (one per row) it
-  // takes half the width, which the dose chip after it needs (owner).
+  // Two entries (beside the graph) stack one per row, dots and values
+  // flush left.
   lv_obj_t* entry1 = btn;
   if (out.bench_overlay) {
     lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_COLUMN);
@@ -520,12 +535,16 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   }
   update_flow_legend(out);
 
-  // The dose chip, after the legend: same shell, bench dot, built up by
+  // The dose chip, above the legend: same shell, bench dot, built up by
   // set_dose_chip (in -> placeholder out -> out + ratio). Hidden until a
-  // dose is recorded; the x clears it.
+  // dose is staged; only its x is a control (the chip body is inert, so a
+  // tap meant for the legend that lands high does nothing).
   {
-    lv_obj_t* chip = lv_button_create(legend_row);
+    lv_obj_t* chip = lv_obj_create(legend_row);
     lv_obj_remove_style_all(chip);
+    lv_obj_remove_flag(chip, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(chip, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_move_to_index(chip, 0);  // on top of the legend
     lv_obj_set_style_bg_color(chip, lv_color_hex(ui::theme::bg()), 0);
     lv_obj_set_style_bg_opa(chip, LV_OPA_70, 0);
     lv_obj_set_style_radius(chip, ui::dp(8), 0);
@@ -551,6 +570,8 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
     lv_obj_set_style_pad_left(out.dose_ratio_label, ui::dp(6), 0);
     out.dose_x_label = label(ui::theme::muted(), 14);
     lv_label_set_text(out.dose_x_label, LV_SYMBOL_CLOSE);
+    lv_obj_add_flag(out.dose_x_label, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ext_click_area(out.dose_x_label, ui::dp(12));  // a thumb-sized target
     lv_obj_add_flag(chip, LV_OBJ_FLAG_HIDDEN);
     out.dose_chip = chip;
     out.dose_chip_state = 0;
@@ -629,6 +650,11 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
     if (out.flow_mode == 2) out.flow_ymax = out.bench_ymax;
     set_flow_ylabels(out);
   }
+  // The legend's live values: a mid-shot column (the newest is the taper's 0).
+  out.legend_gps = out.flow_flows[pw / 2];
+  out.legend_g = out.flow_weights[pw / 2];
+  out.legend_bench_g = out.bench_weights != nullptr ? out.bench_weights[pw - 1] : -1.0f;
+  update_flow_legend(out);
   redraw_flow_from_ring(out);
 #endif
 }
@@ -1216,7 +1242,7 @@ void set_bench_dose(HomeWidgets& w, int state, float dose_g) {
   if (state == 0) ui::set_text(w.bench_name, "");  // the name comes back on the next update
 }
 
-void set_dose_chip(HomeWidgets& w, int state, float in_g, float out_g) {
+void set_dose_chip(HomeWidgets& w, int state, float in_g, float out_g, bool is_default) {
   if (w.dose_chip == nullptr) return;
   if (state == 0) {
     if (w.dose_chip_state != 0) lv_obj_add_flag(w.dose_chip, LV_OBJ_FLAG_HIDDEN);
@@ -1224,7 +1250,8 @@ void set_dose_chip(HomeWidgets& w, int state, float in_g, float out_g) {
     return;
   }
   char b[24];
-  std::snprintf(b, sizeof(b), "%.1f g in", static_cast<double>(in_g));
+  // "in" was weighed on the bench scale; "set" is the default-dose setting.
+  std::snprintf(b, sizeof(b), is_default ? "%.1f g set" : "%.1f g in", static_cast<double>(in_g));
   ui::set_text(w.dose_in_label, b);
   if (state == 1) {
     ui::set_text(w.dose_out_label, "");
@@ -3002,6 +3029,10 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale,
       ++steps;
     }
     if (steps > 0) {
+      w.legend_g = flow_gap(rw) ? -1.0f : rw;
+      w.legend_gps = flow_gap(rf) ? -1.0f : rf;
+      w.legend_bench_g = flow_gap(bw) ? -1.0f : bw;
+      update_flow_legend(w);
       int px = steps * kFlowStepPx;
       if (px > w.flow_w) px = w.flow_w;
       for (int y = 0; y < w.flow_h; ++y) {

@@ -15,6 +15,7 @@ class DoseSettings : public core::IDoseSettings {
   core::DoseConfig config() const override;
   void set_enabled(bool on) override;
   void set_container(int index, float grams) override;
+  void set_default_dose(float grams) override;
 
  private:
   Config& config_;

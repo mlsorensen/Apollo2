@@ -437,7 +437,7 @@ export default function App() {
                 )}
                 <Typography><b>{(open.duration_ms / 1000).toFixed(1)} s</b> time</Typography>
                 <Typography><b>{open.avg_gps.toFixed(2)} g/s</b> avg flow</Typography>
-                {open.dose_g > 0 && <Typography><b>{open.dose_g.toFixed(1)} g</b> dose</Typography>}
+                {open.dose_g > 0 && <Typography><b>{open.dose_g.toFixed(1)} g</b> {open.dose_src === 2 ? 'dose (default)' : 'dose'}</Typography>}
                 {ratioOf(open) != null && <Typography><b>1:{ratioOf(open).toFixed(1)}</b> ratio</Typography>}
               </Stack>
               {samples == null && <Box sx={{ textAlign: 'center', py: 4 }}><CircularProgress size={28} /></Box>}

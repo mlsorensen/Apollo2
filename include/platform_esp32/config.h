@@ -73,6 +73,8 @@ class Config {
   void set_dose_enabled(bool on);
   float dose_container(int index) const;
   void set_dose_container(int index, float grams);
+  float default_dose() const;  // grams, 0 = off (default)
+  void set_default_dose(float grams);
 
   // Brew-by-weight target (grams) — persisted so it survives reboots.
   float target_weight_g() const;       // default 36

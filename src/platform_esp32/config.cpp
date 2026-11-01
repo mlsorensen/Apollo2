@@ -86,7 +86,9 @@ constexpr char kMicraAddrTypeKey[] = "matype";   // the machine's, same encoding
 constexpr char kBenchHomeKey[] = "benchhome";    // bench scale on Home: 0 card / 1 beside graph (ADD, v1.2)
 constexpr char kDetailedLogKey[] = "dbglog";      // Detailed log (ADD, v1.3)
 constexpr char kDoseEnabledKey[] = "dosen";      // Record dose from the bench scale (ADD, v1.3)
-constexpr const char* kDoseContainerKeys[] = {"dosec0", "dosec1", "dosec2"};  // grams (ADD, v1.3)
+constexpr const char* kDoseContainerKeys[] = {"dosec0", "dosec1"};  // grams (ADD, v1.3; a dosec2 from the
+                                                                       // 3-slot beta is left unread)
+constexpr char kDefaultDoseKey[] = "dosedef";                            // grams, 0 = off (ADD, v1.3)
 constexpr char kTargetKey[] = "tgtg";
 constexpr char kShotModeKey[] = "shotmode";  // LEGACY bool (armed) — migration only
 constexpr char kShotMode3Key[] = "shotmd";   // tri-state core::ShotMode as int
@@ -358,6 +360,22 @@ void Config::set_detailed_log(bool on) {
   p.end();
 }
 
+float Config::default_dose() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 0.0f;
+  const float v = p.isKey(kDefaultDoseKey) ? p.getFloat(kDefaultDoseKey, 0.0f) : 0.0f;
+  p.end();
+  return v > 0.0f && v <= 100.0f ? v : 0.0f;  // garbage reads as off
+}
+
+void Config::set_default_dose(float grams) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  if (grams > 0.0f) p.putFloat(kDefaultDoseKey, grams);
+  else p.remove(kDefaultDoseKey);
+  p.end();
+}
+
 bool Config::dose_enabled() const {
   Preferences p;
   if (!p.begin(kNamespace, /*readOnly=*/true)) return true;
@@ -374,7 +392,7 @@ void Config::set_dose_enabled(bool on) {
 }
 
 float Config::dose_container(int index) const {
-  if (index < 0 || index >= 3) return 0.0f;
+  if (index < 0 || index >= 2) return 0.0f;
   Preferences p;
   if (!p.begin(kNamespace, /*readOnly=*/true)) return 0.0f;
   const char* k = kDoseContainerKeys[index];
@@ -384,7 +402,7 @@ float Config::dose_container(int index) const {
 }
 
 void Config::set_dose_container(int index, float grams) {
-  if (index < 0 || index >= 3) return;
+  if (index < 0 || index >= 2) return;
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   if (grams > 0.0f) p.putFloat(kDoseContainerKeys[index], grams);

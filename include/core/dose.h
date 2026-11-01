@@ -35,6 +35,13 @@
 //     spends it (take_for_shot). Re-record replaces. While the same weight
 //     still sits on the scale the card says "recorded" instead of offering
 //     Record again (recorded_showing).
+//   - DEFAULT DOSE (owner, 2026-11-01): an opt-in constant for people who
+//     dose the same every day, or have no bench scale. It is STAGED whenever
+//     nothing is recorded — the chip shows it, every shot spends it — and a
+//     recorded dose overrides it for that one shot. The x on a staged
+//     default means "no dose for the next shot": it is suppressed until that
+//     shot ends or a walk-away clear fires, then staged again. The shot
+//     keeps which it was (DoseSource).
 //   - An unused pending dose clears on WALK-AWAY signals: the screensaver
 //     starting, either scale link DROPPING and staying down kDoseLinkLostMs
 //     (grace for radio blips — and a link already down at Record time is not
@@ -47,7 +54,7 @@
 
 namespace core {
 
-constexpr int kMaxDoseContainers = 3;
+constexpr int kMaxDoseContainers = 2;  // was 3 until 2026-11-01 (owner: two is plenty)
 constexpr float kContainerMinG = 50.0f;   // Capture floor (see above)
 constexpr float kDoseMinG = 5.0f;         // candidate gate, net grams
 constexpr float kDoseMaxG = 30.0f;  // the biggest basket (owner: 48 g was offered — never a dose)
@@ -59,6 +66,16 @@ constexpr uint32_t kDoseBackstopMs = 60 * 60 * 1000;
 
 // Why a pending dose went away this tick (the UI drops the chip on any).
 enum class DoseClear : uint8_t { None, Screensaver, ScaleLost, Standby, Expired };
+
+// Where a shot's dose came from — kept with the shot so a ratio can be told
+// apart as measured or assumed (owner, 2026-11-01).
+enum class DoseSource : uint8_t { kNone = 0, kRecorded = 1, kDefault = 2 };
+
+// What a starting shot takes with it.
+struct SpentDose {
+  float grams = 0.0f;  // 0 = none
+  DoseSource source = DoseSource::kNone;
+};
 
 struct DoseInputs {
   float bench_g = 0.0f;
@@ -105,11 +122,20 @@ class DoseTracker {
 
   // Record the candidate. Returns the dose stored, 0 if there was no candidate.
   float record();
-  bool has_pending() const { return pending_g_ > 0.0f; }
-  float pending() const { return pending_g_; }
-  void clear() { pending_g_ = 0.0f; }   // the user's tap on the chip
-  // A shot is starting: hand over the pending dose (0 = none) and clear it.
-  float take_for_shot();
+  // The default dose (0 = off). Staged whenever nothing is recorded.
+  void set_default_dose(float grams) { default_g_ = grams > 0.0f ? grams : 0.0f; }
+  float default_dose() const { return default_g_; }
+  // What the next shot would take: a recorded dose, else the default unless
+  // the user cleared it for this shot.
+  bool has_pending() const { return pending_source() != DoseSource::kNone; }
+  float pending() const;
+  DoseSource pending_source() const;
+  // The user's tap on the chip: a recorded dose is dropped; a staged default
+  // is skipped for the next shot only.
+  void clear();
+  // A shot is starting: hand over what's staged and settle up (the recorded
+  // dose is spent; a skipped default is staged again for the shot after).
+  SpentDose take_for_shot();
 
  private:
   float containers_[kMaxDoseContainers] = {};
@@ -130,9 +156,11 @@ class DoseTracker {
   float prev_plateau_g_ = 0.0f;
   bool prev_plateau_valid_ = false;
 
-  float pending_g_ = 0.0f;
+  float pending_g_ = 0.0f;           // the recorded dose (0 = none)
   float recorded_reading_g_ = 0.0f;
   uint32_t recorded_at_ms_ = 0;
+  float default_g_ = 0.0f;           // the default dose setting (0 = off)
+  bool default_skipped_ = false;     // x on a staged default: not for the next shot
 
   // Walk-away bookkeeping. A link's downtime counts only after it was seen
   // UP since the record (seen_up), so one asleep at Record time can't clear.

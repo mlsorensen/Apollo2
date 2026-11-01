@@ -184,10 +184,14 @@ struct SettingsWidgets {
   // (value, Capture from the bench scale, Clear).
   lv_obj_t* dose_switch_row = nullptr;
   lv_obj_t* dose_switch = nullptr;
-  lv_obj_t* dose_container_row[3] = {nullptr, nullptr, nullptr};
-  lv_obj_t* dose_container_value[3] = {nullptr, nullptr, nullptr};
-  lv_obj_t* dose_capture_btn[3] = {nullptr, nullptr, nullptr};
-  lv_obj_t* dose_clear_btn[3] = {nullptr, nullptr, nullptr};
+  lv_obj_t* dose_def_row = nullptr;      // "Default dose" stepper: Off, 5..30 g
+  lv_obj_t* dose_def_minus = nullptr;
+  lv_obj_t* dose_def_value = nullptr;
+  lv_obj_t* dose_def_plus = nullptr;
+  lv_obj_t* dose_container_row[2] = {nullptr, nullptr};  // = core::kMaxDoseContainers
+  lv_obj_t* dose_container_value[2] = {nullptr, nullptr};
+  lv_obj_t* dose_capture_btn[2] = {nullptr, nullptr};
+  lv_obj_t* dose_clear_btn[2] = {nullptr, nullptr};
   lv_obj_t* lead_value = nullptr;
   int detect_lead_in_s = 3;
   // Shot-graph smoothing cycle button (Off / Light / Medium / Strong)
