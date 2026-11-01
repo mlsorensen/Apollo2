@@ -1112,11 +1112,14 @@ lv_obj_t* make_pill(lv_obj_t* seg, const char* text, const lv_font_t* font, uint
   lv_obj_t* b = ui::make_button(seg);
   lv_obj_set_size(b, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_set_style_pad_hor(b, ui::dp(12), 0);
-  lv_obj_set_style_pad_ver(b, ui::dp(7), 0);
-  lv_obj_set_style_radius(b, ui::dp(14), 0);
+  // Slim: the switch sets the card header's height, and every dp here is a
+  // dp the body loses — the X-8's shot pill and steppers were being clipped
+  // by the action row (owner, 2026-11-01). The tap target stays thumb-sized
+  // through the extended click area.
+  lv_obj_set_style_pad_ver(b, ui::dp(4), 0);
+  lv_obj_set_style_radius(b, ui::dp(12), 0);
   lv_obj_set_style_opa(b, LV_OPA_40, LV_STATE_DISABLED);
-  // The pill is caption-sized; the thumb isn't. Catch taps well around it.
-  lv_obj_set_ext_click_area(b, ui::dp(10));
+  lv_obj_set_ext_click_area(b, ui::dp(12));
   lv_obj_set_style_bg_color(b, lv_color_hex(color), 0);
   lv_obj_set_style_bg_opa(b, LV_OPA_TRANSP, 0);  // show_bench_side fills the active one
   lv_obj_t* l = lv_label_create(b);
@@ -1139,8 +1142,8 @@ void add_segmented_switch(lv_obj_t* hdr, int idx, const lv_font_t* cap_font,
   lv_obj_remove_flag(seg, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_size(seg, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(seg, LV_FLEX_FLOW_ROW);
-  lv_obj_set_style_pad_all(seg, ui::dp(2), 0);
-  lv_obj_set_style_radius(seg, ui::dp(14), 0);
+  lv_obj_set_style_pad_all(seg, ui::dp(1), 0);
+  lv_obj_set_style_radius(seg, ui::dp(13), 0);
   lv_obj_set_style_bg_opa(seg, LV_OPA_COVER, 0);
   lv_obj_set_style_bg_color(seg, lv_color_hex(ui::theme::rail()), 0);
   out.seg_espresso[idx] = make_pill(seg, "ESPRESSO", cap_font, ui::theme::accent(),
