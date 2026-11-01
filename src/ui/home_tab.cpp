@@ -1112,14 +1112,13 @@ lv_obj_t* make_pill(lv_obj_t* seg, const char* text, const lv_font_t* font, uint
   lv_obj_t* b = ui::make_button(seg);
   lv_obj_set_size(b, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_set_style_pad_hor(b, ui::dp(12), 0);
-  // Slim: the switch sets the card header's height, and every dp here is a
-  // dp the body loses — the X-8's shot pill and steppers were being clipped
-  // by the action row (owner, 2026-11-01). The tap target stays thumb-sized
-  // through the extended click area.
-  lv_obj_set_style_pad_ver(b, ui::dp(4), 0);
-  lv_obj_set_style_radius(b, ui::dp(12), 0);
+  lv_obj_set_style_pad_ver(b, ui::dp(7), 0);
+  lv_obj_set_style_radius(b, ui::dp(14), 0);
   lv_obj_set_style_opa(b, LV_OPA_40, LV_STATE_DISABLED);
-  lv_obj_set_ext_click_area(b, ui::dp(12));
+  // The pill is caption-sized; the thumb isn't. Catch taps well around it.
+  // (An extended click area only counts inside the parents' rectangles, so
+  // the pill's own height is what really sets the target: keep it.)
+  lv_obj_set_ext_click_area(b, ui::dp(10));
   lv_obj_set_style_bg_color(b, lv_color_hex(color), 0);
   lv_obj_set_style_bg_opa(b, LV_OPA_TRANSP, 0);  // show_bench_side fills the active one
   lv_obj_t* l = lv_label_create(b);
@@ -1142,8 +1141,8 @@ void add_segmented_switch(lv_obj_t* hdr, int idx, const lv_font_t* cap_font,
   lv_obj_remove_flag(seg, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_size(seg, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(seg, LV_FLEX_FLOW_ROW);
-  lv_obj_set_style_pad_all(seg, ui::dp(1), 0);
-  lv_obj_set_style_radius(seg, ui::dp(13), 0);
+  lv_obj_set_style_pad_all(seg, ui::dp(2), 0);
+  lv_obj_set_style_radius(seg, ui::dp(14), 0);
   lv_obj_set_style_bg_opa(seg, LV_OPA_COVER, 0);
   lv_obj_set_style_bg_color(seg, lv_color_hex(ui::theme::rail()), 0);
   out.seg_espresso[idx] = make_pill(seg, "ESPRESSO", cap_font, ui::theme::accent(),
@@ -1621,6 +1620,20 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
       // state, as on the compact cards). The bench card starts hidden.
       lv_obj_t* scale_hdr = lv_obj_get_child(out.scale_card, 0);
       add_segmented_switch(scale_hdr, 0, panel_cap, out);
+      // The switch makes the header ~12 dp taller than the caption it
+      // replaces, and the card's height is fixed by the panel row: without
+      // this the body overflows under the action row and the stepper row and
+      // shot pill lose their bottoms (owner's X-8, 2026-11-01). The 16 dp
+      // the steppers sit lower by (see make_stepper_group / build_scale_panel)
+      // is the slack: on the swap card they sit where the values' row ends.
+      if (out.target_minus != nullptr) {
+        lv_obj_t* stepper = lv_obj_get_parent(out.target_minus);
+        lv_obj_set_style_margin_top(stepper, 0, 0);
+        lv_obj_t* wcol = lv_obj_get_parent(stepper);
+        lv_obj_t* row = lv_obj_get_parent(wcol);
+        lv_obj_set_style_pad_top(row, 0, 0);
+      }
+      if (out.shot_btn != nullptr) lv_obj_set_style_margin_top(out.shot_btn, 0, 0);
       lv_obj_add_flag(out.scale_status_label, LV_OBJ_FLAG_HIDDEN);
       out.scale_status_label = nullptr;
       build_bench_panel(panels, panel_cap, panel_status, panel_val, panel_pad, action_h, btn_font,
@@ -1669,11 +1682,12 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
     lv_obj_t* hdr = lv_obj_get_child(out.scale_card, 0);
     lv_obj_t* body = lv_obj_get_child(out.scale_card, 1);
     lv_obj_t* acts = lv_obj_get_child(out.scale_card, 2);
-    core::logf("home: scale card h=%d hdr=%d body=%d (content %d) acts=%d y=%d; pill bottom y=%d; swap=%d\n",
+    // overflow = how far the body's children run past its bottom edge
+    // (lv_obj_get_scroll_bottom): > 0 is exactly the clipped amount.
+    core::logf("home: scale card h=%d hdr=%d body=%d overflow=%d acts=%d y=%d; swap=%d\n",
                static_cast<int>(lv_obj_get_height(out.scale_card)), static_cast<int>(lv_obj_get_height(hdr)),
-               static_cast<int>(lv_obj_get_height(body)), static_cast<int>(lv_obj_get_content_height(body)),
+               static_cast<int>(lv_obj_get_height(body)), static_cast<int>(lv_obj_get_scroll_bottom(body)),
                static_cast<int>(lv_obj_get_height(acts)), static_cast<int>(lv_obj_get_y(acts)),
-               out.shot_btn != nullptr ? static_cast<int>(lv_obj_get_y(out.shot_btn) + lv_obj_get_height(out.shot_btn)) : -1,
                out.bench_enabled && out.bench_mode == 0 ? 1 : 0);
   }
   // Swap mode starts on the ESPRESSO side: paint the pills to match.

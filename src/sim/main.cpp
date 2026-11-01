@@ -157,6 +157,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
 }  // namespace
 
 int main() {
+  core::set_log_detail(true);  // the sim prints every diagnostic line
   host::FakeMachine machine;
   host::FakeProvisioner provisioner;
   host::FakeBattery battery;
