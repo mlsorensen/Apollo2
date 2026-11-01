@@ -1,5 +1,7 @@
 #include "platform_esp32/config.h"
 
+#include "core/dose.h"
+
 #include "core/brew.h"
 #include "core/display_settings.h"
 #include "core/schedule.h"
@@ -392,7 +394,7 @@ void Config::set_dose_enabled(bool on) {
 }
 
 float Config::dose_container(int index) const {
-  if (index < 0 || index >= 2) return 0.0f;
+  if (index < 0 || index >= core::kMaxDoseContainers) return 0.0f;
   Preferences p;
   if (!p.begin(kNamespace, /*readOnly=*/true)) return 0.0f;
   const char* k = kDoseContainerKeys[index];
@@ -402,7 +404,7 @@ float Config::dose_container(int index) const {
 }
 
 void Config::set_dose_container(int index, float grams) {
-  if (index < 0 || index >= 2) return;
+  if (index < 0 || index >= core::kMaxDoseContainers) return;
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   if (grams > 0.0f) p.putFloat(kDoseContainerKeys[index], grams);

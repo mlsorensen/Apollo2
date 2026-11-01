@@ -2,8 +2,12 @@
 
 #include <cmath>
 #include <cstdio>
+#ifdef ESP_PLATFORM
+#include <esp_heap_caps.h>
+#endif
 
 #include "core/dose.h"
+#include "core/system.h"
 #include <cstring>
 
 #include "ui/theme.h"
@@ -395,7 +399,15 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   if (ph < 16) ph = 16;
 
   const uint32_t stride_bytes = lv_draw_buf_width_to_stride(pw, LV_COLOR_FORMAT_RGB565);
-  out.flow_buf = static_cast<uint16_t*>(lv_malloc(stride_bytes * static_cast<size_t>(ph)));
+  ui::flow_buf_alloc(out, stride_bytes * static_cast<size_t>(ph));
+  // Evidence for "the graph is just an empty box" (owner, X-8, 2026-11-01,
+  // after switching Bench scale on Home): the size the card had at build
+  // and whether the canvas got its buffer. A 16x16 means the layout wasn't
+  // final; a null buffer means the LVGL pool refused ~pw*ph*2 bytes.
+  if (core::log_detail() || out.flow_buf == nullptr)
+    core::logf("graph: canvas %dx%d (%u B) %s\n", pw, ph,
+               static_cast<unsigned>(stride_bytes * static_cast<size_t>(ph)),
+               out.flow_buf != nullptr ? "ok" : "NO BUFFER");
   if (out.flow_buf == nullptr) return;  // OOM: no graph (flow_canvas stays null)
 
   lv_obj_t* canvas = lv_canvas_create(card);
@@ -447,6 +459,8 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
                                       : nullptr;
   if (out.flow_weights == nullptr || out.flow_flows == nullptr ||
       (want_bench_ring && out.bench_weights == nullptr)) {  // OOM: tick no-ops
+    core::logf("graph: ring allocation failed (%d columns, bench ring %s)\n", pw,
+               want_bench_ring ? "wanted" : "not wanted");
     if (out.flow_weights != nullptr) lv_free(out.flow_weights);
     if (out.flow_flows != nullptr) lv_free(out.flow_flows);
     if (out.bench_weights != nullptr) lv_free(out.bench_weights);
@@ -1221,6 +1235,29 @@ lv_obj_t* build_bench_panel(lv_obj_t* parent, const lv_font_t* cap_font,
 }  // namespace
 
 namespace ui {
+
+void flow_buf_alloc(HomeWidgets& w, size_t bytes) {
+  w.flow_buf = nullptr;
+  w.flow_buf_in_pool = false;
+#ifdef ESP_PLATFORM
+  w.flow_buf = static_cast<uint16_t*>(
+      heap_caps_aligned_alloc(64, bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  if (w.flow_buf != nullptr) return;
+#endif
+  w.flow_buf = static_cast<uint16_t*>(lv_malloc(bytes));  // the pool (host sim; no PSRAM)
+  w.flow_buf_in_pool = w.flow_buf != nullptr;
+}
+
+void flow_buf_free(HomeWidgets& w) {
+  if (w.flow_buf == nullptr) return;
+#ifdef ESP_PLATFORM
+  if (!w.flow_buf_in_pool) heap_caps_free(w.flow_buf);
+  else lv_free(w.flow_buf);
+#else
+  lv_free(w.flow_buf);
+#endif
+  w.flow_buf = nullptr;
+}
 
 void set_bench_dose(HomeWidgets& w, int state, float dose_g) {
   if (w.bench_block == nullptr) return;
@@ -2972,6 +3009,8 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale,
     if (!w.flow_blanked) {
       reset_flow_graph(w);
       reset_flow_history(w);  // reconnect weights won't relate to these samples
+      w.legend_gps = w.legend_g = w.legend_bench_g = -1.0f;  // "--", like the plot
+      update_flow_legend(w);
     }
     return;
   }

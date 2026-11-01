@@ -168,6 +168,7 @@ struct HomeWidgets {
   uint32_t flow_px_ms = 0;
   int flow_win_s = 45;
   bool flow_blanked = false;   // true while the plot is cleared (scale disconnected)
+  bool flow_buf_in_pool = false;  // the canvas buffer came from lv_malloc (no PSRAM), not PSRAM
   bool flow_drop_negative = true;  // clamp outflow (weight-decreasing) g/s to zero
   // Graph style. false = scroll (whole plot memmoves left each step, newest at the
   // right edge). true = oscilloscope: the trace is stationary and flow_cursor is a
@@ -345,6 +346,14 @@ void set_bench_dose(HomeWidgets& w, int state, float dose_g);
 // 3 "<in> g in  <out> g out  1:<ratio>". A default (not weighed) dose says
 // "set" instead of "in".
 void set_dose_chip(HomeWidgets& w, int state, float in_g, float out_g, bool is_default);
+
+// The flow graph's canvas buffer (pw x ph RGB565, ~300-620 KB) lives OUTSIDE
+// LVGL's pool: on the device it comes straight from PSRAM (64-byte aligned
+// for the P4's draw units), so a rebuild into a wider layout never fails for
+// want of one contiguous hole in a 1 MB pool (the X-8's "empty box",
+// 2026-11-01). The sim uses lv_malloc. Free with flow_buf_free.
+void flow_buf_alloc(HomeWidgets& w, size_t bytes);  // sets w.flow_buf (null = failed)
+void flow_buf_free(HomeWidgets& w);                 // and nulls it
 
 void build_rail_tray(lv_obj_t* rail, const lv_font_t* font, HomeWidgets& out);
 

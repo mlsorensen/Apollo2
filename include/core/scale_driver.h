@@ -54,6 +54,10 @@ class IScaleDriver {
   // Called ~10x/s from the link thread while connected: heartbeats and stream
   // watchdogs. Return false to force a disconnect + reconnect.
   virtual bool tick(ble::ICentral& ble) = 0;
+  // How long the link waits for the FIRST weight after subscribing before
+  // re-dialling (ScaleLink's guard). 0 = the driver watches its own stream
+  // (the Acaia's quiet start + re-handshakes, the Aku's stream timeout).
+  virtual uint32_t first_weight_ms() const { return 5000; }
 
   virtual void tare(ble::ICentral& ble) = 0;
 

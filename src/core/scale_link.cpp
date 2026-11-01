@@ -465,7 +465,8 @@ void ScaleLink::run() {
         streaming = weight_streaming_;
       }
       const uint32_t since = now_ms() - subscribed_at_ms_.load();
-      if (!streaming && since >= kFirstWeightMs) {
+      const uint32_t limit = drv ? drv->first_weight_ms() : kFirstWeightMs;
+      if (limit != 0 && !streaming && since >= limit) {
         logf("ScaleLink: no weight %lu ms after subscribing -> re-dialling\n",
              static_cast<unsigned long>(since));
         ble_.disconnect();

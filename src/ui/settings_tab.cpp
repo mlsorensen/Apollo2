@@ -1261,7 +1261,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     out.dose_def_row = make_setting_row(out.scale_settings_page, "Default dose", font);
     make_inline_stepper(out.dose_def_row, font, symbol_font, btn_size, &out.dose_def_minus,
                         &out.dose_def_value, &out.dose_def_plus, nullptr);
-    for (int i = 0; i < 2; ++i) {
+    for (int i = 0; i < core::kMaxDoseContainers; ++i) {
       char title[16];
       std::snprintf(title, sizeof(title), "Container %d", i + 1);
       lv_obj_t* rc = make_setting_row(out.scale_settings_page, title, font);

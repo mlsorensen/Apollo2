@@ -1096,7 +1096,7 @@ App::~App() {
   if (home_.stop_flash_timer != nullptr) lv_timer_delete(home_.stop_flash_timer);
   if (home_.heat_pulse_timer != nullptr) lv_timer_delete(home_.heat_pulse_timer);
   if (deferred_rebuild_timer_ != nullptr) lv_timer_delete(deferred_rebuild_timer_);
-  if (home_.flow_buf != nullptr) lv_free(home_.flow_buf);
+  ui::flow_buf_free(home_);
   if (home_.flow_weights != nullptr) lv_free(home_.flow_weights);
   if (home_.flow_flows != nullptr) lv_free(home_.flow_flows);
   if (home_.bench_weights != nullptr) lv_free(home_.bench_weights);
@@ -1176,10 +1176,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     // heating_ keeps its value: update_heating re-arms the pulse on the first
     // refresh after the rebuild.
   }
-  if (home_.flow_buf != nullptr) {
-    lv_free(home_.flow_buf);
-    home_.flow_buf = nullptr;
-  }
+  ui::flow_buf_free(home_);
   if (home_.flow_weights != nullptr) {
     lv_free(home_.flow_weights);
     home_.flow_weights = nullptr;

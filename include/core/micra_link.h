@@ -105,6 +105,9 @@ class MicraLink : public IMachine {
   uint32_t connect_fails_ = 0;  // consecutive; the log keeps the 1st, 2nd, then every 20th
   std::atomic<uint32_t> request_started_ms_{0};  // a GATT request in flight (0 = none)
   std::atomic<bool> recovering_{false};          // re-dialling after a stalled request
+  std::atomic<uint32_t> recovering_since_ms_{0};
+  static constexpr uint32_t kRecoverMaskMs = 15000;  // longer than that is a real outage
+  bool refresh_bad_data_ = false;  // do_refresh: the machine answered, but not with JSON (link task)
   // Consecutive failed known-type connects. After kKnownTypeFailLimit the
   // next try goes back to BOTH types and relearns — a stored type can never
   // strand the link (the scale link has the same valve). Link thread only.

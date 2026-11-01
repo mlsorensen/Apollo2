@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/dose.h"
+
 #include <lvgl.h>
 
 #include "core/scale.h"  // ScaleSettingDesc / kMaxScaleSettings (row slots)
@@ -188,10 +190,10 @@ struct SettingsWidgets {
   lv_obj_t* dose_def_minus = nullptr;
   lv_obj_t* dose_def_value = nullptr;
   lv_obj_t* dose_def_plus = nullptr;
-  lv_obj_t* dose_container_row[2] = {nullptr, nullptr};  // = core::kMaxDoseContainers
-  lv_obj_t* dose_container_value[2] = {nullptr, nullptr};
-  lv_obj_t* dose_capture_btn[2] = {nullptr, nullptr};
-  lv_obj_t* dose_clear_btn[2] = {nullptr, nullptr};
+  lv_obj_t* dose_container_row[core::kMaxDoseContainers] = {};
+  lv_obj_t* dose_container_value[core::kMaxDoseContainers] = {};
+  lv_obj_t* dose_capture_btn[core::kMaxDoseContainers] = {};
+  lv_obj_t* dose_clear_btn[core::kMaxDoseContainers] = {};
   lv_obj_t* lead_value = nullptr;
   int detect_lead_in_s = 3;
   // Shot-graph smoothing cycle button (Off / Light / Medium / Strong)

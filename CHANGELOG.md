@@ -30,6 +30,7 @@ the headings as plain lines); leave out a list that would be empty.
 
 ### Fixes
 
+- **Fewer nuisance disconnects with a paired Umbra.** With the Umbra connected, a Micra request can go unanswered; Apollo used to wait 30 s, drop the link visibly and reconnect. It now re-dials after 5 s without showing a disconnect, and a scale that connects but sends nothing is re-dialled the same way. A queued command (standby, a temperature) still lands.
 - **Steadier Bluetooth.** One radio listener at a time across the machine and the scales: reconnect attempts no longer collide, a Settings scan no longer puts a paired Umbra to sleep, and two missing scales are found with one search.
 - **P4 startup made layout-proof.** The cache tune-up at boot could leave a build looping before the screen came on, depending on where its code happened to land in flash. It now runs from internal RAM as intended, and the boot log records the cache geometry it ends up with.
 

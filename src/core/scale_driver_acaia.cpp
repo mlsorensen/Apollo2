@@ -267,6 +267,7 @@ class AcaiaDriver : public IScaleDriver {
     process_buffer(sink);
   }
 
+  uint32_t first_weight_ms() const override { return 0; }  // own watchdog: a 3 s quiet start + re-handshakes
   bool tick(ble::ICentral& ble) override {
     const uint32_t now = now_ms();
     // LIVENESS IS THE WEIGHT STREAM, NOT THE LINK. Timing any-notification
