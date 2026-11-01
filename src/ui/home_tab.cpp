@@ -1188,82 +1188,97 @@ lv_obj_t* build_bench_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   if (with_switch) add_segmented_switch(lv_obj_get_child(card, 0), 1, cap_font, out);
 
   lv_obj_t* body = make_panel_body(card);
-  lv_obj_set_flex_flow(body, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_flex_align(body, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
-                        LV_FLEX_ALIGN_CENTER);
-  // The weight and its caption share ONE block: dormant it is invisible
-  // (no border, no fill) and the caption is the scale's name; while the
-  // reading is a dose candidate it is the Record control (set_bench_dose).
-  // The block is sized to the body, not the body to the block: the actions
-  // row below is laid out after the body and draws over anything taller.
-  lv_obj_t* blk = lv_obj_create(body);
-  lv_obj_remove_style_all(blk);
-  lv_obj_remove_flag(blk, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_add_flag(blk, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_set_size(blk, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-  lv_obj_set_flex_flow(blk, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_flex_align(blk, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_hor(blk, ui::dp(16), 0);
-  lv_obj_set_style_pad_top(blk, ui::dp(2), 0);
-  lv_obj_set_style_pad_bottom(blk, ui::dp(6), 0);
-  lv_obj_set_style_pad_row(blk, ui::dp(4), 0);
-  lv_obj_set_style_radius(blk, ui::dp(12), 0);
-  lv_obj_set_style_border_width(blk, 0, 0);
-  lv_obj_set_style_border_color(blk, lv_color_hex(ui::theme::bench()), 0);
-  lv_obj_set_style_bg_color(blk, lv_color_hex(ui::theme::bench()), 0);
-  lv_obj_set_style_bg_opa(blk, LV_OPA_TRANSP, 0);
-  out.bench_block = blk;
+  // Dose block: the Record control. Outlined (amber) while the reading is a
+  // dose candidate, filled once recorded, invisible otherwise; its caption
+  // is the scale's name when dormant (set_bench_dose).
+  auto make_block = [&](lv_obj_t* parent) {
+    lv_obj_t* blk = lv_obj_create(parent);
+    lv_obj_remove_style_all(blk);
+    lv_obj_remove_flag(blk, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(blk, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_radius(blk, ui::dp(12), 0);
+    lv_obj_set_style_border_width(blk, 0, 0);
+    lv_obj_set_style_border_color(blk, lv_color_hex(ui::theme::bench()), 0);
+    lv_obj_set_style_bg_color(blk, lv_color_hex(ui::theme::bench()), 0);
+    lv_obj_set_style_bg_opa(blk, LV_OPA_TRANSP, 0);
+    return blk;
+  };
+  auto make_labels = [&](lv_obj_t* parent, bool name_first) {
+    for (int i = 0; i < 2; ++i) {
+      if ((i == 0) == name_first) {
+        out.bench_name = lv_label_create(parent);
+        lv_label_set_text(out.bench_name, "");
+        lv_obj_set_style_text_font(out.bench_name, cap_font, 0);
+        lv_obj_set_style_text_color(out.bench_name, lv_color_hex(ui::theme::muted()), 0);
+      } else {
+        out.bench_weight = lv_label_create(parent);
+        lv_label_set_text(out.bench_weight, "-- g");
+        lv_obj_set_style_text_font(out.bench_weight, val_font, 0);  // = the other card values
+        lv_obj_set_style_text_color(out.bench_weight, lv_color_hex(ui::theme::text()), 0);
+      }
+    }
+  };
   out.bench_dose_state = 0;
-  out.bench_weight = lv_label_create(blk);
-  lv_label_set_text(out.bench_weight, "-- g");
-  lv_obj_set_style_text_font(out.bench_weight, val_font, 0);  // = the other card values
-  lv_obj_set_style_text_color(out.bench_weight, lv_color_hex(ui::theme::text()), 0);
-  out.bench_name = lv_label_create(blk);
-  lv_label_set_text(out.bench_name, "");
-  lv_obj_set_style_text_font(out.bench_name, cap_font, 0);
-  lv_obj_set_style_text_color(out.bench_name, lv_color_hex(ui::theme::muted()), 0);
-  // Swap card only: the default-dose stepper in the slot the SCALE card's
-  // target stepper has (same buttons, same row), under the weight block.
-  // Built hidden; App shows it with the Record dose feature. The body's top
-  // pad and the group's own margin go: the card's height is the panel
-  // row's, and the block + stepper are centred in it. The beside card is
-  // the graph's height — ~62 px of body at 800x480, which the weight and
-  // its caption already fill — so it stays the readout it is (Tare only;
-  // the dose is dialled in Settings there).
-  if (with_switch || !with_connect) {
-    // Beside the graph the card is the graph's height — room for the
-    // weight and ONE line under it: the stepper takes the scale name's
-    // line, and a Record offer takes it back for its moment (App hides
-    // one or the other).
-    out.bench_dose_on_caption = !with_switch;
-    if (with_switch) {
-      // Swap card: the block (weight + name, or the Record outline) sits
-      // 4 dp higher, into the header gap, so the outline clears the
-      // stepper instead of touching it (owner, X-8 2026-11-01).
-      lv_obj_set_style_translate_y(blk, -ui::dp(4), 0);
-    }
-    if (out.bench_dose_on_caption) {
-      // Every px counts here (800x480: a 65 px body for a 34 px weight and
-      // a 32 px stepper): the block's outline padding exists only while
-      // the outline shows (set_bench_dose), and the card's row gap is 8 dp
-      // instead of the panels' 12 — the two gaps hand the body 8 px.
-      lv_obj_set_style_pad_top(blk, 0, 0);
-      lv_obj_set_style_pad_bottom(blk, 0, 0);
-      lv_obj_set_style_pad_row(card, ui::dp(8), 0);
-      // The weight sits a little higher than the layout puts it, into the
-      // header gap, so the stepper gets air under the value (owner) — only
-      // while the stepper is on the line: the body clips its children, and
-      // the outline's top would go with it (set_bench_dose).
-      lv_obj_set_style_translate_y(blk, -ui::dp(5), 0);
-    }
+  out.bench_dose_on_caption = !with_connect;
+  if (with_connect) {
+    // Panel slot (swap / bench-only): ONE panel column like the MICRA and
+    // SCALE cards' — the scale's name on the caption line, the weight on
+    // the value line, the dose stepper on the stepper line — so every row
+    // lines up across the cards (owner, 2026-11-01). The outline is NOT in
+    // the flow: a layout-ignoring object sized over the caption + value
+    // after layout and drawn behind them (the labels aren't clickable, so
+    // a tap on the text reaches it).
+    lv_obj_t* col = lv_obj_create(body);
+    lv_obj_remove_style_all(col);
+    lv_obj_remove_flag(col, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_flex_grow(col, 1);
+    lv_obj_set_height(col, lv_pct(100));
+    lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(col, ui::dp(6), 0);  // = make_panel_column
+    out.bench_block = make_block(col);
+    lv_obj_add_flag(out.bench_block, LV_OBJ_FLAG_IGNORE_LAYOUT);
+    make_labels(col, /*name_first=*/true);
+    make_stepper_group(col, btn_size, symbol_font, set_font, &out.bench_dose_value,
+                       &out.bench_dose_minus, &out.bench_dose_plus);
+    out.bench_dose_group = lv_obj_get_parent(out.bench_dose_value);
+    // The stepper's SLOT stays when the stepper isn't shown (the group keeps
+    // its height; App hides its children): the rows above must not move
+    // when the dose feature is off. Centred like the MICRA columns.
+    lv_obj_set_height(out.bench_dose_group, btn_size);
+    for (uint32_t i = 0; i < lv_obj_get_child_count(out.bench_dose_group); ++i)
+      lv_obj_add_flag(lv_obj_get_child(out.bench_dose_group, i), LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_flex_align(col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  } else {
+    // Beside the graph (the graph's height): the weight with the name under
+    // it in a block that IS the flow, and the dose stepper takes the name's
+    // line while it shows (App hides one or the other; set_bench_dose gives
+    // the outline its padding only while it draws). Every px counts here —
+    // 800x480 leaves ~65 px of body for a 34 px weight and a 32 px stepper —
+    // so the card's row gap is 8 dp, not the panels' 12.
+    lv_obj_set_flex_flow(body, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(body, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_t* blk = make_block(body);
+    lv_obj_set_size(blk, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(blk, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(blk, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_hor(blk, ui::dp(16), 0);
+    lv_obj_set_style_pad_row(blk, ui::dp(4), 0);
+    out.bench_block = blk;
+    make_labels(blk, /*name_first=*/false);
+    lv_obj_set_style_pad_row(card, ui::dp(8), 0);
+    // The weight sits a little higher than the layout puts it, into the
+    // header gap, so the stepper gets air under the value (owner) — only
+    // while the stepper is on the line: the body clips its children, and
+    // the outline's top would go with it (set_bench_dose).
+    lv_obj_set_style_translate_y(blk, -ui::dp(5), 0);
     lv_obj_set_style_pad_top(body, 0, 0);
-    make_stepper_group(body, btn_size, symbol_font, set_font,
-                       &out.bench_dose_value, &out.bench_dose_minus, &out.bench_dose_plus);
+    make_stepper_group(body, btn_size, symbol_font, set_font, &out.bench_dose_value,
+                       &out.bench_dose_minus, &out.bench_dose_plus);
     out.bench_dose_group = lv_obj_get_parent(out.bench_dose_value);
     lv_obj_set_style_margin_top(out.bench_dose_group, 0, 0);
     lv_obj_add_flag(out.bench_dose_group, LV_OBJ_FLAG_HIDDEN);
   }
-
   lv_obj_t* acts = lv_obj_create(card);
   lv_obj_remove_style_all(acts);
   lv_obj_remove_flag(acts, LV_OBJ_FLAG_SCROLLABLE);
@@ -1314,6 +1329,20 @@ void set_bench_dose(HomeWidgets& w, int state, float dose_g) {
   else if (state == 2)
     std::snprintf(cap, sizeof(cap), LV_SYMBOL_OK "  %.1f g recorded", static_cast<double>(dose_g));
   if (state != 0) ui::set_text(w.bench_name, cap);
+  if (state != 0 && !w.bench_dose_on_caption) {
+    // Panel column: the outline is a layout-ignoring box behind the caption
+    // and value; fit it to them (the weight's width changes per reading).
+    lv_obj_t* col = lv_obj_get_parent(w.bench_block);
+    lv_obj_update_layout(col);
+    lv_area_t n, v, c;
+    lv_obj_get_coords(w.bench_name, &n);
+    lv_obj_get_coords(w.bench_weight, &v);
+    lv_obj_get_content_coords(col, &c);
+    const int ph = ui::dp(12), pt = ui::dp(3), pb = ui::dp(4);
+    const int wdt = std::max(lv_area_get_width(&n), lv_area_get_width(&v)) + 2 * ph;
+    lv_obj_set_size(w.bench_block, wdt, (v.y2 - n.y1 + 1) + pt + pb);
+    lv_obj_set_pos(w.bench_block, ((c.x1 + c.x2 + 1) / 2 - c.x1) - wdt / 2, (n.y1 - c.y1) - pt);
+  }
   if (state == w.bench_dose_state) return;
   w.bench_dose_state = state;
   // Dormant: no border, no fill, muted caption (update_home restores the
@@ -1341,9 +1370,12 @@ void log_bench_card_geometry(HomeWidgets& w) {
   // > 0 is clipped (LVGL clips children to the parent's rectangle, gap or
   // no gap below it).
   int low = b.y1;
-  for (uint32_t i = 0; i < lv_obj_get_child_count(body); ++i) {
-    lv_obj_t* c = lv_obj_get_child(body, i);
-    if (lv_obj_has_flag(c, LV_OBJ_FLAG_HIDDEN)) continue;
+  // The panel column's children are what can overflow; the beside card's
+  // body holds the block and the stepper directly.
+  lv_obj_t* holder = w.bench_dose_on_caption ? body : lv_obj_get_child(body, 0);
+  for (uint32_t i = 0; i < lv_obj_get_child_count(holder); ++i) {
+    lv_obj_t* c = lv_obj_get_child(holder, i);
+    if (lv_obj_has_flag(c, LV_OBJ_FLAG_HIDDEN) || lv_obj_has_flag(c, LV_OBJ_FLAG_IGNORE_LAYOUT)) continue;
     lv_area_t a; lv_obj_get_coords(c, &a);
     if (a.y2 > low) low = a.y2;
   }
@@ -1702,13 +1734,19 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
       // shot pill lose their bottoms (owner's X-8, 2026-11-01). The 16 dp
       // the steppers sit lower by (see make_stepper_group / build_scale_panel)
       // is the slack: on the swap card they sit where the values' row ends.
-      if (out.target_minus != nullptr) {
-        lv_obj_t* stepper = lv_obj_get_parent(out.target_minus);
+      // The MICRA card takes the same shape — its header set to the switch
+      // header's height, the same slack out of its body — so BREW / STEAM /
+      // WEIGHT / TIMER, the values and the steppers share lines (owner).
+      auto flatten = [](lv_obj_t* stepper_btn) {
+        if (stepper_btn == nullptr) return;
+        lv_obj_t* stepper = lv_obj_get_parent(stepper_btn);
         lv_obj_set_style_margin_top(stepper, 0, 0);
-        lv_obj_t* wcol = lv_obj_get_parent(stepper);
-        lv_obj_t* row = lv_obj_get_parent(wcol);
-        lv_obj_set_style_pad_top(row, 0, 0);
-      }
+        lv_obj_t* col = lv_obj_get_parent(stepper);
+        lv_obj_set_style_pad_top(lv_obj_get_parent(col), 0, 0);
+      };
+      flatten(out.target_minus);
+      flatten(out.brew_minus);
+      flatten(out.boiler_minus);
       if (out.shot_btn != nullptr) lv_obj_set_style_margin_top(out.shot_btn, 0, 0);
       lv_obj_add_flag(out.scale_status_label, LV_OBJ_FLAG_HIDDEN);
       out.scale_status_label = nullptr;
@@ -1717,6 +1755,10 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
                         /*with_status_text=*/false, /*with_connect=*/true,
                         /*with_switch=*/true, out);
       lv_obj_add_flag(out.bench_card, LV_OBJ_FLAG_HIDDEN);
+      flatten(out.bench_dose_minus);
+      lv_obj_update_layout(scale_hdr);
+      lv_obj_t* micra_hdr = lv_obj_get_child(lv_obj_get_child(panels, 0), 0);
+      lv_obj_set_height(micra_hdr, lv_obj_get_height(scale_hdr));
     }
   }
 
@@ -1819,8 +1861,13 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     else std::snprintf(wb, sizeof(wb), "-- g");
     ui::set_text(w.bench_weight, wb);
     char nb[32];
-    if (w.bench_dose_state == 0)  // the dose block owns the caption otherwise
-      ui::set_text(w.bench_name, ui::friendly_scale_name(bench->name, nb, sizeof(nb)));
+    if (w.bench_dose_state == 0) {  // the dose block owns the caption otherwise
+      ui::friendly_scale_name(bench->name, nb, sizeof(nb));
+      if (!w.bench_dose_on_caption)  // the panel column's caption line, like BREW / WEIGHT
+        for (char* q = nb; *q != '\0'; ++q)
+          if (*q >= 'a' && *q <= 'z') *q = static_cast<char>(*q - 'a' + 'A');
+      ui::set_text(w.bench_name, nb);
+    }
     const char* btxt;
     uint32_t bdot;
     if (bench->connected) {

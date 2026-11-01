@@ -212,10 +212,12 @@ auto flush), and nothing on this card is ever disabled by a shot.
   **BENCH** to swap the bench card in; tap **ESPRESSO** to swap back. A shot
   starting swaps back by itself, so a shot is never hidden. The status dot
   and battery stay in the header in both positions.
-- ② **WEIGHT** — the bench scale's live reading, with the scale's name under
-  it. Battery and status follow the same rules as the SCALE card's. When
-  what sits on the scale looks like a dose, this block becomes the **Record**
-  button — see *Recording your dose* below.
+- ② **WEIGHT** — the bench scale's live reading, with the scale's name as
+  its caption (above it on the swap card, on the same lines as the MICRA
+  card's BREW and STEAM; under it on the card beside the graph). Battery
+  and status follow the same rules as the SCALE card's. When what sits on
+  the scale looks like a dose, the caption and reading become the
+  **Record** button — see *Recording your dose* below.
 - ③ **Disconnect / Connect** and **Tare** — the bench scale's own.
 - With **Bench scale on Home** set to *Beside the graph*, the bench card sits
   to the right of the flow graph instead (with just **Tare**), and the graph
@@ -261,9 +263,10 @@ column on the shot's card and the web page).
 - **A default dose** (Settings → Scale → Shot settings → Default dose, off
   unless you set it) is for a constant daily dose, or for using the ratio
   with no bench scale at all. The BENCH card carries the same **− / +**
-  under its weight — on the swap card below the scale's name, beside the
-  graph in its place (a Record offer takes that line back while it shows)
-  — so the dose can be dialled without leaving Home. It is staged for every shot: the chip shows
+  under its weight — on the swap card in the row the other cards' steppers
+  use, beside the graph in the scale name's place (a Record offer takes
+  that line back while it shows) — so the dose can be dialled without
+  leaving Home. It is staged for every shot: the chip shows
   it as **18.0 g set**, and a dose you record overrides it for that one
   shot. The **×** on a staged default skips it for the next shot only; it
   is staged again after that shot, or when you've walked away as above.

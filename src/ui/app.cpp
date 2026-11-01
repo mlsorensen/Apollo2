@@ -5571,8 +5571,16 @@ void App::sync_dose_settings_rows() {
     // Beside the graph the stepper and the caption share one line: the
     // caption only while a dose is offered / recorded.
     const bool caption_busy = home_.bench_dose_on_caption && home_.bench_dose_state != 0;
-    if (show && !caption_busy) lv_obj_remove_flag(home_.bench_dose_group, LV_OBJ_FLAG_HIDDEN);
-    else lv_obj_add_flag(home_.bench_dose_group, LV_OBJ_FLAG_HIDDEN);
+    if (home_.bench_dose_on_caption) {
+      if (show && !caption_busy) lv_obj_remove_flag(home_.bench_dose_group, LV_OBJ_FLAG_HIDDEN);
+      else lv_obj_add_flag(home_.bench_dose_group, LV_OBJ_FLAG_HIDDEN);
+    } else {  // panel column: the group keeps its slot, its children come and go
+      for (uint32_t i = 0; i < lv_obj_get_child_count(home_.bench_dose_group); ++i) {
+        lv_obj_t* c = lv_obj_get_child(home_.bench_dose_group, i);
+        if (show) lv_obj_remove_flag(c, LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_add_flag(c, LV_OBJ_FLAG_HIDDEN);
+      }
+    }
     if (home_.bench_dose_on_caption && home_.bench_name != nullptr) {
       if (show && !caption_busy) lv_obj_add_flag(home_.bench_name, LV_OBJ_FLAG_HIDDEN);
       else lv_obj_remove_flag(home_.bench_name, LV_OBJ_FLAG_HIDDEN);
