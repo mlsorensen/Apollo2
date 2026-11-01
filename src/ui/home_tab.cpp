@@ -1245,7 +1245,9 @@ lv_obj_t* build_bench_panel(lv_obj_t* parent, const lv_font_t* cap_font,
       lv_obj_set_style_pad_bottom(blk, 0, 0);
       lv_obj_set_style_pad_row(card, ui::dp(8), 0);
       // The weight sits a little higher than the layout puts it, into the
-      // header gap, so the stepper gets air under the value (owner).
+      // header gap, so the stepper gets air under the value (owner) — only
+      // while the stepper is on the line: the body clips its children, and
+      // the outline's top would go with it (set_bench_dose).
       lv_obj_set_style_translate_y(blk, -ui::dp(5), 0);
     }
     lv_obj_set_style_pad_top(body, 0, 0);
@@ -1312,9 +1314,10 @@ void set_bench_dose(HomeWidgets& w, int state, float dose_g) {
   // scale's name on its next pass). Candidate: amber outline + faint fill.
   // Recorded: a deeper fill.
   lv_obj_set_style_border_width(w.bench_block, state == 0 ? 0 : ui::dp(2), 0);
-  if (w.bench_dose_on_caption) {  // beside the graph: outline padding only with the outline
-    lv_obj_set_style_pad_top(w.bench_block, state == 0 ? 0 : ui::dp(2), 0);
-    lv_obj_set_style_pad_bottom(w.bench_block, state == 0 ? 0 : ui::dp(6), 0);
+  if (w.bench_dose_on_caption) {  // beside the graph: outline padding + the
+    lv_obj_set_style_pad_top(w.bench_block, state == 0 ? 0 : ui::dp(2), 0);  // centred block
+    lv_obj_set_style_pad_bottom(w.bench_block, state == 0 ? 0 : ui::dp(6), 0);  // only with the
+    lv_obj_set_style_translate_y(w.bench_block, state == 0 ? -ui::dp(5) : 0, 0);  // outline
   }
   lv_obj_set_style_bg_opa(w.bench_block, state == 0 ? LV_OPA_TRANSP
                                          : state == 1 ? LV_OPA_10 : LV_OPA_30, 0);
