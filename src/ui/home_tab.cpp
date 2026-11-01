@@ -1236,6 +1236,15 @@ lv_obj_t* build_bench_panel(lv_obj_t* parent, const lv_font_t* cap_font,
     // line, and a Record offer takes it back for its moment (App hides
     // one or the other).
     out.bench_dose_on_caption = !with_switch;
+    if (out.bench_dose_on_caption) {
+      // Every px counts here (800x480: a 65 px body for a 34 px weight and
+      // a 32 px stepper): the block's outline padding exists only while
+      // the outline shows (set_bench_dose), and the card's row gap is 8 dp
+      // instead of the panels' 12 — the two gaps hand the body 8 px.
+      lv_obj_set_style_pad_top(blk, 0, 0);
+      lv_obj_set_style_pad_bottom(blk, 0, 0);
+      lv_obj_set_style_pad_row(card, ui::dp(8), 0);
+    }
     lv_obj_set_style_pad_top(body, 0, 0);
     make_stepper_group(body, btn_size, symbol_font, set_font,
                        &out.bench_dose_value, &out.bench_dose_minus, &out.bench_dose_plus);
@@ -1300,11 +1309,37 @@ void set_bench_dose(HomeWidgets& w, int state, float dose_g) {
   // scale's name on its next pass). Candidate: amber outline + faint fill.
   // Recorded: a deeper fill.
   lv_obj_set_style_border_width(w.bench_block, state == 0 ? 0 : ui::dp(2), 0);
+  if (w.bench_dose_on_caption) {  // beside the graph: outline padding only with the outline
+    lv_obj_set_style_pad_top(w.bench_block, state == 0 ? 0 : ui::dp(2), 0);
+    lv_obj_set_style_pad_bottom(w.bench_block, state == 0 ? 0 : ui::dp(6), 0);
+  }
   lv_obj_set_style_bg_opa(w.bench_block, state == 0 ? LV_OPA_TRANSP
                                          : state == 1 ? LV_OPA_10 : LV_OPA_30, 0);
   lv_obj_set_style_text_color(w.bench_name,
                               lv_color_hex(state == 0 ? ui::theme::muted() : ui::theme::bench()), 0);
   if (state == 0) ui::set_text(w.bench_name, "");  // the name comes back on the next update
+}
+
+void log_bench_card_geometry(HomeWidgets& w) {
+  if (!core::log_detail() || w.bench_card == nullptr || lv_obj_get_child_count(w.bench_card) < 3) return;
+  lv_obj_update_layout(w.bench_card);  // the stepper / caption were just shown or hidden
+  lv_obj_t* body = lv_obj_get_child(w.bench_card, 1);
+  lv_area_t b; lv_obj_get_coords(body, &b);
+  // The lowest edge among the body's children against the body's bottom:
+  // > 0 is clipped (LVGL clips children to the parent's rectangle, gap or
+  // no gap below it).
+  int low = b.y1;
+  for (uint32_t i = 0; i < lv_obj_get_child_count(body); ++i) {
+    lv_obj_t* c = lv_obj_get_child(body, i);
+    if (lv_obj_has_flag(c, LV_OBJ_FLAG_HIDDEN)) continue;
+    lv_area_t a; lv_obj_get_coords(c, &a);
+    if (a.y2 > low) low = a.y2;
+  }
+  core::logf("home: bench card h=%d body=%d clipped=%d stepper=%d caption=%d\n",
+             static_cast<int>(lv_obj_get_height(w.bench_card)), static_cast<int>(lv_area_get_height(&b)),
+             static_cast<int>(low - b.y2),
+             w.bench_dose_group != nullptr && !lv_obj_has_flag(w.bench_dose_group, LV_OBJ_FLAG_HIDDEN) ? 1 : 0,
+             w.bench_name != nullptr && !lv_obj_has_flag(w.bench_name, LV_OBJ_FLAG_HIDDEN) ? 1 : 0);
 }
 
 void set_dose_chip(HomeWidgets& w, int state, float in_g, float out_g, bool is_default) {
@@ -1732,13 +1767,6 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
                static_cast<int>(lv_obj_get_height(body)), overflow,
                static_cast<int>(lv_obj_get_height(acts)), static_cast<int>(lv_obj_get_y(acts)),
                out.bench_enabled && out.bench_mode == 0 ? 1 : 0);
-  }
-  if (core::log_detail() && out.bench_card != nullptr && out.bench_dose_on_caption) {
-    lv_obj_t* body = lv_obj_get_child(out.bench_card, 1);
-    core::logf("home: bench card h=%d body=%d overflow=%d\n",
-               static_cast<int>(lv_obj_get_height(out.bench_card)),
-               static_cast<int>(lv_obj_get_height(body)),
-               static_cast<int>(lv_obj_get_scroll_bottom(body)));
   }
   // Swap mode starts on the ESPRESSO side: paint the pills to match.
   if (bench_enabled && out.bench_mode == 0 && !out.bench_only) show_bench_side(out, false);

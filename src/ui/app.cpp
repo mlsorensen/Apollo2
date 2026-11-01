@@ -5577,6 +5577,7 @@ void App::sync_dose_settings_rows() {
       if (show && !caption_busy) lv_obj_add_flag(home_.bench_name, LV_OBJ_FLAG_HIDDEN);
       else lv_obj_remove_flag(home_.bench_name, LV_OBJ_FLAG_HIDDEN);
     }
+    ui::log_bench_card_geometry(home_);
   }
   if (settings_.dose_switch == nullptr || dose_settings_ == nullptr) return;
   // The switch and the default dose mean something with an espresso scale;

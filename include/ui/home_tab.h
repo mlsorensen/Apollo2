@@ -351,6 +351,10 @@ void show_bench_side(HomeWidgets& w, bool bench);
 // The bench card's dose block: state 0 = dormant (scale name), 1 = "Record
 // <dose> g" offered, 2 = "<dose> g recorded". Cheap when unchanged.
 void set_bench_dose(HomeWidgets& w, int state, float dose_g);
+// Detailed log: the bench card's body vs its lowest visible child, AFTER the
+// stepper / caption were shown or hidden (the build-time layout has the
+// hidden stepper unplaced). clipped > 0 = pixels lost at the body's edge.
+void log_bench_card_geometry(HomeWidgets& w);
 // The graph's dose chip: 0 hidden, 1 "<in> g in", 2 + a placeholder out,
 // 3 "<in> g in  <out> g out  1:<ratio>". A default (not weighed) dose says
 // "set" instead of "in".
