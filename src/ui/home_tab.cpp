@@ -1236,6 +1236,12 @@ lv_obj_t* build_bench_panel(lv_obj_t* parent, const lv_font_t* cap_font,
     // line, and a Record offer takes it back for its moment (App hides
     // one or the other).
     out.bench_dose_on_caption = !with_switch;
+    if (with_switch) {
+      // Swap card: the block (weight + name, or the Record outline) sits
+      // 4 dp higher, into the header gap, so the outline clears the
+      // stepper instead of touching it (owner, X-8 2026-11-01).
+      lv_obj_set_style_translate_y(blk, -ui::dp(4), 0);
+    }
     if (out.bench_dose_on_caption) {
       // Every px counts here (800x480: a 65 px body for a 34 px weight and
       // a 32 px stepper): the block's outline padding exists only while
