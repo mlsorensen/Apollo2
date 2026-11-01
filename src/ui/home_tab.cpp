@@ -1658,6 +1658,21 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   // to the card's real content box.
   lv_obj_update_layout(parent);
   populate_flow_graph(graph_card, out);
+  // Evidence for the swap card's clipped stepper / pill (owner, X-8,
+  // 2026-11-01; the sim doesn't reproduce it): the SCALE card's slot and the
+  // heights its header, body and action row got, plus where the shot pill
+  // ends against the action row's top. Detailed log only.
+  if (core::log_detail() && out.scale_card != nullptr && lv_obj_get_child_count(out.scale_card) >= 3) {
+    lv_obj_t* hdr = lv_obj_get_child(out.scale_card, 0);
+    lv_obj_t* body = lv_obj_get_child(out.scale_card, 1);
+    lv_obj_t* acts = lv_obj_get_child(out.scale_card, 2);
+    core::logf("home: scale card h=%d hdr=%d body=%d (content %d) acts=%d y=%d; pill bottom y=%d; swap=%d\n",
+               static_cast<int>(lv_obj_get_height(out.scale_card)), static_cast<int>(lv_obj_get_height(hdr)),
+               static_cast<int>(lv_obj_get_height(body)), static_cast<int>(lv_obj_get_content_height(body)),
+               static_cast<int>(lv_obj_get_height(acts)), static_cast<int>(lv_obj_get_y(acts)),
+               out.shot_btn != nullptr ? static_cast<int>(lv_obj_get_y(out.shot_btn) + lv_obj_get_height(out.shot_btn)) : -1,
+               out.bench_enabled && out.bench_mode == 0 ? 1 : 0);
+  }
   // Swap mode starts on the ESPRESSO side: paint the pills to match.
   if (bench_enabled && out.bench_mode == 0 && !out.bench_only) show_bench_side(out, false);
 }
