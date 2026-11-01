@@ -1281,6 +1281,12 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   if (home_.bench_connect_btn != nullptr)
     lv_obj_add_event_cb(home_.bench_connect_btn, on_bench_connect_clicked,
                         LV_EVENT_CLICKED, this);
+  // The bench card's default-dose stepper: the Settings row's handlers, so
+  // both places edit the one setting and both labels follow.
+  if (home_.bench_dose_minus != nullptr) {
+    lv_obj_add_event_cb(home_.bench_dose_minus, on_dose_def_minus, LV_EVENT_CLICKED, this);
+    lv_obj_add_event_cb(home_.bench_dose_plus, on_dose_def_plus, LV_EVENT_CLICKED, this);
+  }
   for (int i = 0; i < 2; ++i) {
     if (home_.seg_espresso[i] != nullptr)
       lv_obj_add_event_cb(home_.seg_espresso[i], on_seg_espresso_clicked, LV_EVENT_CLICKED,
@@ -5421,7 +5427,9 @@ void App::dose_tick(const core::MachineSnapshot& snap) {
 void App::pose_dose(int pose) {
   if (pose <= 0) return;
   if (pose == 5) {  // the default-dose setting, staged, no bench scale needed
+    if (dose_settings_ != nullptr) dose_settings_->set_default_dose(18.0f);
     dose_.set_default_dose(18.0f);
+    sync_dose_settings_rows();
     dose_tick(machine_ != nullptr ? machine_->snapshot() : core::MachineSnapshot{});
     return;
   }
@@ -5548,6 +5556,18 @@ void App::clear_dose_container(int index) {
 }
 
 void App::sync_dose_settings_rows() {
+  // The bench card's stepper first: it exists without the Settings rows
+  // (the tab is built after Home) and reads the same setting.
+  if (home_.bench_dose_group != nullptr) {
+    const bool show = dose_record_active();
+    char b[16];
+    const float g = show ? dose_settings_->config().default_dose : 0.0f;
+    if (g > 0.0f) std::snprintf(b, sizeof(b), "%.1f g", static_cast<double>(g));
+    else std::snprintf(b, sizeof(b), "Off");
+    lv_label_set_text(home_.bench_dose_value, b);
+    if (show) lv_obj_remove_flag(home_.bench_dose_group, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(home_.bench_dose_group, LV_OBJ_FLAG_HIDDEN);
+  }
   if (settings_.dose_switch == nullptr || dose_settings_ == nullptr) return;
   // The switch and the default dose mean something with an espresso scale;
   // the container rows only with a bench scale as well.

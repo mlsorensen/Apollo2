@@ -138,6 +138,14 @@ struct HomeWidgets {
   lv_obj_t* bench_batt_pct_label = nullptr;
   lv_obj_t* bench_tare_btn = nullptr;
   lv_obj_t* bench_connect_btn = nullptr;   // swap mode only (beside: Tare alone)
+  // Default-dose stepper under the weight ("Off" / "18.0 g"): the same
+  // setting as Settings > Scale > Shot settings > Default dose, reachable
+  // from the card so a dose can be dialled without leaving Home. Hidden
+  // unless Record dose is active (App::sync_dose_settings_rows).
+  lv_obj_t* bench_dose_group = nullptr;
+  lv_obj_t* bench_dose_value = nullptr;
+  lv_obj_t* bench_dose_minus = nullptr;
+  lv_obj_t* bench_dose_plus = nullptr;
   lv_obj_t* bench_connect_label = nullptr;
   // The ESPRESSO | BENCH pills: one pair per header (index 0 on the SCALE
   // card, 1 on the bench card), so whichever card shows carries the switch.

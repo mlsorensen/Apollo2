@@ -1172,9 +1172,10 @@ void add_bench_battery(lv_obj_t* status_group, const lv_font_t* cap_font,
 // Connect lives in Settings; the beside card is the readout).
 lv_obj_t* build_bench_panel(lv_obj_t* parent, const lv_font_t* cap_font,
                             const lv_font_t* status_font, const lv_font_t* val_font,
-                            int pad, int action_h, const lv_font_t* action_font,
-                            bool with_status_text, bool with_connect, bool with_switch,
-                            HomeWidgets& out) {
+                            const lv_font_t* set_font, int btn_size,
+                            const lv_font_t* symbol_font, int pad, int action_h,
+                            const lv_font_t* action_font, bool with_status_text,
+                            bool with_connect, bool with_switch, HomeWidgets& out) {
   lv_obj_t* card = make_panel_card(parent, pad);
   make_panel_header(card, "BENCH", cap_font, status_font, &out.bench_status_dot,
                     with_status_text ? &out.bench_status_label : nullptr);
@@ -1217,6 +1218,22 @@ lv_obj_t* build_bench_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   lv_label_set_text(out.bench_name, "");
   lv_obj_set_style_text_font(out.bench_name, cap_font, 0);
   lv_obj_set_style_text_color(out.bench_name, lv_color_hex(ui::theme::muted()), 0);
+  // Swap card only: the default-dose stepper in the slot the SCALE card's
+  // target stepper has (same buttons, same row), under the weight block.
+  // Built hidden; App shows it with the Record dose feature. The body's top
+  // pad and the group's own margin go: the card's height is the panel
+  // row's, and the block + stepper are centred in it. The beside card is
+  // the graph's height — ~62 px of body at 800x480, which the weight and
+  // its caption already fill — so it stays the readout it is (Tare only;
+  // the dose is dialled in Settings there).
+  if (with_switch) {
+    lv_obj_set_style_pad_top(body, 0, 0);
+    make_stepper_group(body, btn_size, symbol_font, set_font, &out.bench_dose_value,
+                       &out.bench_dose_minus, &out.bench_dose_plus);
+    out.bench_dose_group = lv_obj_get_parent(out.bench_dose_value);
+    lv_obj_set_style_margin_top(out.bench_dose_group, 0, 0);
+    lv_obj_add_flag(out.bench_dose_group, LV_OBJ_FLAG_HIDDEN);
+  }
 
   lv_obj_t* acts = lv_obj_create(card);
   lv_obj_remove_style_all(acts);
@@ -1439,6 +1456,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   out.scale_card = out.bench_card = nullptr;
   out.bench_weight = out.bench_name = out.bench_block = nullptr;
   out.bench_dose_state = 0;
+  out.bench_dose_group = out.bench_dose_value = out.bench_dose_minus = out.bench_dose_plus = nullptr;
   out.dose_chip = out.dose_in_label = out.dose_out_label = out.dose_ratio_label =
       out.dose_x_label = nullptr;
   out.dose_chip_state = 0;
@@ -1608,7 +1626,8 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   if (out.bench_only) {
     // No espresso scale: the bench card takes the SCALE slot alone (status
     // text, Disconnect + Tare, no switch) and the graph shows it in grams.
-    build_bench_panel(panels, panel_cap, panel_status, panel_val, panel_pad, action_h, btn_font,
+    build_bench_panel(panels, panel_cap, panel_status, panel_val, panel_set, panel_btn,
+                      panel_sym, panel_pad, action_h, btn_font,
                       /*with_status_text=*/true, /*with_connect=*/true,
                       /*with_switch=*/false, out);
   } else {
@@ -1636,7 +1655,8 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
       if (out.shot_btn != nullptr) lv_obj_set_style_margin_top(out.shot_btn, 0, 0);
       lv_obj_add_flag(out.scale_status_label, LV_OBJ_FLAG_HIDDEN);
       out.scale_status_label = nullptr;
-      build_bench_panel(panels, panel_cap, panel_status, panel_val, panel_pad, action_h, btn_font,
+      build_bench_panel(panels, panel_cap, panel_status, panel_val, panel_set, panel_btn,
+                        panel_sym, panel_pad, action_h, btn_font,
                         /*with_status_text=*/false, /*with_connect=*/true,
                         /*with_switch=*/true, out);
       lv_obj_add_flag(out.bench_card, LV_OBJ_FLAG_HIDDEN);
@@ -1661,7 +1681,8 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
     lv_obj_set_height(graph_card, lv_pct(100));
     lv_obj_set_width(graph_card, 0);
     lv_obj_set_flex_grow(graph_card, 2);
-    build_bench_panel(lower, panel_cap, panel_status, panel_val, panel_pad, action_h, btn_font,
+    build_bench_panel(lower, panel_cap, panel_status, panel_val, panel_set, panel_btn,
+                      panel_sym, panel_pad, action_h, btn_font,
                       /*with_status_text=*/false, /*with_connect=*/false,
                       /*with_switch=*/false, out);
     lv_obj_set_flex_grow(out.bench_card, 1);

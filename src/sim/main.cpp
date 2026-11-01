@@ -93,7 +93,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   static host::FakeSound fake_sound;  // stateless; shared across renders
   ui::App app;
   static host::FakeSchedule fallback_schedule;  // renders that don't pose one
-  static host::FakeDoseSettings fake_dose;      // a portafilter + a cup stored
+  host::FakeDoseSettings fake_dose;  // per render: a dose pose may write the default dose
   app.build(machine, provisioner, battery, disp_settings, clock, history, scale, bench,
             scale_provisioner, brew, network, fake_sound, shots, screen, updates,
             backup, schedule != nullptr ? *schedule : fallback_schedule, &fake_dose);
@@ -345,10 +345,11 @@ int main() {
   ok &= r({800, 480}, "renders/scale_device_pick_800x480.png", 1, ui::kSectionScaleDevice);
   ok &= r({800, 480}, "renders/home_bench_card_800x480.png");
   ok &= r({1280, 800, 1.6f}, "renders/home_bench_card_1280x800.png");  // the X-8's swap card, ESPRESSO side
+  // BENCH side / beside card with an 18.0 g default dose dialled (pose 5).
   ok &= r({800, 480}, "renders/home_bench_card_bench_800x480.png", 0, -1, false, 0, -1,
-          false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 1);
+          false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 1, 5);
   ok &= r({1280, 800, 1.6f}, "renders/home_bench_card_bench_1280x800.png", 0, -1, false, 0,
-          -1, false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 1);
+          -1, false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 1, 5);
   disp.set_bench_home_style(1);
   ok &= r({800, 480}, "renders/home_bench_beside_800x480.png");
   ok &= r({1280, 800, 1.6f}, "renders/home_bench_beside_1280x800.png");

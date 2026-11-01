@@ -260,7 +260,10 @@ column on the shot's card and the web page).
   standby, or an hour passing.
 - **A default dose** (Settings → Scale → Shot settings → Default dose, off
   unless you set it) is for a constant daily dose, or for using the ratio
-  with no bench scale at all. It is staged for every shot: the chip shows
+  with no bench scale at all. When the bench scale shares the panel with
+  the espresso scale, the BENCH side carries the same **− / +** under its
+  weight, so the dose can be dialled without leaving Home (the card beside
+  the graph is the readout only). It is staged for every shot: the chip shows
   it as **18.0 g set**, and a dose you record overrides it for that one
   shot. The **×** on a staged default skips it for the next shot only; it
   is staged again after that shot, or when you've walked away as above.
