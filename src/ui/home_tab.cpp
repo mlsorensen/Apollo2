@@ -1246,7 +1246,7 @@ lv_obj_t* build_bench_panel(lv_obj_t* parent, const lv_font_t* cap_font,
       lv_obj_set_style_pad_row(card, ui::dp(8), 0);
       // The weight sits a little higher than the layout puts it, into the
       // header gap, so the stepper gets air under the value (owner).
-      lv_obj_set_style_translate_y(blk, -ui::dp(3), 0);
+      lv_obj_set_style_translate_y(blk, -ui::dp(5), 0);
     }
     lv_obj_set_style_pad_top(body, 0, 0);
     make_stepper_group(body, btn_size, symbol_font, set_font,
