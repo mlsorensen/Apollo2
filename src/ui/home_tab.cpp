@@ -549,10 +549,12 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   }
   update_flow_legend(out);
 
-  // The dose chip, above the legend: same shell, bench dot, built up by
-  // set_dose_chip (in -> placeholder out -> out + ratio). Hidden until a
-  // dose is staged; only its x is a control (the chip body is inert, so a
-  // tap meant for the legend that lands high does nothing).
+  // The dose chip, above the legend: same shell, no dot (the legend's
+  // amber dot already names the bench series; the ratio is amber itself —
+  // owner, 2026-11-01), built up by set_dose_chip (in -> placeholder out ->
+  // out + ratio). Hidden until a dose is staged; only its x is a control
+  // (the chip body is inert, so a tap meant for the legend that lands high
+  // does nothing).
   {
     lv_obj_t* chip = lv_obj_create(legend_row);
     lv_obj_remove_style_all(chip);
@@ -568,7 +570,6 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
     lv_obj_set_size(chip, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(chip, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(chip, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    make_dot(chip, ui::dp(10), ui::theme::bench());
     auto label = [&](uint32_t color, int size) {
       lv_obj_t* l = lv_label_create(chip);
       lv_label_set_text(l, "");
