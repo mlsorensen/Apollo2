@@ -142,6 +142,7 @@ struct HomeWidgets {
   // setting as Settings > Scale > Shot settings > Default dose, reachable
   // from the card so a dose can be dialled without leaving Home. Hidden
   // unless Record dose is active (App::sync_dose_settings_rows).
+  bool bench_dose_on_caption = false;  // beside card: the stepper takes the name's line
   lv_obj_t* bench_dose_group = nullptr;
   lv_obj_t* bench_dose_value = nullptr;
   lv_obj_t* bench_dose_minus = nullptr;

@@ -5389,10 +5389,13 @@ void App::dose_tick(const core::MachineSnapshot& snap) {
                                                    : "expired");
 
   // The bench card's block: dormant / Record <dose> / recorded.
+  const int block_was = home_.bench_dose_state;
   if (!have_bench) ui::set_bench_dose(home_, 0, 0.0f);
   else if (dose_.recorded_showing()) ui::set_bench_dose(home_, 2, dose_.pending());
   else if (dose_.candidate()) ui::set_bench_dose(home_, 1, dose_.candidate_dose());
   else ui::set_bench_dose(home_, 0, 0.0f);
+  // Beside the graph the block's caption and the dose stepper share a line.
+  if (home_.bench_dose_on_caption && home_.bench_dose_state != block_was) sync_dose_settings_rows();
 
   // The graph chip builds up: in -> in + placeholder out -> in + out + ratio.
   const core::BrewSnapshot bs = brew_ != nullptr ? brew_->snapshot() : core::BrewSnapshot{};
@@ -5565,8 +5568,15 @@ void App::sync_dose_settings_rows() {
     if (g > 0.0f) std::snprintf(b, sizeof(b), "%.1f g", static_cast<double>(g));
     else std::snprintf(b, sizeof(b), "Off");
     lv_label_set_text(home_.bench_dose_value, b);
-    if (show) lv_obj_remove_flag(home_.bench_dose_group, LV_OBJ_FLAG_HIDDEN);
+    // Beside the graph the stepper and the caption share one line: the
+    // caption only while a dose is offered / recorded.
+    const bool caption_busy = home_.bench_dose_on_caption && home_.bench_dose_state != 0;
+    if (show && !caption_busy) lv_obj_remove_flag(home_.bench_dose_group, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_add_flag(home_.bench_dose_group, LV_OBJ_FLAG_HIDDEN);
+    if (home_.bench_dose_on_caption && home_.bench_name != nullptr) {
+      if (show && !caption_busy) lv_obj_add_flag(home_.bench_name, LV_OBJ_FLAG_HIDDEN);
+      else lv_obj_remove_flag(home_.bench_name, LV_OBJ_FLAG_HIDDEN);
+    }
   }
   if (settings_.dose_switch == nullptr || dose_settings_ == nullptr) return;
   // The switch and the default dose mean something with an espresso scale;

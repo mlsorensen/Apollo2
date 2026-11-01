@@ -1171,6 +1171,9 @@ void add_bench_battery(lv_obj_t* status_group, const lv_font_t* cap_font,
 // battery), a hero weight with the scale's name under it, and the actions —
 // Disconnect + Tare in the panel slot, Tare alone beside the graph (its
 // Connect lives in Settings; the beside card is the readout).
+// set_font / btn_size / symbol_font size the default-dose stepper: the
+// caller picks a smaller button where the card is short (beside the graph
+// at 800x480).
 lv_obj_t* build_bench_panel(lv_obj_t* parent, const lv_font_t* cap_font,
                             const lv_font_t* status_font, const lv_font_t* val_font,
                             const lv_font_t* set_font, int btn_size,
@@ -1227,10 +1230,15 @@ lv_obj_t* build_bench_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   // the graph's height — ~62 px of body at 800x480, which the weight and
   // its caption already fill — so it stays the readout it is (Tare only;
   // the dose is dialled in Settings there).
-  if (with_switch) {
+  if (with_switch || !with_connect) {
+    // Beside the graph the card is the graph's height — room for the
+    // weight and ONE line under it: the stepper takes the scale name's
+    // line, and a Record offer takes it back for its moment (App hides
+    // one or the other).
+    out.bench_dose_on_caption = !with_switch;
     lv_obj_set_style_pad_top(body, 0, 0);
-    make_stepper_group(body, btn_size, symbol_font, set_font, &out.bench_dose_value,
-                       &out.bench_dose_minus, &out.bench_dose_plus);
+    make_stepper_group(body, btn_size, symbol_font, set_font,
+                       &out.bench_dose_value, &out.bench_dose_minus, &out.bench_dose_plus);
     out.bench_dose_group = lv_obj_get_parent(out.bench_dose_value);
     lv_obj_set_style_margin_top(out.bench_dose_group, 0, 0);
     lv_obj_add_flag(out.bench_dose_group, LV_OBJ_FLAG_HIDDEN);
@@ -1458,6 +1466,7 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   out.bench_weight = out.bench_name = out.bench_block = nullptr;
   out.bench_dose_state = 0;
   out.bench_dose_group = out.bench_dose_value = out.bench_dose_minus = out.bench_dose_plus = nullptr;
+  out.bench_dose_on_caption = false;
   out.dose_chip = out.dose_in_label = out.dose_out_label = out.dose_ratio_label =
       out.dose_x_label = nullptr;
   out.dose_chip_state = 0;
@@ -1682,8 +1691,13 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
     lv_obj_set_height(graph_card, lv_pct(100));
     lv_obj_set_width(graph_card, 0);
     lv_obj_set_flex_grow(graph_card, 2);
-    build_bench_panel(lower, panel_cap, panel_status, panel_val, panel_set, panel_btn,
-                      panel_sym, panel_pad, action_h, btn_font,
+    // The card is the graph's height: at 800x480 its body (~65 px) holds
+    // the weight plus a 32 dp stepper, no more; the X boards' extra height
+    // (500 logical) takes the panel-size button.
+    const bool tall = screen.height > ui::dp(480);
+    build_bench_panel(lower, panel_cap, panel_status, panel_val, panel_set,
+                      tall ? panel_btn : ui::dp(32), tall ? panel_sym : ui::font_dp(16),
+                      panel_pad, action_h, btn_font,
                       /*with_status_text=*/false, /*with_connect=*/false,
                       /*with_switch=*/false, out);
     lv_obj_set_flex_grow(out.bench_card, 1);
@@ -1718,6 +1732,13 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
                static_cast<int>(lv_obj_get_height(body)), overflow,
                static_cast<int>(lv_obj_get_height(acts)), static_cast<int>(lv_obj_get_y(acts)),
                out.bench_enabled && out.bench_mode == 0 ? 1 : 0);
+  }
+  if (core::log_detail() && out.bench_card != nullptr && out.bench_dose_on_caption) {
+    lv_obj_t* body = lv_obj_get_child(out.bench_card, 1);
+    core::logf("home: bench card h=%d body=%d overflow=%d\n",
+               static_cast<int>(lv_obj_get_height(out.bench_card)),
+               static_cast<int>(lv_obj_get_height(body)),
+               static_cast<int>(lv_obj_get_scroll_bottom(body)));
   }
   // Swap mode starts on the ESPRESSO side: paint the pills to match.
   if (bench_enabled && out.bench_mode == 0 && !out.bench_only) show_bench_side(out, false);

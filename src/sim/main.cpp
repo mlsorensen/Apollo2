@@ -351,8 +351,10 @@ int main() {
   ok &= r({1280, 800, 1.6f}, "renders/home_bench_card_bench_1280x800.png", 0, -1, false, 0,
           -1, false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 1, 5);
   disp.set_bench_home_style(1);
-  ok &= r({800, 480}, "renders/home_bench_beside_800x480.png");
-  ok &= r({1280, 800, 1.6f}, "renders/home_bench_beside_1280x800.png");
+  ok &= r({800, 480}, "renders/home_bench_beside_800x480.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 5);
+  ok &= r({1280, 800, 1.6f}, "renders/home_bench_beside_1280x800.png", 0, -1, false, 0,
+          -1, false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 5);
   disp.set_bench_home_style(0);
   // Dose from the bench scale: a loaded portafilter (480 g stored) on the
   // bench offers Record on the BENCH side; recorded, the chip appears in the
