@@ -455,6 +455,26 @@ void ScaleLink::run() {
       if (send_idx >= 0) drv->set_device_setting(ble_, send_idx, send_val);
     }
 
+    // Subscribed but never a weight: the link is up and the data isn't
+    // coming (see subscribed_at_ms_). Re-dial now rather than wait for the
+    // scale's own patience to run out.
+    {
+      bool streaming;
+      {
+        std::lock_guard<std::mutex> lk(mutex_);
+        streaming = weight_streaming_;
+      }
+      const uint32_t since = now_ms() - subscribed_at_ms_.load();
+      if (!streaming && since >= kFirstWeightMs) {
+        logf("ScaleLink: no weight %lu ms after subscribing -> re-dialling\n",
+             static_cast<unsigned long>(since));
+        ble_.disconnect();
+        connected = false;
+        set_connected(false);
+        continue;
+      }
+    }
+
     // Driver housekeeping: heartbeats, stream watchdogs. false = link is dead.
     if (drv && !drv->tick(ble_)) {
       ble_.disconnect();
@@ -536,6 +556,7 @@ bool ScaleLink::do_connect(const std::string& address, AddrType type,
   }
 
   connect_fails_ = 0;
+  subscribed_at_ms_.store(now_ms());
 
   logf("ScaleLink: %s connected + subscribed (%s)\n", drv->model(),
        addr_type_name(used));

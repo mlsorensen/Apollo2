@@ -158,6 +158,14 @@ class ScaleLink : public IScale, public IScaleSink {
   mutable std::mutex mutex_;  // guards the cached fields below
   bool connected_ = false;
   bool weight_streaming_ = false;
+  // When this connection subscribed (link task). A link that is up and
+  // subscribed but has never delivered a weight within kFirstWeightMs is
+  // re-dialled: X-8, 2026-11-01, a Bookoo sat blue-lit and silent for 30 s
+  // after a seemingly good subscribe until the scale itself hung up, and the
+  // fresh connection streamed at once. Generic to every driver; the Acaia
+  // driver's own stream watchdog covers a stream that stops later.
+  std::atomic<uint32_t> subscribed_at_ms_{0};
+  static constexpr uint32_t kFirstWeightMs = 5000;
   float weight_g_ = 0.0f;
   uint32_t timer_ms_ = 0;
   int battery_pct_ = 0;

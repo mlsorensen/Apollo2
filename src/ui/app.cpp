@@ -2178,10 +2178,13 @@ void App::toggle_power() {
     machine_->set_power(prev != core::Power::On);
     // Immediate feedback for the 1-3 s command->report lag: the button
     // disables and reads "Working..." until the reported power changes (see
-    // HomeWidgets::power_pending_until). 8 s deadline = a couple of poll
-    // rounds past the normal confirm, so a swallowed command can't lock it.
+    // HomeWidgets::power_pending_until). 12 s deadline: a couple of poll
+    // rounds past the normal confirm, and long enough to cover a stalled
+    // request's 5 s watchdog + re-dial (the command waits in its mailbox and
+    // lands after), so a swallowed command can't lock it and a queued one
+    // doesn't flip the button back to the old state before it lands.
     home_.power_pending_from = prev;
-    home_.power_pending_until = lv_tick_get() + 8000;
+    home_.power_pending_until = lv_tick_get() + 12000;
     refresh();
     return;
   }
