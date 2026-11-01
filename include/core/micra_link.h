@@ -88,9 +88,11 @@ class MicraLink : public IMachine {
  private:
   bool do_connect(const std::string& address, const std::string& token, AddrType type);
   bool do_refresh();           // loop thread: read + parse into the cache
-  void do_set_power(bool on);  // loop thread: write the command
-  void do_set_boiler_target(const char* identifier, const char* value);
-  void do_set_steam_enabled(bool enabled);
+  // Loop thread: write the command; false = the write failed (the caller
+  // puts the command back in its slot).
+  bool do_set_power(bool on);
+  bool do_set_boiler_target(const char* identifier, const char* value);
+  bool do_set_steam_enabled(bool enabled);
   void do_scan();              // loop thread: scan + publish results
   void set_link(Link link);
   bool read_setting(const char* name, std::string& out);

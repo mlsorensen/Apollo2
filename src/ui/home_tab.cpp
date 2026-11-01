@@ -1703,11 +1703,18 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
     lv_obj_t* hdr = lv_obj_get_child(out.scale_card, 0);
     lv_obj_t* body = lv_obj_get_child(out.scale_card, 1);
     lv_obj_t* acts = lv_obj_get_child(out.scale_card, 2);
-    // overflow = how far the body's children run past its bottom edge
-    // (lv_obj_get_scroll_bottom): > 0 is exactly the clipped amount.
+    // overflow = how far the columns' children (the steppers, the shot pill)
+    // run past the bottom edge: > 0 is exactly the clipped amount. Measured
+    // on the COLUMNS — lv_obj_get_scroll_bottom sees direct children only,
+    // and the body's are the columns, which are sized to it (always 0).
+    int overflow = 0;
+    for (uint32_t i = 0; i < lv_obj_get_child_count(body); ++i) {
+      const int o = static_cast<int>(lv_obj_get_scroll_bottom(lv_obj_get_child(body, i)));
+      if (o > overflow) overflow = o;
+    }
     core::logf("home: scale card h=%d hdr=%d body=%d overflow=%d acts=%d y=%d; swap=%d\n",
                static_cast<int>(lv_obj_get_height(out.scale_card)), static_cast<int>(lv_obj_get_height(hdr)),
-               static_cast<int>(lv_obj_get_height(body)), static_cast<int>(lv_obj_get_scroll_bottom(body)),
+               static_cast<int>(lv_obj_get_height(body)), overflow,
                static_cast<int>(lv_obj_get_height(acts)), static_cast<int>(lv_obj_get_y(acts)),
                out.bench_enabled && out.bench_mode == 0 ? 1 : 0);
   }

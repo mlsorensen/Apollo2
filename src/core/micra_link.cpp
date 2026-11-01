@@ -273,10 +273,22 @@ void MicraLink::run() {
         // completed (a stall, the watchdog dropping the link, a drop) are a
         // link failure: go round again, don't strand the link in NeedsToken.
         if (!refresh_bad_data_ || !ble_.connected()) {
-          logf("MicraLink: verify reads failed (link) -> retrying\n");
+          // A machine that accepts the connection but answers nothing would
+          // otherwise cycle connect -> reads -> drop back to back, holding
+          // the shared radio against the scales: it counts and backs off
+          // like a failed connect (same throttled log).
+          ++connect_fails_;
+          if (connect_fails_ <= 2 || connect_fails_ % 20 == 0)
+            logf("MicraLink: verify reads failed (link) x%u -> retrying\n",
+                 static_cast<unsigned>(connect_fails_));
           ble_.disconnect();
           mark(false);
           set_link(Link::Disconnected);
+          for (uint32_t waited = 0; waited < kReconnectBackoffMs &&
+                                    !arb_.user_scan_pending(RadioSlot::kMicra);
+               waited += 100) {
+            sleep_ms(100);
+          }
           continue;
         }
         logf("MicraLink: token rejected (reads failed) -> NeedsToken\n");
@@ -298,22 +310,29 @@ void MicraLink::run() {
       continue;
     }
 
+    // A command is taken out of its slot for the write; a write that fails
+    // (the watchdog dropping a stalled one included) puts it back so it
+    // lands after the re-dial — unless a newer value arrived meanwhile.
+    const auto restage = [](std::atomic<int>& slot, int v) {
+      int empty = -1;
+      slot.compare_exchange_strong(empty, v);
+    };
     const int p = pending_power_.exchange(-1);
-    if (p >= 0) do_set_power(p == 1);
+    if (p >= 0 && !do_set_power(p == 1)) restage(pending_power_, p);
     const int b = pending_brew_tenths_.exchange(-1);
     if (b >= 0) {
       char v[8];
       std::snprintf(v, sizeof(v), "%.1f", b / 10.0f);
-      do_set_boiler_target("CoffeeBoiler1", v);
+      if (!do_set_boiler_target("CoffeeBoiler1", v)) restage(pending_brew_tenths_, b);
     }
     const int st = pending_steam_whole_.exchange(-1);
     if (st >= 0) {
       char v[8];
       std::snprintf(v, sizeof(v), "%d", st);
-      do_set_boiler_target("SteamBoiler", v);
+      if (!do_set_boiler_target("SteamBoiler", v)) restage(pending_steam_whole_, st);
     }
     const int se = pending_steam_enable_.exchange(-1);
-    if (se >= 0) { do_set_steam_enabled(se == 1); }
+    if (se >= 0 && !do_set_steam_enabled(se == 1)) restage(pending_steam_enable_, se);
     // No instant read-back after a command: the machine's machineMode answer
     // lags the command by a beat, so an immediate read reliably returns the
     // OLD state (observed on HW). The regular cadence picks up the settled
@@ -461,13 +480,14 @@ bool MicraLink::do_refresh() {
   return true;
 }
 
-void MicraLink::do_set_power(bool on) {
+bool MicraLink::do_set_power(bool on) {
   const std::string json =
       on ? R"({"name":"MachineChangeMode","parameter":{"mode":"BrewingMode"}})"
          : R"({"name":"MachineChangeMode","parameter":{"mode":"StandBy"}})";
   request_started_ms_.store(now_ms());
-  write_with_nul(ble_, kWriteUuid, json);
+  const bool ok = write_with_nul(ble_, kWriteUuid, json);
   request_started_ms_.store(0);
+  return ok;
 }
 
 MachineSnapshot MicraLink::snapshot() const {
@@ -505,22 +525,24 @@ void MicraLink::set_steam_enabled(bool enabled) {
   pending_steam_enable_.store(enabled ? 1 : 0);
 }
 
-void MicraLink::do_set_boiler_target(const char* identifier, const char* value) {
+bool MicraLink::do_set_boiler_target(const char* identifier, const char* value) {
   std::string json =
       std::string(R"({"name":"SettingBoilerTarget","parameter":{"identifier":")") +
       identifier + R"(","value":)" + value + "}}";
   request_started_ms_.store(now_ms());
-  write_with_nul(ble_, kWriteUuid, json);
+  const bool ok = write_with_nul(ble_, kWriteUuid, json);
   request_started_ms_.store(0);
+  return ok;
 }
 
-void MicraLink::do_set_steam_enabled(bool enabled) {
+bool MicraLink::do_set_steam_enabled(bool enabled) {
   std::string json =
       std::string(R"({"name":"SettingBoilerEnable","parameter":{"identifier":"SteamBoiler","state":)") +
       (enabled ? "true" : "false") + "}}";
   request_started_ms_.store(now_ms());
-  write_with_nul(ble_, kWriteUuid, json);
+  const bool ok = write_with_nul(ble_, kWriteUuid, json);
   request_started_ms_.store(0);
+  return ok;
 }
 
 void MicraLink::request_scan() {
