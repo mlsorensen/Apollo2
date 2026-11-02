@@ -100,6 +100,7 @@ struct BrewSnapshot {
                           // False = detector-driven (see the header comment)
   bool  paddle_pressed;   // the physical paddle is currently engaged (wired only)
   bool  brewing;          // the line is held closed (machine running via us)
+  bool  cleaning;         // a manual flush or backflush sequence is running
   ShotPhase phase;        // shot lifecycle (see above)
   ShotMode mode;          // EFFECTIVE start/stop mode (kAuto only when wired)
   uint32_t shot_ms;       // ESP-timed shot duration; holds after stop

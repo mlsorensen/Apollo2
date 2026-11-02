@@ -560,9 +560,9 @@ void build_micra_schedule_rows(lv_obj_t* menu, lv_obj_t* page, lv_obj_t* times_p
   // Auto-standby first: independent of the schedule below (App gates it on a
   // paired Micra only — no clock, no master switch). No group headings: the
   // row names carry it, and the page keeps its air.
-  //   Auto-standby after last shot [sw] [-] 30 min [+]
+  //   Auto-standby when idle [sw] [-] 30 min [+]
   //   Show auto-standby timer [sw]        (the countdown on the Home MICRA card)
-  make_switch_stepper(make_setting_row(page, "Auto-standby after last shot", font), font,
+  make_switch_stepper(make_setting_row(page, "Auto-standby when idle", font), font,
                       symbol_font, btn_size, compact, &out.sched_standby_switch,
                       &out.sched_standby_minus, &out.sched_standby_value,
                       &out.sched_standby_plus);

@@ -5331,12 +5331,14 @@ bool App::ntp_ready() const {
 }
 
 core::ScheduleInputs App::schedule_inputs(const core::MachineSnapshot& snap) const {
+  const core::BrewSnapshot bs = brew_ != nullptr ? brew_->snapshot() : core::BrewSnapshot{};
   return core::ScheduleInputs{
       clock_ != nullptr ? clock_->now() : core::WallTime{},
       ntp_ready(),
       snap.link,
       snap.power,
-      brew_ != nullptr ? brew_->snapshot().phase : core::ShotPhase::kIdle,
+      brew_ != nullptr ? bs.phase : core::ShotPhase::kIdle,
+      brew_ != nullptr && bs.cleaning,
       lv_tick_get()};
 }
 

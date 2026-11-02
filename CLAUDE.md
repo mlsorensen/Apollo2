@@ -434,11 +434,15 @@ per weekday, with a global warm-up lead. Shape of it:
   opa, not a container) SILENTLY — the owner dropped the explanatory line
   (2026-09-25, "too much for the page"); the manual carries the reason. `MachineSnapshot::brewing` is
   NEVER set by the link — use `ShotPhase`.
-- AUTO-STANDBY (v1.0.0-beta.4, owner's spec 2026-09-23) lives in the SAME
-  engine (`tick_auto_standby`, `ScheduleAction::AutoStandby`): a countdown
-  from the END of the last shot (BrewSnapshot::phase leaving
-  kBrewing/kSettling), never from turn-on — so a machine the schedule (or a
-  hand) switched on and nobody used stays on; every shot restarts it; a
+- AUTO-STANDBY (v1.0.0-beta.4, owner's spec 2026-09-23; INACTIVITY since
+  2026-11-02) lives in the SAME engine (`tick_auto_standby`,
+  `ScheduleAction::AutoStandby`): a countdown from the END of the last
+  ACTIVITY — a shot (BrewSnapshot::phase leaving kBrewing/kSettling) or a
+  cleaning cycle (BrewSnapshot::cleaning, flush or backflush; the owner
+  found a flush didn't count) — never from turn-on — so a machine the
+  schedule (or a hand) switched on and nobody used stays on; every shot or
+  cleaning restarts it, and neither the count nor a scheduled Off fires
+  while one runs (a deferred Off restarts its 2-min grace on cleaning too); a
   scheduled "on" (even onto a machine already on) DISARMS it; standby by
   anyone disarms it; it fires only Connected + On + phase kIdle, and needs
   NO clock and NOT the master `enabled` (UI gates it on "paired" only). A

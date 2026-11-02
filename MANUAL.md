@@ -55,7 +55,7 @@ Settings
 │  ├─ Controls  — Wired paddle* · Chime melody* · Chime volume*
 │  │             · Brew Temperature · Steam Enable + Temperature
 │  ├─ Cleaning* — Auto flush · Flush delay · Backflush cleaning  → cleaning mode
-│  └─ Schedule  — Auto-standby after last shot · Show auto-standby timer
+│  └─ Schedule  — Auto-standby when idle · Show auto-standby timer
 │                · Enable schedules · Same every day · Smart Warm-up
 │                └─ Configure schedule — day chips · Day enabled · On at / Off at
 │                                        · range slider · Copy times to
@@ -445,12 +445,13 @@ schedule in the La Marzocco app — two schedules for one machine conflict and
 confuse. **OK** dismisses it until the next restart; **Don't show again**, for
 good.
 
-- ① **Auto‑standby after last shot** *(default off, 30 min; 10–240 in
+- ① **Auto‑standby when idle** *(default off, 30 min; 10–240 in
   10‑minute steps)* — independent of the schedule rows below: sends the
-  machine to standby this long after the **last shot**, like the Micra's own
-  auto‑standby. Each shot restarts the count; a machine that was switched on
-  but never used is left alone, so a scheduled turn‑on stays up until you use
-  it (and a scheduled turn‑on cancels a running count). It needs only a
+  machine to standby this long after you last **used** it — a shot, a flush
+  or a backflush — like the Micra's own auto‑standby. Each of those restarts
+  the count, and none of it fires while one is running; a machine that was
+  switched on but never used is left alone, so a scheduled turn‑on stays up
+  until you use it (and a scheduled turn‑on cancels a running count). It needs only a
   paired Micra — no WiFi, no clock, and it works with the schedules switched
   off. It does need to *see* shots, though: through a wired paddle, or a
   paired scale in Shot detect mode. With neither, a line under the row says
@@ -497,14 +498,15 @@ How it behaves:
   once; Off at sends it to standby once. Between them do as you like — switch
   it off by hand and it stays off; switch it on early and On at simply finds
   it already on.
-- **Auto‑standby counts from the last shot, not from turn‑on.** Turn the
-  machine on by hand and pull nothing, and it stays on; pull a shot and the
-  count starts, restarting with every shot. If the count runs out mid‑shot
-  or during the review, it simply restarts when the shot ends. Standby by
+- **Auto‑standby counts from the last use, not from turn‑on.** Turn the
+  machine on by hand and do nothing, and it stays on; pull a shot, run a
+  flush or a backflush and the count starts, restarting with each. If the
+  count runs out mid‑shot, during the review or mid‑cleaning, it simply
+  restarts when that ends. Standby by
   any route — you, the schedule, this — ends the count, and a machine
   already in standby makes the scheduled Off at a no‑op.
-- **Standby waits for the shot.** If Off at lands while a shot is running or
-  still under review, standby holds until the device has been idle for about
+- **Standby waits for the shot.** If Off at lands while a shot is running,
+  still under review or a cleaning cycle is going, standby holds until the device has been idle for about
   two minutes (long enough for the auto‑flush and the cup to come off), then
   goes ahead if the machine is still on.
 - **Only while connected.** A trigger fires only if the Micra is connected at

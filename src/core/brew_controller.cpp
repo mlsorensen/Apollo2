@@ -651,6 +651,7 @@ BrewSnapshot BrewController::snapshot() const {
       .paddle_wired = wired(),
       .paddle_pressed = paddle_on_,
       .brewing = driving_,
+      .cleaning = clean_ != CleanMode::kOff,
       .phase = phase_,
       .mode = eff_mode(),
       .shot_ms = timer_.elapsed_ms(last_now_ms_),

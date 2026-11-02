@@ -32,8 +32,9 @@ WallTime at(int year, int month, int day, int hour, int minute) {
 constexpr int kMon = 21, kSun = 27;
 
 ScheduleInputs in(const WallTime& t, Link link = Link::Connected, Power power = Power::Standby,
-                  ShotPhase phase = ShotPhase::kIdle, uint32_t ms = 1000, bool trusted = true) {
-  return ScheduleInputs{t, trusted, link, power, phase, ms};
+                  ShotPhase phase = ShotPhase::kIdle, uint32_t ms = 1000, bool trusted = true,
+                  bool cleaning = false) {
+  return ScheduleInputs{t, trusted, link, power, phase, cleaning, ms};
 }
 
 ScheduleConfig daily(int on, int off, bool warm = false, int warm_min = 6) {
@@ -286,6 +287,24 @@ int test_auto_standby() {
   CHECK(e.tick(poll(Power::Standby, ShotPhase::kIdle, ms + 5 * kMin)) == ScheduleAction::None);
   CHECK(!e.auto_standby_armed());
   CHECK(e.tick(poll(Power::On, ShotPhase::kIdle, ms + 60 * kMin)) == ScheduleAction::None);
+
+  // Cleaning is activity too: a backflush (no shot phase) arms the count at
+  // its end, a flush while the count runs restarts it, and a count that
+  // falls due mid-cycle waits for the cycle to end, then restarts.
+  ms += 200 * kMin;
+  auto clean = [&](Power p, uint32_t t_ms) { return in(t, Link::Connected, p, ShotPhase::kIdle, t_ms, false, true); };
+  CHECK(e.tick(clean(Power::On, ms)) == ScheduleAction::None);              // backflush running
+  CHECK(!e.auto_standby_armed());
+  CHECK(e.tick(poll(Power::On, ShotPhase::kIdle, ms + 3 * kMin)) == ScheduleAction::None);  // ...done
+  CHECK(e.auto_standby_armed());
+  CHECK(e.tick(clean(Power::On, ms + 20 * kMin)) == ScheduleAction::None);  // a flush at +20
+  CHECK(e.tick(poll(Power::On, ShotPhase::kIdle, ms + 20 * kMin + 6000)) == ScheduleAction::None);
+  CHECK(e.tick(poll(Power::On, ShotPhase::kIdle, ms + 40 * kMin)) == ScheduleAction::None);  // 30 after the FIRST would be now
+  CHECK(e.tick(clean(Power::On, ms + 50 * kMin)) == ScheduleAction::None);  // due, but cleaning
+  CHECK(e.tick(clean(Power::On, ms + 52 * kMin)) == ScheduleAction::None);
+  CHECK(e.tick(poll(Power::On, ShotPhase::kIdle, ms + 53 * kMin)) == ScheduleAction::None);  // restarted at 53
+  CHECK(e.tick(poll(Power::On, ShotPhase::kIdle, ms + 82 * kMin)) == ScheduleAction::None);
+  CHECK(e.tick(poll(Power::On, ShotPhase::kIdle, ms + 83 * kMin)) == ScheduleAction::AutoStandby);
 
   // A minutes edit while armed moves the deadline; switching it off drops it.
   ms += 200 * kMin;
