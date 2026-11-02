@@ -2844,6 +2844,11 @@ void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
   bool full = w.shot_x_painted < 0;
   if (scale.seq != w.shot_seq_seen) {
     w.shot_seq_seen = scale.seq;
+    // The legend's live values: the scroll path feeds them per step, but it
+    // isn't running during a shot (the owner's X-8, 2026-11-02: g/s frozen).
+    w.legend_g = rw;
+    w.legend_gps = flow_gap(rf) ? -1.0f : rf;
+    update_flow_legend(w);
     if (w.shot_n == 0 || now - w.shot_last_sample_ms >= kShotSampleMs) {
       if (w.shot_n > 0) {  // track the achieved storage cadence (sizes the edge lag)
         const uint32_t dt = now - w.shot_last_sample_ms;
@@ -3242,10 +3247,6 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale,
       ++steps;
     }
     if (steps > 0) {
-      w.legend_g = flow_gap(rw) ? -1.0f : rw;
-      w.legend_gps = flow_gap(rf) ? -1.0f : rf;
-      w.legend_bench_g = flow_gap(bw) ? -1.0f : bw;
-      update_flow_legend(w);
       int px = steps * kFlowStepPx;
       if (px > w.flow_w) px = w.flow_w;
       for (int y = 0; y < w.flow_h; ++y) {
@@ -3295,6 +3296,12 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale,
     }
   }
   if (steps == 0) return;
+  // The legend's live values follow the plot's steps on both paths (the
+  // scope branch used to be left out).
+  w.legend_g = flow_gap(rw) ? -1.0f : rw;
+  w.legend_gps = flow_gap(rf) ? -1.0f : rf;
+  w.legend_bench_g = flow_gap(bw) ? -1.0f : bw;
+  update_flow_legend(w);
 
   // Auto-range the Y axis: grow immediately to fit the window's peak; shrink back
   // toward the mode default only once the peak drops below half scale (hysteresis,
