@@ -217,7 +217,8 @@ class App {
   void record_dose();       // the bench card's Record block
   void refit_bench_outline();  // re-fit the Record outline to its labels
   void clear_dose();        // the chip's x
-  void default_dose_adjust(int dir);  // the Default dose stepper: Off, 5..30 g by 0.5
+  void default_dose_adjust(int dir);  // the Default dose stepper: 5..30 g by 0.5
+  void set_default_dose_enabled(bool on);  // its switch: on = the last value (18 g at first)
   void set_dose_enabled(bool on);
   void capture_dose_container(int index);  // Settings: store the bench reading (arms if moving)
   void clear_dose_container(int index);
@@ -525,7 +526,7 @@ class App {
   core::ScheduleEngine schedule_engine_;
   core::IDoseSettings* dose_settings_ = nullptr;
   core::DoseTracker dose_;
-  bool dose_enabled_ = true;
+  bool dose_enabled_ = false;
   float shot_dose_g_ = 0.0f;  // the dose the running / reviewed shot spent
   core::DoseSource shot_dose_src_ = core::DoseSource::kNone;  // ... and where it came from
   float review_out_g_ = 0.0f; // the settled yield, latched at the freeze (0 = not yet)

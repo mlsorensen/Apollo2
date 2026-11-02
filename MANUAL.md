@@ -233,50 +233,57 @@ itself, and the graph shows it in grams.
 
 ![Dose recorded — the block on the bench card and the chip in the graph](docs/img/manual/home-dose-recorded.png)
 
-Put the dosed portafilter (or your dosing cup, or beans in a tared cup) on
-the bench scale. Once the reading has held still for a second and is
-dose‑sized, the weight and its caption gain an amber outline and the caption
-reads **Record 18.3 g** — the dose Apollo would store ①. Tap the block to
-record it; the caption turns to **✓ 18.3 g recorded** until you lift the
-portafilter, and a chip appears above the graph's legend ② with the dose:
-**18.3 g in**.
-That dose belongs to the **next shot you start**: when the shot begins the
-chip adds a placeholder for the yield (**--.- g out**), fills it in live as
-the shot runs with the ratio growing beside it, and freezes with the graph
-for review (**36.4 g out · 1:2.0**). Both are kept in History (a **Ratio**
-column on the shot's card and the web page).
+Apollo can keep the **dose** (grams in) with each shot and show the **brew
+ratio** (in : out) in the graph and in History. It is off until you turn it
+on, and it has two independent switches under **Settings → Scale → Shot
+settings**:
 
-- Nothing is subtracted for a tared cup. For a portafilter or a dosing cup
-  that is *not* tared, store its weight once under **Settings → Scale → Shot
+- **Record dose** — the feature itself. Off (the default), none of this
+  exists: no Record offers on the bench card, no dose chip in the graph,
+  no ratio in History. On, Apollo offers to record a dose whenever one is
+  weighed on the bench scale, and shows the ratio for a shot that has one.
+  It needs an espresso scale paired, since the ratio needs the shot's yield.
+- **Default dose** — optional, and off by default too. On, a dose you set
+  once (18.0 g to start, 5–30 g) is used for every shot you *don't* weigh,
+  so a constant daily dose needs no weighing at all — and the ratio works
+  even with no bench scale. Off, the only doses are the ones you weigh.
+
+**Weighing a dose.** Put the dosed portafilter (or your dosing cup, or beans
+in a tared cup) on the bench scale. Once the reading has held still for a
+second and is dose‑sized, the weight and its caption gain an amber outline
+and the caption reads **Record 18.3 g** — the dose Apollo would store ①. Tap
+it to record; the caption turns to **✓ 18.3 g recorded** until you lift the
+portafilter, and a chip appears above the graph's legend ② with the dose:
+**18.3 g in**. That dose belongs to the **next shot you start**: when the
+shot begins the chip adds a placeholder for the yield (**--.- g out**), fills
+it in live as the shot runs with the ratio growing beside it, and freezes
+with the graph for review (**36.4 g out · 1:2.0**).
+
+- **Containers.** Nothing is subtracted for a tared cup. For a portafilter
+  or a dosing cup that is *not* tared, store its weight once under **Shot
   settings → Container** and Apollo subtracts it by itself: the reading is
   matched to the heaviest stored container lighter than it, so a 498 g
   reading with a 480 g portafilter stored records 18 g. Apollo measures the
   *step* the load made on the scale (from whatever it read before), so you
   don't have to tare first — a spoon already on the scale, or a cup you
-  tared earlier, makes no difference. The block only appears for a step
-  whose dose would be 5–30 g — a milk jug never offers Record.
-- Recording again replaces the pending dose; the **×** on the chip clears
-  it. A dose nobody pulls a shot with also clears itself when you've
-  evidently walked away: the screensaver starting, a scale going to sleep
-  (a link that drops and stays down half a minute), the Micra going to
-  standby, or an hour passing.
-- **A default dose** (Settings → Scale → Shot settings → Default dose, off
-  unless you set it) is for a constant daily dose, or for using the ratio
-  with no bench scale at all. The BENCH card carries the same **− / +**
-  under its weight — on the swap card in the row the other cards' steppers
-  use, beside the graph in the scale name's place (a Record offer takes
-  that line back while it shows) — so the dose can be dialled without
-  leaving Home. It is staged for every shot: the chip shows
-  it as **18.0 g set**, and a dose you record overrides it for that one
-  shot. The **×** on a staged default skips it for the next shot only; it
-  is staged again after that shot, or when you've walked away as above.
-  History keeps which kind each shot had: a recorded dose reads
-  **18.2 g in** on the shot's card, a default **18.0 g default**, so a
-  ratio can be told apart as measured or assumed.
-- The whole feature can be switched off under **Settings → Scale → Shot
-  settings → Record dose**; it needs an espresso scale paired, since the
-  ratio needs the shot's yield. Recording a dose needs the bench scale as
-  well; the default dose does not.
+  tared earlier, makes no difference. Record is only offered for a step
+  whose dose would be 5–30 g — a milk jug never offers it.
+- **A dose clears** when you record again (the new one replaces it), when
+  you tap the **×** on the chip, or when you've evidently walked away: the
+  screensaver starting, a scale going to sleep (a link that drops and stays
+  down half a minute), the Micra going to standby, or an hour passing.
+- **The default dose** is staged for every shot: the chip shows it as
+  **18.0 g set**, and a dose you weigh overrides it for that one shot. The
+  **×** on a staged default skips it for the next shot only; it is staged
+  again after that shot, or when you've walked away as above. While the
+  switch is on, the BENCH card carries a **− / +** for the value — on the
+  swap card in the row the other cards' steppers use, beside the graph in
+  the scale name's place (a Record offer takes that line back while it
+  shows) — so it can be dialled without leaving Home. Switch it off and
+  those controls go with it.
+- **History** keeps which kind each shot had: a weighed dose reads
+  **18.2 g in** on the shot's card, a default **18.0 g default**, so a ratio
+  can be told apart as measured or assumed. The web page shows the same.
 
 ### Flow graph
 
@@ -582,12 +589,14 @@ which is a weight readout with its own Tare (see the BENCH card above).
   started the shot. Adjust it to match your machine's preinfusion setting as
   needed (roughly your typical paddle‑to‑first‑drip time); 0 starts the shot
   at the first drip.
-- ④ **Record dose** *(on by default; needs an espresso scale)* — the dose
+- ④ **Record dose** *(off by default; needs an espresso scale)* — the dose
   chip in the graph, the ratio, and with a bench scale the Record block on
-  the bench card (see *Recording your dose* under the BENCH card). Off hides
-  all of it and records nothing.
-- ⑤ **Default dose** *(Off, or 5–30 g in 0.5 g steps)* — a dose staged for
-  every shot when none was recorded; see *Recording your dose*.
+  the bench card (see *Recording your dose* under the BENCH card). Off, none
+  of it shows and nothing is recorded.
+- ⑤ **Default dose** *(switch, off by default; on: 5–30 g in 0.5 g steps,
+  18.0 g at first)* — a dose staged for every shot when none was recorded;
+  see *Recording your dose*. Off hides the value controls here and on the
+  bench card.
 - ⑥ **Container 1–2** *(bench scale only)* — the weights Apollo subtracts from a bench reading
   before recording a dose: a portafilter, a dosing cup. Put the empty
   container on the bench scale and tap **Capture**; **×** forgets it. A

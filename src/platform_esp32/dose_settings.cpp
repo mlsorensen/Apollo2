@@ -9,6 +9,7 @@ core::DoseConfig DoseSettings::config() const {
   c.enabled = config_.dose_enabled();
   for (int i = 0; i < core::kMaxDoseContainers; ++i) c.containers[i] = config_.dose_container(i);
   c.default_dose = config_.default_dose();
+  c.default_dose_last = config_.default_dose_last();
   return c;
 }
 

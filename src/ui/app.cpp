@@ -155,6 +155,11 @@ void on_dose_block_clicked(lv_event_t* e) {
 void on_dose_chip_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->clear_dose();
 }
+void on_dose_def_switch(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))
+      ->set_default_dose_enabled(lv_obj_has_state(static_cast<lv_obj_t*>(lv_event_get_target(e)),
+                                                  LV_STATE_CHECKED));
+}
 void on_dose_def_minus(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->default_dose_adjust(-1);
 }
@@ -1439,6 +1444,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
   if (settings_.dose_switch != nullptr) {
     lv_obj_add_event_cb(settings_.dose_switch, on_dose_switch, LV_EVENT_VALUE_CHANGED, this);
     if (settings_.dose_def_minus != nullptr) {
+      lv_obj_add_event_cb(settings_.dose_def_switch, on_dose_def_switch, LV_EVENT_VALUE_CHANGED, this);
       lv_obj_add_event_cb(settings_.dose_def_minus, on_dose_def_minus, LV_EVENT_CLICKED, this);
       lv_obj_add_event_cb(settings_.dose_def_plus, on_dose_def_plus, LV_EVENT_CLICKED, this);
     }
@@ -5509,9 +5515,23 @@ void App::set_dose_enabled(bool on) {
 void App::default_dose_adjust(int dir) {
   if (dose_settings_ == nullptr) return;
   float g = dose_settings_->config().default_dose;
-  if (dir > 0) g = g <= 0.0f ? core::kDefaultDoseMinG : g + 0.5f;
-  else g = g <= core::kDefaultDoseMinG ? 0.0f : g - 0.5f;
+  if (g <= 0.0f) return;  // the switch is off: no value to dial
+  g += dir > 0 ? 0.5f : -0.5f;
+  if (g < core::kDefaultDoseMinG) g = core::kDefaultDoseMinG;
   if (g > core::kDefaultDoseMaxG) g = core::kDefaultDoseMaxG;
+  dose_settings_->set_default_dose(g);
+  dose_.set_default_dose(g);
+  sync_dose_settings_rows();
+  dose_tick(machine_ != nullptr ? machine_->snapshot() : core::MachineSnapshot{});
+}
+
+// The Default dose switch: on restores the last value (18 g the first time),
+// off clears it — the value controls come and go with it.
+void App::set_default_dose_enabled(bool on) {
+  if (dose_settings_ == nullptr) return;
+  const core::DoseConfig dc = dose_settings_->config();
+  float g = 0.0f;
+  if (on) g = dc.default_dose_last > 0.0f ? dc.default_dose_last : core::kDefaultDoseInitialG;
   dose_settings_->set_default_dose(g);
   dose_.set_default_dose(g);
   sync_dose_settings_rows();
@@ -5580,11 +5600,12 @@ void App::sync_dose_settings_rows() {
   // The bench card's stepper first: it exists without the Settings rows
   // (the tab is built after Home) and reads the same setting.
   if (home_.bench_dose_group != nullptr) {
-    const bool show = dose_record_active();
+    // Only with a default dose in force: the switch off means no value to
+    // dial, and the card shows nothing of it.
+    const float g = dose_record_active() ? dose_settings_->config().default_dose : 0.0f;
+    const bool show = g > 0.0f;
     char b[16];
-    const float g = show ? dose_settings_->config().default_dose : 0.0f;
-    if (g > 0.0f) std::snprintf(b, sizeof(b), "%.1f g", static_cast<double>(g));
-    else std::snprintf(b, sizeof(b), "Off");
+    std::snprintf(b, sizeof(b), "%.1f g", static_cast<double>(g));
     lv_label_set_text(home_.bench_dose_value, b);
     // Beside the graph the stepper and the caption share one line: the
     // caption only while a dose is offered / recorded.
@@ -5616,10 +5637,17 @@ void App::sync_dose_settings_rows() {
   else lv_obj_remove_state(settings_.dose_switch, LV_STATE_CHECKED);
   const core::DoseConfig dc = dose_settings_->config();
   if (settings_.dose_def_row != nullptr) {
+    const bool on = dc.default_dose > 0.0f;
     char b[16];
-    if (dc.default_dose > 0.0f) std::snprintf(b, sizeof(b), "%.1f g", static_cast<double>(dc.default_dose));
-    else std::snprintf(b, sizeof(b), "Off");
+    std::snprintf(b, sizeof(b), "%.1f g", static_cast<double>(on ? dc.default_dose : dc.default_dose_last));
     lv_label_set_text(settings_.dose_def_value, b);
+    if (on) lv_obj_add_state(settings_.dose_def_switch, LV_STATE_CHECKED);
+    else lv_obj_remove_state(settings_.dose_def_switch, LV_STATE_CHECKED);
+    // The stepper's own group (its value stack is fixed-width, so hiding the
+    // three controls alone would leave the switch floating left).
+    lv_obj_t* stepper = lv_obj_get_parent(settings_.dose_def_minus);
+    if (on) lv_obj_remove_flag(stepper, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(stepper, LV_OBJ_FLAG_HIDDEN);
     if (show && dose_enabled_) lv_obj_remove_flag(settings_.dose_def_row, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_add_flag(settings_.dose_def_row, LV_OBJ_FLAG_HIDDEN);
   }

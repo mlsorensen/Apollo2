@@ -69,11 +69,12 @@ class Config {
   void set_bench_home_style(int style);
   // Dose from the bench scale (v1.3): the Record switch and up to three
   // stored container weights (0 = empty slot).
-  bool dose_enabled() const;           // default true
+  bool dose_enabled() const;           // default false (opt-in)
   void set_dose_enabled(bool on);
   float dose_container(int index) const;
   void set_dose_container(int index, float grams);
-  float default_dose() const;  // grams, 0 = off (default)
+  float default_dose() const;       // grams, 0 = off (default)
+  float default_dose_last() const;  // the last value set, for the switch to restore
   void set_default_dose(float grams);
 
   // Brew-by-weight target (grams) — persisted so it survives reboots.

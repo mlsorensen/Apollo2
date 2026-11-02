@@ -10,6 +10,7 @@ namespace host {
 class FakeDoseSettings : public core::IDoseSettings {
  public:
   FakeDoseSettings() {
+    cfg_.enabled = true;  // the renders show the feature (it ships off)
     cfg_.containers[0] = 480.0f;
     cfg_.containers[1] = 111.0f;
   }
@@ -18,7 +19,10 @@ class FakeDoseSettings : public core::IDoseSettings {
   void set_container(int index, float grams) override {
     if (index >= 0 && index < core::kMaxDoseContainers) cfg_.containers[index] = grams;
   }
-  void set_default_dose(float grams) override { cfg_.default_dose = grams; }
+  void set_default_dose(float grams) override {
+    cfg_.default_dose = grams;
+    if (grams > 0.0f) cfg_.default_dose_last = grams;
+  }
 
  private:
   core::DoseConfig cfg_;

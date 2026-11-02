@@ -186,7 +186,8 @@ struct SettingsWidgets {
   // (value, Capture from the bench scale, Clear).
   lv_obj_t* dose_switch_row = nullptr;
   lv_obj_t* dose_switch = nullptr;
-  lv_obj_t* dose_def_row = nullptr;      // "Default dose" stepper: Off, 5..30 g
+  lv_obj_t* dose_def_row = nullptr;      // "Default dose": [switch] - 18.0 g +
+  lv_obj_t* dose_def_switch = nullptr;   //   the value controls exist only while on
   lv_obj_t* dose_def_minus = nullptr;
   lv_obj_t* dose_def_value = nullptr;
   lv_obj_t* dose_def_plus = nullptr;

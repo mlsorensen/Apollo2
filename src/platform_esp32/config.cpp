@@ -91,6 +91,7 @@ constexpr char kDoseEnabledKey[] = "dosen";      // Record dose from the bench s
 constexpr const char* kDoseContainerKeys[] = {"dosec0", "dosec1"};  // grams (ADD, v1.3; a dosec2 from the
                                                                        // 3-slot beta is left unread)
 constexpr char kDefaultDoseKey[] = "dosedef";                            // grams, 0 = off (ADD, v1.3)
+constexpr char kDefaultDoseLastKey[] = "dosedeflast";                    // the value the switch restores (ADD, v1.3)
 constexpr char kTargetKey[] = "tgtg";
 constexpr char kShotModeKey[] = "shotmode";  // LEGACY bool (armed) — migration only
 constexpr char kShotMode3Key[] = "shotmd";   // tri-state core::ShotMode as int
@@ -370,18 +371,32 @@ float Config::default_dose() const {
   return v > 0.0f && v <= 100.0f ? v : 0.0f;  // garbage reads as off
 }
 
+float Config::default_dose_last() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 0.0f;
+  const float v = p.isKey(kDefaultDoseLastKey) ? p.getFloat(kDefaultDoseLastKey, 0.0f) : 0.0f;
+  p.end();
+  return v > 0.0f && v <= 100.0f ? v : 0.0f;
+}
+
+// dosedef keeps its v1.3.0-beta.1 meaning (0 / absent = off, else the grams
+// in force); the switch's memory is the ADDED dosedeflast.
 void Config::set_default_dose(float grams) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
-  if (grams > 0.0f) p.putFloat(kDefaultDoseKey, grams);
-  else p.remove(kDefaultDoseKey);
+  if (grams > 0.0f) {
+    p.putFloat(kDefaultDoseKey, grams);
+    p.putFloat(kDefaultDoseLastKey, grams);
+  } else {
+    p.remove(kDefaultDoseKey);
+  }
   p.end();
 }
 
 bool Config::dose_enabled() const {
   Preferences p;
-  if (!p.begin(kNamespace, /*readOnly=*/true)) return true;
-  const bool v = p.isKey(kDoseEnabledKey) ? p.getBool(kDoseEnabledKey, true) : true;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
+  const bool v = p.isKey(kDoseEnabledKey) ? p.getBool(kDoseEnabledKey, false) : false;
   p.end();
   return v;
 }

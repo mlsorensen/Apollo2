@@ -10,12 +10,14 @@
 namespace core {
 
 struct DoseConfig {
-  bool enabled = true;  // the whole feature: Record block, chip, ratio
+  bool enabled = false;  // the whole feature: Record block, chip, ratio (opt-in)
   float containers[kMaxDoseContainers] = {};  // grams; 0 = slot empty
-  float default_dose = 0.0f;  // grams; 0 = off (opt-in)
+  float default_dose = 0.0f;       // grams; 0 = the Default dose switch is off
+  float default_dose_last = 0.0f;  // the value the switch restores (0 = never set)
 };
 constexpr float kDefaultDoseMinG = 5.0f;   // the stepper's range, 0.5 g steps
 constexpr float kDefaultDoseMaxG = 30.0f;
+constexpr float kDefaultDoseInitialG = 18.0f;  // the first value the switch starts at
 
 class IDoseSettings {
  public:
@@ -23,7 +25,7 @@ class IDoseSettings {
   virtual DoseConfig config() const = 0;
   virtual void set_enabled(bool on) = 0;
   virtual void set_container(int index, float grams) = 0;  // 0 clears the slot
-  virtual void set_default_dose(float grams) = 0;         // 0 = off
+  virtual void set_default_dose(float grams) = 0;         // 0 = off; a value is remembered as default_dose_last
 };
 
 }  // namespace core

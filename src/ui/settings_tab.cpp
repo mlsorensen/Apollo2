@@ -1256,11 +1256,14 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     out.dose_switch_row = rd;
     out.dose_switch = lv_switch_create(rd);
     lv_obj_set_size(out.dose_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
-    // A default dose (opt-in, Off by default): staged for every shot when
-    // nothing was recorded — for a constant daily dose, or no bench scale.
+    // A default dose (its own switch, off by default): staged for every
+    // shot when nothing was recorded — for a constant daily dose, or no
+    // bench scale. The value controls exist only while the switch is on
+    // (owner, 2026-11-02: no "Off" notch at the bottom of a stepper).
     out.dose_def_row = make_setting_row(out.scale_settings_page, "Default dose", font);
-    make_inline_stepper(out.dose_def_row, font, symbol_font, btn_size, &out.dose_def_minus,
-                        &out.dose_def_value, &out.dose_def_plus, nullptr);
+    make_switch_stepper(out.dose_def_row, font, symbol_font, btn_size, compact,
+                        &out.dose_def_switch, &out.dose_def_minus, &out.dose_def_value,
+                        &out.dose_def_plus);
     for (int i = 0; i < core::kMaxDoseContainers; ++i) {
       char title[16];
       std::snprintf(title, sizeof(title), "Container %d", i + 1);
