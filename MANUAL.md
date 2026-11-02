@@ -447,8 +447,9 @@ good.
 
 - ① **Auto‑standby when idle** *(default off, 30 min; 10–240 in
   10‑minute steps)* — independent of the schedule rows below: sends the
-  machine to standby this long after you last **used** it — a shot, a flush
-  or a backflush — like the Micra's own auto‑standby. Each of those restarts
+  machine to standby this long after you last **used** it — a shot (in any
+  mode, a Manual pull included), a flush or a backflush — like the Micra's
+  own auto‑standby. Each of those restarts
   the count, and none of it fires while one is running; a machine that was
   switched on but never used is left alone, so a scheduled turn‑on stays up
   until you use it (and a scheduled turn‑on cancels a running count). It needs only a

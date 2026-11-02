@@ -1717,10 +1717,14 @@ void App::refresh() {
     update_temp_panels(snap);
     schedule_tick(snap);
     // The MICRA card's countdown: only while auto-standby is really counting
-    // (armed, connected, on) and the user asked to see it.
+    // (armed, connected, on, nothing in flight — a shot, review or cleaning
+    // restarts the count when it ends, so the number would run to "<1 min"
+    // and jump back) and the user asked to see it.
     {
       int remaining_s = -1;
-      if (display_ != nullptr && display_->show_standby_timer() &&
+      const core::BrewSnapshot cbs = brew_ != nullptr ? brew_->snapshot() : core::BrewSnapshot{};
+      const bool in_use = cbs.phase != core::ShotPhase::kIdle || cbs.cleaning || cbs.brewing;
+      if (display_ != nullptr && display_->show_standby_timer() && !in_use &&
           schedule_engine_.auto_standby_armed() && snap.link == core::Link::Connected &&
           snap.power == core::Power::On) {
         remaining_s = static_cast<int>(schedule_engine_.auto_standby_remaining_ms(lv_tick_get()) / 1000u);
@@ -3190,7 +3194,8 @@ void App::pump_scale_chart() {
     if (screensaver_on_) {
       if (feed_ring) ui::unwired_ring_tick(home_, snap);
     } else if (home_.flow_shot_plot) {
-      ui::shot_plot_tick(home_, snap);
+      const core::ScaleSnapshot bench = bench_snapshot();
+      ui::shot_plot_tick(home_, snap, bench_ != nullptr ? &bench : nullptr);
     } else {
       const core::ScaleSnapshot bench = bench_snapshot();
       ui::flow_graph_tick(home_, snap, bench_ != nullptr ? &bench : nullptr);
@@ -5338,7 +5343,7 @@ core::ScheduleInputs App::schedule_inputs(const core::MachineSnapshot& snap) con
       snap.link,
       snap.power,
       brew_ != nullptr ? bs.phase : core::ShotPhase::kIdle,
-      brew_ != nullptr && bs.cleaning,
+      bs.cleaning || bs.brewing,  // a flush/backflush, a Manual pull, the auto-flush run
       lv_tick_get()};
 }
 

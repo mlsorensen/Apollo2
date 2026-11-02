@@ -33,8 +33,8 @@ constexpr int kMon = 21, kSun = 27;
 
 ScheduleInputs in(const WallTime& t, Link link = Link::Connected, Power power = Power::Standby,
                   ShotPhase phase = ShotPhase::kIdle, uint32_t ms = 1000, bool trusted = true,
-                  bool cleaning = false) {
-  return ScheduleInputs{t, trusted, link, power, phase, cleaning, ms};
+                  bool busy = false) {
+  return ScheduleInputs{t, trusted, link, power, phase, busy, ms};
 }
 
 ScheduleConfig daily(int on, int off, bool warm = false, int warm_min = 6) {
@@ -197,6 +197,32 @@ int test_deferred_standby() {
   CHECK(e.tick(in(at(2026, 9, kMon, 9, 7), Link::Connected, Power::On, ShotPhase::kIdle, ms)) ==
         ScheduleAction::Standby);
   CHECK(!e.standby_deferred());
+  // Off landing mid-backflush (no shot phase, busy): deferred; a flush inside
+  // the grace restarts it; fires 2 min after the last quiet start.
+  {
+    ScheduleEngine f;
+    f.set_config(daily(390, 540), in(quiet));
+    uint32_t t = 10000;
+    CHECK(f.tick(in(at(2026, 9, kMon, 9, 0), Link::Connected, Power::On, ShotPhase::kIdle, t, true, true)) ==
+          ScheduleAction::None);
+    CHECK(f.standby_deferred());
+    t += 60000;  // the backflush ends: the grace starts
+    CHECK(f.tick(in(at(2026, 9, kMon, 9, 1), Link::Connected, Power::On, ShotPhase::kIdle, t)) ==
+          ScheduleAction::None);
+    t += kStandbyGraceMs - 1000;  // a flush just before it would fire
+    CHECK(f.tick(in(at(2026, 9, kMon, 9, 3), Link::Connected, Power::On, ShotPhase::kIdle, t, true, true)) ==
+          ScheduleAction::None);
+    t += 6000;
+    CHECK(f.tick(in(at(2026, 9, kMon, 9, 3), Link::Connected, Power::On, ShotPhase::kIdle, t)) ==
+          ScheduleAction::None);
+    t += kStandbyGraceMs - 1000;
+    CHECK(f.tick(in(at(2026, 9, kMon, 9, 5), Link::Connected, Power::On, ShotPhase::kIdle, t)) ==
+          ScheduleAction::None);
+    t += 1000;
+    CHECK(f.tick(in(at(2026, 9, kMon, 9, 5), Link::Connected, Power::On, ShotPhase::kIdle, t)) ==
+          ScheduleAction::Standby);
+    CHECK(!f.standby_deferred());
+  }
   // No second standby.
   ms += 1000;
   CHECK(e.tick(in(at(2026, 9, kMon, 9, 7), Link::Connected, Power::On, ShotPhase::kIdle, ms)) ==
@@ -288,9 +314,10 @@ int test_auto_standby() {
   CHECK(!e.auto_standby_armed());
   CHECK(e.tick(poll(Power::On, ShotPhase::kIdle, ms + 60 * kMin)) == ScheduleAction::None);
 
-  // Cleaning is activity too: a backflush (no shot phase) arms the count at
-  // its end, a flush while the count runs restarts it, and a count that
-  // falls due mid-cycle waits for the cycle to end, then restarts.
+  // Cleaning (or the line held by a Manual pull / the auto-flush) is
+  // activity too: a backflush (no shot phase) arms the count at its end, a
+  // flush while the count runs restarts it, and a count that falls due
+  // mid-cycle waits for the cycle to end, then restarts.
   ms += 200 * kMin;
   auto clean = [&](Power p, uint32_t t_ms) { return in(t, Link::Connected, p, ShotPhase::kIdle, t_ms, false, true); };
   CHECK(e.tick(clean(Power::On, ms)) == ScheduleAction::None);              // backflush running
@@ -300,7 +327,7 @@ int test_auto_standby() {
   CHECK(e.tick(clean(Power::On, ms + 20 * kMin)) == ScheduleAction::None);  // a flush at +20
   CHECK(e.tick(poll(Power::On, ShotPhase::kIdle, ms + 20 * kMin + 6000)) == ScheduleAction::None);
   CHECK(e.tick(poll(Power::On, ShotPhase::kIdle, ms + 40 * kMin)) == ScheduleAction::None);  // 30 after the FIRST would be now
-  CHECK(e.tick(clean(Power::On, ms + 50 * kMin)) == ScheduleAction::None);  // due, but cleaning
+  CHECK(e.tick(clean(Power::On, ms + 51 * kMin)) == ScheduleAction::None);  // due (50:06), but cleaning
   CHECK(e.tick(clean(Power::On, ms + 52 * kMin)) == ScheduleAction::None);
   CHECK(e.tick(poll(Power::On, ShotPhase::kIdle, ms + 53 * kMin)) == ScheduleAction::None);  // restarted at 53
   CHECK(e.tick(poll(Power::On, ShotPhase::kIdle, ms + 82 * kMin)) == ScheduleAction::None);

@@ -437,9 +437,11 @@ per weekday, with a global warm-up lead. Shape of it:
 - AUTO-STANDBY (v1.0.0-beta.4, owner's spec 2026-09-23; INACTIVITY since
   2026-11-02) lives in the SAME engine (`tick_auto_standby`,
   `ScheduleAction::AutoStandby`): a countdown from the END of the last
-  ACTIVITY — a shot (BrewSnapshot::phase leaving kBrewing/kSettling) or a
-  cleaning cycle (BrewSnapshot::cleaning, flush or backflush; the owner
-  found a flush didn't count) — never from turn-on — so a machine the
+  ACTIVITY — a shot (BrewSnapshot::phase leaving kBrewing/kSettling) or
+  `ScheduleInputs::busy` = BrewSnapshot::cleaning (flush or backflush; the
+  owner found a flush didn't count) || BrewSnapshot::brewing (the drive
+  line held: a MANUAL-mode pull, which never sets a shot phase, and the
+  post-shot auto-flush run — review 2026-11-02) — never from turn-on — so a machine the
   schedule (or a hand) switched on and nobody used stays on; every shot or
   cleaning restarts it, and neither the count nor a scheduled Off fires
   while one runs (a deferred Off restarts its 2-min grace on cleaning too); a

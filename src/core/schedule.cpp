@@ -154,14 +154,16 @@ void ScheduleEngine::set_config(const ScheduleConfig& c, const ScheduleInputs& i
   }
 }
 
-// Auto-standby: an INACTIVITY count. Activity is a shot or a cleaning cycle
-// (a flush, a backflush — owner, 2026-11-02: "a general inactivity timer,
-// not strictly the last shot"); its END (re)starts the count, and nothing
-// fires while either runs. Turn-on alone still starts nothing. Needs no
-// clock and no master switch — see the header.
+// Auto-standby: an INACTIVITY count. Activity is a shot phase or `busy` —
+// a cleaning cycle (a flush, a backflush — owner, 2026-11-02: "a general
+// inactivity timer, not strictly the last shot") or the drive line held
+// with no shot phase (a Manual-mode pull, the auto-flush run); its END
+// (re)starts the count, and nothing fires while any of it runs. Turn-on
+// alone still starts nothing. Needs no clock and no master switch — see
+// the header.
 ScheduleAction ScheduleEngine::tick_auto_standby(const ScheduleInputs& in) {
   const bool shot = in.phase == ShotPhase::kBrewing || in.phase == ShotPhase::kSettling ||
-                    in.cleaning;
+                    in.busy;
   const bool ended = asb_shot_seen_ && !shot;
   asb_shot_seen_ = shot;
   if (!cfg_.auto_standby_enabled) {
@@ -229,8 +231,8 @@ ScheduleAction ScheduleEngine::tick(const ScheduleInputs& in) {
     if (in.link != Link::Connected || in.power != Power::On) {
       defer_ = false;
       idle_timing_ = false;
-    } else if (in.phase != ShotPhase::kIdle || in.cleaning) {
-      idle_timing_ = false;  // a new shot (or a cleaning cycle) restarts the grace
+    } else if (in.phase != ShotPhase::kIdle || in.busy) {
+      idle_timing_ = false;  // a new shot, a cleaning cycle, the line held: restart the grace
     } else if (!idle_timing_) {
       idle_timing_ = true;
       idle_since_ms_ = in.now_ms;
@@ -268,8 +270,8 @@ ScheduleAction ScheduleEngine::tick(const ScheduleInputs& in) {
         off_latched_ = static_cast<int16_t>(off);
         off_open_ = -1;
         if (in.power == Power::On) {
-          if (in.phase == ShotPhase::kIdle && !in.cleaning) return ScheduleAction::Standby;
-          defer_ = true;  // mid-shot / in review / cleaning: wait for quiet
+          if (in.phase == ShotPhase::kIdle && !in.busy) return ScheduleAction::Standby;
+          defer_ = true;  // mid-shot / in review / cleaning / line held: wait for quiet
           idle_timing_ = false;
         }
       } else {

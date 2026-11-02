@@ -440,7 +440,8 @@ void end_shot_plot(HomeWidgets& w);
 // Advance the shot plot: sample the scale, grow the X window, redraw. Called
 // from the same fast path as flow_graph_tick while a shot runs/settles (the
 // review freeze simply stops calling it).
-void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale);
+void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale,
+                    const core::ScaleSnapshot* bench = nullptr);  // bench: the legend's row only
 
 // Flush the one-event-behind display lag (final full paint). Call when the
 // shot freezes into review so the frozen plot shows the complete tail.

@@ -2828,7 +2828,8 @@ void end_shot_plot(HomeWidgets& w) {
   apply_flow_xaxis_labels(w);  // restore the labels for the active sweep style
 }
 
-void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
+void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale,
+                    const core::ScaleSnapshot* bench) {
   if (!w.flow_shot_plot || w.flow_canvas == nullptr || w.flow_buf == nullptr ||
       w.flow_w <= 1)
     return;
@@ -2848,6 +2849,7 @@ void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
     // isn't running during a shot (the owner's X-8, 2026-11-02: g/s frozen).
     w.legend_g = rw;
     w.legend_gps = flow_gap(rf) ? -1.0f : rf;
+    w.legend_bench_g = bench != nullptr && bench->connected ? bench->weight_g : -1.0f;
     update_flow_legend(w);
     if (w.shot_n == 0 || now - w.shot_last_sample_ms >= kShotSampleMs) {
       if (w.shot_n > 0) {  // track the achieved storage cadence (sizes the edge lag)
