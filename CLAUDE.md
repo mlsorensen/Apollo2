@@ -876,11 +876,13 @@ GT911 all up; NimBLE host inits. Paddle/audio/ADC since confirmed, 2026-09-11):
    Config-only (native-GPIO path in paddle.cpp). CONFIRMED working on HW.
    **DIY cable (WIRING.md, 2026-11-02): TWO single-channel PC817 modules.**
    Drive module at the machine end as always (GPIO52 -> IO, GND; OUT/GND =
-   the Micra contact, VCC open). Sense module at the APOLLO end: a 3V3
-   header pin -> module IO; the paddle-sense wire -> the module's INPUT
-   GND terminal (the LED cathode is the switch input); module OUT ->
-   GPIO51, output GND -> GND, VCC open. Same 3-conductor cable, same
-   machine-end splice. Never a dual module: those share the output GND and
+   the Micra contact, VCC open). Sense module at the APOLLO end: GPIO50
+   (kPaddleSenseSupplyPin, held HIGH from Paddle::begin, dropped with CTRL
+   by IPaddle::own(false)) -> module IO; the paddle-sense wire -> the
+   module's INPUT GND terminal (the LED cathode is the switch input);
+   module OUT -> GPIO51, output GND -> GND, VCC open. A 4-slot block on
+   the corner column GND/52/51/50. Same 3-conductor cable, same
+   machine-end splice. GPIO50 is therefore NOT a free remap target on P4s. Never a dual module: those share the output GND and
    would tie the Micra's black to Apollo GND. WHY: two P4 sense pads died
    on a bare switch wire (P4-5 GPIO51 2026-07 on that single-module cable;
    the owner's X-8 GPIO5 2026-11-02 on a rev 0.6 Link) — phantom flips when

@@ -35,8 +35,8 @@ it), but you will have the machine open — **unplug the Micra first**.
   paddle sense input (see [why](#why-the-second-module)). (The S3‑4.3C has
   both isolators built in; no module needed.) A
   [2.54 mm screw‑terminal block](https://a.co/d/0eVdsD4h) that clips onto the
-  P4's GPIO header makes the board‑side connection clean and solder‑free,
-  plus one short jumper wire (a female Dupont lead) for the 3V3 pin.
+  P4's GPIO header makes the board‑side connection clean and solder‑free —
+  a **4‑slot** one now, the fourth slot feeding the sense module.
 
 (P4 boards have an optional alternative to the modules and the splice: the
 [Apollo Link](#apollo-link-optional-p4-boards) board, described at the end
@@ -46,7 +46,7 @@ Although there are **four** connections at the machine end (Micra white,
 Micra black, and the two paddle‑switch wires), one 3‑conductor cable is all
 you need — **ground is shared**. It just means the ground conductor gets
 **two connectors** at the machine end. (The P4's sense module adds one
-short jumper at the Apollo end, nothing in the cable.)
+more header pin at the Apollo end, nothing in the cable.)
 
 ## Inside the Micra
 
@@ -94,13 +94,15 @@ bullet connectors at the machine end (two on the shared ground conductor):
 
 ## ESP32‑P4 boards (two external opto modules)
 
-On the P4‑WIFI6‑Touch‑LCD‑5 (and the 4.3), the paddle uses three native pins
-that sit **side by side** on the corner of the GPIO header — **GND, GPIO 52,
-GPIO 51**, in that order on the silkscreen — so a
-[2.54 mm 3‑pin screw‑terminal block](https://a.co/d/0eVdsD4h) clips straight
-onto them, no soldering. The X‑series boxes (7"/8") use the **same three
-pins**: on their 40‑pin header one pin column runs GND, IO52, IO51 in a row
-near the header's end (per the schematic — the photos below show the 5";
+On the P4‑WIFI6‑Touch‑LCD‑5 (and the 4.3), the paddle uses four native pins
+that sit **in a row** on the corner of the GPIO header — **GND, GPIO 52,
+GPIO 51, GPIO 50**, in that order on the silkscreen — so a
+[2.54 mm 4‑slot screw‑terminal block](https://a.co/d/0eVdsD4h) clips straight
+onto them, no soldering. GPIO 50 is new with the two‑module cable: the
+firmware holds it at 3.3 V while Apollo runs, and it powers the sense
+module's LED. The X‑series boxes (7"/8") use the **same pins**: on their
+40‑pin header one pin column runs GND, IO52, IO51, IO50 in a row near the
+header's end (per the schematic — the photos below show the 5";
 double‑check the silkscreen before clipping on):
 
 ![The P4 header corner — GND, 52, 51 in a row](img/wiring/p4-header-pins.jpg)
@@ -127,9 +129,9 @@ In detail:
   paddle wire still goes to the shared **ground**. The other comes back
   through the cable to the second module's **input GND terminal** — used
   here as the switch input; nothing else connects to it. The module's **IO**
-  goes to a **3V3** pin on the header (any of them; a short jumper). A closed
-  paddle therefore completes 3V3 → IO → LED → paddle → ground and lights the
-  module's LED. On the output side: **VCC unconnected**, **OUT → GPIO 51**,
+  goes to **GPIO 50**, the fourth slot of the block, which the firmware holds
+  at 3.3 V while Apollo is running. A closed paddle therefore completes
+  GPIO 50 → IO → LED → paddle → ground and lights the module's LED. On the output side: **VCC unconnected**, **OUT → GPIO 51**,
   **GND → Apollo GND**. The transistor pulls GPIO 51 low while the LED is
   lit — closed is low, the same thing the firmware has always read — and
   GPIO 51 is now wired to nothing but a transistor a few centimetres away.
@@ -155,11 +157,13 @@ depend on knowing it: whatever arrives on that wire now ends at an LED and a
 resistor instead of a GPIO.
 
 **Already built the single‑module cable?** Nothing changes inside the machine
-or in the cable. At the Apollo end: move the paddle‑sense wire from **GPIO 51**
-to the new module's **input GND** terminal; jumper a **3V3** header pin to the
-module's **IO**; wire the module's **OUT** to **GPIO 51** and its output
-**GND** to **GND**; leave **VCC** open. If you fitted the 1 kΩ resistor, take
-it out — the module's own input resistor does that job now.
+or in the cable. At the Apollo end: swap the 3‑slot block for a 4‑slot one
+(GND / 52 / 51 / 50); move the paddle‑sense wire from **GPIO 51** to the new
+module's **input GND** terminal; wire **GPIO 50** to the module's **IO**, the
+module's **OUT** to **GPIO 51** and its output **GND** to **GND**; leave
+**VCC** open. If you fitted the 1 kΩ resistor, take it out — the module's own
+input resistor does that job now. This needs firmware that drives GPIO 50
+(v1.3 onward); on older firmware the pin floats and the sense LED never lights.
 
 A finished P4 cable with the drive module spliced in near the machine end
 (shown before wrapping the module in heat‑shrink — do wrap it, so nothing can

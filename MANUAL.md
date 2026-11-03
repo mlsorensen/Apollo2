@@ -1028,13 +1028,14 @@ in the firmware). It does not work with the S3‑4.3C.
   USB, and run
 
   ```
-  make padsense PIN=50      # sense wire moved to GPIO50 (example)
+  make padsense PIN=21      # sense wire moved to GPIO21 (example)
   make paddrive PIN=49      # drive wire, same idea
   make padsense PIN=-1      # revert to the board default
   ```
 
-  (or type `padsense=50` into any serial monitor). The setting is stored in
+  (or type `padsense=21` into any serial monitor). The setting is stored in
   the device's settings memory — it survives reflashes and web‑flasher
   upgrades, so stock releases keep working on a remapped unit — and takes
-  effect on the next boot, which logs it: `Paddle: sense GPIO50 (NVS
+  effect on the next boot, which logs it: `Paddle: sense GPIO21 (NVS
   override)`. The board's default pins stay unchanged for everyone else.
+  (GPIO 50 is taken on the P4 boards: it powers the sense module.)

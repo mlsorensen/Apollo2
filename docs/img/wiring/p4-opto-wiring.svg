@@ -9,16 +9,16 @@
   <text x="238" y="217" text-anchor="end" font-size="20" font-weight="bold" fill="#ffffff">GND</text>
   <text x="238" y="267" text-anchor="end" font-size="20" font-weight="bold" fill="#ffffff">GPIO 52</text>
   <text x="238" y="317" text-anchor="end" font-size="20" font-weight="bold" fill="#ffffff">GPIO 51</text>
-  <text x="238" y="507" text-anchor="end" font-size="20" font-weight="bold" fill="#ffffff">3V3</text>
+  <text x="238" y="507" text-anchor="end" font-size="20" font-weight="bold" fill="#ffffff">GPIO 50</text>
   <circle cx="250" cy="210" r="6" fill="#ffffff"/>
   <circle cx="250" cy="260" r="6" fill="#ffffff"/>
   <circle cx="250" cy="310" r="6" fill="#ffffff"/>
   <circle cx="250" cy="500" r="6" fill="#ffffff"/>
-  <text x="150" y="365" text-anchor="middle" font-size="15" fill="#ffffff">GND &#183; 52 &#183; 51 sit side by side:</text>
-  <text x="150" y="386" text-anchor="middle" font-size="15" fill="#ffffff">a 3-pin screw-terminal block</text>
-  <text x="150" y="407" text-anchor="middle" font-size="15" fill="#ffffff">clips straight on. 3V3 is one</text>
-  <text x="150" y="428" text-anchor="middle" font-size="15" fill="#ffffff">jumper wire from any 3V3 pin</text>
-  <text x="150" y="449" text-anchor="middle" font-size="15" fill="#ffffff">on the header.</text>
+  <text x="150" y="365" text-anchor="middle" font-size="15" fill="#ffffff">GND &#183; 52 &#183; 51 &#183; 50 sit in a row</text>
+  <text x="150" y="386" text-anchor="middle" font-size="15" fill="#ffffff">on the header corner: a 4-slot</text>
+  <text x="150" y="407" text-anchor="middle" font-size="15" fill="#ffffff">screw-terminal block clips on.</text>
+  <text x="150" y="428" text-anchor="middle" font-size="15" fill="#ffffff">GPIO 50 is held at 3.3 V by the</text>
+  <text x="150" y="449" text-anchor="middle" font-size="15" fill="#ffffff">firmware while Apollo runs.</text>
 
   <!-- Sense module (new), at the Apollo end: output side faces Apollo, input side faces the cable -->
   <text x="405" y="338" font-size="20" font-weight="bold" fill="#222222">Sense module (new)</text>
@@ -42,7 +42,7 @@
   <text x="342" y="372" text-anchor="middle" font-size="14" fill="#555555">open</text>
   <text x="530" y="536" text-anchor="middle" font-size="14" fill="#555555">sits at the Apollo end. Output GND &#8594; Apollo GND.</text>
   <text x="530" y="554" text-anchor="middle" font-size="14" fill="#555555">The input-side "GND" terminal is the switch input</text>
-  <text x="530" y="572" text-anchor="middle" font-size="14" fill="#555555">(nothing else connects to it): 3V3 &#8594; IO &#8594; LED &#8594;</text>
+  <text x="530" y="572" text-anchor="middle" font-size="14" fill="#555555">(nothing else connects to it): GPIO 50 &#8594; IO &#8594; LED &#8594;</text>
   <text x="530" y="590" text-anchor="middle" font-size="14" fill="#555555">that terminal &#8594; paddle &#8594; GND.</text>
 
   <!-- Cable: the same 3-conductor cable as before -->
@@ -102,7 +102,7 @@
   <polyline points="332,310 380,310 380,430 400,430" fill="none" stroke="#777777" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
   <polyline points="332,310 380,310 380,430 400,430" fill="none" stroke="#F4F4F4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
 
-  <!-- 3V3 (orange) -> sense module IO; stays at the Apollo end -->
+  <!-- GPIO 50 (orange, 3.3 V while Apollo runs) -> sense module IO; stays at the Apollo end -->
   <polyline points="250,500 330,500 330,620 690,620 690,390 660,390" fill="none" stroke="#E08A1E" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
 
   <!-- Paddle wire (blue): sense module input GND terminal -> through the cable -> one paddle wire; hops the 3V3 riser -->
@@ -124,6 +124,6 @@
   <text x="1100" y="658" text-anchor="middle" font-size="14" fill="#555555">sense module's LED instead of GPIO 51. It never touches a GPIO or the Micra.</text>
 
   <!-- captions -->
-  <text x="700" y="730" text-anchor="middle" font-size="19" fill="#444444">Paddle closed &#8594; the sense module's LED lights (3V3 &#8594; IO &#8594; LED &#8594; paddle &#8594; GND) &#8594; OUT pulls GPIO 51 low. GPIO 51 touches only the module.</text>
+  <text x="700" y="730" text-anchor="middle" font-size="19" fill="#444444">Paddle closed &#8594; the sense module's LED lights (GPIO 50 &#8594; IO &#8594; LED &#8594; paddle &#8594; GND) &#8594; OUT pulls GPIO 51 low. GPIO 51 touches only the module.</text>
   <text x="700" y="758" text-anchor="middle" font-size="19" fill="#444444">GPIO 52 high &#8594; drive module LED on &#8594; isolated OUT/GND contact closes &#8594; the Micra sees the paddle ON.</text>
 </svg>

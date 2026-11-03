@@ -36,6 +36,7 @@ class Paddle : public core::IPaddle {
   int link_sense_pin_ = -1;  // Apollo Link set (P4): mirrors the two above
   int link_drive_pin_ = -1;
   int ctrl_pin_ = -1;        // Link CTRL: HIGH = paddle handed to Apollo
+  int sense_supply_pin_ = -1;  // opto-cable sense LED supply (GPIO50 on the P4s)
 };
 
 Paddle& paddle();  // shared singleton (device main + display share none)
