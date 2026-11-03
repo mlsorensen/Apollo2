@@ -38,7 +38,14 @@ bool Paddle::sensed() {
     reassert = 0;
     io_extension().apply_dir_mask();
   }
-  const uint8_t in = io_extension().read_input();
+  // A failed I2C read keeps the LAST level rather than reading as "open": the
+  // paddle breaker counts every one-poll blip as a rejected pulse, and a bus
+  // hiccup while the paddle is held closed would otherwise look like one
+  // (ten in a minute = a tripped breaker mid-shot). "Open on error" bought no
+  // safety anyway — the drive goes through the same chip, so a dead bus can't
+  // open the contact either way. (1 B static.)
+  static uint8_t in = 0xFF;  // idle-high until the first good read
+  io_extension().read_input(&in);
   return (in & (1u << board::kPaddleIoExtSense)) == 0;  // low = closed
 }
 

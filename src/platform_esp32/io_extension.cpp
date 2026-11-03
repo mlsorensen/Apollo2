@@ -56,7 +56,10 @@ void IoExtension::set_pwm(uint8_t percent) {
 
 uint16_t IoExtension::read_adc() { return 0; }  // no ADC on the CH422G
 
-uint8_t IoExtension::read_input() { return 0xFF; }  // inputs unused on the 4.3B
+bool IoExtension::read_input(uint8_t* levels) {  // inputs unused on the 4.3B
+  *levels = 0xFF;
+  return true;
+}
 
 void IoExtension::apply_dir_mask() {}  // n/a for the CH422G
 
@@ -123,14 +126,16 @@ uint16_t IoExtension::read_adc() {
   return static_cast<uint16_t>(hi << 8 | lo);
 }
 
-uint8_t IoExtension::read_input() {
-  // Same STOP-then-read shape as read_adc (see the i2c-ng note above). 0xFF on
-  // error = "all inputs idle-high", which reads as paddle-open (safe).
+bool IoExtension::read_input(uint8_t* levels) {
+  // Same STOP-then-read shape as read_adc (see the i2c-ng note above). An I2C
+  // error leaves *levels alone and returns false: the caller decides what a
+  // missed read means (the paddle keeps its last level — see paddle.cpp).
   Wire.beginTransmission(addr_);
   Wire.write(kRegInput);
-  if (Wire.endTransmission(true) != 0) return 0xFF;
-  if (Wire.requestFrom(addr_, static_cast<uint8_t>(1)) != 1) return 0xFF;
-  return static_cast<uint8_t>(Wire.read());
+  if (Wire.endTransmission(true) != 0) return false;
+  if (Wire.requestFrom(addr_, static_cast<uint8_t>(1)) != 1) return false;
+  *levels = static_cast<uint8_t>(Wire.read());
+  return true;
 }
 
 void IoExtension::apply_dir_mask() { write_reg(kRegMode, board::kIoExtDirMask); }
