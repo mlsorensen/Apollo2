@@ -1007,6 +1007,18 @@ in the firmware). It does not work with the S3‑4.3C.
   the board, so the pin only ever sees the module. If you built the earlier
   single‑module cable, the guide shows the change, which is confined to the
   Apollo end of the cable.
+- **The paddle breaker.** A failing sense pin announces itself: it starts
+  registering paddle flips that nobody made, dozens a minute, each one a shot
+  start. Apollo watches for that signature — raw flickers too short to be a
+  hand, or accepted flips shorter than half a second, several of either within
+  a minute — and when it sees it, switches the paddle drive off, refuses every
+  flush and cleaning cycle, hands the paddle back to the machine on an Apollo
+  Link (the machine then works as stock), and shows a modal explaining what it
+  saw. Nothing a person does trips it: flipping the paddle a few times quickly,
+  a flush‑flush‑shot morning or a ten‑cycle manual backflush all pass. Tap
+  **Reset** once you have looked at the wiring; if the flicker is still there
+  it trips again at once, which is itself the diagnosis. A reboot also clears
+  it. The diagnostic log records each trip with its counts.
 - **If a paddle pin ever does fail** (symptom: the paddle stops registering
   or behaves erratically while everything meters fine — the diagnostic log's
   `Paddle: raw sense ...` lines will show a line stuck, drifting, or flipping

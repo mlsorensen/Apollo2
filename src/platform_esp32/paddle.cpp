@@ -46,6 +46,8 @@ void Paddle::drive(bool closed) {
   io_extension().set(static_cast<uint8_t>(board::kPaddleIoExtDrive), !closed);
 }
 
+void Paddle::own(bool /*owned*/) {}  // no transfer switch on the 4.3C's terminals
+
 #else
 
 // Native-GPIO boards: drive an external relay, sense the switch to GND with the
@@ -179,6 +181,17 @@ void Paddle::drive(bool closed) {
     digitalWrite(drive_pin_, level ? HIGH : LOW);
   }
   if (link_drive_pin_ >= 0) digitalWrite(link_drive_pin_, closed ? HIGH : LOW);
+}
+
+void Paddle::own(bool owned) {
+  // Apollo Link CTRL. LOW = the Link's relays wire the paddle to the Micra in
+  // copper, exactly as when Apollo is unplugged. The brew controller's paddle
+  // breaker drops it so a unit that no longer trusts its sense input leaves
+  // the machine usable; Reset raises it again. No-op without a Link set.
+  if (ctrl_pin_ < 0) return;
+  digitalWrite(ctrl_pin_, owned ? HIGH : LOW);
+  core::logf("Paddle: Link CTRL %s (%s)\n", owned ? "HIGH" : "LOW",
+             owned ? "Apollo owns the paddle" : "paddle handed back to the Micra");
 }
 
 #endif  // BOARD_PADDLE_VIA_IOEXT

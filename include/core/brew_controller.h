@@ -79,6 +79,7 @@ class BrewController : public IBrewController {
   void toggle_manual_flush() override;
   bool start_backflush() override;
   void cancel_backflush() override;
+  void reset_paddle_breaker() override;
 
  private:
   // end_ms = when brewing ACTUALLY ceased, which is not always now: the unwired
@@ -117,6 +118,29 @@ class BrewController : public IBrewController {
   // and boot safety either way).
   int sense_paddle_edge(uint32_t now_ms);
   void cancel_shot();                  // any phase -> kIdle, line opened, timer cleared
+  // THE drive choke point: every close/open of the machine's line goes through
+  // here, so a tripped breaker can refuse to close it whatever asked (a sense
+  // edge, a flush, a backflush pulse, the standby wake-through).
+  void set_drive(bool closed);
+  // Paddle breaker (owner's spec, 2026-11-03). A sense pad that is failing
+  // announces itself hours ahead — the X-8's GPIO5 produced 238 phantom ON
+  // edges in two hours, each one a shot start — and nothing a hand does looks
+  // like it. Two signatures, either trips:
+  //   (1) REJECTED pulses: raw transitions the glitch filter threw away (a
+  //       candidate level that changed again before kSenseStablePolls). A
+  //       hand's bounce is ~1 ms and invisible at the 25 ms poll; a leaky pad
+  //       gives tens per second. kBreakerRejectTrip in kBreakerWindowMs.
+  //   (2) SHORT accepted pulses: an accepted edge less than kBreakerShortMs
+  //       after the previous one. A flush holds >= 1 s, a shot 20+ s; one
+  //       quick flick a person might do, kBreakerShortTrip in a minute nobody.
+  // NOT a rate rule on accepted edges — a manual backflush is 10+ ON edges in
+  // two minutes and must never trip. Tripped = cancel whatever is running,
+  // hold the line open, refuse every drive, hand the paddle back on a Link
+  // (IPaddle::own(false)); only reset_paddle_breaker() (the modal's Reset)
+  // or a reboot clears it, and it re-trips at once if the flicker goes on.
+  void breaker_note(uint8_t& count, uint32_t& win_ms, uint32_t now_ms,
+                    uint8_t trip_at, const char* what);
+  void trip_breaker(const char* what);
 
   IPaddle& paddle_;
   IScale& scale_;
@@ -214,6 +238,14 @@ class BrewController : public IBrewController {
   uint32_t wired_hint_seq_ = 0;     // first pass-through ON edge with the setting off
   bool wired_hint_fired_ = false;   // once per boot
   uint32_t blind_since_ms_ = 0;  // scale dark since (kBrewing); 0 = seeing it
+  // Paddle breaker state (see the method comment). ~20 B of .bss, no heap.
+  bool tripped_ = false;
+  uint32_t trip_seq_ = 0;
+  uint8_t reject_count_ = 0;      // rejected pulses in the current window
+  uint32_t reject_win_ms_ = 0;    // that window's start
+  uint8_t short_count_ = 0;       // short accepted pulses in the current window
+  uint32_t short_win_ms_ = 0;
+  uint32_t last_edge_ms_ = 0;     // last ACCEPTED edge (0 = none yet)
   uint32_t last_sense_ms_ = 0;
   uint32_t last_now_ms_ = 0;  // for snapshot()'s elapsed time
 
@@ -224,6 +256,10 @@ class BrewController : public IBrewController {
   // pump/solenoid kick — a phantom pair re-closes the line on an awake
   // machine, i.e. an unintended real brew. A hand flip holds for 100s of ms.
   static constexpr uint8_t kSenseStablePolls = 3;
+  static constexpr uint32_t kBreakerWindowMs = 60000;  // counting window
+  static constexpr uint8_t kBreakerRejectTrip = 10;    // rejected pulses / window
+  static constexpr uint8_t kBreakerShortTrip = 4;      // short accepted pulses / window
+  static constexpr uint32_t kBreakerShortMs = 500;     // "short" = edges closer than this
   static constexpr uint32_t kBaselineDelayMs = 1200;  // tare settle before baseline
   static constexpr float kPreTaredG = 0.5f;           // |weight| under this = already tared
   // Drip settle before the freeze. The window ENDS when the drips stop, not on

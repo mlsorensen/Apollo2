@@ -68,6 +68,10 @@ void on_flush_clicked_home(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->toggle_manual_flush();
 }
 
+void on_breaker_reset(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->reset_paddle_breaker();
+}
+
 void on_backflush_open(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->open_backflush();
 }
@@ -2882,6 +2886,15 @@ void App::pump_scale_chart() {
       show_toast("Paddle harness detected. Turn on Settings > Micra > Controls > "
                  "Wired paddle for the shot timer, Auto shot and cleaning.");
     }
+    // The paddle breaker tripped: the sense input flickered on its own and
+    // the controller has opened the drive line for good (see BrewController).
+    // A modal, not a toast — this is a hardware fault the person has to look
+    // at, and the paddle stays dead (or in copper on a Link) until they Reset.
+    if (bsnap.paddle_trip_seq != paddle_trip_seen_) {
+      paddle_trip_seen_ = bsnap.paddle_trip_seq;
+      ui::play_button_press();
+      show_breaker_modal();
+    }
     // Unwired stop-early signal: fire the pill flash once per shot, on the
     // controller's latch going high (see BrewSnapshot::stop_hint).
     if (bsnap.stop_hint && !stop_hint_seen_) ui::flash_stop_hint(home_);
@@ -3415,6 +3428,11 @@ void App::close_backflush() {
 
 void App::backflush_go() {
   if (brew_ == nullptr) return;
+  if (brew_->snapshot().paddle_tripped) {  // the breaker refuses every drive
+    close_backflush();
+    show_breaker_modal();
+    return;
+  }
   if (brew_->start_backflush()) bf_state_ = kBackflushRunning;
   backflush_tick();  // reflect the new state immediately
 }
@@ -3513,6 +3531,10 @@ void App::backflush_tick() {
 
 void App::toggle_manual_flush() {
   if (brew_ == nullptr) return;
+  if (brew_->snapshot().paddle_tripped) {  // the breaker refuses every drive
+    show_breaker_modal();
+    return;
+  }
   brew_->toggle_manual_flush();
   refresh();  // flip the button to Stop (or back) now, not at the next 2 Hz tick
 }
@@ -3544,6 +3566,25 @@ void App::show_wifi_modal() {
                       provisioner_->setup_url(), "then paste your token");
   modal_button(card, "Cancel", ui::theme::rail(), on_wifi_cancel, this);
   wifi_setup_shown_ = true;
+}
+
+void App::show_breaker_modal() {
+  lv_obj_t* card = open_modal(
+      "Paddle disconnected",
+      "Apollo saw its paddle input flickering on its own: a possible GPIO or "
+      "wiring fault. The paddle drive is switched off and every flush and "
+      "cleaning cycle is refused until you reset it. On an Apollo Link the "
+      "paddle has been handed back to the machine, which works as stock; on "
+      "the opto cable the paddle is dead until reset.\n\n"
+      "Check the sense wiring (the wiring guide's \"Why the second module\"), "
+      "then tap Reset and watch the next few shots. It trips again at once if "
+      "the flicker continues.");
+  modal_button(modal_button_row(card), "Reset", ui::theme::accent(), on_breaker_reset, this);
+}
+
+void App::reset_paddle_breaker() {
+  if (brew_ != nullptr) brew_->reset_paddle_breaker();
+  close_modal();
 }
 
 void App::open_token_setup() { show_token_modal(/*fetch_failed=*/false); }

@@ -234,6 +234,7 @@ class App {
   void backflush_cancel();  // "Cancel": stop, stay on the screen
   void backflush_tick();    // readout update (from an lv_timer, 4 Hz)
   void toggle_manual_flush();  // Home "Flush"/"Stop" button
+  void reset_paddle_breaker();  // the breaker modal's Reset (event callback)
   void review_hold_adjust(int dir);  // Scale settings: review-hold stepper (5s steps)
   void detect_lead_in_adjust(int dir);  // Scale settings: detect lead-in stepper (1s steps)
   void cycle_flow_smooth();          // Scale settings: Off/Light/Medium/Strong
@@ -300,6 +301,7 @@ class App {
   void close_modal();
   void show_token_modal(bool fetch_failed);  // token-entry prompt (Enter token / Cancel)
   void show_wifi_modal();   // WiFi instructions + Cancel
+  void show_breaker_modal();  // paddle breaker tripped: explanation + Reset
   void show_wifi_setup_modal();  // WiFi-credential portal instructions + Cancel
   core::NetState net_status() const {
     return network_ != nullptr ? network_->status() : core::NetState::Disabled;
@@ -379,6 +381,7 @@ class App {
   uint32_t brew_reject_seen_ = 0;  // last review_reject_seq (flash Reset on change)
   uint32_t scale_refuse_seen_ = 0;  // last scale_refuse_seq (toast on change)
   uint32_t wired_hint_seen_ = 0;    // last wired_hint_seq (toast on change)
+  uint32_t paddle_trip_seen_ = 0;   // last paddle_trip_seq (modal on change)
   lv_obj_t* toast_ = nullptr;          // transient message card (lv_layer_top)
   lv_timer_t* toast_timer_ = nullptr;  // its auto-dismiss timer
   uint32_t unwired_shot_t0_ = 0;   // lv_tick of the detected shot's retro start

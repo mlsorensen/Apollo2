@@ -9,6 +9,16 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 Each version lists `### Features` first, then `### Fixes` (the device shows
 the headings as plain lines); leave out a list that would be empty.
 
+## Unreleased
+
+### Features
+
+- **Paddle breaker.** If the paddle sense input starts flickering on its own —
+  the signature of a failing GPIO pin, which once ran a pump for hours — Apollo
+  now switches the paddle drive off, hands the paddle back to the machine on an
+  Apollo Link, and shows a modal with a Reset button. Flipping the paddle quickly
+  or running a backflush never trips it.
+
 ## v1.2.0
 
 ### Features

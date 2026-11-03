@@ -136,8 +136,7 @@ void BrewController::poll_flush(uint32_t now_ms) {
           flush_state_ = FlushState::kOff;
           return;
         }
-        paddle_.drive(true);
-        driving_ = true;
+        set_drive(true);
         flush_state_ = FlushState::kRunning;
         flush_off_ms_ = now_ms + static_cast<uint32_t>(flush_s_) * 1000u;
         logf("Brew: auto-flush running (%ds)\n", flush_s_);
@@ -145,8 +144,7 @@ void BrewController::poll_flush(uint32_t now_ms) {
       break;
     case FlushState::kRunning:
       if (reached(now_ms, flush_off_ms_)) {
-        paddle_.drive(false);
-        driving_ = false;
+        set_drive(false);
         flush_state_ = FlushState::kOff;
         logf("Brew: auto-flush done\n");
       }
@@ -157,7 +155,7 @@ void BrewController::poll_flush(uint32_t now_ms) {
 }
 
 bool BrewController::can_clean() const {
-  if (!relay()) return false;
+  if (!relay() || tripped_) return false;
   // A closed line on a standby machine is its WAKE switch — no water moves.
   // Running a cleaning cycle there would silently power the machine on and
   // pulse a dry group; make the user turn it on first.
@@ -181,8 +179,7 @@ void BrewController::poll_clean(uint32_t now_ms) {
   if (edge >= 0) {
     logf("Brew: paddle edge during cleaning -> cancelled\n");
     end_clean();
-    paddle_.drive(edge == 1);
-    driving_ = edge == 1;
+    set_drive(edge == 1);
     return;
   }
 
@@ -199,8 +196,7 @@ void BrewController::poll_clean(uint32_t now_ms) {
   // few ms long — never a stuck line.
   if (!reached(now_ms, clean_until_ms_)) return;
   if (bf_on_) {
-    paddle_.drive(false);
-    driving_ = false;
+    set_drive(false);
     bf_on_ = false;
     if (bf_cycle_ >= kBackflushCycles) {
       clean_ = CleanMode::kOff;
@@ -211,8 +207,7 @@ void BrewController::poll_clean(uint32_t now_ms) {
     clean_until_ms_ = now_ms + kBackflushOffMs;
   } else {
     ++bf_cycle_;
-    paddle_.drive(true);
-    driving_ = true;
+    set_drive(true);
     bf_on_ = true;
     clean_until_ms_ = now_ms + flush_run_ms(flush_s_);
     logf("Brew: backflush cycle %d/%d\n", bf_cycle_, kBackflushCycles);
@@ -224,8 +219,7 @@ void BrewController::end_clean() {
   clean_ = CleanMode::kOff;
   bf_on_ = false;
   if (driving_) {
-    paddle_.drive(false);
-    driving_ = false;
+    set_drive(false);
   }
 }
 
@@ -246,8 +240,7 @@ void BrewController::toggle_manual_flush() {
   // Same run time as the post-shot auto-flush — one duration to reason about.
   clean_ = CleanMode::kManual;
   clean_until_ms_ = last_now_ms_ + flush_run_ms(flush_s_);
-  paddle_.drive(true);
-  driving_ = true;
+  set_drive(true);
   logf("Brew: manual flush running (%ums)\n",
        static_cast<unsigned>(flush_run_ms(flush_s_)));
 }
@@ -262,8 +255,7 @@ bool BrewController::start_backflush() {
   // Drive the first pulse HERE rather than waiting for the next poll, so the
   // Go button gives instant feedback.
   clean_until_ms_ = last_now_ms_ + flush_run_ms(flush_s_);
-  paddle_.drive(true);
-  driving_ = true;
+  set_drive(true);
   logf("Brew: backflush started (%d cycles, %ums on)\n", kBackflushCycles,
        static_cast<unsigned>(flush_run_ms(flush_s_)));
   return true;
@@ -280,8 +272,7 @@ void BrewController::cancel_flush() {
   if (flush_state_ == FlushState::kRunning && driving_) {
     // We closed the line for the flush: open it, whatever the paddle's level
     // (flips are ignored mid-run, so a paddle that is ON never took the line).
-    paddle_.drive(false);
-    driving_ = false;
+    set_drive(false);
   }
   flush_state_ = FlushState::kOff;
 }
@@ -294,6 +285,12 @@ int BrewController::sense_paddle_edge(uint32_t now_ms) {
   // edge pairs from machine-wake EMI start unintended shots).
   const bool raw = paddle_.sensed();
   if (raw != sense_candidate_) {
+    // The previous candidate never held long enough to be accepted: a
+    // rejected pulse. Counted for the breaker (hands never make these; a
+    // failing pad makes them by the dozen). Not before the boot adoption —
+    // the first poll's candidate is just the initial field value.
+    if (sensed_once_ && sense_stable_ < kSenseStablePolls)
+      breaker_note(reject_count_, reject_win_ms_, now_ms, kBreakerRejectTrip, "rejected");
     sense_candidate_ = raw;
     sense_stable_ = 1;
   } else if (sense_stable_ < kSenseStablePolls) {
@@ -312,6 +309,13 @@ int BrewController::sense_paddle_edge(uint32_t now_ms) {
   }
   if (on == paddle_on_) return -1;
   paddle_on_ = on;
+  // An accepted edge hard on the heels of the previous one is the second
+  // breaker signature (see the header). Counted before the tripped check so
+  // a reset under continuing flicker re-trips at once.
+  if (last_edge_ms_ != 0 && now_ms - last_edge_ms_ < kBreakerShortMs)
+    breaker_note(short_count_, short_win_ms_, now_ms, kBreakerShortTrip, "short");
+  last_edge_ms_ = now_ms;
+  if (tripped_) return -1;  // the level is tracked, the edge goes to nobody
   if (flush_state_ == FlushState::kRunning) {
     // The post-shot auto-flush owns the line while it runs. The level is
     // tracked but the edge goes to nobody: an OFF must not open the line under
@@ -348,8 +352,7 @@ void BrewController::poll_wired(uint32_t now_ms) {
         // no shot to time or tare for. The OFF edge below is then a no-op for
         // the (never-started) timer, and the NEXT flip — machine now on —
         // runs as a normal shot.
-        paddle_.drive(true);
-        driving_ = true;
+        set_drive(true);
       } else if (on && phase_ == ShotPhase::kIdle &&
                  eff_mode() == ShotMode::kAuto && !scale_.snapshot().connected) {
         // Auto shot is armed but the scale isn't connected: the user expects a
@@ -361,8 +364,7 @@ void BrewController::poll_wired(uint32_t now_ms) {
         ++scale_refuse_seq_;
         logf("Brew: shot refused (Auto shot needs the scale connected)\n");
       } else if (on) {
-        paddle_.drive(true);
-        driving_ = true;
+        set_drive(true);
         timer_.start(now_ms);  // ESP times every shot, automated or not
         logf("Brew: shot timer started\n");
         if (phase_ == ShotPhase::kIdle && eff_mode() == ShotMode::kAuto) {
@@ -389,8 +391,7 @@ void BrewController::poll_wired(uint32_t now_ms) {
           }
         }
       } else {
-        paddle_.drive(false);
-        driving_ = false;
+        set_drive(false);
         timer_.stop(now_ms);
         if (phase_ == ShotPhase::kBrewing) end_shot(now_ms, now_ms);  // manual cut -> settle
       }
@@ -427,8 +428,7 @@ void BrewController::poll_wired(uint32_t now_ms) {
       }
     } else if (s.weight_g - start_g_ >= target_g_ - overshoot_g_) {
       blind_since_ms_ = 0;
-      paddle_.drive(false);
-      driving_ = false;
+      set_drive(false);
       timer_.stop(now_ms);
       auto_stopped_ = true;
       end_shot(now_ms, now_ms);
@@ -473,12 +473,10 @@ void BrewController::poll_unwired(uint32_t now_ms) {
         logf("Brew: shot refused (Shot detect needs the scale connected)\n");
       } else {
         if (phase_ == ShotPhase::kReview) phase_ = ShotPhase::kIdle;
-        paddle_.drive(true);
-        driving_ = true;
+        set_drive(true);
       }
     } else if (edge == 0) {
-      paddle_.drive(false);
-      driving_ = false;
+      set_drive(false);
     }
   }
 
@@ -680,6 +678,8 @@ BrewSnapshot BrewController::snapshot() const {
       .backflush_done = bf_done_,
       .wired_hint_seq = wired_hint_seq_,
       .scale_known = scale_known(),
+      .paddle_tripped = tripped_,
+      .paddle_trip_seq = trip_seq_,
   };
 }
 
@@ -746,14 +746,49 @@ void BrewController::cancel_shot() {
   end_clean();     // a cleaning cycle holds the line too (and outranks a shot)
   cancel_flush();  // before driving_: a running flush holds the line too
   if (driving_) {
-    paddle_.drive(false);  // never leave the machine running across a mode flip
-    driving_ = false;
+    set_drive(false);
   }
   detector_.reset();
   timer_.reset();  // a cancelled half-shot's time must not display as a real one
   phase_ = ShotPhase::kIdle;
   stop_hint_ = false;
   hint_fired_ = false;  // a cancelled shot teaches nothing
+}
+
+void BrewController::set_drive(bool closed) {
+  if (closed && tripped_) return;  // the breaker holds the line open, whoever asks
+  paddle_.drive(closed);
+  driving_ = closed;
+}
+
+void BrewController::breaker_note(uint8_t& count, uint32_t& win_ms, uint32_t now_ms,
+                                  uint8_t trip_at, const char* what) {
+  if (win_ms == 0 || reached(now_ms, win_ms + kBreakerWindowMs)) {
+    win_ms = now_ms;  // a fresh fixed window (lenient at the boundary, on purpose)
+    count = 0;
+  }
+  if (count < 255) ++count;
+  if (!tripped_ && count >= trip_at) trip_breaker(what);
+}
+
+void BrewController::trip_breaker(const char* what) {
+  tripped_ = true;
+  ++trip_seq_;
+  logf("Brew: PADDLE BREAKER TRIPPED (%s: %u rejected / %u short pulses in the window) "
+       "-> drive opened, paddle released\n",
+       what, static_cast<unsigned>(reject_count_), static_cast<unsigned>(short_count_));
+  cancel_shot();  // ends a cleaning cycle, a flush or a shot; opens the line
+  paddle_.own(false);  // a Link hands the paddle back to the machine in copper
+}
+
+void BrewController::reset_paddle_breaker() {
+  if (!tripped_) return;
+  tripped_ = false;
+  reject_count_ = short_count_ = 0;
+  reject_win_ms_ = short_win_ms_ = 0;
+  last_edge_ms_ = 0;
+  paddle_.own(true);
+  logf("Brew: paddle breaker reset by the user\n");
 }
 
 void BrewController::set_wired_paddle(bool on) {

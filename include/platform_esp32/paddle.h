@@ -28,6 +28,7 @@ class Paddle : public core::IPaddle {
   bool available() const override;
   bool sensed() override;
   void drive(bool closed) override;
+  void own(bool owned) override;  // Link CTRL: HIGH = Apollo has the paddle
 
  private:
   int sense_pin_ = -1;  // resolved at begin() on native-GPIO boards

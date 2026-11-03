@@ -47,6 +47,8 @@ class FakeBrewController : public core::IBrewController {
         .backflush_done = bf_done_,
         .wired_hint_seq = 0,
         .scale_known = true,
+        .paddle_tripped = false,
+        .paddle_trip_seq = 0,
     };
   }
   void set_target_weight_g(float grams) override { target_g_ = grams; }
@@ -54,6 +56,7 @@ class FakeBrewController : public core::IBrewController {
   void set_review_hold_s(int seconds) override { review_hold_s_ = seconds; }
   void set_detect_lead_in_s(int seconds) override { detect_lead_in_s_ = seconds; }
   void set_wired_paddle(bool on) override { wired_ = on; }
+  void reset_paddle_breaker() override {}
   void set_flush_s(int seconds) override { flush_s_ = seconds; }
   void set_flush_delay_s(int seconds) override { flush_delay_s_ = seconds; }
   void dismiss_review() override {

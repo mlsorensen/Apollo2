@@ -885,6 +885,17 @@ GT911 all up; NimBLE host inits. Paddle/audio/ADC since confirmed, 2026-09-11):
    on a bare switch wire (P4-5 GPIO51 2026-07 on that single-module cable;
    the owner's X-8 GPIO5 2026-11-02 on a rev 0.6 Link) — phantom flips when
    warm, then deaf; cause unproven, pad-off-the-wire is the fix either way.
+   **PADDLE BREAKER (core/brew_controller, 2026-11-03):** every drive goes
+   through `set_drive()`, the one choke point. Trips on either signature in a
+   60 s window: 10 REJECTED pulses (raw transitions the 75 ms glitch filter
+   threw away) or 4 SHORT accepted pulses (ON->OFF under 500 ms). NEVER a rate
+   rule on accepted edges — a manual backflush is 10+ ON edges in 2 min.
+   Tripped: cancel_shot() (ends cleaning/flush/shot, opens the line), every
+   drive refused, can_clean false, IPaddle::own(false) drops the Link's CTRL
+   (copper), `paddle_trip_seq` ticks -> the UI's modal with Reset
+   (reset_paddle_breaker(); re-trips at once if the flicker goes on). Nothing
+   persists; a reboot clears it. `make test-paddle` replays the X-8's chatter,
+   a backflush, quick flicks, trips mid-cleaning and a reset — keep it green.
    **Apollo Link (v1.0, 2026-10-01; rev 0.7 drawn 2026-11-02):** the bridge
    board (hardware/paddle-bridge; rev 0.7 = rev 0.6 + U4 PC817 + D2 1N4148W
    + R6 560R from 5V so SENSE is opto-isolated on the board, connectors

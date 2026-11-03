@@ -159,6 +159,13 @@ struct BrewSnapshot {
   bool  scale_known;      // a scale is paired (saved), connected or not. With
                           // none, the effective mode is kManual whatever is
                           // stored: nothing could detect or stop a shot
+  // --- Paddle breaker ----------------------------------------------------
+  bool  paddle_tripped;   // the sense input flickered on its own (see
+                          // BrewController's breaker): the drive line is held
+                          // open and every drive is refused until
+                          // reset_paddle_breaker(); on an Apollo Link the
+                          // paddle has been handed back to the machine
+  uint32_t paddle_trip_seq;  // ticks per trip (the UI opens the modal on a change)
 };
 
 // True when the ESP-side shot timer is the authoritative shot-time source:
@@ -242,6 +249,11 @@ class IBrewController {
 
   // Stop a running backflush and open the line. Safe to call when idle.
   virtual void cancel_backflush() = 0;
+
+  // Clear a tripped paddle breaker (the modal's Reset): the drive line is
+  // usable again and an Apollo Link's paddle is taken back. Trips again at
+  // once if the sense input is still flickering. No-op when not tripped.
+  virtual void reset_paddle_breaker() = 0;
 };
 
 }  // namespace core

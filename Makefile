@@ -212,6 +212,15 @@ test-radio:
 	g++ -std=c++20 -Wall -Wextra -Iinclude tools/radio_arbiter_test.cpp src/core/radio_arbiter.cpp \
 	    -o .pio/build/radio_arbiter_test && ./.pio/build/radio_arbiter_test
 
+# The brew controller's paddle breaker: replays the dying-pad chatter the
+# X-8 logged on 2026-11-02 against a manual backflush, quick flicks, a trip
+# mid-cleaning and a reset. Plain g++ over the core sources, like the others.
+test-paddle:
+	@mkdir -p .pio/build
+	g++ -std=c++20 -Wall -Wextra -Iinclude tools/paddle_breaker_test.cpp \
+	    src/core/brew_controller.cpp src/core/shot_detector.cpp \
+	    -o .pio/build/paddle_breaker_test && ./.pio/build/paddle_breaker_test
+
 # Regenerate the manual's annotated screenshots from the sim renders. The
 # manifest (docs/img/manual/manifest.json) holds the callout coordinates; see
 # tools/annotate_docs.py for the update rules when the UI changes.

@@ -17,6 +17,12 @@ class IPaddle {
   virtual bool available() const = 0;  // both lines usable on this board
   virtual bool sensed() = 0;           // physical paddle is currently ON
   virtual void drive(bool closed) = 0; // close/open the machine's paddle line
+  // Hand the paddle to Apollo (true) or back to the machine (false) where the
+  // wiring has a transfer switch — the Apollo Link's CTRL line. Boards without
+  // one (the 4.3C's terminals, the plain opto cable) ignore it. The brew
+  // controller's paddle breaker releases it so a unit that has stopped
+  // trusting its own sense input leaves the machine usable as stock.
+  virtual void own(bool /*owned*/) {}
 };
 
 }  // namespace core
