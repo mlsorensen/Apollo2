@@ -58,7 +58,12 @@ struct FakeScale : public IScale {
   float weight = 0.0f;
   uint32_t seq = 0;
   ScaleSnapshot snapshot() const override {
-    return ScaleSnapshot{"fake", connected, weight, 0, false, 0, seq};
+    ScaleSnapshot snap{};
+    snap.name = "fake";
+    snap.connected = connected;
+    snap.weight_g = weight;
+    snap.seq = seq;
+    return snap;
   }
   ScaleFeatures features() const override { return ScaleFeatures{}; }
   void tare() override { weight = 0.0f; }
@@ -66,6 +71,10 @@ struct FakeScale : public IScale {
   ScaleSettingDesc device_setting(int) const override { return ScaleSettingDesc{}; }
   int device_setting_value(int) const override { return -1; }
   void set_device_setting(int, int) override {}
+  ScaleBatteryInfo battery_info() const override { return ScaleBatteryInfo{}; }
+  void set_battery_drain_rate(int) override {}
+  void set_battery_calibration(bool) override {}
+  int take_battery_calibration_result() override { return -1; }
 };
 
 // One rig per scenario: controller in Manual mode with the wired relay on
