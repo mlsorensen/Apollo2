@@ -1141,7 +1141,9 @@ in the firmware). It does not work with the S3‑4.3C.
   sense pin as well as the drive pin, and Apollo Link rev 0.7 does the same on
   the board, so the pin only ever sees the module. If you built the earlier
   single‑module cable, the guide shows the change, which is confined to the
-  Apollo end of the cable.
+  Apollo end of the cable — or, if you keep the single module, the resistor
+  and capacitor the guide now specifies for the sense pin, which a scope shows
+  taking the pin cleanly to zero where the bare wire rang it below −1 V.
 - **The paddle breaker.** A failing sense pin announces itself: it starts
   registering paddle flips that nobody made, dozens a minute, each one a shot
   start. Apollo watches for that signature — raw flickers too short to be a

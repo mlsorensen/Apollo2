@@ -155,10 +155,16 @@ started a shot had a scale been connected), then stopped registering
 anything. The 1 kΩ series resistor the guide used to suggest limits current;
 it does not take the pin off the wire. The second module does, for the price
 of the first one, and it is how the 4.3C has always been built (its isolators
-are on the board). The cause of the failures is not proven — a transient
-coupled into the sense wire is the working theory — but the fix does not
-depend on knowing it: whatever arrives on that wire now ends at an LED and a
-resistor instead of a GPIO.
+are on the board). The cause of the failures is not proven, but an
+oscilloscope on the sense pin (November 2026) showed what a bare switch does
+to it: every bounce of the contact as the paddle closes rings the pin to about
+−1 V, well past the −0.3 V where the pin's protection diode starts
+conducting — several times per flip, thousands of flips a year. The 1 kΩ
+resistor the guide used to suggest halves that; it does not remove it. With
+the sense module in place the far end of the wire is a transistor, which
+turns on over tens of microseconds instead of slamming, and the same scope
+shows the pin going cleanly to zero with nothing beneath it. The machine's
+own pump and solenoid, incidentally, put nothing on the wire at all.
 
 **Already built the single‑module cable?** Nothing changes inside the machine
 or in the cable. At the Apollo end: swap the 3‑slot block for a 4‑slot one
@@ -168,6 +174,19 @@ module's **OUT** to **GPIO 51** and its output **GND** to **GND**; leave
 **VCC** open. If you fitted the 1 kΩ resistor, take it out — the module's own
 input resistor does that job now. This needs firmware that drives GPIO 50
 (v1.3 onward); on older firmware the pin floats and the sense LED never lights.
+
+**Keeping the single‑module cable instead?** Then protect the pin with two
+parts in the terminal block, in this order: the paddle‑sense wire into a
+**1 kΩ resistor**, the resistor into **GPIO 51**, and a **100 nF ceramic
+capacitor** from **GPIO 51 to GND** (on the pin's side of the resistor). The
+scope shows that pair taking the pin cleanly to zero. Do **not** fit the
+capacitor alone: a capacitor with no resistor in front of it rings the pin
+to −1.7 V on every closure, worse than the bare wire, because the switch
+shorts a charged capacitor through two metres of cable.
+
+**Plug the block in with the board powered off.** Whichever pin of the block
+touches first carries the whole cable's charge into that pin until GND mates;
+on a powered board that is a GPIO taking the hit.
 
 A finished P4 cable with the drive module spliced in near the machine end
 (shown before wrapping the module in heat‑shrink — do wrap it, so nothing can
