@@ -99,16 +99,6 @@ void Paddle::begin(int sense_pin_override, int drive_pin_override) {
     core::logf("Paddle: Link sense GPIO%d raw=%s at init\n", link_sense_pin_,
                digitalRead(link_sense_pin_) == LOW ? "LOW (closed)" : "HIGH (open)");
   }
-  // Two-module opto cable: the sense module's LED is fed from this pin (see
-  // board_config.h). HIGH from here on, like CTRL — it is the cable's "Apollo
-  // is running" line, and the breaker drops both together in own().
-  sense_supply_pin_ = use_corner() ? board::kPaddleSenseSupplyPin : -1;
-  if (sense_supply_pin_ >= 0) {
-    gpio_set_level(static_cast<gpio_num_t>(sense_supply_pin_), 1);
-    pinMode(sense_supply_pin_, OUTPUT);
-    digitalWrite(sense_supply_pin_, HIGH);
-    core::logf("Paddle: sense-module supply GPIO%d HIGH\n", sense_supply_pin_);
-  }
   ctrl_pin_ = use_link() ? board::kLinkCtrlPin : -1;
   if (ctrl_pin_ >= 0) {
     pinMode(ctrl_pin_, OUTPUT);
@@ -135,7 +125,7 @@ void Paddle::set_wiring(core::PaddleWiring w) {
   if (w == wiring_) return;
   // Hand back the set we are leaving: drive low, CTRL/supply low, then an
   // input so it is an open pin from here on (a Link on it drops to copper).
-  for (int pin : {drive_pin_, link_drive_pin_, ctrl_pin_, sense_supply_pin_}) {
+  for (int pin : {drive_pin_, link_drive_pin_, ctrl_pin_}) {
     if (pin < 0) continue;
     digitalWrite(pin, LOW);
     pinMode(pin, INPUT);
@@ -224,17 +214,14 @@ void Paddle::drive(bool closed) {
 }
 
 void Paddle::own(bool owned) {
-  // Apollo Link CTRL and the opto cable's sense-module supply, together. LOW
-  // = the Link's relays wire the paddle to the Micra in copper (exactly as
-  // when Apollo is unplugged) and the opto cable's sense LED goes dark. The
-  // brew controller's paddle breaker drops them so a unit that no longer
-  // trusts its sense input stops listening to it; Reset raises them again.
-  if (sense_supply_pin_ >= 0) digitalWrite(sense_supply_pin_, owned ? HIGH : LOW);
-  if (ctrl_pin_ >= 0) digitalWrite(ctrl_pin_, owned ? HIGH : LOW);
-  if (ctrl_pin_ >= 0 || sense_supply_pin_ >= 0)
-    core::logf("Paddle: %s (CTRL GPIO%d, sense supply GPIO%d %s)\n",
-               owned ? "Apollo owns the paddle" : "paddle released",
-               ctrl_pin_, sense_supply_pin_, owned ? "HIGH" : "LOW");
+  // Apollo Link CTRL. LOW = the Link's relays wire the paddle to the Micra in
+  // copper, exactly as when Apollo is unplugged. The brew controller's paddle
+  // breaker drops it so a unit that no longer trusts its sense input leaves
+  // the machine usable; Reset raises it again. No-op without a Link set.
+  if (ctrl_pin_ < 0) return;
+  digitalWrite(ctrl_pin_, owned ? HIGH : LOW);
+  core::logf("Paddle: Link CTRL %s (%s)\n", owned ? "HIGH" : "LOW",
+             owned ? "Apollo owns the paddle" : "paddle handed back to the Micra");
 }
 
 #endif  // BOARD_PADDLE_VIA_IOEXT

@@ -92,7 +92,6 @@ constexpr bool kPaddleActiveHigh = true;   // drive level that "closes" the shot
 constexpr int  kLinkDrivePin = -1;  // no Apollo Link pin set on this board
 constexpr int  kLinkSensePin = -1;
 constexpr int  kLinkCtrlPin  = -1;
-constexpr int  kPaddleSenseSupplyPin = -1;  // no native sense-module supply
 
 #elif defined(BOARD_WAVESHARE_S3_LCD_7B)
 
@@ -180,7 +179,6 @@ constexpr bool kPaddleActiveHigh = true;
 constexpr int  kLinkDrivePin = -1;  // no Apollo Link pin set on this board
 constexpr int  kLinkSensePin = -1;
 constexpr int  kLinkCtrlPin  = -1;
-constexpr int  kPaddleSenseSupplyPin = -1;  // no native sense-module supply
 
 #elif defined(BOARD_WAVESHARE_S3_LCD_43B)
 
@@ -264,7 +262,6 @@ constexpr bool kPaddleActiveHigh = true;
 constexpr int  kLinkDrivePin = -1;  // no Apollo Link pin set on this board
 constexpr int  kLinkSensePin = -1;
 constexpr int  kLinkCtrlPin  = -1;
-constexpr int  kPaddleSenseSupplyPin = -1;  // no native sense-module supply
 
 #elif defined(BOARD_WAVESHARE_S3_LCD_43C)
 
@@ -381,7 +378,6 @@ constexpr bool kPaddleActiveHigh = true;
 constexpr int  kLinkDrivePin = -1;  // no Apollo Link pin set on this board
 constexpr int  kLinkSensePin = -1;
 constexpr int  kLinkCtrlPin  = -1;
-constexpr int  kPaddleSenseSupplyPin = -1;  // no native sense-module supply
 
 // --- Audio: ES8311 codec (DAC -> onboard speaker header) + ES7210 mic ADC
 //     (unused). I2S pins per the vendor 11_speaker_microphone demo — note the
@@ -543,14 +539,6 @@ constexpr bool kPaddleActiveHigh = true;
 constexpr int  kLinkDrivePin = 3;
 constexpr int  kLinkSensePin = 5;
 constexpr int  kLinkCtrlPin  = 4;
-// Sense-module supply for the two-module opto cable (WIRING.md, 2026-11-03):
-// held HIGH while Apollo runs, it lights the sense module's LED through the
-// module's own resistor (~2 mA) so the paddle switch never touches a GPIO.
-// The corner column reads GND / 52 / 51 / 50, so a 4-slot terminal block
-// takes the whole cable. The brew controller's paddle breaker drops it with
-// the Link's CTRL (IPaddle::own). Low = an unpowered or crashed Apollo, and
-// the paddle is dead, exactly as this cable always was.
-constexpr int  kPaddleSenseSupplyPin = 50;
 
 // --- RTC: NO discrete RTC chip (schematic-verified). The "RTC BAT" header
 //     feeds the ESP32-P4's own VBAT pin (102) through a B5819WS diode, backing
@@ -702,14 +690,6 @@ constexpr bool kPaddleActiveHigh = true;
 constexpr int  kLinkDrivePin = 3;
 constexpr int  kLinkSensePin = 5;
 constexpr int  kLinkCtrlPin  = 4;
-// Sense-module supply for the two-module opto cable (WIRING.md, 2026-11-03):
-// held HIGH while Apollo runs, it lights the sense module's LED through the
-// module's own resistor (~2 mA) so the paddle switch never touches a GPIO.
-// The corner column reads GND / 52 / 51 / 50, so a 4-slot terminal block
-// takes the whole cable. The brew controller's paddle breaker drops it with
-// the Link's CTRL (IPaddle::own). Low = an unpowered or crashed Apollo, and
-// the paddle is dead, exactly as this cable always was.
-constexpr int  kPaddleSenseSupplyPin = 50;
 
 // --- RTC: same as the 4.3 — no discrete RTC chip; the RTC battery header
 //     backs the P4's VBAT pin / internal RTC (see the 4.3 block's note). ---
@@ -909,14 +889,6 @@ constexpr bool kPaddleActiveHigh = true;
 constexpr int  kLinkDrivePin = 3;
 constexpr int  kLinkSensePin = 5;
 constexpr int  kLinkCtrlPin  = 4;
-// Sense-module supply for the two-module opto cable (WIRING.md, 2026-11-03):
-// held HIGH while Apollo runs, it lights the sense module's LED through the
-// module's own resistor (~2 mA) so the paddle switch never touches a GPIO.
-// The corner column reads GND / 52 / 51 / 50, so a 4-slot terminal block
-// takes the whole cable. The brew controller's paddle breaker drops it with
-// the Link's CTRL (IPaddle::own). Low = an unpowered or crashed Apollo, and
-// the paddle is dead, exactly as this cable always was.
-constexpr int  kPaddleSenseSupplyPin = 50;
 
 // --- RTC: no discrete RTC chip (same as the other P4 boards). ---
 

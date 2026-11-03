@@ -1170,7 +1170,6 @@ in the firmware). It does not work with the S3‑4.3C.
   upgrades, so stock releases keep working on a remapped unit — and takes
   effect on the next boot, which logs it: `Paddle: sense GPIO21 (NVS
   override)`. The board's default pins stay unchanged for everyone else.
-  (GPIO 50 is taken on the P4 boards: it powers the sense module.) A dead pin
-  on the set you are *not* using needs no remap at all: set **Settings >
-  Micra > Controls > Paddle wiring** to your cable and the firmware stops
-  reading that set.
+  A dead pin on the set you are *not* using needs no remap at all: set
+  **Settings > Micra > Controls > Paddle wiring** to your cable and the
+  firmware stops reading that set.
