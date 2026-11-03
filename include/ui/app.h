@@ -130,6 +130,7 @@ class App {
   void set_ntp_enabled(bool on);    // Device "Auto time (NTP)" switch
   void dismiss_modal();        // token-modal "Cancel"
   void select_settings_section(int section);  // Settings segmented selector
+  void scroll_settings_section(int section, int y);  // sim renders of long pages
   void on_settings_page_shown();  // lv_menu navigated; re-seed time on the Device page
   void settings_tab_pressed();    // tab-bar Settings button: remember if it was already active
   void settings_tab_clicked();    // ...and if so, jump the drill-in back to its root
@@ -273,6 +274,7 @@ class App {
     if (provisioner_ != nullptr) provisioner_->set_auto_connect(on);
   }
   void set_wired_paddle(bool on);    // Micra settings: paddle harness vs shot detector
+  void cycle_paddle_wiring();        // Micra settings "Paddle wiring": Auto / Apollo Link / Opto cable
   // Transient auto-dismissing message over the current tab (the tabview stays
   // visible — unlike open_modal). Used for the "shot refused, no scale"
   // feedback; works on every layout incl. compact (which has no shot button

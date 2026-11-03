@@ -23,16 +23,18 @@ class Paddle : public core::IPaddle {
   // unit (the NVS "padsense"/"paddrive" repair knobs — a board with a damaged
   // pad moves its wire without forking the board config). Ignored on IOEXT
   // boards.
-  // link_sense_override: -2 = the board's kLinkSensePin, -1 = that input
-  // DISABLED, >= 0 = moved to that pin (NVS "lnksense"; the X-8 whose GPIO5
-  // died reads it stuck closed, which would OR the paddle permanently on).
-  void begin(int sense_pin_override = -1, int drive_pin_override = -1,
-             int link_sense_override = -2);
+  void begin(int sense_pin_override = -1, int drive_pin_override = -1);
 
   bool available() const override;
   bool sensed() override;
   void drive(bool closed) override;
   void own(bool owned) override;  // Link CTRL: HIGH = Apollo has the paddle
+  // Paddle wiring (P4 boards with both native sets): which set is polled,
+  // driven and powered. Set BEFORE begin() at boot (main.cpp reads NVS);
+  // a later change re-runs begin() with the remembered overrides.
+  bool wiring_selectable() const override;
+  void set_wiring(core::PaddleWiring w) override;
+  core::PaddleWiring wiring() const override { return wiring_; }
 
  private:
   int sense_pin_ = -1;  // resolved at begin() on native-GPIO boards
@@ -41,6 +43,11 @@ class Paddle : public core::IPaddle {
   int link_drive_pin_ = -1;
   int ctrl_pin_ = -1;        // Link CTRL: HIGH = paddle handed to Apollo
   int sense_supply_pin_ = -1;  // opto-cable sense LED supply (GPIO50 on the P4s)
+  core::PaddleWiring wiring_ = core::PaddleWiring::kAuto;
+  int sense_override_ = -1;  // begin() arguments, kept for set_wiring's re-run
+  int drive_override_ = -1;
+  bool use_corner() const { return wiring_ != core::PaddleWiring::kLink; }
+  bool use_link() const { return wiring_ != core::PaddleWiring::kCable; }
 };
 
 Paddle& paddle();  // shared singleton (device main + display share none)

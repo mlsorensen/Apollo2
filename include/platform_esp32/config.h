@@ -112,12 +112,10 @@ class Config {
   void set_paddle_sense_pin(int pin);  // < 0 clears the override
   int paddle_drive_pin() const;
   void set_paddle_drive_pin(int pin);  // < 0 clears the override
-  // Apollo Link sense pin override (per unit, NVS "lnksense"): kLinkSenseDefault
-  // when absent (board pin), -1 = that input DISABLED (a dead GPIO5 that reads
-  // closed would otherwise OR the paddle permanently on), >= 0 = moved to that pin.
-  static constexpr int kLinkSenseDefault = -2;
-  int link_sense_pin() const;
-  void set_link_sense_pin(int pin);  // kLinkSenseDefault clears the override
+  // Paddle wiring (per unit, NVS "padwire"; core::PaddleWiring as an int:
+  // 0 auto = both native sets, 1 Apollo Link, 2 opto cable). Garbage reads 0.
+  int paddle_wiring() const;
+  void set_paddle_wiring(int wiring);
   int flush_delay_s() const;           // cup-off -> flush pause seconds (default 3)
   void set_flush_delay_s(int seconds);
   int flow_smooth() const;             // shot-graph smoothing level 0..3 (default 1)

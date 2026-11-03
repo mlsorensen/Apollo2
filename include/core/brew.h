@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include "core/paddle.h"
+
 // Core port for brew-by-weight: paddle interception + automatic shot stop.
 //
 // IMPORTANT: stays free of LVGL/Arduino/BLE/SDL like the other core ports.
@@ -167,6 +169,9 @@ struct BrewSnapshot {
                           // reset_paddle_breaker(); on an Apollo Link the
                           // paddle has been handed back to the machine
   uint32_t paddle_trip_seq;  // ticks per trip (the UI opens the modal on a change)
+  // --- Paddle wiring (P4 boards with both native sets) -------------------
+  bool  paddle_wiring_choice;   // the board offers Auto / Apollo Link / Opto cable
+  PaddleWiring paddle_wiring;   // the unit's setting (kAuto where there is no choice)
 };
 
 // True when the ESP-side shot timer is the authoritative shot-time source:
@@ -255,6 +260,10 @@ class IBrewController {
   // usable again and an Apollo Link's paddle is taken back. Trips again at
   // once if the sense input is still flickering. No-op when not tripped.
   virtual void reset_paddle_breaker() = 0;
+
+  // Which paddle wiring this unit carries (Settings > Micra > Controls >
+  // Paddle wiring). Cancels any in-flight shot: the pins change. Persisted.
+  virtual void set_paddle_wiring(PaddleWiring w) = 0;
 };
 
 }  // namespace core

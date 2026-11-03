@@ -913,7 +913,7 @@ namespace ui {
 
 void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
                         bool with_brightness, bool with_sound,
-                        bool with_wired_paddle, bool with_backup,
+                        bool with_wired_paddle, bool with_paddle_wiring, bool with_backup,
                         SettingsWidgets& out) {
   const bool compact = is_compact(screen);
   const bool xl = is_xl(screen);
@@ -1054,6 +1054,21 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
       lv_obj_set_size(out.wired_paddle_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
     } else {
       out.wired_paddle_switch = nullptr;
+    }
+    // Which paddle wiring the unit carries (P4 boards, which have two native
+    // pin sets): Auto polls and drives both, as every unit shipped; Apollo
+    // Link or Opto cable leaves the other set an open input, so a dead pin on
+    // it can't hold the paddle closed. Tap cycles the three.
+    if (with_wired_paddle && with_paddle_wiring) {
+      lv_obj_t* rp = make_setting_row(out.micra_controls_page, "Paddle wiring", font);
+      out.paddle_wiring_btn = ui::make_button(rp);
+      lv_obj_set_height(out.paddle_wiring_btn, btn_size);
+      lv_obj_set_style_pad_hor(out.paddle_wiring_btn, ui::dp(14), 0);
+      lv_obj_set_style_bg_color(out.paddle_wiring_btn, lv_color_hex(ui::theme::card()), 0);
+      out.paddle_wiring_value = lv_label_create(out.paddle_wiring_btn);
+      lv_obj_set_style_text_color(out.paddle_wiring_value, lv_color_hex(ui::theme::text()), 0);
+      lv_obj_set_style_text_font(out.paddle_wiring_value, font, 0);
+      lv_obj_center(out.paddle_wiring_value);
     }
     // Chime when the machine reaches temperature (audio boards only): the
     // melody row picks WHICH tune (Off / Blue / Pink / ...), the volume row

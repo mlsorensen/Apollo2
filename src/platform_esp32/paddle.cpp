@@ -18,8 +18,7 @@ namespace platform {
 // output = opto LED on = contact closed; low input = paddle-switch current
 // flowing). The expander is begun by the display before the paddle is used.
 
-void Paddle::begin(int /*sense_pin_override*/, int /*drive_pin_override*/,
-                   int /*link_sense_override*/) {
+void Paddle::begin(int /*sense_pin_override*/, int /*drive_pin_override*/) {
   // (No native pins to remap on this board — overrides are ignored.)
   // Re-assert the direction mask here too: the expander can ACK the display's
   // early begin() yet drop that first mode write (seen on hardware — inputs
@@ -48,16 +47,22 @@ void Paddle::drive(bool closed) {
 }
 
 void Paddle::own(bool /*owned*/) {}  // no transfer switch on the 4.3C's terminals
+bool Paddle::wiring_selectable() const { return false; }  // one wiring: the terminals
+void Paddle::set_wiring(core::PaddleWiring /*w*/) {}
 
 #else
 
 // Native-GPIO boards: drive an external relay, sense the switch to GND with the
 // internal pull-up. Pins < 0 = not wired on this board.
 
-void Paddle::begin(int sense_pin_override, int drive_pin_override,
-                   int link_sense_override) {
+void Paddle::begin(int sense_pin_override, int drive_pin_override) {
+  sense_override_ = sense_pin_override;
+  drive_override_ = drive_pin_override;
+  // The set the wiring setting excludes is left exactly as reset left it: an
+  // open input. kAuto (the shipped default) brings up both, as it always has.
   drive_pin_ =
       drive_pin_override >= 0 ? drive_pin_override : board::kPaddleDrivePin;
+  if (!use_corner()) drive_pin_ = -1;
   if (drive_pin_ >= 0) {
     pinMode(drive_pin_, OUTPUT);
     digitalWrite(drive_pin_, board::kPaddleActiveHigh ? LOW : HIGH);
@@ -66,6 +71,7 @@ void Paddle::begin(int sense_pin_override, int drive_pin_override,
   }
   sense_pin_ =
       sense_pin_override >= 0 ? sense_pin_override : board::kPaddleSensePin;
+  if (!use_corner()) sense_pin_ = -1;
   if (sense_pin_ >= 0) {
     pinMode(sense_pin_, INPUT_PULLUP);
     core::logf("Paddle: sense GPIO%d%s raw=%s at init\n", sense_pin_,
@@ -80,34 +86,30 @@ void Paddle::begin(int sense_pin_override, int drive_pin_override,
   // stays: Apollo owns the paddle whenever it is booted; the pin is an
   // input (LEDs dark, paddle in copper) at reset, in install mode, and the
   // moment the unit loses power or is unplugged.
-  link_drive_pin_ = board::kLinkDrivePin;
+  link_drive_pin_ = use_link() ? board::kLinkDrivePin : -1;
   if (link_drive_pin_ >= 0) {
     // Level first: no high blip on OUTPUT. IDF call, not digitalWrite: since
     // core 3.3.12 digitalWrite refuses a pin pinMode hasn't claimed yet.
     gpio_set_level(static_cast<gpio_num_t>(link_drive_pin_), 0);
     pinMode(link_drive_pin_, OUTPUT);
   }
-  link_sense_pin_ = link_sense_override >= -1 ? link_sense_override : board::kLinkSensePin;
+  link_sense_pin_ = use_link() ? board::kLinkSensePin : -1;
   if (link_sense_pin_ >= 0) {
     pinMode(link_sense_pin_, INPUT_PULLUP);
-    core::logf("Paddle: Link sense GPIO%d%s raw=%s at init\n", link_sense_pin_,
-               link_sense_override >= 0 ? " (NVS override)" : "",
+    core::logf("Paddle: Link sense GPIO%d raw=%s at init\n", link_sense_pin_,
                digitalRead(link_sense_pin_) == LOW ? "LOW (closed)" : "HIGH (open)");
-  } else if (link_sense_override == -1 && board::kLinkSensePin >= 0) {
-    core::logf("Paddle: Link sense GPIO%d DISABLED on this unit (NVS lnksense)\n",
-               board::kLinkSensePin);
   }
   // Two-module opto cable: the sense module's LED is fed from this pin (see
   // board_config.h). HIGH from here on, like CTRL — it is the cable's "Apollo
   // is running" line, and the breaker drops both together in own().
-  sense_supply_pin_ = board::kPaddleSenseSupplyPin;
+  sense_supply_pin_ = use_corner() ? board::kPaddleSenseSupplyPin : -1;
   if (sense_supply_pin_ >= 0) {
     gpio_set_level(static_cast<gpio_num_t>(sense_supply_pin_), 1);
     pinMode(sense_supply_pin_, OUTPUT);
     digitalWrite(sense_supply_pin_, HIGH);
     core::logf("Paddle: sense-module supply GPIO%d HIGH\n", sense_supply_pin_);
   }
-  ctrl_pin_ = board::kLinkCtrlPin;
+  ctrl_pin_ = use_link() ? board::kLinkCtrlPin : -1;
   if (ctrl_pin_ >= 0) {
     pinMode(ctrl_pin_, OUTPUT);
     // Four SSR LEDs in parallel (~26 mA): the strongest pad driver.
@@ -121,6 +123,28 @@ void Paddle::begin(int sense_pin_override, int drive_pin_override,
 bool Paddle::available() const {
   return (drive_pin_ >= 0 && sense_pin_ >= 0) ||
          (link_drive_pin_ >= 0 && link_sense_pin_ >= 0);
+}
+
+bool Paddle::wiring_selectable() const {
+  // Both native sets exist on the board (the P4s) — the choice is real.
+  return board::kPaddleSensePin >= 0 && board::kLinkSensePin >= 0;
+}
+
+void Paddle::set_wiring(core::PaddleWiring w) {
+  if (!wiring_selectable()) return;
+  if (w == wiring_) return;
+  // Hand back the set we are leaving: drive low, CTRL/supply low, then an
+  // input so it is an open pin from here on (a Link on it drops to copper).
+  for (int pin : {drive_pin_, link_drive_pin_, ctrl_pin_, sense_supply_pin_}) {
+    if (pin < 0) continue;
+    digitalWrite(pin, LOW);
+    pinMode(pin, INPUT);
+  }
+  wiring_ = w;
+  core::logf("Paddle: wiring -> %s\n",
+             w == core::PaddleWiring::kLink ? "Apollo Link"
+             : w == core::PaddleWiring::kCable ? "opto cable" : "auto (both sets)");
+  begin(sense_override_, drive_override_);
 }
 
 namespace {

@@ -17,6 +17,10 @@ the headings as plain lines); leave out a list that would be empty.
 - **Live readings in the graph legend.** The legend shows the espresso scale's current flow rate (or weight) and the bench scale's grams, not just the units.
 - **Detailed log switch.** Settings > Apollo > Display > Detailed log keeps the minute-by-minute housekeeping in the diagnostic log (and gives it a two-day buffer); off, the log holds events only and lasts weeks. The log now records why a Bluetooth link ended and the parameters each link uses.
 - **Auto-standby counts inactivity.** A flush or a backflush now restarts the auto-standby count like a shot does, and neither auto-standby nor a scheduled Off fires in the middle of one. The row is now "Auto-standby when idle".
+- **Paddle wiring setting.** Settings > Micra > Controls > Paddle wiring tells a
+  P4 board which paddle pin set your cable uses — Apollo Link, or the opto cable
+  on the corner pins — so the unused set is ignored. Auto, the default, watches
+  both as before. The opto cable's new second module is powered from GPIO 50.
 - **Paddle breaker.** If the paddle sense input starts flickering on its own —
   the signature of a failing GPIO pin, which once ran a pump for hours — Apollo
   now switches the paddle drive off, hands the paddle back to the machine on an

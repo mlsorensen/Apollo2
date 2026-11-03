@@ -84,7 +84,8 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             core::ISettingsBackup* backup = nullptr, int backup_modal = 0,
             int schedule_day = -1, core::ISchedule* schedule = nullptr,
             bool welcome_modal = false, int standby_timer_s = -1,
-            core::IScale* bench = nullptr, int bench_pose = 0, int dose_pose = 0) {
+            core::IScale* bench = nullptr, int bench_pose = 0, int dose_pose = 0,
+            int settings_scroll_y = 0) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
@@ -103,7 +104,10 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   if (bench_pose == 1) app.show_bench_side(true);
   if (bench_pose == 2) app.open_save_scale_modal(0);
   if (dose_pose != 0) app.pose_dose(dose_pose);  // Record block / dose chip states
-  if (settings_section >= 0) app.select_settings_section(settings_section);  if (schedule_day >= 0) app.schedule_pick_day(schedule_day);  // per-day chip pose
+  if (settings_section >= 0) app.select_settings_section(settings_section);
+  if (settings_section >= 0 && settings_scroll_y > 0)
+    app.scroll_settings_section(settings_section, settings_scroll_y);  // long pages: 2nd shot
+  if (schedule_day >= 0) app.schedule_pick_day(schedule_day);  // per-day chip pose
   if (welcome_modal) app.open_welcome_modal();
   if (stats_section >= 0) app.select_stats_section(stats_section);
   if (history_ym != 0) app.set_history_filter(history_ym);
@@ -183,13 +187,13 @@ int main() {
                bool toast = false, bool join_modal = false, bool screensaver = false,
                bool update_modal = false, int backup_modal = 0, int schedule_day = -1,
                bool welcome_modal = false, int standby_timer_s = -1, int bench_pose = 0,
-               int dose_pose = 0) {
+               int dose_pose = 0, int settings_scroll_y = 0) {
     return render(machine, provisioner, battery, disp, clock, history, scale,
                   scale_provisioner, brew, network, shots, s, path, tab, sec, modal, theme,
                   stats, clean_lock, shot_id, history_ym, backflush, log_modal,
                   unwired_midshot_ms, toast, join_modal, screensaver, update_modal,
                   &updates, &backup, backup_modal, schedule_day, &schedule, welcome_modal,
-                  standby_timer_s, &bench, bench_pose, dose_pose);
+                  standby_timer_s, &bench, bench_pose, dose_pose, settings_scroll_y);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
@@ -325,6 +329,11 @@ int main() {
   ok &= r({320, 240}, "renders/micra_bt_320x240.png", 1, ui::kSectionMicraBt);
   ok &= r({320, 240}, "renders/micra_controls_320x240.png", 1, ui::kSectionMicraControls);
   ok &= r({800, 480}, "renders/micra_controls_800x480.png", 1, ui::kSectionMicraControls);
+  // The Controls page outgrew one 480-px shot (Paddle wiring, 2026-11-03): a
+  // second one scrolled to the Brew / Steam Boiler rows for the manual.
+  ok &= r({800, 480}, "renders/micra_controls_2_800x480.png", 1, ui::kSectionMicraControls,
+          false, 0, -1, false, -1, 0, false, false, 0, false, false, false, false, 0, -1,
+          false, -1, 0, 0, 300);
   ok &= r({320, 240}, "renders/micra_cleaning_320x240.png", 1, ui::kSectionMicraCleaning);
   ok &= r({800, 480}, "renders/micra_cleaning_800x480.png", 1, ui::kSectionMicraCleaning);
   // ...and with the wired paddle off: the page greys with the reason on top.

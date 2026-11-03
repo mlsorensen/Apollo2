@@ -681,6 +681,8 @@ BrewSnapshot BrewController::snapshot() const {
       .scale_known = scale_known(),
       .paddle_tripped = tripped_,
       .paddle_trip_seq = trip_seq_,
+      .paddle_wiring_choice = paddle_.wiring_selectable(),
+      .paddle_wiring = paddle_.wiring(),
   };
 }
 
@@ -790,6 +792,14 @@ void BrewController::reset_paddle_breaker() {
   last_edge_ms_ = 0;
   paddle_.own(true);
   logf("Brew: paddle breaker reset by the user\n");
+}
+
+void BrewController::set_paddle_wiring(PaddleWiring w) {
+  if (w == paddle_.wiring()) return;
+  cancel_shot();  // the pins behind the line are about to change
+  paddle_.set_wiring(w);
+  if (persist_wiring_) persist_wiring_(static_cast<int>(w));
+  logf("Brew: paddle wiring %d\n", static_cast<int>(w));
 }
 
 void BrewController::set_wired_paddle(bool on) {

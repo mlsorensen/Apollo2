@@ -8,17 +8,15 @@
 #   tools/padpin.sh sense 50     move this unit's paddle sense to GPIO50
 #   tools/padpin.sh drive 49     move this unit's paddle drive to GPIO49
 #   tools/padpin.sh sense -1     revert this unit to the board default
-#   tools/padpin.sh link off     disable this unit's Apollo Link sense input
-#   tools/padpin.sh link default restore the board's Link sense pin
 #
 # The port is auto-detected (same globs as flash.sh) or taken from $PORT/arg 3.
 set -euo pipefail
 
-WHICH="${1:?usage: padpin.sh <sense|drive|link> <gpio|-1|off|default> [port]}"
-PIN="${2:?usage: padpin.sh <sense|drive|link> <gpio|-1|off|default> [port]}"
+WHICH="${1:?usage: padpin.sh <sense|drive> <gpio|-1> [port]}"
+PIN="${2:?usage: padpin.sh <sense|drive> <gpio|-1> [port]}"
 case "$WHICH" in
-  sense|drive|link) ;;
-  *) echo "padpin: first argument must be 'sense', 'drive' or 'link'" >&2; exit 1 ;;
+  sense|drive) ;;
+  *) echo "padpin: first argument must be 'sense' or 'drive'" >&2; exit 1 ;;
 esac
 PORT="${3:-${PORT:-}}"
 if [ -z "$PORT" ]; then
@@ -45,10 +43,8 @@ if [ -z "$PY" ]; then
   exit 1
 fi
 
-CMD="pad$WHICH"
-[ "$WHICH" = link ] && CMD="linksense"
-echo "padpin: port=$PORT $CMD=$PIN" >&2
-"$PY" - "$PORT" "$CMD" "$PIN" <<'PY'
+echo "padpin: port=$PORT pad$WHICH=$PIN" >&2
+"$PY" - "$PORT" "pad$WHICH" "$PIN" <<'PY'
 import sys, time
 import serial  # provided by the interpreter chosen above
 

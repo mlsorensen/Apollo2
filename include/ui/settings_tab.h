@@ -219,6 +219,8 @@ struct SettingsWidgets {
   lv_obj_t* chime_mel_btn = nullptr;         // Micra > Controls: warm-up chime
   lv_obj_t* chime_mel_value = nullptr;       // melody cycle (Off / Blue / Pink
                                              // / ...); audio boards only
+  lv_obj_t* paddle_wiring_btn = nullptr;     // Micra > Controls: Auto / Apollo Link /
+  lv_obj_t* paddle_wiring_value = nullptr;   // Opto cable (P4 boards with both sets)
   lv_obj_t* wired_paddle_switch = nullptr;   // Micra: paddle harness in use (off =
                                              // detector-driven "unwired" shots);
                                              // only built on paddle-capable boards
@@ -336,7 +338,7 @@ struct SettingsWidgets {
 // with_backup: build Device > Backup AND Device > Storage (boards with a card slot).
 void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
                         bool with_brightness, bool with_sound,
-                        bool with_wired_paddle, bool with_backup,
+                        bool with_wired_paddle, bool with_paddle_wiring, bool with_backup,
                         SettingsWidgets& out);
 
 // Navigate to a section's page (kSectionMicra / kSectionScale / kSectionDevice).

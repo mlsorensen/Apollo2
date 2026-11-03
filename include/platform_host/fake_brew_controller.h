@@ -50,6 +50,8 @@ class FakeBrewController : public core::IBrewController {
         .scale_known = true,
         .paddle_tripped = false,
         .paddle_trip_seq = 0,
+        .paddle_wiring_choice = paddle_hw_,
+        .paddle_wiring = wiring_,
     };
   }
   void set_target_weight_g(float grams) override { target_g_ = grams; }
@@ -58,6 +60,7 @@ class FakeBrewController : public core::IBrewController {
   void set_detect_lead_in_s(int seconds) override { detect_lead_in_s_ = seconds; }
   void set_wired_paddle(bool on) override { wired_ = on; }
   void reset_paddle_breaker() override {}
+  void set_paddle_wiring(core::PaddleWiring w) override { wiring_ = w; }
   void set_flush_s(int seconds) override { flush_s_ = seconds; }
   void set_flush_delay_s(int seconds) override { flush_delay_s_ = seconds; }
   void dismiss_review() override {
@@ -98,6 +101,7 @@ class FakeBrewController : public core::IBrewController {
  private:
   bool paddle_hw_ = true;  // board has the paddle harness (wired-capable)
   bool wired_ = true;      // the "Wired paddle" user setting. NOTE: the DEVICE
+  core::PaddleWiring wiring_ = core::PaddleWiring::kAuto;
                            // default is now OFF (Config::wired_paddle); the sim
                            // keeps true so the standard renders show the wired
                            // look (main.cpp toggles it for the unwired render)

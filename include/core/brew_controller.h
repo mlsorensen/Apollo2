@@ -45,6 +45,7 @@ class BrewController : public IBrewController {
   void set_wired_paddle_persister(std::function<void(bool)> p) { persist_wired_ = std::move(p); }
   void set_flush_persister(std::function<void(int)> p) { persist_flush_ = std::move(p); }
   void set_flush_delay_persister(std::function<void(int)> p) { persist_flush_delay_ = std::move(p); }
+  void set_paddle_wiring_persister(std::function<void(int)> p) { persist_wiring_ = std::move(p); }
 
   // Seed from persisted config at boot (does not re-persist). `mode` is the
   // persisted ShotMode as an int (clamped here so a stale NVS value is safe).
@@ -80,6 +81,7 @@ class BrewController : public IBrewController {
   bool start_backflush() override;
   void cancel_backflush() override;
   void reset_paddle_breaker() override;
+  void set_paddle_wiring(PaddleWiring w) override;
 
  private:
   // end_ms = when brewing ACTUALLY ceased, which is not always now: the unwired
@@ -156,6 +158,7 @@ class BrewController : public IBrewController {
   std::function<void(bool)> persist_wired_;
   std::function<void(int)> persist_flush_;
   std::function<void(int)> persist_flush_delay_;
+  std::function<void(int)> persist_wiring_;
   std::function<void(float)> persist_hint_overshoot_;
 
   ShotPhase phase_ = ShotPhase::kIdle;

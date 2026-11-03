@@ -738,6 +738,18 @@ void on_xgrow_clicked(lv_event_t* e) {
 void on_flush_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_flush();
 }
+
+void on_paddle_wiring_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_paddle_wiring();
+}
+
+const char* paddle_wiring_label(core::PaddleWiring w) {
+  switch (w) {
+    case core::PaddleWiring::kLink: return "Apollo Link";
+    case core::PaddleWiring::kCable: return "Opto cable";
+    default: return "Auto";
+  }
+}
 void on_flush_delay_clicked(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->cycle_flush_delay();
 }
@@ -1342,7 +1354,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
 
   build_settings_tab(settings, screen, display_->supports_brightness(),
                      sound_->available(), brew_->snapshot().paddle_hw,
-                     backup_ != nullptr, settings_);
+                     brew_->snapshot().paddle_wiring_choice, backup_ != nullptr, settings_);
   if (settings_.backup_btn != nullptr)
     lv_obj_add_event_cb(settings_.backup_btn, on_backup_clicked, LV_EVENT_CLICKED, this);
   if (settings_.restore_btn != nullptr)
@@ -1478,6 +1490,12 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
       lv_obj_add_state(settings_.wired_paddle_switch, LV_STATE_CHECKED);
     lv_obj_add_event_cb(settings_.wired_paddle_switch, on_wired_paddle_switch,
                         LV_EVENT_VALUE_CHANGED, this);
+  }
+  if (settings_.paddle_wiring_btn != nullptr) {  // P4 boards with both pin sets
+    lv_label_set_text(settings_.paddle_wiring_value,
+                      paddle_wiring_label(brew_->snapshot().paddle_wiring));
+    lv_obj_add_event_cb(settings_.paddle_wiring_btn, on_paddle_wiring_clicked,
+                        LV_EVENT_CLICKED, this);
   }
   if (settings_.flush_btn != nullptr) {  // paddle-capable boards only
     set_flush_label(settings_, brew_ != nullptr ? brew_->snapshot().flush_s : 0);
@@ -2131,6 +2149,13 @@ void App::rebuild() {
   if (lv_obj_t* new_page = settings_section_page(settings_, section)) {
     lv_obj_update_layout(new_page);  // compute the scroll range first
     lv_obj_scroll_to_y(new_page, scroll_y, LV_ANIM_OFF);
+  }
+}
+
+void App::scroll_settings_section(int section, int y) {
+  if (lv_obj_t* page = settings_section_page(settings_, section)) {
+    lv_obj_update_layout(page);
+    lv_obj_scroll_to_y(page, y, LV_ANIM_OFF);
   }
 }
 
@@ -2957,6 +2982,15 @@ void App::shot_button() {
   refresh();  // reflect the new button label/color immediately, not at the next 2 Hz
 }
 
+void App::cycle_paddle_wiring() {
+  if (brew_ == nullptr || settings_.paddle_wiring_value == nullptr) return;
+  const int cur = static_cast<int>(brew_->snapshot().paddle_wiring);
+  const auto next = static_cast<core::PaddleWiring>((cur + 1) % 3);
+  brew_->set_paddle_wiring(next);  // cancels any in-flight shot: the pins change
+  lv_label_set_text(settings_.paddle_wiring_value, paddle_wiring_label(next));
+  refresh();
+}
+
 void App::set_wired_paddle(bool on) {
   if (brew_ == nullptr) return;
   brew_->set_wired_paddle(on);  // cancels any in-flight shot to kIdle
@@ -3778,16 +3812,26 @@ void App::show_wifi_modal() {
 }
 
 void App::show_breaker_modal() {
-  lv_obj_t* card = open_modal(
-      "Paddle disconnected",
-      "Apollo saw its paddle input flickering on its own: a possible GPIO or "
-      "wiring fault. The paddle drive is switched off and every flush and "
-      "cleaning cycle is refused until you reset it. On an Apollo Link the "
-      "paddle has been handed back to the machine, which works as stock; on "
-      "the opto cable the paddle is dead until reset.\n\n"
-      "Check the sense wiring (the wiring guide's \"Why the second module\"), "
-      "then tap Reset and watch the next few shots. It trips again at once if "
-      "the flicker continues.");
+  const core::PaddleWiring w =
+      brew_ != nullptr ? brew_->snapshot().paddle_wiring : core::PaddleWiring::kAuto;
+  const char* handed =
+      w == core::PaddleWiring::kLink
+          ? "The paddle has been handed back to the machine, which works as stock."
+          : w == core::PaddleWiring::kCable
+                ? "The paddle is dead until you reset."
+                : "On an Apollo Link the paddle has been handed back to the machine, "
+                  "which works as stock; on the opto cable the paddle is dead until "
+                  "reset.";
+  char body[560];
+  std::snprintf(body, sizeof(body),
+                "Apollo saw its paddle input flickering on its own: a possible GPIO or "
+                "wiring fault. The paddle drive is switched off and every flush and "
+                "cleaning cycle is refused until you reset it. %s\n\n"
+                "Check the sense wiring (the wiring guide's \"Why the second module\"), "
+                "then tap Reset and watch the next few shots. It trips again at once if "
+                "the flicker continues.",
+                handed);
+  lv_obj_t* card = open_modal("Paddle disconnected", body);
   modal_button(modal_button_row(card), "Reset", ui::theme::accent(), on_breaker_reset, this);
 }
 

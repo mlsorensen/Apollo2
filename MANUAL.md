@@ -52,7 +52,7 @@ Home
 Settings
 ├─ Micra
 │  ├─ Bluetooth — Scan · saved machine (Setup / Connect / Forget) · Auto connect
-│  ├─ Controls  — Wired paddle* · Chime melody* · Chime volume*
+│  ├─ Controls  — Wired paddle* · Paddle wiring* · Chime melody* · Chime volume*
 │  │             · Brew Temperature · Steam Enable + Temperature
 │  ├─ Cleaning* — Auto flush · Flush delay · Backflush cleaning  → cleaning mode
 │  └─ Schedule  — Auto-standby when idle · Show auto-standby timer
@@ -366,12 +366,20 @@ Plots the live flow rate (or weight) from the scale.
   timer, Auto shot or cleaning, so the first paddle flip the firmware sees
   with this off pops a one‑time reminder pointing here. Flipping it mid‑shot
   cancels the shot.
-- ② **Chime melody** *(boards with a speaker; Off / Blue / Pink / Human /
+- ② **Paddle wiring** *(P4 boards; Auto / Apollo Link / Opto cable, default
+  Auto)* — which of the board's two paddle pin sets your cable uses: the
+  corner pins (GND · 52 · 51 · 50) for the opto cable, or the pins at the 5 V
+  end for an Apollo Link. **Auto** watches both, which is how every unit has
+  always worked and needs nothing from you. Pick your wiring to have the
+  firmware ignore the unused set entirely — worth doing, because a pin on the
+  unused set that fails or gets shorted can otherwise hold the paddle "on".
+  Changing it cancels any shot in progress.
+- ③ **Chime melody** *(boards with a speaker; Off / Blue / Pink / Human /
   Gold / White / Autumn / Random, default Blue)* — which tune announces the end of a warm‑up. Each tap
   cycles to the next melody and auditions it; **Random** picks a different
   tune each time the machine warms up; `Off` silences the chime regardless of
   the volume below.
-- ③ **Chime volume** *(boards with a speaker; 0–100 %, default 80 %)* — the
+- ④ **Chime volume** *(boards with a speaker; 0–100 %, default 80 %)* — the
   warm‑up chime's level, so you can walk away and be called back. Drag the
   slider to get close, or tap **–** / **+** to nudge it 5 % at a time; either
   way it **plays a note at the new level** so you can set it by ear. `0 %`
@@ -387,10 +395,12 @@ Plots the live flow rate (or weight) from the scale.
   turn‑on's warm‑up chimes again. With the steam boiler **off** the chime
   follows the coffee boiler alone; with it **on**, both boilers have to be
   there.
-- ④ **Brew → Temperature** — coffee boiler set‑point stepper (0.1 °C steps;
+![Micra Controls, scrolled down](docs/img/manual/micra-controls-2.png)
+
+- ⑤ **Brew → Temperature** — coffee boiler set‑point stepper (0.1 °C steps;
   long‑press for 0.5 °C).
-- ⑤ **Steam Boiler → Enable** — steam boiler on/off.
-- ⑥ **Steam Boiler → Temperature** — one of the Micra's three steam levels
+- ⑥ **Steam Boiler → Enable** — steam boiler on/off.
+- ⑦ **Steam Boiler → Temperature** — one of the Micra's three steam levels
   (shown as Level 1–3 with the temperature underneath).
 
 ### Cleaning *(paddle‑capable boards)*
@@ -1163,7 +1173,7 @@ in the firmware). It does not work with the S3‑4.3C.
   upgrades, so stock releases keep working on a remapped unit — and takes
   effect on the next boot, which logs it: `Paddle: sense GPIO21 (NVS
   override)`. The board's default pins stay unchanged for everyone else.
-  (GPIO 50 is taken on the P4 boards: it powers the sense module.) The
-  Apollo Link's sense input has the same knob: `make linksense PIN=off`
-  disables it on a unit whose Link sense pin has died — a dead pin that reads
-  "closed" would otherwise hold the paddle on — and `PIN=default` restores it.
+  (GPIO 50 is taken on the P4 boards: it powers the sense module.) A dead pin
+  on the set you are *not* using needs no remap at all: set **Settings >
+  Micra > Controls > Paddle wiring** to your cable and the firmware stops
+  reading that set.

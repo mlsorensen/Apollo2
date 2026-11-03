@@ -104,7 +104,7 @@ constexpr char kWiredPaddleKey[] = "wiredpad";
 constexpr char kFlushKey[] = "flushs";  // post-shot auto-flush seconds (0 = off)
 constexpr char kPadSenseKey[] = "padsense";  // per-UNIT paddle sense GPIO override
 constexpr char kPadDriveKey[] = "paddrive";  // per-UNIT paddle drive GPIO override
-constexpr char kLinkSenseKey[] = "lnksense";  // per-UNIT Link sense override (-1 = disabled)
+constexpr char kPadWireKey[] = "padwire";    // per-UNIT paddle wiring (0 auto / 1 Link / 2 cable)
 constexpr char kFlushDelayKey[] = "flushd";  // cup-off -> flush pause seconds
 constexpr char kLeadInKey[] = "leadin";      // detect-mode preinfusion lead-in seconds
 constexpr char kFlowSmoothKey[] = "flowsmth";
@@ -659,23 +659,18 @@ void Config::set_paddle_sense_pin(int pin) {
   p.end();
 }
 
-int Config::link_sense_pin() const {
+int Config::paddle_wiring() const {
   Preferences p;
-  if (!p.begin(kNamespace, /*readOnly=*/true)) return kLinkSenseDefault;
-  const int v = p.isKey(kLinkSenseKey) ? p.getInt(kLinkSenseKey, kLinkSenseDefault)
-                                       : kLinkSenseDefault;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 0;
+  const int v = p.isKey(kPadWireKey) ? p.getInt(kPadWireKey, 0) : 0;
   p.end();
-  return v < -1 ? kLinkSenseDefault : v;
+  return (v < 0 || v > 2) ? 0 : v;
 }
 
-void Config::set_link_sense_pin(int pin) {
+void Config::set_paddle_wiring(int wiring) {
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
-  if (pin < -1) {
-    p.remove(kLinkSenseKey);
-  } else {
-    p.putInt(kLinkSenseKey, pin);
-  }
+  p.putInt(kPadWireKey, (wiring < 0 || wiring > 2) ? 0 : wiring);
   p.end();
 }
 

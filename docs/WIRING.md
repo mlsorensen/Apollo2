@@ -135,6 +135,10 @@ In detail:
   **GND → Apollo GND**. The transistor pulls GPIO 51 low while the LED is
   lit — closed is low, the same thing the firmware has always read — and
   GPIO 51 is now wired to nothing but a transistor a few centimetres away.
+- **Tell the firmware which wiring this is:** **Settings → Micra → Controls →
+  Paddle wiring → Opto cable**. The default, Auto, watches both of the P4's
+  pin sets and works; picking the cable makes the firmware ignore the Apollo
+  Link pins, so nothing on them can ever masquerade as the paddle.
 - **If a pin ever fails anyway**, both paddle pins can be remapped per unit
   (no custom build): move the wire to a free header GPIO and run
   `make padsense PIN=<n>` / `make paddrive PIN=<n>` with the board on USB —
@@ -341,7 +345,9 @@ adapter's 5 V goes through it; the Apollo end is a plain 2 × 7 plug with
 nothing to stop it going in rotated, and a rotated plug with power behind it
 can destroy the P4. Without that power it can't.
 
-Mount the Link where you would mount the drive module — low in the machine,
+Set **Settings → Micra → Controls → Paddle wiring → Apollo Link** so the
+firmware reads only the Link's pins (Auto, the default, watches both sets and
+works too). Mount the Link where you would mount the drive module — low in the machine,
 away from the brew head (the relays are rated to 85 °C) — then close up and
 set **Wired paddle** exactly as in the sections above. Everything in the
 manual about Auto shot, auto‑flush and cleaning applies unchanged; the only
