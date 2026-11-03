@@ -238,9 +238,9 @@ and layout, a Mouser‑ready BOM and the gerbers to have the board made. It is y
 expect rough edges.
 
 **Revisions.** Rev 0.6 (October 2026) is the board in the photos. Rev 0.7
-(never built) and rev 0.8 (November 2026) add an opto‑isolator, a 100 nF
-capacitor and an ESD diode on the sense input, for the same reasons as the
-cable's [sense RC](#the-sense-rc). The connectors and every wire below are
+(November 2026) adds an opto‑isolator, a 100 nF capacitor and an ESD diode
+on the sense input, for the same reasons as the cable's
+[sense RC](#the-sense-rc). The connectors and every wire below are
 identical on all revisions, and the firmware cannot tell them apart; a
 rev 0.6 board in service keeps working.
 
@@ -351,7 +351,7 @@ visible difference is that the paddle keeps working when Apollo is off.
 |---|---|---|
 | The pump runs the moment Apollo boots, no paddle touched | The plug is rotated 180° (the DRV wire is on a 5 V pin) | Unplug the Apollo end, turn it around |
 | Green LED dark while Apollo is running | The plug is shifted along the header, or the J1 wires are in the wrong order | Re‑seat it one pair in from the 5 V end; check J1 reads GND, 5V, DRV, SENSE, CTRL |
-| LED lit, paddle flips do nothing on Apollo | SENSE not on GPIO 5, or P1/P2 not on the paddle wires (rev 0.8: U4 or D2 fitted backwards) | Check the plug position and the J2 wires |
+| LED lit, paddle flips do nothing on Apollo | SENSE not on GPIO 5, or P1/P2 not on the paddle wires (rev 0.7: U4 or D2 fitted backwards) | Check the plug position and the J2 wires |
 | Touch or sound stops while the Link is plugged in | A wire landed on SCL/SDA — the plug is rotated | Unplug it; nothing is damaged without the Link's power |
 | Apollo runs from its own USB but not from the Link | 5V/GND not on the 5V/GND pins, or the PTC has tripped | Fix the plug; a tripped PTC resets by itself once the adapter is unplugged |
 | "USB power" shown but a fitted battery never charges | Expected — the Link does not charge a battery | Charge from Apollo's own USB‑C |

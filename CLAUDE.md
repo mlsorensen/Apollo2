@@ -920,14 +920,14 @@ GT911 all up; NimBLE host inits. Paddle/audio/ADC since confirmed, 2026-09-11):
    supply (kPaddleSenseSupplyPin) was removed from the firmware the same day
    — GPIO50 is a free pin again. Never a dual module board: shared output
    GND would tie the Micra's black to Apollo GND.
-   **Apollo Link (v1.0, 2026-10-01; rev 0.8 drawn 2026-11-03):** the bridge
-   board (hardware/paddle-bridge; rev 0.8 = rev 0.6 + U4 PC817 + D2 1N4148W
-   + C1 100 nF on SENSE + D3 PESD5V0L1BA ESD diode at J1; rev 0.7 was
-   ordered, cancelled, never built; rev 0.7 = rev 0.6 + U4 PC817 + D2 1N4148W
-   + R6 560R from 5V so SENSE is opto-isolated on the board, connectors
-   unchanged, rev 0.6 boards in the field lack it; bridge:D_H pin 1 = K to
-   match the footprint band — D1 on 0.5/0.6 boards is fitted reversed,
-   harmless) uses a SECOND native set on the header's 5V end
+   **Apollo Link (v1.0, 2026-10-01; rev 0.7 drawn 2026-11-03):** the bridge
+   board (hardware/paddle-bridge; rev 0.7 = rev 0.6 + U4 PC817 + D2 1N4148W
+   + R6 560R from 5V so SENSE is opto-isolated, + C1 100 nF on SENSE + D3
+   PESD5V0L1BA ESD diode at J1; an opto-only 0.7 was ordered and cancelled
+   the same week, never built, and this 0.7 supersedes it — there is no
+   0.8; connectors unchanged, rev 0.6 boards in the field lack all of it;
+   bridge:D_H pin 1 = K to match the footprint band — D1 on 0.5/0.6 boards
+   is fitted reversed, harmless) uses a SECOND native set on the header's 5V end
    so one 5-wire cable also POWERS the unit: DRV GPIO3, SENSE GPIO5, CTRL
    GPIO4 (schematic pins 12/11/14; plus 5V at 1/3 and GND at 5/13). By
    default (Paddle wiring = Auto) both sets are driven and polled together
