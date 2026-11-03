@@ -9,7 +9,7 @@
 		(date "2026-11-03")
 		(rev "0.8")
 		(comment 1 "Pass-through when the remote is unplugged; solid-state, LEDs driven by remote GPIOs; USB-C 5 V passed through to the remote")
-		(comment 2 "Rev 0.8: C1 100n holds the SENSE node (the real protection); U4/D2 opto kept as insurance. 0.7 never built.")
+		(comment 2 "Rev 0.8: C1 100n holds the SENSE node, D3 ESD diode clamps it at J1; U4/D2 opto kept as insurance. 0.7 never built.")
 	)
 	(lib_symbols
 		(symbol "Conn_01x04_1"
@@ -6609,7 +6609,7 @@
 		(uuid "4e331ed8-7fcf-4444-a710-d308eaf8fb9a")
 	)
 
-	(text "REV 0.8 (2026-11-03), see U4/C1 top right. WHAT PROTECTS THE PAD IS C1: a pad dies from voltage above its rail, and voltage is charge over\ncapacitance - the cable to the remote is ~100 pF, so 100 nF on SENSE makes the node 1000x harder to lift; R6/R7 drain it. The opto (U4, D2) is\ninsurance on top: the paddle contacts never touch the SENSE node and a dead U4 fails OPEN (paddle reads off). Rev 0.7 (opto only) was never built.\nSENSE IS OPTO-ISOLATED - the remote's GPIO never touches the paddle wire.\nP1 switches U4's LED from the 5V rail through R6 (560R, ~6.8 mA; PC817 CTR >= 50% -> >= 3 mA sink\nagainst R7 + the pad's 45k pull-up). U4's transistor pulls SENSE low: closed = low, as before, no\nfirmware change. A charge landing on P1 now returns to 5V through R6 and the LED (negative) or\nR6 and D2 (positive; D2 is anti-parallel to the LED, whose reverse rating is only 6 V). In rev 0.6\nthe contact's only path to ground was the P4 pad's clamp diode (SENSE_RAW -1k- SENSE): that build\nlost GPIO5 on the owner's X-8 (chatter when warm, then deaf, 2026-11-02) and the bare-wire opto\ncable lost GPIO51 on a P4-5 (2026-07) - sense pads only, never a drive pad. U2/U3 unchanged: the\npaddle still reverts to the Micra in copper whenever CTRL is low. Isolation note: the LED side sits\non the remote's 5V/GND_R - the paddle loop stays in the remote's ground domain; only the pad is isolated."
+	(text "REV 0.8 (2026-11-03), see U4/C1/D3 top right. D3 (ESD diode at J1) clamps a static hit on the cable or the plug; C1 holds the node. WHAT PROTECTS THE PAD IS C1: a pad dies from voltage above its rail, and voltage is charge over\ncapacitance - the cable to the remote is ~100 pF, so 100 nF on SENSE makes the node 1000x harder to lift; R6/R7 drain it. The opto (U4, D2) is\ninsurance on top: the paddle contacts never touch the SENSE node and a dead U4 fails OPEN (paddle reads off). Rev 0.7 (opto only) was never built.\nSENSE IS OPTO-ISOLATED - the remote's GPIO never touches the paddle wire.\nP1 switches U4's LED from the 5V rail through R6 (560R, ~6.8 mA; PC817 CTR >= 50% -> >= 3 mA sink\nagainst R7 + the pad's 45k pull-up). U4's transistor pulls SENSE low: closed = low, as before, no\nfirmware change. A charge landing on P1 now returns to 5V through R6 and the LED (negative) or\nR6 and D2 (positive; D2 is anti-parallel to the LED, whose reverse rating is only 6 V). In rev 0.6\nthe contact's only path to ground was the P4 pad's clamp diode (SENSE_RAW -1k- SENSE): that build\nlost GPIO5 on the owner's X-8 (chatter when warm, then deaf, 2026-11-02) and the bare-wire opto\ncable lost GPIO51 on a P4-5 (2026-07) - sense pads only, never a drive pad. U2/U3 unchanged: the\npaddle still reverts to the Micra in copper whenever CTRL is low. Isolation note: the LED side sits\non the remote's 5V/GND_R - the paddle loop stays in the remote's ground domain; only the pad is isolated."
 		(exclude_from_sim no)
 		(at 88.9 160.02 0)
 		(effects
@@ -6878,6 +6878,130 @@
 			(justify right bottom)
 		)
 		(uuid "785847de-5acb-4964-a02f-ee8624b4c598")
+	)
+
+	(symbol
+		(lib_id "bridge:D_H")
+		(at 264.16 93.98 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "eee8e501-f6ac-4427-af52-0cd545db0ac9")
+		(property "Reference" "D3"
+			(at 257.81 92.71 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "PESD5V0"
+			(at 257.81 95.25 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Diode_SMD:D_SOD-323"
+			(at 264.16 93.98 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 264.16 93.98 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "ESD diode on SENSE at J1 (Nexperia PESD5V0L1BA, 5 V working, <1 uA leakage): clamps a static hit on the cable or the plug before the remote's pad sees it"
+			(at 264.16 93.98 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "1f2cfa14-8776-4212-aff0-b7911dabf7bc")
+		)
+		(pin "2"
+			(uuid "669c44df-5d09-4b16-a9d0-3dd24e9fcf18")
+		)
+		(instances
+			(project "paddle_bridge"
+				(path "/58862f1b-9bf8-41e3-85a0-2bb0ef7e5536"
+					(reference "D3")
+					(unit 1)
+				)
+			)
+		)
+	)
+
+	(wire
+		(pts
+			(xy 264.16 90.17) (xy 264.16 86.36)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "42d386a2-9675-4a8a-a358-d1f6bbdfe79a")
+	)
+
+	(wire
+		(pts
+			(xy 264.16 97.79) (xy 264.16 101.6)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c3944216-5613-4fea-9d1d-0f7649936a27")
+	)
+
+	(label "SENSE"
+		(at 264.16 86.36 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "c901ae53-1dee-4c9f-bf72-6a390f6078a9")
+	)
+
+	(label "GND_R"
+		(at 264.16 101.6 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "f30c3600-fc45-41f8-8b7f-9710862a4321")
 	)
 
 	(sheet_instances
