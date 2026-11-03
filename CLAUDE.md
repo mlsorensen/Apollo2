@@ -907,40 +907,19 @@ GT911 all up; NimBLE host inits. Paddle/audio/ADC since confirmed, 2026-09-11):
    expander. GPIO51 <- paddle switch to board GND (INPUT_PULLUP, low =
    closed); the physical paddle touches only this board, never the Micra.
    Config-only (native-GPIO path in paddle.cpp). CONFIRMED working on HW.
-   **DIY cable (WIRING.md, 2026-11-02): TWO single-channel PC817 modules.**
-   Drive module at the machine end as always (GPIO52 -> IO, GND; OUT/GND =
-   the Micra contact, VCC open). Sense module at the APOLLO end: GPIO50
-   (kPaddleSenseSupplyPin, held HIGH from Paddle::begin, dropped with CTRL
-   by IPaddle::own(false)) -> module IO; the paddle-sense wire -> the
-   module's INPUT GND terminal (the LED cathode is the switch input);
-   module OUT -> GPIO51, output GND -> GND, VCC open. A 4-slot block on
-   the corner column GND/52/51/50. Same 3-conductor cable, same
-   machine-end splice. GPIO50 is therefore NOT a free remap target on P4s.
-   PADDLE WIRING (2026-11-03): `core::PaddleWiring` Auto/Link/Cable, NVS
-   `padwire` (ADD, i32 0/1/2, per-unit: out of backups like padsense),
-   Settings > Micra > Controls > Paddle wiring (P4 boards only —
-   IPaddle::wiring_selectable()). Auto = both sets polled/driven as always;
-   Link or Cable leaves the other set an open input (Paddle::set_wiring
-   re-runs begin()). WHY: the senses are ORed and a dead Link sense pad can
-   read LOW (the owner's X-8's GPIO5 did), holding the paddle closed. The
-   serial `linksense` knob was built and dropped the same day in favour of
-   this. The Controls page outgrew one 480-px shot: the manual uses two
-   (micra_controls_2 render, scrolled via App::scroll_settings_section). Never a dual module: those share the output GND and
-   would tie the Micra's black to Apollo GND. WHY: two P4 sense pads died
-   on a bare switch wire (P4-5 GPIO51 2026-07 on that single-module cable;
-   the owner's X-8 GPIO5 2026-11-02 on a rev 0.6 Link) — phantom flips when
-   warm, then deaf; cause unproven, pad-off-the-wire is the fix either way.
-   **PADDLE BREAKER (core/brew_controller, 2026-11-03):** every drive goes
-   through `set_drive()`, the one choke point. Trips on either signature in a
-   60 s window: 10 REJECTED pulses (raw transitions the 75 ms glitch filter
-   threw away) or 4 SHORT accepted pulses (ON->OFF under 500 ms). NEVER a rate
-   rule on accepted edges — a manual backflush is 10+ ON edges in 2 min.
-   Tripped: cancel_shot() (ends cleaning/flush/shot, opens the line), every
-   drive refused, can_clean false, IPaddle::own(false) drops the Link's CTRL
-   (copper), `paddle_trip_seq` ticks -> the UI's modal with Reset
-   (reset_paddle_breaker(); re-trips at once if the flicker goes on). Nothing
-   persists; a reboot clears it. `make test-paddle` replays the X-8's chatter,
-   a backflush, quick flicks, trips mid-cleaning and a reset — keep it green.
+   **DIY cable (WIRING.md, settled 2026-11-03 on scope evidence): ONE
+   PC817 module (drive) + a 1k series resistor and 100 nF to GND in the
+   paddle-sense wire (resistor THEN cap on the pin side; either end of the
+   cable). Owner's TDS 210 on GPIO51: a bare switch rings the pin to -1 V at
+   every bounce closure (outside the -0.3 V abs max), 1k alone halves it, a
+   cap ALONE rings -1.7 V (LC with the cable), 1k+cap is clean; pump/solenoid
+   put nothing on the wire. Whether the ring kills pads is NOT established —
+   the RC is hygiene, the dead-pad cause is open. A two-module variant
+   (second module at the Apollo end with its LED fed from GPIO50,
+   kPaddleSenseSupplyPin) was built, measured clean, and DROPPED from the
+   guide as too complex; the GPIO50 supply stays in firmware (harmless, high
+   while running, released with CTRL by own(false)). Never a dual module
+   board: shared output GND would tie the Micra's black to Apollo GND.
    **Apollo Link (v1.0, 2026-10-01; rev 0.7 drawn 2026-11-02):** the bridge
    board (hardware/paddle-bridge; rev 0.7 = rev 0.6 + U4 PC817 + D2 1N4148W
    + R6 560R from 5V so SENSE is opto-isolated on the board, connectors

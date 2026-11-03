@@ -29,24 +29,22 @@ it), but you will have the machine open — **unplug the Micra first**.
   [this one](https://a.co/d/07cSW1AY), but any 3‑conductor cable works.
 - **Bullet connectors** (or your favorite splice) for the in‑machine pigtail,
   so everything stays pluggable and reversible.
-- **P4 boards only**: **two** single‑channel **PC817‑style opto‑isolator
-  modules** — the same part twice, e.g. [this one](https://a.co/d/03qHqcyM);
-  anything similar works. One isolates Apollo's drive output, the other the
-  paddle sense input (see [why](#why-the-second-module)). (The S3‑4.3C has
-  both isolators built in; no module needed.) A
+- **P4 boards only**: a single‑channel **PC817‑style opto‑isolator module**,
+  e.g. [this one](https://a.co/d/03qHqcyM) — anything similar works — plus
+  a **1 kΩ resistor** and a **100 nF ceramic capacitor** for the paddle‑sense
+  wire (see [the sense RC](#the-sense-rc)). (The S3‑4.3C has isolators built
+  in; no module needed.) A
   [2.54 mm screw‑terminal block](https://a.co/d/0eVdsD4h) that clips onto the
-  P4's GPIO header makes the board‑side connection clean and solder‑free —
-  a **4‑slot** one now, the fourth slot feeding the sense module.
+  P4's GPIO header makes the board‑side connection clean and solder‑free.
 
-(P4 boards have an optional alternative to the modules and the splice: the
+(P4 boards have an optional alternative to the module and the splice: the
 [Apollo Link](#apollo-link-optional-p4-boards) board, described at the end
 of this guide.)
 
 Although there are **four** connections at the machine end (Micra white,
 Micra black, and the two paddle‑switch wires), one 3‑conductor cable is all
 you need — **ground is shared**. It just means the ground conductor gets
-**two connectors** at the machine end. (The P4's sense module adds one
-more header pin at the Apollo end, nothing in the cable.)
+**two connectors** at the machine end.
 
 ## Inside the Micra
 
@@ -92,113 +90,86 @@ bullet connectors at the machine end (two on the shared ground conductor):
 
 ![Finished 4.3C cable](img/wiring/cable-s3.jpg)
 
-## ESP32‑P4 boards (two external opto modules)
+## ESP32‑P4 boards (external opto module)
 
-On the P4‑WIFI6‑Touch‑LCD‑5 (and the 4.3), the paddle uses four native pins
-that sit **in a row** on the corner of the GPIO header — **GND, GPIO 52,
-GPIO 51, GPIO 50**, in that order on the silkscreen — so a
-[2.54 mm 4‑slot screw‑terminal block](https://a.co/d/0eVdsD4h) clips straight
-onto them, no soldering. GPIO 50 is new with the two‑module cable: the
-firmware holds it at 3.3 V while Apollo runs, and it powers the sense
-module's LED. The X‑series boxes (7"/8") use the **same pins**: on their
-40‑pin header one pin column runs GND, IO52, IO51, IO50 in a row near the
-header's end (per the schematic — the photos below show the 5";
+On the P4‑WIFI6‑Touch‑LCD‑5 (and the 4.3), the paddle uses three native pins
+that sit **side by side** on the corner of the GPIO header — **GND, GPIO 52,
+GPIO 51**, in that order on the silkscreen — so a
+[2.54 mm 3‑pin screw‑terminal block](https://a.co/d/0eVdsD4h) clips straight
+onto them, no soldering. The X‑series boxes (7"/8") use the **same three
+pins**: on their 40‑pin header one pin column runs GND, IO52, IO51 in a row
+near the header's end (per the schematic — the photos below show the 5";
 double‑check the silkscreen before clipping on):
 
 ![The P4 header corner — GND, 52, 51 in a row](img/wiring/p4-header-pins.jpg)
 
 ![Screw-terminal block on the pins, cable attached](img/wiring/p4-header-terminal.jpg)
 
-The cable can run out through a hole in the 3D‑printed backplate. Two opto
-modules provide the isolation, one per direction — the drive module at the
-machine end as always, and a second one for the paddle sense at the Apollo
-end:
+The cable can run out through a hole in the 3D‑printed backplate. From there,
+the opto module provides the isolation, and two small parts protect the
+sense pin:
 
-![Apollo P4 → two opto modules → Micra wiring](img/wiring/p4-opto-wiring.svg)
+![Apollo P4 → opto module → Micra wiring, with the sense RC](img/wiring/p4-opto-wiring.svg)
 
 In detail:
 
-- **Drive (Apollo → Micra), module at the machine end — unchanged:** Apollo
-  **GPIO 52** → opto module input **IO**, and Apollo **GND** → the module's
-  input **GND**. On the output side leave **VCC unconnected** ("VCC
-  suspended") so OUT/GND form an isolated dry contact: module **OUT** → Micra
-  **white**, module output **GND** → Micra **black**. When Apollo raises
-  GPIO 52, the contact closes — exactly like the paddle.
-- **Sense (paddle → Apollo), second module at the Apollo end — new
-  (November 2026):** the paddle switch no longer touches GPIO 51 at all. One
-  paddle wire still goes to the shared **ground**. The other comes back
-  through the cable to the second module's **input GND terminal** — used
-  here as the switch input; nothing else connects to it. The module's **IO**
-  goes to **GPIO 50**, the fourth slot of the block, which the firmware holds
-  at 3.3 V while Apollo is running. A closed paddle therefore completes
-  GPIO 50 → IO → LED → paddle → ground and lights the module's LED. On the output side: **VCC unconnected**, **OUT → GPIO 51**,
-  **GND → Apollo GND**. The transistor pulls GPIO 51 low while the LED is
-  lit — closed is low, the same thing the firmware has always read — and
-  GPIO 51 is now wired to nothing but a transistor a few centimetres away.
-- **Tell the firmware which wiring this is:** **Settings → Micra → Controls →
-  Paddle wiring → Opto cable**. The default, Auto, watches both of the P4's
-  pin sets and works; picking the cable makes the firmware ignore the Apollo
-  Link pins, so nothing on them can ever masquerade as the paddle.
+- **Drive (Apollo → Micra):** Apollo **GPIO 52** → opto module input **IO**,
+  and Apollo **GND** → the module's input **GND**. On the output side leave
+  **VCC unconnected** ("VCC suspended") so OUT/GND form an isolated dry
+  contact: module **OUT** → Micra **white**, module output **GND** → Micra
+  **black**. When Apollo raises GPIO 52, the contact closes — exactly like the
+  paddle.
+- **Sense (paddle → Apollo):** one paddle‑switch wire → Apollo **GPIO 51**,
+  the other → Apollo **GND**. The physical paddle now touches only Apollo,
+  never the Micra. **In the GPIO 51 wire, at the machine end beside the
+  module:** a **1 kΩ resistor** in series, and a **100 nF capacitor** from the
+  cable side of that resistor to the shared ground, as drawn. The two parts
+  can equally live at the Apollo end — resistor into the GPIO 51 slot of the
+  block, capacitor from that slot to GND, in that order — if you would rather
+  keep the machine end to the module alone.
+- **Tell the firmware which pins:** **Settings → Micra → Controls → Paddle
+  wiring → Opto cable**. Auto (the default) also works; picking the cable makes
+  the firmware ignore the Apollo Link pins entirely.
 - **If a pin ever fails anyway**, both paddle pins can be remapped per unit
   (no custom build): move the wire to a free header GPIO and run
   `make padsense PIN=<n>` / `make paddrive PIN=<n>` with the board on USB —
   see the manual's "Paddle pin protection & per‑unit remapping" section.
 
-### Why the second module
+### The sense RC
 
-The P4 boards' paddle inputs are plain GPIO pads. Two of them have failed on
-sense wiring that ran straight from the switch to the pin: the P4‑5 that
-first ran this guide's single‑module cable, and an X‑8 on an Apollo Link
-rev 0.6. Both went the same way — the pin began registering phantom paddle
-flips when the machine was warm (hundreds an hour; each one would have
-started a shot had a scale been connected), then stopped registering
-anything. The 1 kΩ series resistor the guide used to suggest limits current;
-it does not take the pin off the wire. The second module does, for the price
-of the first one, and it is how the 4.3C has always been built (its isolators
-are on the board). The cause of the failures is not proven, but an
-oscilloscope on the sense pin (November 2026) showed what a bare switch does
-to it: every bounce of the contact as the paddle closes rings the pin to about
-−1 V, well past the −0.3 V where the pin's protection diode starts
-conducting — several times per flip, thousands of flips a year. The 1 kΩ
-resistor the guide used to suggest halves that; it does not remove it. With
-the sense module in place the far end of the wire is a transistor, which
-turns on over tens of microseconds instead of slamming, and the same scope
-shows the pin going cleanly to zero with nothing beneath it. The machine's
-own pump and solenoid, incidentally, put nothing on the wire at all.
+The P4 boards' paddle inputs are plain GPIO pins, and two of them have failed
+on this wiring (one on a bare wire, one behind a 1 kΩ resistor on an Apollo
+Link). The cause is **not established**. What an oscilloscope on the pin does
+show (November 2026) is that a bare mechanical switch at the end of two metres
+of cable rings the pin to about −1 V at each bounce of the contact as the
+paddle closes — outside the chip's rated −0.3 V — a resistor alone halves
+that, a capacitor alone makes it worse (−1.7 V, the switch shorting a charged
+capacitor through the cable's inductance), and **resistor then capacitor**
+takes the pin cleanly to zero. Whether the ring wears a pin over years is not
+known; keeping the pin inside its rating costs two parts and nothing in
+behaviour, so the guide specifies them. The machine's own pump and solenoid,
+for the record, put nothing on the wire at all.
 
-**Already built the single‑module cable?** Nothing changes inside the machine
-or in the cable. At the Apollo end: swap the 3‑slot block for a 4‑slot one
-(GND / 52 / 51 / 50); move the paddle‑sense wire from **GPIO 51** to the new
-module's **input GND** terminal; wire **GPIO 50** to the module's **IO**, the
-module's **OUT** to **GPIO 51** and its output **GND** to **GND**; leave
-**VCC** open. If you fitted the 1 kΩ resistor, take it out — the module's own
-input resistor does that job now. This needs firmware that drives GPIO 50
-(v1.3 onward); on older firmware the pin floats and the sense LED never lights.
+**Already built this cable without the two parts?** Add them at either end
+as above; nothing else changes. If you built the two‑module version this
+page briefly described (a second module at the Apollo end, GPIO 50 feeding
+its LED), it measures clean and needs no change.
 
-**Keeping the single‑module cable instead?** Then protect the pin with two
-parts in the terminal block, in this order: the paddle‑sense wire into a
-**1 kΩ resistor**, the resistor into **GPIO 51**, and a **100 nF ceramic
-capacitor** from **GPIO 51 to GND** (on the pin's side of the resistor). The
-scope shows that pair taking the pin cleanly to zero. Do **not** fit the
-capacitor alone: a capacitor with no resistor in front of it rings the pin
-to −1.7 V on every closure, worse than the bare wire, because the switch
-shorts a charged capacitor through two metres of cable.
+**Plug the block in with the board powered off**, and keep the block's screw
+heads covered (a dab of hot glue or a strip of tape) if the back of the
+display is ever open: a screw is the pin it clamps.
 
-**Plug the block in with the board powered off.** Whichever pin of the block
-touches first carries the whole cable's charge into that pin until GND mates;
-on a powered board that is a GPIO taking the hit.
-
-A finished P4 cable with the drive module spliced in near the machine end
+A finished P4 cable with the opto module spliced in near the machine end
 (shown before wrapping the module in heat‑shrink — do wrap it, so nothing can
-short out inside the machine). Of the cable's conductors, **red + black feed
-the drive module's input** — that pair carries Apollo's drive and becomes the
-Micra's paddle signal on the isolated side — while **white + the second
-black** run to the physical paddle switch. (The photo predates the sense
-module, which sits at the other end of this cable, beside the display.)
+short out inside the machine; the resistor and capacitor are not in this
+photo). Of the cable's conductors, **red + black feed the opto module's
+input** — that pair carries Apollo's drive and becomes the Micra's paddle
+signal on the isolated side — while **white + the second black** run to the
+physical paddle switch:
 
 ![Finished P4 cable with inline opto module](img/wiring/cable-p4-opto.jpg)
 
-**Keep the drive module away from heat when installing it.** An opto‑isolator
+**Keep the opto module away from heat when installing it.** An opto‑isolator
 loses transfer ratio as it warms, so one that heat‑soaks can stop registering
 "paddle on" until it cools — a failure that looks exactly like a broken cable
 and then fixes itself. Inside the machine is fine; sitting against the brew
@@ -206,7 +177,6 @@ head, a boiler, or any other heat‑producing surface is not. **Mount it low
 and away from the brew head** — there is open space below the hot‑water pipe
 and the steam wand that works well — and where clearance is tight, a piece of
 neoprene sheet between the module and the nearest hot surface does the job.
-The sense module lives at the display end and sees none of this.
 
 ## Bench‑test before installing
 
@@ -215,9 +185,8 @@ it to Apollo, power up, and turn on **Settings → Micra → Settings → Wired
 paddle**. Apollo relays the paddle regardless of anything else, so:
 
 1. **Touch the two paddle‑sense wires together** — to Apollo that's the
-   paddle flipping ON. On a P4 build the **sense module's red LED lights**
-   while they're touching, and the drive module's lights a moment later as
-   Apollo closes the Micra line.
+   paddle flipping ON. On a P4 build the opto module's **red LED lights**
+   while they're touching.
 2. **Meter the Micra side**: with a multimeter in continuity mode across the
    two machine‑side connectors (the ones destined for the Micra's white and
    black), you should read a **closed circuit** while the sense wires touch
@@ -241,8 +210,8 @@ appears on the Home shot pill and **Auto flush** becomes available. See the
 
 **You do not need this, and it is P4‑only.** The opto cable above is the
 simplest way to wire the paddle and it is what most installs use. Apollo
-Link is a small open‑hardware board that replaces the two opto modules and
-the DIY splice on the **P4 boards (5, 4.3 and the X boxes)** for people who want
+Link is a small open‑hardware board that replaces the opto module and the
+DIY splice on the **P4 boards (5, 4.3 and the X boxes)** for people who want
 two extra things. **It does not work with the ESP32‑S3‑Touch‑LCD‑4.3C**:
 that box has no header pins for it and already has its own isolators, so
 its paddle wiring is the three screw‑terminal wires described above and
@@ -264,12 +233,11 @@ board made. It is young — the first boards were built in October 2026 — so
 expect rough edges.
 
 **Revisions.** Rev 0.6 (October 2026) is the board in the photos. Rev 0.7
-(November 2026) adds an opto‑isolator in front of the sense input, after an
-X‑8 running a rev 0.6 lost its sense pin the same way the single‑module
-cable had cost a P4‑5 one (see [why the second module](#why-the-second-module)).
-The connectors and every wire below are identical on both revisions, and
-the firmware cannot tell them apart; a rev 0.6 board in service keeps
-working.
+(never built) and rev 0.8 (November 2026) add an opto‑isolator in front of
+the sense input and a 100 nF capacitor on it, after an X‑8 running a rev 0.6
+lost its sense pin (see [the sense RC](#the-sense-rc)). The connectors and
+every wire below are identical on all revisions, and the firmware cannot
+tell them apart; a rev 0.6 board in service keeps working.
 
 **Parts:** the Link board, assembled; two JST PH housings (PHR‑5 for the
 Apollo side, PHR‑4 for the machine side) with their crimp contacts; a
@@ -366,7 +334,7 @@ can destroy the P4. Without that power it can't.
 
 Set **Settings → Micra → Controls → Paddle wiring → Apollo Link** so the
 firmware reads only the Link's pins (Auto, the default, watches both sets and
-works too). Mount the Link where you would mount the drive module — low in the machine,
+works too). Mount the Link where you would mount the opto module — low in the machine,
 away from the brew head (the relays are rated to 85 °C) — then close up and
 set **Wired paddle** exactly as in the sections above. Everything in the
 manual about Auto shot, auto‑flush and cleaning applies unchanged; the only
@@ -378,7 +346,7 @@ visible difference is that the paddle keeps working when Apollo is off.
 |---|---|---|
 | The pump runs the moment Apollo boots, no paddle touched | The plug is rotated 180° (the DRV wire is on a 5 V pin) | Unplug the Apollo end, turn it around |
 | Green LED dark while Apollo is running | The plug is shifted along the header, or the J1 wires are in the wrong order | Re‑seat it one pair in from the 5 V end; check J1 reads GND, 5V, DRV, SENSE, CTRL |
-| LED lit, paddle flips do nothing on Apollo | SENSE not on GPIO 5, or P1/P2 not on the paddle wires (rev 0.7: U4 or D2 fitted backwards) | Check the plug position and the J2 wires |
+| LED lit, paddle flips do nothing on Apollo | SENSE not on GPIO 5, or P1/P2 not on the paddle wires (rev 0.8: U4 or D2 fitted backwards) | Check the plug position and the J2 wires |
 | Touch or sound stops while the Link is plugged in | A wire landed on SCL/SDA — the plug is rotated | Unplug it; nothing is damaged without the Link's power |
 | Apollo runs from its own USB but not from the Link | 5V/GND not on the 5V/GND pins, or the PTC has tripped | Fix the plug; a tripped PTC resets by itself once the adapter is unplugged |
 | "USB power" shown but a fitted battery never charges | Expected — the Link does not charge a battery | Charge from Apollo's own USB‑C |

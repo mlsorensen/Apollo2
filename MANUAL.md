@@ -1133,17 +1133,13 @@ in the firmware). It does not work with the S3‑4.3C.
 
 ### Paddle pin protection & per‑unit remapping
 
-- **Keep the sense pin off the paddle wire.** The P4 boards' paddle inputs
-  are plain GPIO pins, and two of them have failed on sense wiring that ran
-  straight from the paddle switch to the pin — one on the single‑module cable
-  this guide used to describe, one on an Apollo Link rev 0.6. The
-  [wiring guide](docs/WIRING.md) now puts an opto module in front of the
-  sense pin as well as the drive pin, and Apollo Link rev 0.7 does the same on
-  the board, so the pin only ever sees the module. If you built the earlier
-  single‑module cable, the guide shows the change, which is confined to the
-  Apollo end of the cable — or, if you keep the single module, the resistor
-  and capacitor the guide now specifies for the sense pin, which a scope shows
-  taking the pin cleanly to zero where the bare wire rang it below −1 V.
+- **Protect the sense pin.** The P4 boards' paddle inputs are plain GPIO
+  pins, and two have failed on paddle wiring; the cause is not established.
+  The [wiring guide](docs/WIRING.md) now puts a 1 kΩ resistor and a 100 nF
+  capacitor in the sense wire, which a scope shows taking the pin cleanly to
+  zero on every flip where a bare wire rang it below its rated range, and it
+  says to plug the paddle block in with the board powered off. Two cheap
+  parts, no change in behaviour.
 - **The paddle breaker.** A failing sense pin announces itself: it starts
   registering paddle flips that nobody made, dozens a minute, each one a shot
   start. Apollo watches for that signature — raw flickers too short to be a
