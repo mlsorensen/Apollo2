@@ -6,10 +6,10 @@
 	(paper "A4")
 	(title_block
 		(title "Apollo Link")
-		(date "2026-09-24")
-		(rev "0.6")
+		(date "2026-11-02")
+		(rev "0.7")
 		(comment 1 "Pass-through when the remote is unplugged; solid-state, LEDs driven by remote GPIOs; USB-C 5 V passed through to the remote")
-		(comment 2 "Rev 0.6: J1 grows to 5 pins (adds 5V), J3 USB-C power input. Not yet built.")
+		(comment 2 "Rev 0.7: SENSE opto-isolated (U4 PC817 + D2 + R6 560R); D_H pin 1 = K now. Not yet built.")
 	)
 	(lib_symbols
 		(symbol "Conn_01x04_1"
@@ -1506,7 +1506,7 @@
 					)
 				)
 			)
-			(property "Description" ""
+			(property "Description" "Diode, A left / K right; pin 1 = K to match the KiCad footprint band (fixed rev 0.7: was 1 = A, so D1 on rev 0.5/0.6 boards is fitted reversed - harmless, the optional CTRL pull-up never acted)"
 				(at 0 0 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -1578,7 +1578,7 @@
 							)
 						)
 					)
-					(number "1"
+					(number "2"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -1596,7 +1596,7 @@
 							)
 						)
 					)
-					(number "2"
+					(number "1"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -2216,6 +2216,277 @@
 						)
 					)
 					(number "8"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
+		(symbol "bridge:PC817"
+			(pin_names
+				(offset 1.016)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "U"
+				(at 0 7.62 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "PC817"
+				(at 0 -7.62 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" "Package_DIP:DIP-4_W7.62mm"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Description" "Opto-isolator, transistor output, DIP-4: 1 A, 2 K, 3 E, 4 C"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "PC817_0_1"
+				(rectangle
+					(start -5.08 5.08)
+					(end 5.08 -5.08)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type background)
+					)
+				)
+				(polyline
+					(pts
+						(xy -5.08 2.54) (xy -2.54 2.54) (xy -2.54 1.27)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -3.81 1.27) (xy -1.27 1.27) (xy -2.54 -1.27) (xy -3.81 1.27)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type outline)
+					)
+				)
+				(polyline
+					(pts
+						(xy -3.81 -1.27) (xy -1.27 -1.27)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -2.54 -1.27) (xy -2.54 -2.54) (xy -5.08 -2.54)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -0.635 0.635) (xy 0.889 0.635)
+					)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -0.635 -0.635) (xy 0.889 -0.635)
+					)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 1.905 1.905) (xy 1.905 -1.905)
+					)
+					(stroke
+						(width 0.381)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 1.905 0.635) (xy 3.81 2.54) (xy 5.08 2.54)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 1.905 -0.635) (xy 3.81 -2.54) (xy 5.08 -2.54)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 3.175 -2.54) (xy 3.81 -1.905) (xy 2.794 -1.651) (xy 3.175 -2.54)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type outline)
+					)
+				)
+			)
+			(symbol "PC817_1_1"
+				(pin passive line
+					(at -7.62 2.54 0)
+					(length 2.54)
+					(name "A"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -7.62 -2.54 0)
+					(length 2.54)
+					(name "K"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 7.62 -2.54 180)
+					(length 2.54)
+					(name "E"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 7.62 2.54 180)
+					(length 2.54)
+					(name "C"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "4"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -3510,7 +3781,7 @@
 			(embedded_fonts no)
 		)
 	)
-	(text "Goal: unplug the remote and the Micra's paddle works as stock. The USB-C 5 V (J3) only passes through F1 (1.5 A PTC) to the remote on J1; every LED is still driven straight from a remote GPIO.\nCTRL (GPIO50) low or floating -> U2/U3 NC switches closed (paddle wired to the Micra in copper), NO switches open, remote fully disconnected.\nCTRL high (firmware, Wired paddle on) -> NC open, NO closed: paddle reads on SENSE (GPIO51), U1 alone drives the Micra from DRIVE (GPIO52)."
+	(text "Goal: unplug the remote and the Micra's paddle works as stock. The USB-C 5 V (J3) only passes through F1 (1.5 A PTC) to the remote on J1; every LED is still driven straight from a remote GPIO.\nCTRL (GPIO4) low or floating -> U2/U3 NC switches closed (paddle wired to the Micra in copper), NO switches open, remote fully disconnected.\nCTRL high (firmware, Wired paddle on) -> NC open, NO closed: paddle reads on SENSE (GPIO5, through U4 since rev 0.7), U1 alone drives the Micra from DRIVE (GPIO3)."
 		(exclude_from_sim no)
 		(at 30.48 33.02 0)
 		(effects
@@ -3521,7 +3792,7 @@
 		)
 		(uuid "1424ceb9-b2a1-4b21-aab1-b4547c4e8e2f")
 	)
-	(text "BOM: U2/U3 = Vishay LH1502BB (DIP-8) dual 1-Form-A/B SSR used as 1-Form-C (350 V, 150 mA, 20 R typ, 3750 Vrms). Pinout per Vishay 83806: 1/2 = LED for the S1 switch (8/7 = NC),\n3/4 = LED for the S2 switch (6/5 = NO); common made on the board by tying 7 to 6. LED must-operate is 2 mA MAX for both switches, so R2-R5 = 330R: ~6.4 mA nominal each,\n3.6 mA worst case (VOH 2.64 V, Vf 1.45 V) = 1.8x margin; ~26 mA total on CTRL -> set GPIO50 to PAD_DRIVER 3 (40 mA class, P4 datasheet 5.4).\nU1 = Panasonic AQY212EH (DIP-4) 1-Form-A PhotoMOS (60 V, 550 mA, 3 mA max operate), R1 330R. Bidirectional output = no polarity on the Micra plug.\nR6 1k = the series protection resistor the wiring guide already recommends. R7+D1 = optional stronger SENSE pull-up, present only while CTRL is high.\nLED1+R8 = optional 'remote in control' indicator. Footprints: 1206 passives; U1 DIP-4, U2/U3 DIP-8 through-hole so the Panasonic AQW612EH (same pinout: 8/7 = N.C., 6/5 = N.O.)\nis a drop-in for U2/U3 with R2-R5 changed to 270R (3 mA LED); J1/J2 JST PH 4-pin side-entry (S4B-PH-K; same drills as the vertical B4B-PH-K)."
+	(text "BOM: U2/U3 = Vishay LH1502BB (DIP-8) dual 1-Form-A/B SSR used as 1-Form-C (350 V, 150 mA, 20 R typ, 3750 Vrms). Pinout per Vishay 83806: 1/2 = LED for the S1 switch (8/7 = NC),\n3/4 = LED for the S2 switch (6/5 = NO); common made on the board by tying 7 to 6. LED must-operate is 2 mA MAX for both switches, so R2-R5 = 330R: ~6.4 mA nominal each,\n3.6 mA worst case (VOH 2.64 V, Vf 1.45 V) = 1.8x margin; ~26 mA total on CTRL (GPIO4) -> PAD_DRIVER 3 (40 mA class, P4 datasheet 5.4).\nU1 = Panasonic AQY212EH (DIP-4) 1-Form-A PhotoMOS (60 V, 550 mA, 3 mA max operate), R1 330R. Bidirectional output = no polarity on the Micra plug.\nR6 560R + U4 PC817 (DIP-4) = the opto-isolated SENSE path (rev 0.7; see the note by U4). R7+D1 = optional stronger SENSE pull-up, present only while CTRL is high.\nLED1+R8 = optional 'remote in control' indicator. Footprints: 1206 passives; U1 DIP-4, U2/U3 DIP-8 through-hole so the Panasonic AQW612EH (same pinout: 8/7 = N.C., 6/5 = N.O.)\nis a drop-in for U2/U3 with R2-R5 changed to 270R (3 mA LED); J1/J2 JST PH 4-pin side-entry (S4B-PH-K; same drills as the vertical B4B-PH-K)."
 		(exclude_from_sim no)
 		(at 30.48 178 0)
 		(effects
@@ -3532,7 +3803,7 @@
 		)
 		(uuid "165c7af5-c8d3-48e7-8157-ef59952efd1f")
 	)
-	(text "APOLLO PADDLE BRIDGE - rev 0.6 (2026-09-24)"
+	(text "APOLLO PADDLE BRIDGE - rev 0.7 (2026-11-02)"
 		(exclude_from_sim no)
 		(at 30.48 22.86 0)
 		(effects
@@ -3543,7 +3814,7 @@
 		)
 		(uuid "1de0b581-ecd6-49d4-8400-543d906cd15e")
 	)
-	(text "FIRMWARE: one new output, kPaddleCtrlPin per board (GPIO50 on the P4-5/4.3, GPIO46 on the X boxes), HIGH while Wired paddle is on and the app\nis running, LOW otherwise and in install mode. Drive strength max (gpio_set_drive_capability). New 'padctrl' NVS remap key beside padsense/paddrive."
+	(text "FIRMWARE (as shipped, v1.0+): the Link set is DRIVE = GPIO3, SENSE = GPIO5, CTRL = GPIO4 on every P4 board (X boxes since\n2026-10-16), driven together with the corner set (52/51) - no connector setting. CTRL is HIGH from Paddle::begin() whenever Apollo\nruns (drive strength max) and an input otherwise, so an unpowered or crashed remote leaves the paddle in copper.\npadsense/paddrive (NVS, per unit) remap the corner pins only."
 		(exclude_from_sim no)
 		(at 30.48 186.69 0)
 		(effects
@@ -3854,26 +4125,6 @@
 			(type default)
 		)
 		(uuid "94487f97-660d-428c-baf7-8aafdb71f2a8")
-	)
-	(wire
-		(pts
-			(xy 236.22 87.63) (xy 236.22 92.71)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "97bc0b86-5a0a-4829-b055-442641ca0ad2")
-	)
-	(wire
-		(pts
-			(xy 236.22 80.01) (xy 236.22 74.93)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a2a43540-e2c6-44c9-af81-a253487df2d6")
 	)
 	(wire
 		(pts
@@ -4325,16 +4576,6 @@
 		)
 		(uuid "bd7d0583-cdf4-4281-9d18-0725e3a74f4b")
 	)
-	(label "SENSE"
-		(at 236.22 92.71 270)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "ccd0d72d-7eca-4bda-b893-2284089da89c")
-	)
 	(label "CTRL"
 		(at 125.73 114.3 0)
 		(effects
@@ -4354,16 +4595,6 @@
 			(justify left bottom)
 		)
 		(uuid "e7ab831b-757a-4537-9468-1fcbdf7e5caa")
-	)
-	(label "SENSE_RAW"
-		(at 236.22 74.93 90)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "eb4c60b6-567e-4597-a4e6-e44986015914")
 	)
 	(label "P2"
 		(at 182.88 119.38 0)
@@ -5428,7 +5659,7 @@
 	)
 	(symbol
 		(lib_id "bridge:R_V")
-		(at 236.22 83.82 0)
+		(at 228.6 72.39 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -5438,7 +5669,7 @@
 		(dnp no)
 		(uuid "f2a19e39-17cf-4d8c-90a4-9580f1de209f")
 		(property "Reference" "R6"
-			(at 241.3 82.55 0)
+			(at 233.68 71.12 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -5447,8 +5678,8 @@
 				)
 			)
 		)
-		(property "Value" "1k"
-			(at 241.3 85.09 0)
+		(property "Value" "560R"
+			(at 233.68 73.66 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -5458,7 +5689,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_1206_3216Metric"
-			(at 236.22 83.82 0)
+			(at 228.6 72.39 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5469,7 +5700,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 236.22 83.82 0)
+			(at 228.6 72.39 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -5479,7 +5710,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 236.22 83.82 0)
+			(at 228.6 72.39 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -6054,6 +6285,349 @@
 		(at 255.27 149.86)
 		(uuid "a46893a7-5fdb-4924-8ca8-38faa4b51669")
 	)
+	(symbol
+		(lib_id "bridge:PC817")
+		(at 241.3 86.36 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "25aa35a2-fc56-4696-8219-cb330b9dc655")
+		(property "Reference" "U4"
+			(at 241.3 77.47 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "PC817"
+			(at 241.3 95.25 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Package_DIP:DIP-4_W7.62mm"
+			(at 241.3 86.36 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 241.3 86.36 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Opto-isolator, transistor output, DIP-4: 1 A, 2 K, 3 E, 4 C"
+			(at 241.3 86.36 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "5d6b0596-18a8-4262-8c11-43b0a0cf4e01")
+		)
+		(pin "2"
+			(uuid "759bab7b-df8b-46ca-9487-87cd06a962fb")
+		)
+		(pin "3"
+			(uuid "fe70ed02-dc9e-4822-b54a-a644331c4a5c")
+		)
+		(pin "4"
+			(uuid "ba217d66-aacf-4351-901a-e20f818d77ed")
+		)
+		(instances
+			(project "paddle_bridge"
+				(path "/58862f1b-9bf8-41e3-85a0-2bb0ef7e5536"
+					(reference "U4")
+					(unit 1)
+				)
+			)
+		)
+	)
+
+	(wire
+		(pts
+			(xy 228.6 68.58) (xy 228.6 66.04)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f937450f-c6cb-4505-a767-118650a81e70")
+	)
+
+	(wire
+		(pts
+			(xy 228.6 76.2) (xy 228.6 83.82)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "260a030a-3a1d-4ff5-aed9-c300439839a1")
+	)
+
+	(wire
+		(pts
+			(xy 228.6 83.82) (xy 233.68 83.82)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "537bf5f9-a14e-4e3e-b6cd-af7c899d52e7")
+	)
+
+	(wire
+		(pts
+			(xy 233.68 88.9) (xy 226.06 88.9)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "da6ecaf6-b0d8-45b0-8d70-71f0ba71fb68")
+	)
+
+	(wire
+		(pts
+			(xy 248.92 83.82) (xy 254 83.82)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "6eabcae7-e56c-4758-812d-0be1aa243843")
+	)
+
+	(wire
+		(pts
+			(xy 248.92 88.9) (xy 254 88.9)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "aefafef1-738f-4e1a-8a5c-61e4903a1936")
+	)
+
+	(label "5V"
+		(at 228.6 66.04 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "12daec91-23c5-4d20-9b64-565fb12894e7")
+	)
+
+	(label "SENSE_RAW"
+		(at 226.06 88.9 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "198471a9-2b00-4ba3-b544-a9d157e75679")
+	)
+
+	(label "SENSE"
+		(at 254 83.82 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "3ad7b64a-1718-472d-8868-00687ad7627b")
+	)
+
+	(label "GND_R"
+		(at 254 88.9 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "4e331ed8-7fcf-4444-a710-d308eaf8fb9a")
+	)
+
+	(text "REV 0.7 (2026-11-02), see U4 top right: SENSE IS OPTO-ISOLATED - the remote's GPIO never touches the paddle wire.\nP1 switches U4's LED from the 5V rail through R6 (560R, ~6.8 mA; PC817 CTR >= 50% -> >= 3 mA sink\nagainst R7 + the pad's 45k pull-up). U4's transistor pulls SENSE low: closed = low, as before, no\nfirmware change. A charge landing on P1 now returns to 5V through R6 and the LED (negative) or\nR6 and D2 (positive; D2 is anti-parallel to the LED, whose reverse rating is only 6 V). In rev 0.6\nthe contact's only path to ground was the P4 pad's clamp diode (SENSE_RAW -1k- SENSE): that build\nlost GPIO5 on the owner's X-8 (chatter when warm, then deaf, 2026-11-02) and the bare-wire opto\ncable lost GPIO51 on a P4-5 (2026-07) - sense pads only, never a drive pad. U2/U3 unchanged: the\npaddle still reverts to the Micra in copper whenever CTRL is low. Isolation note: the LED side sits\non the remote's 5V/GND_R - the paddle loop stays in the remote's ground domain; only the pad is isolated."
+		(exclude_from_sim no)
+		(at 88.9 160.02 0)
+		(effects
+			(font
+				(size 1 1)
+			)
+			(justify left bottom)
+		)
+		(uuid "09b72673-b81a-4ced-b466-47c8bf9b53a4")
+	)
+
+	(symbol
+		(lib_id "bridge:D_H")
+		(at 208.28 86.36 270)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "2f3d0a94-8797-4259-aa44-cbe955194444")
+		(property "Reference" "D2"
+			(at 199.39 85.09 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "1N4148W"
+			(at 199.39 87.63 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Diode_SMD:D_1206_3216Metric"
+			(at 208.28 86.36 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 208.28 86.36 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "anti-parallel to U4's LED: forward path for a positive charge on P1"
+			(at 208.28 86.36 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "16aa114b-13c4-4e63-921b-a520c63ba1f0")
+		)
+		(pin "2"
+			(uuid "a61044c5-f17f-492d-b67c-b397ff333427")
+		)
+		(instances
+			(project "paddle_bridge"
+				(path "/58862f1b-9bf8-41e3-85a0-2bb0ef7e5536"
+					(reference "D2")
+					(unit 1)
+				)
+			)
+		)
+	)
+
+	(wire
+		(pts
+			(xy 208.28 82.55) (xy 208.28 80.01)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "ad035246-9b0b-4ef2-986a-9d1785e397f4")
+	)
+
+	(wire
+		(pts
+			(xy 208.28 90.17) (xy 208.28 92.71)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "760dd318-d63e-4775-aa87-edff9dc87bf6")
+	)
+
+	(label "SENSE_RAW"
+		(at 208.28 80.01 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "fdfaad64-f205-4242-8c38-685f2358a87b")
+	)
+
+	(label "U4_A"
+		(at 208.28 92.71 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "fc7d3f9e-7cba-447a-8486-cea3ab526537")
+	)
+
+	(label "U4_A"
+		(at 228.6 83.82 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "ccd46aaf-cca7-4c16-865c-a5bcd14c2d39")
+	)
+
 	(sheet_instances
 		(path "/"
 			(page "1")
