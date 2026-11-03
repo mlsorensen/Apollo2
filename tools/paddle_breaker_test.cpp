@@ -22,6 +22,7 @@ void logf(const char* fmt, ...) {
   va_end(ap);
 }
 uint32_t now_ms() { return 0; }
+bool log_detail() { return false; }
 }  // namespace core
 
 namespace {
