@@ -6,10 +6,10 @@
 	(paper "A4")
 	(title_block
 		(title "Apollo Link")
-		(date "2026-11-02")
-		(rev "0.7")
+		(date "2026-11-03")
+		(rev "0.8")
 		(comment 1 "Pass-through when the remote is unplugged; solid-state, LEDs driven by remote GPIOs; USB-C 5 V passed through to the remote")
-		(comment 2 "Rev 0.7: SENSE opto-isolated (U4 PC817 + D2 + R6 560R); D_H pin 1 = K now. Not yet built.")
+		(comment 2 "Rev 0.8: C1 100n holds the SENSE node (the real protection); U4/D2 opto kept as insurance. 0.7 never built.")
 	)
 	(lib_symbols
 		(symbol "Conn_01x04_1"
@@ -1117,6 +1117,134 @@
 		)
 		(embedded_fonts no)
 	)
+		(symbol "bridge:C_V"
+			(pin_names
+				(offset 0)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "C"
+				(at 0 6.35 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "C"
+				(at 0 -6.35 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" "Capacitor_SMD:C_1206_3216Metric"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Description" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "C_V_0_1"
+				(polyline
+					(pts
+						(xy -2.032 0.762) (xy 2.032 0.762)
+					)
+					(stroke
+						(width 0.508)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -2.032 -0.762) (xy 2.032 -0.762)
+					)
+					(stroke
+						(width 0.508)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "C_V_1_1"
+				(pin passive line
+					(at 0 3.81 270)
+					(length 3.048)
+					(name ""
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -3.81 90)
+					(length 3.048)
+					(name ""
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "bridge:Conn_01x02"
 			(pin_names
 				(offset 1.016)
@@ -3803,7 +3931,7 @@
 		)
 		(uuid "165c7af5-c8d3-48e7-8157-ef59952efd1f")
 	)
-	(text "APOLLO PADDLE BRIDGE - rev 0.7 (2026-11-02)"
+	(text "APOLLO PADDLE BRIDGE - rev 0.8 (2026-11-03)"
 		(exclude_from_sim no)
 		(at 30.48 22.86 0)
 		(effects
@@ -6481,7 +6609,7 @@
 		(uuid "4e331ed8-7fcf-4444-a710-d308eaf8fb9a")
 	)
 
-	(text "REV 0.7 (2026-11-02), see U4 top right: SENSE IS OPTO-ISOLATED - the remote's GPIO never touches the paddle wire.\nP1 switches U4's LED from the 5V rail through R6 (560R, ~6.8 mA; PC817 CTR >= 50% -> >= 3 mA sink\nagainst R7 + the pad's 45k pull-up). U4's transistor pulls SENSE low: closed = low, as before, no\nfirmware change. A charge landing on P1 now returns to 5V through R6 and the LED (negative) or\nR6 and D2 (positive; D2 is anti-parallel to the LED, whose reverse rating is only 6 V). In rev 0.6\nthe contact's only path to ground was the P4 pad's clamp diode (SENSE_RAW -1k- SENSE): that build\nlost GPIO5 on the owner's X-8 (chatter when warm, then deaf, 2026-11-02) and the bare-wire opto\ncable lost GPIO51 on a P4-5 (2026-07) - sense pads only, never a drive pad. U2/U3 unchanged: the\npaddle still reverts to the Micra in copper whenever CTRL is low. Isolation note: the LED side sits\non the remote's 5V/GND_R - the paddle loop stays in the remote's ground domain; only the pad is isolated."
+	(text "REV 0.8 (2026-11-03), see U4/C1 top right. WHAT PROTECTS THE PAD IS C1: a pad dies from voltage above its rail, and voltage is charge over\ncapacitance - the cable to the remote is ~100 pF, so 100 nF on SENSE makes the node 1000x harder to lift; R6/R7 drain it. The opto (U4, D2) is\ninsurance on top: the paddle contacts never touch the SENSE node and a dead U4 fails OPEN (paddle reads off). Rev 0.7 (opto only) was never built.\nSENSE IS OPTO-ISOLATED - the remote's GPIO never touches the paddle wire.\nP1 switches U4's LED from the 5V rail through R6 (560R, ~6.8 mA; PC817 CTR >= 50% -> >= 3 mA sink\nagainst R7 + the pad's 45k pull-up). U4's transistor pulls SENSE low: closed = low, as before, no\nfirmware change. A charge landing on P1 now returns to 5V through R6 and the LED (negative) or\nR6 and D2 (positive; D2 is anti-parallel to the LED, whose reverse rating is only 6 V). In rev 0.6\nthe contact's only path to ground was the P4 pad's clamp diode (SENSE_RAW -1k- SENSE): that build\nlost GPIO5 on the owner's X-8 (chatter when warm, then deaf, 2026-11-02) and the bare-wire opto\ncable lost GPIO51 on a P4-5 (2026-07) - sense pads only, never a drive pad. U2/U3 unchanged: the\npaddle still reverts to the Micra in copper whenever CTRL is low. Isolation note: the LED side sits\non the remote's 5V/GND_R - the paddle loop stays in the remote's ground domain; only the pad is isolated."
 		(exclude_from_sim no)
 		(at 88.9 160.02 0)
 		(effects
@@ -6626,6 +6754,130 @@
 			(justify right bottom)
 		)
 		(uuid "ccd46aaf-cca7-4c16-865c-a5bcd14c2d39")
+	)
+
+	(symbol
+		(lib_id "bridge:C_V")
+		(at 279.4 93.98 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "901152e4-df5c-4c4e-ba3a-44442187a5dd")
+		(property "Reference" "C1"
+			(at 273.05 92.71 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "100n"
+			(at 273.05 95.25 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Capacitor_SMD:C_1206_3216Metric"
+			(at 279.4 93.98 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 279.4 93.98 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "SENSE node hold-up: the cable is one node, 100 nF makes it 1000x harder to lift past the rail"
+			(at 279.4 93.98 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "0c7e74e0-5885-4c21-8360-396a99606df7")
+		)
+		(pin "2"
+			(uuid "547ab546-201e-4d3f-814b-2b29c094fc1d")
+		)
+		(instances
+			(project "paddle_bridge"
+				(path "/58862f1b-9bf8-41e3-85a0-2bb0ef7e5536"
+					(reference "C1")
+					(unit 1)
+				)
+			)
+		)
+	)
+
+	(wire
+		(pts
+			(xy 279.4 90.17) (xy 279.4 86.36)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "2cdf35c5-b735-452c-96e8-d0317be083e0")
+	)
+
+	(wire
+		(pts
+			(xy 279.4 97.79) (xy 279.4 101.6)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c8e5978a-1aa6-4815-bbd4-a2692f5b570c")
+	)
+
+	(label "SENSE"
+		(at 279.4 86.36 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "30e96dd2-b736-4f47-9c87-bd79e7a66f67")
+	)
+
+	(label "GND_R"
+		(at 279.4 101.6 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "785847de-5acb-4964-a02f-ee8624b4c598")
 	)
 
 	(sheet_instances
