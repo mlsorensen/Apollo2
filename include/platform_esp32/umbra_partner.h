@@ -66,6 +66,7 @@ class UmbraPartner {
   std::atomic<int> pending_setting_{-2};  // -2 = no command; -1 = tare
   std::atomic<int> pending_value_{-1};
   std::atomic<int> conn_handle_{-1};
+  bool params_requested_ = false;  // the slave-latency request, once per connection (poll task)
   std::atomic<uint32_t> last_info_ms_{0};
   std::atomic<uint32_t> last_keepalive_ms_{0};
 };

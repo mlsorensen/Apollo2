@@ -23,7 +23,15 @@
 //     format misread by sscanf would corrupt silently — never guess).
 //   - Compatible changes APPEND columns, keep the same header prefix
 //     semantics, and parsers default missing trailing columns (see
-//     parse_shot_index_row: mode/wired are optional) and ignore extras.
+//     parse_shot_index_row: mode/wired/dose_g are optional) and ignore
+//     extras. The HEADER STRING STAYS AS IS for such a change: both stores
+//     refuse a file whose header differs, so a new header would lock every
+//     card written by older firmware out (and an older firmware, rolled back
+//     to, out of the new one). dose_g (v1.3) is the first column added this
+//     way: rows carry a 10th field the header doesn't name, and dose_src an
+//     11th (0 none / 1 recorded / 2 default). Corollary: an
+//     OLDER firmware that rewrites the index (a delete) re-formats every row
+//     from its own struct and drops the field — accepted.
 //   - A breaking change (reorder/remove/retype) gets a NEW header string and
 //     a migrating loader that reads the old header and rewrites the index
 //     (keep the original as shots.csv.bak).
@@ -49,12 +57,13 @@ inline int format_shot_index_row(char* buf, size_t n, const ShotSummary& s) {
   struct tm tm;
   localtime_r(&t, &tm);
   return std::snprintf(
-      buf, n, "%lu,%04d-%02d-%02dT%02d:%02d:%02d,%lld,%lu,%.1f,%.1f,%.2f,%s,%d\n",
+      buf, n, "%lu,%04d-%02d-%02dT%02d:%02d:%02d,%lld,%lu,%.1f,%.1f,%.2f,%s,%d,%.1f,%u\n",
       static_cast<unsigned long>(s.id), tm.tm_year + 1900, tm.tm_mon + 1,
       tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
       static_cast<long long>(s.unix_time), static_cast<unsigned long>(s.duration_ms),
       static_cast<double>(s.target_g), static_cast<double>(s.final_g),
-      static_cast<double>(s.avg_gps), shot_mode_name(s.mode), s.wired ? 1 : 0);
+      static_cast<double>(s.avg_gps), shot_mode_name(s.mode), s.wired ? 1 : 0,
+      static_cast<double>(s.dose_g), static_cast<unsigned>(s.dose_src));
 }
 
 // Parse one index row back into a summary. Returns false on a malformed row
@@ -62,13 +71,14 @@ inline int format_shot_index_row(char* buf, size_t n, const ShotSummary& s) {
 inline bool parse_shot_index_row(const char* line, ShotSummary& out) {
   unsigned long id = 0, dur = 0;
   long long unix_time = 0;
-  double target = 0, final_g = 0, avg = 0;
+  double target = 0, final_g = 0, avg = 0, dose = 0;
   char mode[16] = {};
   int wired = 0;
+  unsigned dose_src = 0;
   // iso8601 column is skipped ("%*[^,]" — derived from unix at display time).
   const int got =
-      std::sscanf(line, "%lu,%*[^,],%lld,%lu,%lf,%lf,%lf,%15[^,],%d", &id,
-                  &unix_time, &dur, &target, &final_g, &avg, mode, &wired);
+      std::sscanf(line, "%lu,%*[^,],%lld,%lu,%lf,%lf,%lf,%15[^,],%d,%lf,%u", &id,
+                  &unix_time, &dur, &target, &final_g, &avg, mode, &wired, &dose, &dose_src);
   if (got < 6) return false;
   out.id = static_cast<uint32_t>(id);
   out.unix_time = unix_time;
@@ -80,6 +90,9 @@ inline bool parse_shot_index_row(const char* line, ShotSummary& out) {
              : std::strcmp(mode, "manual") == 0 ? ShotMode::kManual
                                                 : ShotMode::kAuto;
   out.wired = wired != 0;
+  out.dose_g = got >= 9 && dose > 0 && dose < 1000 ? static_cast<float>(dose) : 0.0f;  // inf/garbage = none
+  // Source only with a dose; a pre-provenance row with a dose was recorded.
+  out.dose_src = out.dose_g <= 0.0f ? 0 : got >= 10 && dose_src <= 2 ? static_cast<uint8_t>(dose_src) : 1;
   return true;
 }
 

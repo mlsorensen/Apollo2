@@ -9,15 +9,25 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 Each version lists `### Features` first, then `### Fixes` (the device shows
 the headings as plain lines); leave out a list that would be empty.
 
-## Unreleased
+## v1.3.0
 
 ### Features
 
+- **Record your dose, see the ratio.** Put the dosed portafilter (or a dosing cup) on the bench scale: the weight becomes a Record button that stores the dose for the next shot, no tare needed. A chip above the graph's legend shows `18.2 g in`, then the yield and the brew ratio live, and freezes with the graph. Both are opt-in: **Record dose** turns the feature on, and a separate **Default dose** switch stages a constant dose for every shot, with or without a bench scale — dialled in Settings or with − / + on the BENCH card. History and the web page keep the dose, whether it was weighed or the default, and the ratio.
+- **Live readings in the graph legend.** The legend shows the espresso scale's current flow rate (or weight) and the bench scale's grams, not just the units.
+- **Detailed log switch.** Settings > Apollo > Display > Detailed log keeps the minute-by-minute housekeeping in the diagnostic log (and gives it a two-day buffer); off, the log holds events only and lasts weeks. The log now records why a Bluetooth link ended and the parameters each link uses.
+- **Auto-standby counts inactivity.** A flush or a backflush now restarts the auto-standby count like a shot does, and neither auto-standby nor a scheduled Off fires in the middle of one. The row is now "Auto-standby when idle".
 - **Paddle breaker.** If the paddle sense input starts flickering on its own —
   the signature of a failing GPIO pin, which once ran a pump for hours — Apollo
   now switches the paddle drive off, hands the paddle back to the machine on an
   Apollo Link, and shows a modal with a Reset button. Flipping the paddle quickly
   or running a backflush never trips it.
+- **Umbra battery estimate.** A paired Umbra's battery level freezes once it sleeps, so Apollo now estimates it from a daily drain (Settings > Scale > Device settings), shown as `~41%`, with the usual low-battery warning. Calibrate drain measures your scale's real figure over one charge.
+
+### Fixes
+
+- **Fewer nuisance disconnects with a paired Umbra.** With the Umbra connected, a Micra request can go unanswered; Apollo used to wait 30 s, drop the link visibly and reconnect. It now re-dials after 5 s without showing a disconnect, and a scale that connects but sends nothing is re-dialled the same way. A queued command (standby, a temperature) still lands.
+- **Graph no longer comes up empty on the 8" box.** Changing Bench scale on Home could leave the flow graph blank until a restart; the graph's drawing buffer now comes from the larger memory pool.
 
 ## v1.2.0
 

@@ -24,9 +24,12 @@
 // internal SRAM. A big internal pool starved NimBLE — its mutex alloc failed and
 // it asserted in npl_freertos_mutex_pend on connect. PSRAM keeps internal RAM for
 // the BLE/WiFi stacks while giving the UI plenty of headroom.
-// 1 MB: the widget pool plus the flow-graph canvas buffer (a full-plot RGB565
-// bitmap, ~300-550 KB depending on screen). All PSRAM, so it doesn't touch the
-// internal RAM the BLE/WiFi stacks need.
+// 1 MB: the widget pool. The flow-graph canvas (a full-plot RGB565 bitmap,
+// ~300-620 KB depending on screen) is NOT in it any more: a rebuild into a
+// wider layout could not find that in one piece once Settings' widgets sat
+// in the pool (the X-8's empty graph, 2026-11-01) — it comes straight from
+// PSRAM (ui::flow_buf_alloc). All PSRAM either way, so none of it touches
+// the internal RAM the BLE/WiFi stacks need.
 #define LV_MEM_SIZE (1024 * 1024)
 #define LV_MEM_ADR 0
 #define LV_MEM_POOL_INCLUDE "esp_heap_caps.h"

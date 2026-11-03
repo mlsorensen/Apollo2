@@ -49,6 +49,16 @@ class MicraLink : public IMachine {
   void set_addr_type_learned(std::function<void(AddrType)> cb) {
     addr_type_learned_ = std::move(cb);
   }
+  // Watchdog for a request the machine never answers. The host's own GATT
+  // timeout is 30 s, after which it drops the link anyway; a request still
+  // pending after kRequestStallMs is cut short by dropping the link now and
+  // re-dialling (every stall seen on the X-8, 2026-10-31, was a loss that
+  // ran the full 30 s, never a late answer). The re-dial is masked: the
+  // link reads Connected until it either succeeds (a ~10 s gap in fresh
+  // state instead of ~35 s) or fails (then Disconnected, honestly). Call
+  // from any other task every few ms with its clock; true = it fired.
+  bool abort_stalled_request(uint32_t now_ms);
+  static constexpr uint32_t kRequestStallMs = 5000;
 
   // Manual connect gate. Disabling drops the link and stops auto-reconnect.
   bool connect_enabled() const { return connect_enabled_.load(); }
@@ -78,9 +88,11 @@ class MicraLink : public IMachine {
  private:
   bool do_connect(const std::string& address, const std::string& token, AddrType type);
   bool do_refresh();           // loop thread: read + parse into the cache
-  void do_set_power(bool on);  // loop thread: write the command
-  void do_set_boiler_target(const char* identifier, const char* value);
-  void do_set_steam_enabled(bool enabled);
+  // Loop thread: write the command; false = the write failed (the caller
+  // puts the command back in its slot).
+  bool do_set_power(bool on);
+  bool do_set_boiler_target(const char* identifier, const char* value);
+  bool do_set_steam_enabled(bool enabled);
   void do_scan();              // loop thread: scan + publish results
   void set_link(Link link);
   bool read_setting(const char* name, std::string& out);
@@ -92,6 +104,12 @@ class MicraLink : public IMachine {
   std::string address_;         // guarded by mutex_
   AddrType addr_type_ = AddrType::kUnknown;  // guarded by mutex_
   std::function<void(AddrType)> addr_type_learned_;  // set once before run()
+  uint32_t connect_fails_ = 0;  // consecutive; the log keeps the 1st, 2nd, then every 20th
+  std::atomic<uint32_t> request_started_ms_{0};  // a GATT request in flight (0 = none)
+  std::atomic<bool> recovering_{false};          // re-dialling after a stalled request
+  std::atomic<uint32_t> recovering_since_ms_{0};
+  static constexpr uint32_t kRecoverMaskMs = 15000;  // longer than that is a real outage
+  bool refresh_bad_data_ = false;  // do_refresh: the machine answered, but not with JSON (link task)
   // Consecutive failed known-type connects. After kKnownTypeFailLimit the
   // next try goes back to BOTH types and relearns — a stored type can never
   // strand the link (the scale link has the same valve). Link thread only.

@@ -42,6 +42,8 @@ class DisplaySettings : public core::IDisplaySettings {
   void set_show_standby_timer(bool on) override;
   bool perf_overlay() const override;
   void set_perf_overlay(bool on) override;
+  bool detailed_log() const override;
+  void set_detailed_log(bool on) override;
   bool click_sound() const override;
   void set_click_sound(bool on) override;
   int ready_chime_volume() const override;

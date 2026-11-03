@@ -267,6 +267,7 @@ class AcaiaDriver : public IScaleDriver {
     process_buffer(sink);
   }
 
+  uint32_t first_weight_ms() const override { return 0; }  // own watchdog: a 3 s quiet start + re-handshakes
   bool tick(ble::ICentral& ble) override {
     const uint32_t now = now_ms();
     // LIVENESS IS THE WEIGHT STREAM, NOT THE LINK. Timing any-notification
@@ -635,7 +636,8 @@ class AcaiaDriver : public IScaleDriver {
       if (w < -0.5f && w > -20.0f && baseline_g_ - w > 2.5f) {
         holding_ = true;
         hold_since_ms_ = now;
-        logf("AcaiaDriver: [%u] auto-zero hold (w=%.1f baseline=%.1f)\n",
+        if (log_detail())
+          logf("AcaiaDriver: [%u] auto-zero hold (w=%.1f baseline=%.1f)\n",
              static_cast<unsigned>(now), static_cast<double>(w),
              static_cast<double>(baseline_g_));
         return false;
@@ -660,7 +662,8 @@ class AcaiaDriver : public IScaleDriver {
     }
     if (now - hold_since_ms_ > kHoldTimeoutMs) {
       holding_ = false;  // no return, no contact spike: a real change — adopt it
-      logf("AcaiaDriver: [%u] auto-zero hold released (real change w=%.1f)\n",
+      if (log_detail())
+        logf("AcaiaDriver: [%u] auto-zero hold released (real change w=%.1f)\n",
            static_cast<unsigned>(now), static_cast<double>(w));
       baseline_g_ = w;
       return true;

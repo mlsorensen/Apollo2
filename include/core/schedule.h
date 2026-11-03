@@ -136,6 +136,10 @@ struct ScheduleInputs {
   Link link;
   Power power;
   ShotPhase phase;      // BrewSnapshot::phase (MachineSnapshot::brewing is never set)
+  bool busy;            // activity without a shot phase: a flush / backflush
+                        // (BrewSnapshot::cleaning) or the drive line held
+                        // (BrewSnapshot::brewing: a Manual-mode pull, the
+                        // post-shot auto-flush run)
   uint32_t now_ms;      // monotonic; only the standby grace timer uses it
 };
 

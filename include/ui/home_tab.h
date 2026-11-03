@@ -126,12 +126,27 @@ struct HomeWidgets {
   lv_obj_t* bench_card = nullptr;
   lv_obj_t* bench_weight = nullptr;  // hero weight
   lv_obj_t* bench_name = nullptr;    // the scale's name under it
+  // Dose: the weight + its caption share one block that becomes the Record
+  // control (outlined, amber) while the reading is a dose candidate, and a
+  // filled "recorded" block once tapped. bench_dose_state: 0 dormant (the
+  // scale's name shows), 1 Record offered, 2 recorded.
+  lv_obj_t* bench_block = nullptr;
+  int bench_dose_state = 0;
   lv_obj_t* bench_status_dot = nullptr;
   lv_obj_t* bench_status_label = nullptr;  // null where the header is dot-only
   lv_obj_t* bench_batt_label = nullptr;
   lv_obj_t* bench_batt_pct_label = nullptr;
   lv_obj_t* bench_tare_btn = nullptr;
   lv_obj_t* bench_connect_btn = nullptr;   // swap mode only (beside: Tare alone)
+  // Default-dose stepper under the weight ("Off" / "18.0 g"): the same
+  // setting as Settings > Scale > Shot settings > Default dose, reachable
+  // from the card so a dose can be dialled without leaving Home. Hidden
+  // unless Record dose is active (App::sync_dose_settings_rows).
+  bool bench_dose_on_caption = false;  // beside card: the stepper takes the name's line
+  lv_obj_t* bench_dose_group = nullptr;
+  lv_obj_t* bench_dose_value = nullptr;
+  lv_obj_t* bench_dose_minus = nullptr;
+  lv_obj_t* bench_dose_plus = nullptr;
   lv_obj_t* bench_connect_label = nullptr;
   // The ESPRESSO | BENCH pills: one pair per header (index 0 on the SCALE
   // card, 1 on the bench card), so whichever card shows carries the switch.
@@ -162,6 +177,7 @@ struct HomeWidgets {
   uint32_t flow_px_ms = 0;
   int flow_win_s = 45;
   bool flow_blanked = false;   // true while the plot is cleared (scale disconnected)
+  bool flow_buf_in_pool = false;  // the canvas buffer came from lv_malloc (no PSRAM), not PSRAM
   bool flow_drop_negative = true;  // clamp outflow (weight-decreasing) g/s to zero
   // Graph style. false = scroll (whole plot memmoves left each step, newest at the
   // right edge). true = oscilloscope: the trace is stationary and flow_cursor is a
@@ -202,6 +218,19 @@ struct HomeWidgets {
   lv_obj_t* flow_legend_dot = nullptr;    // coloured dot before the unit
   lv_obj_t* flow_legend_dot2 = nullptr;   // beside mode: the bench entry
   lv_obj_t* flow_unit_label2 = nullptr;
+  // The dose chip ABOVE the legend (its own box; only its x is a control):
+  // builds up over the shot (see set_dose_chip). Hidden with no dose.
+  lv_obj_t* dose_chip = nullptr;
+  lv_obj_t* dose_in_label = nullptr;
+  lv_obj_t* dose_out_label = nullptr;
+  lv_obj_t* dose_ratio_label = nullptr;
+  lv_obj_t* dose_x_label = nullptr;
+  int dose_chip_state = -1;
+  // Live values for the legend's rows (set by flow_graph_tick, formatted by
+  // update_flow_legend): the espresso scale in the unit shown, the bench in g.
+  float legend_gps = -1.0f;   // < 0 = no data
+  float legend_g = -1.0f;
+  float legend_bench_g = -1.0f;
   lv_obj_t* flow_ylabels[3] = {nullptr, nullptr, nullptr};  // Y = max, 2max/3, max/3
   // Bench series on the live sweep. A third per-column ring (NaN = no bench
   // data in that column: disconnected). flow_mode 2 = the BENCH side of the
@@ -319,6 +348,26 @@ void show_bench_side(HomeWidgets& w, bool bench);
 // for that case; the labels live in `out` and are updated by update_home every
 // refresh, so they stay live on every tab. The tray + its spacer are plain
 // objects, so the tabview (which counts/indexes tabs by button class) ignores them.
+// The bench card's dose block: state 0 = dormant (scale name), 1 = "Record
+// <dose> g" offered, 2 = "<dose> g recorded". Cheap when unchanged.
+void set_bench_dose(HomeWidgets& w, int state, float dose_g);
+// Detailed log: the bench card's body vs its lowest visible child, AFTER the
+// stepper / caption were shown or hidden (the build-time layout has the
+// hidden stepper unplaced). clipped > 0 = pixels lost at the body's edge.
+void log_bench_card_geometry(HomeWidgets& w);
+// The graph's dose chip: 0 hidden, 1 "<in> g in", 2 + a placeholder out,
+// 3 "<in> g in  <out> g out  1:<ratio>". A default (not weighed) dose says
+// "set" instead of "in".
+void set_dose_chip(HomeWidgets& w, int state, float in_g, float out_g, bool is_default);
+
+// The flow graph's canvas buffer (pw x ph RGB565, ~300-620 KB) lives OUTSIDE
+// LVGL's pool: on the device it comes straight from PSRAM (64-byte aligned
+// for the P4's draw units), so a rebuild into a wider layout never fails for
+// want of one contiguous hole in a 1 MB pool (the X-8's "empty box",
+// 2026-11-01). The sim uses lv_malloc. Free with flow_buf_free.
+void flow_buf_alloc(HomeWidgets& w, size_t bytes);  // sets w.flow_buf (null = failed)
+void flow_buf_free(HomeWidgets& w);                 // and nulls it
+
 void build_rail_tray(lv_obj_t* rail, const lv_font_t* font, HomeWidgets& out);
 
 // Compact counterpart: clock + battery pushed to the right of the bottom tab bar
@@ -391,7 +440,8 @@ void end_shot_plot(HomeWidgets& w);
 // Advance the shot plot: sample the scale, grow the X window, redraw. Called
 // from the same fast path as flow_graph_tick while a shot runs/settles (the
 // review freeze simply stops calling it).
-void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale);
+void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale,
+                    const core::ScaleSnapshot* bench = nullptr);  // bench: the legend's row only
 
 // Flush the one-event-behind display lag (final full paint). Call when the
 // shot freezes into review so the frozen plot shows the complete tail.

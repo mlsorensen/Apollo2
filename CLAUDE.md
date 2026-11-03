@@ -434,11 +434,17 @@ per weekday, with a global warm-up lead. Shape of it:
   opa, not a container) SILENTLY — the owner dropped the explanatory line
   (2026-09-25, "too much for the page"); the manual carries the reason. `MachineSnapshot::brewing` is
   NEVER set by the link — use `ShotPhase`.
-- AUTO-STANDBY (v1.0.0-beta.4, owner's spec 2026-09-23) lives in the SAME
-  engine (`tick_auto_standby`, `ScheduleAction::AutoStandby`): a countdown
-  from the END of the last shot (BrewSnapshot::phase leaving
-  kBrewing/kSettling), never from turn-on — so a machine the schedule (or a
-  hand) switched on and nobody used stays on; every shot restarts it; a
+- AUTO-STANDBY (v1.0.0-beta.4, owner's spec 2026-09-23; INACTIVITY since
+  2026-11-02) lives in the SAME engine (`tick_auto_standby`,
+  `ScheduleAction::AutoStandby`): a countdown from the END of the last
+  ACTIVITY — a shot (BrewSnapshot::phase leaving kBrewing/kSettling) or
+  `ScheduleInputs::busy` = BrewSnapshot::cleaning (flush or backflush; the
+  owner found a flush didn't count) || BrewSnapshot::brewing (the drive
+  line held: a MANUAL-mode pull, which never sets a shot phase, and the
+  post-shot auto-flush run — review 2026-11-02) — never from turn-on — so a machine the
+  schedule (or a hand) switched on and nobody used stays on; every shot or
+  cleaning restarts it, and neither the count nor a scheduled Off fires
+  while one runs (a deferred Off restarts its 2-min grace on cleaning too); a
   scheduled "on" (even onto a machine already on) DISARMS it; standby by
   anyone disarms it; it fires only Connected + On + phase kIdle, and needs
   NO clock and NOT the master `enabled` (UI gates it on "paired" only). A
@@ -499,6 +505,33 @@ both failed for lack of internal RAM); a "harmless" 1.5 KB stack bump is
 exactly how that happens. Prefer restructuring (move the work to a task that
 already has the room, log from loop() instead of a small task, reuse an
 existing buffer) over adding memory. Applies to fixes as much as features.
+
+## Row alignment rule (owner, 2026-11-01)
+
+**Cards that share a row share their lines — never break that without
+raising it first, the way RAM use is raised.** On Home's large layouts the
+MICRA, SCALE and BENCH panel cards are built from the same grammar:
+header, then a caption line (BREW / STEAM / WEIGHT / TIMER / the bench
+scale's name in caps), a value line, a stepper line (− value +, the shot
+pill, or an EMPTY slot that keeps its height), then the action row — and
+every one of those lines sits at the same y on every card in the row
+(swap mode levels the MICRA header to the switch header's height and
+takes the same slack out of both bodies for this). New content on a card
+goes INTO an existing line, not between two; decoration that must wrap
+text (the Record outline) is a layout-ignoring object fitted behind the
+labels, never a box in the flow; the only card exempt is the one beside
+the graph (nothing beside it to align with, and the graph's height to
+live in). Before saying a layout is right, LOOK: crop the card from the
+sim render at 2-3x (the Preview-sized image hides a cut ring), and read
+the detail log's `home: scale card` / `home: bench card ... clipped=N`
+lines — measured AFTER the App's show/hide pass, on visible children's
+raw coordinates (a build-time measurement of a hidden widget is
+meaningless, and `lv_obj_get_scroll_bottom` sees direct children only).
+LVGL clips every child to its parent's rectangle: content that overruns a
+body loses its edge even with an empty gap below it. If a design needs a
+line to move, a row to be added or a card to break rank, say so and get
+the owner's OK before building it — "it looks fine" is not the test, the
+rows are.
 
 ## Release checklist (every tag, no exceptions)
 

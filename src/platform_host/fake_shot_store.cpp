@@ -66,14 +66,20 @@ FakeShotStore::FakeShotStore() {
   uint32_t id = 14;
   shots_.push_back(make_shot(id--, kNow - 2 * 3600, 36.0f, 36.2f, 27400,
                              core::ShotMode::kAuto, true));
+  shots_.back().summary.dose_g = 18.2f;
+  shots_.back().summary.dose_src = 1;
   shots_.push_back(make_shot(id--, kNow - 1 * kDay, 36.0f, 35.8f, 26100,
                              core::ShotMode::kAuto, true));
   shots_.push_back(make_shot(id--, kNow - 2 * kDay, 36.0f, 36.9f, 29800,
                              core::ShotMode::kDetect, false));
+  shots_.back().summary.dose_g = 18.0f;
+  shots_.back().summary.dose_src = 1;
   shots_.push_back(make_shot(id--, kNow - 3 * kDay, 40.0f, 40.4f, 31500,
                              core::ShotMode::kAuto, true));
   shots_.push_back(make_shot(id--, kNow - 5 * kDay, 36.0f, 34.6f, 24000,
                              core::ShotMode::kAuto, true));
+  shots_.back().summary.dose_g = 17.6f;
+  shots_.back().summary.dose_src = 2;  // the default-dose setting, not weighed
   shots_.push_back(make_shot(id--, kNow - 7 * kDay, 0.0f, 41.3f, 33200,
                              core::ShotMode::kManual, false));
   shots_.push_back(make_shot(id--, kNow - 9 * kDay, 36.0f, 36.1f, 27900,

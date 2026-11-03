@@ -36,6 +36,8 @@ class FakeDisplaySettings : public core::IDisplaySettings {
   void set_show_standby_timer(bool on) override { show_standby_timer_ = on; }
   bool perf_overlay() const override { return perf_overlay_; }
   void set_perf_overlay(bool on) override { perf_overlay_ = on; }
+  bool detailed_log() const override { return detailed_log_; }
+  void set_detailed_log(bool on) override { detailed_log_ = on; }
   bool click_sound() const override { return click_sound_; }
   void set_click_sound(bool on) override { click_sound_ = on; }
   int ready_chime_volume() const override { return ready_chime_volume_; }
@@ -57,6 +59,7 @@ class FakeDisplaySettings : public core::IDisplaySettings {
   int bench_home_style_ = 0;     // in the SCALE card, the device default
   bool show_standby_timer_ = false;
   bool perf_overlay_ = false;
+  bool detailed_log_ = false;
   bool click_sound_ = true;
   int ready_chime_volume_ = 50;  // matches the device default
   int ready_chime_melody_ = 1;   // 1 = Blue (device default)

@@ -1,11 +1,14 @@
 #include "platform_esp32/config.h"
 
+#include "core/dose.h"
+
 #include "core/brew.h"
 #include "core/display_settings.h"
 #include "core/schedule.h"
 
 #include <Preferences.h>
 #include <cmath>
+#include <cstring>
 
 // NVS is initialized by the Arduino-ESP32 core at boot, so we just open the
 // namespace per call (cheap, and avoids holding the handle open).
@@ -69,16 +72,26 @@ struct ScaleKeys {
   const char* partner;
   const char* pending;  // per-unit (config_backup), both slots
   const char* type;     // core::AddrType as uchar (ADD, v1.1)
+  // A partner Umbra's battery estimate + drain setting: the blob of
+  // core::pack_scale_battery, tagged with the scale's MAC (ADD, v1.3).
+  const char* battery;
 };
 constexpr ScaleKeys kScaleKeys[2] = {
-    {"smac", "sname", "sprtnr", "sprpend", "satype"},
-    {"smac2", "sname2", "sprtnr2", "sprpend2", "satype2"},
+    {"smac", "sname", "sprtnr", "sprpend", "satype", "sbatest"},
+    {"smac2", "sname2", "sprtnr2", "sprpend2", "satype2", "sbatest2"},
 };
+constexpr int kBatteryBlobLen = core::kScaleBatteryBlobLen;
 inline const ScaleKeys& keys(core::ScaleSlot slot) {
   return kScaleKeys[slot == core::ScaleSlot::kBench ? 1 : 0];
 }
 constexpr char kMicraAddrTypeKey[] = "matype";   // the machine's, same encoding (ADD, v1.2)
 constexpr char kBenchHomeKey[] = "benchhome";    // bench scale on Home: 0 card / 1 beside graph (ADD, v1.2)
+constexpr char kDetailedLogKey[] = "dbglog";      // Detailed log (ADD, v1.3)
+constexpr char kDoseEnabledKey[] = "dosen";      // Record dose from the bench scale (ADD, v1.3)
+constexpr const char* kDoseContainerKeys[] = {"dosec0", "dosec1"};  // grams (ADD, v1.3; a dosec2 from the
+                                                                       // 3-slot beta is left unread)
+constexpr char kDefaultDoseKey[] = "dosedef";                            // grams, 0 = off (ADD, v1.3)
+constexpr char kDefaultDoseLastKey[] = "dosedeflast";                    // the value the switch restores (ADD, v1.3)
 constexpr char kTargetKey[] = "tgtg";
 constexpr char kShotModeKey[] = "shotmode";  // LEGACY bool (armed) — migration only
 constexpr char kShotMode3Key[] = "shotmd";   // tri-state core::ShotMode as int
@@ -226,6 +239,8 @@ struct ScaleRecord {
   std::string mac, name;
   bool partner = false;
   uint8_t type = 0;  // 0 = unknown (key absent)
+  uint8_t battery[kBatteryBlobLen] = {};
+  bool has_battery = false;
 };
 
 ScaleRecord read_record(Preferences& p, const ScaleKeys& k) {
@@ -234,7 +249,16 @@ ScaleRecord read_record(Preferences& p, const ScaleKeys& k) {
   if (p.isKey(k.name)) r.name = p.getString(k.name, "").c_str();
   r.partner = p.getBool(k.partner, false);
   r.type = p.isKey(k.type) ? p.getUChar(k.type, 0) : 0;
+  r.has_battery = p.isKey(k.battery) &&
+                  p.getBytesLength(k.battery) == static_cast<size_t>(kBatteryBlobLen) &&
+                  p.getBytes(k.battery, r.battery, kBatteryBlobLen) ==
+                      static_cast<size_t>(kBatteryBlobLen);
   return r;
+}
+
+void write_battery(Preferences& p, const ScaleKeys& k, const ScaleRecord& r) {
+  if (r.has_battery) p.putBytes(k.battery, r.battery, kBatteryBlobLen);
+  else p.remove(k.battery);
 }
 
 void write_record(Preferences& p, const ScaleKeys& k, const ScaleRecord& r) {
@@ -243,6 +267,7 @@ void write_record(Preferences& p, const ScaleKeys& k, const ScaleRecord& r) {
     p.remove(k.name);
     p.remove(k.partner);
     p.remove(k.type);
+    p.remove(k.battery);
     return;
   }
   p.putString(k.mac, r.mac.c_str());
@@ -250,6 +275,7 @@ void write_record(Preferences& p, const ScaleKeys& k, const ScaleRecord& r) {
   p.putBool(k.partner, r.partner);
   if (r.type == 0) p.remove(k.type);
   else p.putUChar(k.type, r.type);
+  write_battery(p, k, r);
 }
 }  // namespace
 
@@ -258,6 +284,13 @@ void Config::save_scale(core::ScaleSlot slot, const std::string& mac, const std:
   Preferences p;
   p.begin(kNamespace, /*readOnly=*/false);
   ScaleRecord r;
+  // Re-saving the same scale keeps its battery estimate and drain setting;
+  // a different scale starts fresh (its tag wouldn't match anyway).
+  const ScaleRecord old = read_record(p, keys(slot));
+  if (old.mac == mac) {
+    std::memcpy(r.battery, old.battery, kBatteryBlobLen);
+    r.has_battery = old.has_battery;
+  }
   r.mac = mac;
   r.name = name;
   r.partner = partner_mode;
@@ -315,6 +348,85 @@ void Config::set_bench_home_style(int style) {
   p.end();
 }
 
+bool Config::detailed_log() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
+  const bool v = p.isKey(kDetailedLogKey) ? p.getBool(kDetailedLogKey, false) : false;
+  p.end();
+  return v;
+}
+
+void Config::set_detailed_log(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kDetailedLogKey, on);
+  p.end();
+}
+
+float Config::default_dose() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 0.0f;
+  const float v = p.isKey(kDefaultDoseKey) ? p.getFloat(kDefaultDoseKey, 0.0f) : 0.0f;
+  p.end();
+  return v > 0.0f && v <= 100.0f ? v : 0.0f;  // garbage reads as off
+}
+
+float Config::default_dose_last() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 0.0f;
+  const float v = p.isKey(kDefaultDoseLastKey) ? p.getFloat(kDefaultDoseLastKey, 0.0f) : 0.0f;
+  p.end();
+  return v > 0.0f && v <= 100.0f ? v : 0.0f;
+}
+
+// dosedef keeps its v1.3.0-beta.1 meaning (0 / absent = off, else the grams
+// in force); the switch's memory is the ADDED dosedeflast.
+void Config::set_default_dose(float grams) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  if (grams > 0.0f) {
+    p.putFloat(kDefaultDoseKey, grams);
+    p.putFloat(kDefaultDoseLastKey, grams);
+  } else {
+    p.remove(kDefaultDoseKey);
+  }
+  p.end();
+}
+
+bool Config::dose_enabled() const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
+  const bool v = p.isKey(kDoseEnabledKey) ? p.getBool(kDoseEnabledKey, false) : false;
+  p.end();
+  return v;
+}
+
+void Config::set_dose_enabled(bool on) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  p.putBool(kDoseEnabledKey, on);
+  p.end();
+}
+
+float Config::dose_container(int index) const {
+  if (index < 0 || index >= core::kMaxDoseContainers) return 0.0f;
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return 0.0f;
+  const char* k = kDoseContainerKeys[index];
+  const float v = p.isKey(k) ? p.getFloat(k, 0.0f) : 0.0f;
+  p.end();
+  return v > 0.0f && v < 5000.0f ? v : 0.0f;  // garbage reads as empty
+}
+
+void Config::set_dose_container(int index, float grams) {
+  if (index < 0 || index >= core::kMaxDoseContainers) return;
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  if (grams > 0.0f) p.putFloat(kDoseContainerKeys[index], grams);
+  else p.remove(kDoseContainerKeys[index]);
+  p.end();
+}
+
 core::AddrType Config::micra_addr_type() const {
   Preferences p;
   if (!p.begin(kNamespace, /*readOnly=*/true)) return core::AddrType::kUnknown;
@@ -342,6 +454,30 @@ void Config::clear_scale(core::ScaleSlot slot) {
   p.remove(k.partner);
   p.remove(k.pending);
   p.remove(k.type);
+  p.remove(k.battery);
+  p.end();
+}
+
+bool Config::scale_battery(core::ScaleSlot slot, core::ScaleBatteryState* state) const {
+  Preferences p;
+  if (!p.begin(kNamespace, /*readOnly=*/true)) return false;
+  const ScaleRecord r = read_record(p, keys(slot));
+  p.end();
+  // A blob tagged for another MAC (left by a rolled-back build that re-saved
+  // the slot) or of another length is ignored: that scale starts fresh.
+  return r.has_battery &&
+         core::unpack_scale_battery(r.battery, kBatteryBlobLen, r.mac.c_str(), state);
+}
+
+void Config::set_scale_battery(core::ScaleSlot slot, const core::ScaleBatteryState& state) {
+  Preferences p;
+  p.begin(kNamespace, /*readOnly=*/false);
+  ScaleRecord r = read_record(p, keys(slot));
+  if (!r.mac.empty()) {  // a slot Forget emptied keeps nothing
+    core::pack_scale_battery(state, r.mac.c_str(), r.battery);
+    r.has_battery = true;
+    write_battery(p, keys(slot), r);
+  }
   p.end();
 }
 

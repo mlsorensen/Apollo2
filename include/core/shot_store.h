@@ -30,6 +30,8 @@ struct ShotSummary {
   float avg_gps;       // final_g / duration
   ShotMode mode = ShotMode::kAuto;  // effective mode the shot ran under
   bool wired = false;  // paddle harness vs weight-stream detection
+  float dose_g = 0.0f;  // the shot's dose; 0 = none (v1.3)
+  uint8_t dose_src = 0;  // 0 none, 1 recorded from the bench scale, 2 the default-dose setting (v1.3)
 };
 
 // A full record: summary + the series. ~7 KB — pass by reference, never copy

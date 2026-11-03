@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/dose.h"
+
 #include <lvgl.h>
 
 #include "core/scale.h"  // ScaleSettingDesc / kMaxScaleSettings (row slots)
@@ -117,6 +119,15 @@ struct SettingsWidgets {
   lv_obj_t* scale_dev_labels[core::kMaxScaleSettings] = {};  // row name labels
   lv_obj_t* scale_dev_btns[core::kMaxScaleSettings] = {};    // cycle buttons
   lv_obj_t* scale_dev_values[core::kMaxScaleSettings] = {};  // value labels
+  // Battery estimate rows (a partner-mode Umbra only: its gauge freezes after
+  // it sleeps, so Apollo estimates). Apollo-side settings, not the scale's.
+  lv_obj_t* scale_drain_row = nullptr;    // "Battery drain per day" [-] 15% [+]
+  lv_obj_t* scale_drain_minus = nullptr;
+  lv_obj_t* scale_drain_value = nullptr;
+  lv_obj_t* scale_drain_plus = nullptr;
+  lv_obj_t* scale_cal_row = nullptr;      // "Calibrate drain" [Start | Cancel]
+  lv_obj_t* scale_cal_btn = nullptr;
+  lv_obj_t* scale_cal_label = nullptr;
   lv_obj_t* device_page = nullptr;          // chooser: Display | Time & date | WiFi
   lv_obj_t* device_display_page = nullptr;  // brightness/dim/theme/units/sound
   lv_obj_t* device_time_page = nullptr;     // clock + calendar steppers
@@ -171,6 +182,19 @@ struct SettingsWidgets {
   // onset; backdates detect-mode shots to lever-on)
   lv_obj_t* lead_minus = nullptr;
   lv_obj_t* lead_plus = nullptr;
+  // Shot settings > Dose: the Record switch and three container rows
+  // (value, Capture from the bench scale, Clear).
+  lv_obj_t* dose_switch_row = nullptr;
+  lv_obj_t* dose_switch = nullptr;
+  lv_obj_t* dose_def_row = nullptr;      // "Default dose": [switch] - 18.0 g +
+  lv_obj_t* dose_def_switch = nullptr;   //   the value controls exist only while on
+  lv_obj_t* dose_def_minus = nullptr;
+  lv_obj_t* dose_def_value = nullptr;
+  lv_obj_t* dose_def_plus = nullptr;
+  lv_obj_t* dose_container_row[core::kMaxDoseContainers] = {};
+  lv_obj_t* dose_container_value[core::kMaxDoseContainers] = {};
+  lv_obj_t* dose_capture_btn[core::kMaxDoseContainers] = {};
+  lv_obj_t* dose_clear_btn[core::kMaxDoseContainers] = {};
   lv_obj_t* lead_value = nullptr;
   int detect_lead_in_s = 3;
   // Shot-graph smoothing cycle button (Off / Light / Medium / Strong)
@@ -184,6 +208,7 @@ struct SettingsWidgets {
   lv_obj_t* sbatt_btn = nullptr;    // Scale > Device settings > Battery display
   lv_obj_t* sbatt_value = nullptr;  // (Apollo's own preference: Icon / Percent / Icon + %)
   lv_obj_t* perf_overlay_switch = nullptr;   // on = show LVGL FPS/CPU overlay
+  lv_obj_t* detailed_log_switch = nullptr;   // on = steady-state chatter in the log ring
   lv_obj_t* clean_lock_btn = nullptr;        // 30 s touch lockout for wiping the screen
   lv_obj_t* auto_connect_switch = nullptr;   // Micra > Bluetooth: connect to the
                                              // saved machine at boot

@@ -78,6 +78,8 @@ function downloadCard(shot, svgEl, theme, textColor) {
     [(shot.duration_ms / 1000).toFixed(1) + ' s', 'Time', textColor],
     [shot.avg_gps.toFixed(2) + ' g/s', 'Avg flow', textColor],
   ];
+  if (shot.dose_g > 0 && shot.final_g > 0)
+    stats.push(['1:' + (shot.final_g / shot.dose_g).toFixed(1), 'Ratio', textColor]);
   const colW = (W - 2 * M) / stats.length;
   stats.forEach(([value, caption, color], i) => {
     const cx = M + colW * i + colW / 2;
@@ -300,6 +302,8 @@ export default function App() {
   }, [shots, filter]);
 
   const diffOf = (s) => (s.target_g > 0 ? s.final_g - s.target_g : null);
+  // Brew ratio (yield / dose) when a dose was recorded from the bench scale.
+  const ratioOf = (s) => (s.dose_g > 0 && s.final_g > 0 ? s.final_g / s.dose_g : null);
 
   return (
     <ThemeProvider theme={muiTheme}>
@@ -373,6 +377,7 @@ export default function App() {
                     <TableCell align="right">Diff</TableCell>
                     <TableCell align="right">Time</TableCell>
                     <TableCell align="right">Avg flow</TableCell>
+                    <TableCell align="right">Ratio</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -393,11 +398,14 @@ export default function App() {
                         </TableCell>
                         <TableCell align="right">{Math.round(s.duration_ms / 1000)} s</TableCell>
                         <TableCell align="right">{s.avg_gps.toFixed(2)} g/s</TableCell>
+                        <TableCell align="right" sx={{ color: ratioOf(s) == null ? 'text.secondary' : undefined }}>
+                          {ratioOf(s) == null ? '—' : `1:${ratioOf(s).toFixed(1)}`}
+                        </TableCell>
                       </TableRow>
                     );
                   })}
                   {visible.length === 0 && (
-                    <TableRow><TableCell colSpan={6}>
+                    <TableRow><TableCell colSpan={7}>
                       <Typography color="text.secondary" align="center" sx={{ py: 2 }}>
                         No shots {filter ? 'in this month' : 'recorded yet'}
                       </Typography>
@@ -429,6 +437,8 @@ export default function App() {
                 )}
                 <Typography><b>{(open.duration_ms / 1000).toFixed(1)} s</b> time</Typography>
                 <Typography><b>{open.avg_gps.toFixed(2)} g/s</b> avg flow</Typography>
+                {open.dose_g > 0 && <Typography><b>{open.dose_g.toFixed(1)} g</b> {open.dose_src === 2 ? 'dose (default)' : 'dose'}</Typography>}
+                {ratioOf(open) != null && <Typography><b>1:{ratioOf(open).toFixed(1)}</b> ratio</Typography>}
               </Stack>
               {samples == null && <Box sx={{ textAlign: 'center', py: 4 }}><CircularProgress size={28} /></Box>}
               {samples != null && <ShotChart samples={samples} target={open.target_g} theme={chart} />}

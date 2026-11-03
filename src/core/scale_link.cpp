@@ -12,6 +12,7 @@ constexpr core::ScaleSettingDesc kPartnerSettings[] = {
     {"Auto sleep", kPartnerSleepLabels, 5},
 };
 constexpr int kPartnerSettingCount = 2;  // no Unit row: the Umbra streams grams
+constexpr int kPartnerSleepSetting = 1;  // option 0 = Off: it never sleeps
 
 // Address type UNKNOWN (a unit paired before the type was recorded, or the
 // relearn attempt below): the transport tries both types, so each try is
@@ -56,6 +57,11 @@ namespace core {
 void ScaleLink::set_address(std::string address, AddrType type) {
   {
     std::lock_guard<std::mutex> lk(mutex_);
+    // A different scale: its battery estimate and drain setting don't carry
+    // over (the platform dropped the stored ones when it saved the new MAC).
+    if (!address_.empty() && address_ != address) {
+      battery_est_ = ScaleBatteryEstimate{};
+    }
     address_ = std::move(address);
     addr_type_ = type;
   }
@@ -79,7 +85,16 @@ void ScaleLink::set_name(std::string name) {
 void ScaleLink::set_partner_mode(bool enabled) {
   partner_mode_.store(enabled);
   partner_paired_.store(false);
-  partner_connected_.store(false);
+  // Leaving (or entering) partner mode ends any partner session here, not in
+  // the disconnect callback that follows — which then sees no session. The
+  // sleep note is cleared with it so it can't attach to a later, ordinary
+  // drop (the mode switch's own sleep frame lands after this).
+  const bool was = partner_connected_.exchange(false);
+  partner_sleep_sent_.store(false);
+  if (was) {
+    std::lock_guard<std::mutex> lk(mutex_);
+    battery_est_.on_session_end(/*slept=*/false, now_unix());
+  }
   reconnect_requested_.store(true);
   if (enabled) {
     std::lock_guard<std::mutex> lk(mutex_);
@@ -89,7 +104,16 @@ void ScaleLink::set_partner_mode(bool enabled) {
 }
 
 void ScaleLink::set_partner_connected(bool connected) {
-  partner_connected_.store(connected);
+  const bool was = partner_connected_.exchange(connected);
+  // A note only ever belongs to the session it was sent in: a new session
+  // starts clean, so a sleep frame that never led to a disconnect can't mark
+  // a later, ordinary drop as a sleep.
+  if (!was && connected) partner_sleep_sent_.store(false);
+  if (was && !connected) {
+    const bool slept = partner_sleep_sent_.exchange(false);
+    std::lock_guard<std::mutex> lk(mutex_);
+    battery_est_.on_session_end(slept, now_unix());
+  }
   if (link_up() != connected) set_connected(connected);
 }
 
@@ -135,6 +159,58 @@ void ScaleLink::on_battery(int pct) {
   std::lock_guard<std::mutex> lk(mutex_);
   battery_pct_ = pct;
   battery_valid_ = true;
+  if (partner_mode_.load()) battery_est_.on_reading(pct);
+}
+
+void ScaleLink::load_battery(const ScaleBatteryState& state) {
+  std::lock_guard<std::mutex> lk(mutex_);
+  battery_est_.load(state);
+}
+
+void ScaleLink::persist_battery() {
+  {
+    std::lock_guard<std::mutex> lk(mutex_);
+    if (!battery_est_.dirty()) return;
+  }
+  if (battery_persist_) battery_persist_();
+}
+
+bool ScaleLink::take_battery_state(ScaleBatteryState* out) {
+  std::lock_guard<std::mutex> lk(mutex_);
+  if (!battery_est_.take_dirty()) return false;
+  *out = battery_est_.state();
+  return true;
+}
+
+ScaleBatteryInfo ScaleLink::battery_info() const {
+  ScaleBatteryInfo info;
+  if (!partner_mode_.load()) return info;
+  std::lock_guard<std::mutex> lk(mutex_);
+  info.supported = true;
+  info.rate_pct_per_day = battery_est_.rate();
+  info.armed = battery_est_.armed();
+  info.sleep_off = setting_value_[kPartnerSleepSetting] == 0;
+  return info;
+}
+
+void ScaleLink::set_battery_drain_rate(int pct_per_day) {
+  if (!partner_mode_.load() || pct_per_day < kScaleDrainMinPctPerDay ||
+      pct_per_day > kScaleDrainMaxPctPerDay)
+    return;
+  std::lock_guard<std::mutex> lk(mutex_);
+  battery_est_.set_rate(pct_per_day);
+}
+
+void ScaleLink::set_battery_calibration(bool armed) {
+  if (!partner_mode_.load()) return;
+  std::lock_guard<std::mutex> lk(mutex_);
+  if (armed) battery_est_.arm();
+  else battery_est_.disarm();
+}
+
+int ScaleLink::take_battery_calibration_result() {
+  std::lock_guard<std::mutex> lk(mutex_);
+  return battery_est_.take_calibration_result();
 }
 
 void ScaleLink::on_device_setting(int index, int option_idx) {
@@ -217,6 +293,7 @@ void ScaleLink::run() {
       if (link_up() != partner) set_connected(partner);
       if (partner && pending_tare_.exchange(false) && partner_setting_writer_)
         partner_setting_writer_(-1, 0);
+      persist_battery();
       sleep_ms(100);
       continue;
     }
@@ -258,7 +335,8 @@ void ScaleLink::run() {
         // short direct connect on its next poll.
         const Sighting s = ble_.scan_for(arb_.finder_targets(), RadioArbiter::kChunkMs);
         if (s.found) {
-          logf("ScaleLink: finder saw %s (%s)\n", radio_slot_name(s.slot),
+          if (log_detail())
+            logf("ScaleLink: finder saw %s (%s)\n", radio_slot_name(s.slot),
                addr_type_name(s.type));
           arb_.report_sighting(s.slot, s.type, now_ms());
         }
@@ -377,6 +455,27 @@ void ScaleLink::run() {
       if (send_idx >= 0) drv->set_device_setting(ble_, send_idx, send_val);
     }
 
+    // Subscribed but never a weight: the link is up and the data isn't
+    // coming (see subscribed_at_ms_). Re-dial now rather than wait for the
+    // scale's own patience to run out.
+    {
+      bool streaming;
+      {
+        std::lock_guard<std::mutex> lk(mutex_);
+        streaming = weight_streaming_;
+      }
+      const uint32_t since = now_ms() - subscribed_at_ms_.load();
+      const uint32_t limit = drv ? drv->first_weight_ms() : kFirstWeightMs;
+      if (limit != 0 && !streaming && since >= limit) {
+        logf("ScaleLink: no weight %lu ms after subscribing -> re-dialling\n",
+             static_cast<unsigned long>(since));
+        ble_.disconnect();
+        connected = false;
+        set_connected(false);
+        continue;
+      }
+    }
+
     // Driver housekeeping: heartbeats, stream watchdogs. false = link is dead.
     if (drv && !drv->tick(ble_)) {
       ble_.disconnect();
@@ -410,9 +509,11 @@ bool ScaleLink::do_connect(const std::string& address, AddrType type,
   // timed out fully before falling back to RANDOM).
   const bool known = type != AddrType::kUnknown;
   if (!ble_.connect(address, type, /*prefer_random=*/true, timeout_ms)) {
-    logf("ScaleLink: connect failed (%s, %lu ms)\n",
-         known ? addr_type_name(type) : "random+public",
-         static_cast<unsigned long>(timeout_ms));
+    ++connect_fails_;  // a scale asleep all day: 1st, 2nd, then every 20th
+    if (connect_fails_ <= 2 || connect_fails_ % 20 == 0)
+      logf("ScaleLink: connect failed (%s, %lu ms) x%u\n",
+           known ? addr_type_name(type) : "random+public",
+           static_cast<unsigned long>(timeout_ms), static_cast<unsigned>(connect_fails_));
     return false;
   }
   // Learn the type the connect actually used: persisted by the platform so
@@ -455,6 +556,9 @@ bool ScaleLink::do_connect(const std::string& address, AddrType type,
     return false;
   }
 
+  connect_fails_ = 0;
+  subscribed_at_ms_.store(now_ms());
+
   logf("ScaleLink: %s connected + subscribed (%s)\n", drv->model(),
        addr_type_name(used));
   return true;
@@ -472,15 +576,27 @@ ScaleSnapshot ScaleLink::snapshot() const {
   // Lunar), and everything downstream keys on this one bit — Home's status/
   // readout/Tare, Settings, Auto shot arming, the shot detector, the stop
   // logic — so none of them act on a scale that isn't sending weight yet.
-  return ScaleSnapshot{
+  ScaleSnapshot snap{
       .name = name_.c_str(),
       .connected = connected_ && weight_streaming_,
       .weight_g = weight_g_,
       .timer_ms = timer_ms_,
       .battery_valid = battery_valid_,
       .battery_pct = battery_pct_,
+      .battery_estimated = false,
       .seq = seq_,
   };
+  // A partner-mode Umbra's gauge freezes once it has slept: show the estimate
+  // (which is the reading itself while the gauge is live).
+  if (partner_mode_.load()) {
+    const ScaleBatteryView v = battery_est_.view(now_unix());
+    if (v.valid) {
+      snap.battery_valid = true;
+      snap.battery_pct = v.pct;
+      snap.battery_estimated = v.estimated;
+    }
+  }
+  return snap;
 }
 
 ScaleFeatures ScaleLink::features() const {
@@ -578,7 +694,8 @@ void ScaleLink::do_scan() {
       // Logged so an unsupported scale's advertised name can be read off the
       // Log page instead of guessed at — new models keep appearing with
       // names the filter doesn't know yet.
-      logf("ScaleLink: scan skipped '%s' (%d dBm)\n", r.name, r.rssi);
+      if (log_detail())
+        logf("ScaleLink: scan skipped '%s' (%d dBm)\n", r.name, r.rssi);
       continue;
     }
     found.push_back(r);

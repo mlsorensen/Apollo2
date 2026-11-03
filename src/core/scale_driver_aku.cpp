@@ -65,6 +65,7 @@ class AkuDriver : public IScaleDriver {
     sink.on_weight(sign * static_cast<float>(raw) / 100.0f);
   }
 
+  uint32_t first_weight_ms() const override { return 0; }  // own stream timeout below
   bool tick(ble::ICentral&) override {
     if (now_ms() - last_rx_ms_.load() > kStreamDeadMs) {
       logf("AkuDriver: stream silent — reconnecting\n");

@@ -36,6 +36,7 @@
 #include "platform_esp32/display.h"
 #include "platform_esp32/display_settings.h"
 #include "platform_esp32/schedule_settings.h"
+#include "platform_esp32/dose_settings.h"
 #include "platform_esp32/history.h"
 #include "platform_esp32/install_mode.h"
 #include "platform_esp32/io_extension.h"
@@ -63,6 +64,10 @@
 // responsive whether the machine is connected, connecting, or offline.
 
 namespace {
+// Steady-state telemetry cadence (the perf and heap lines in the log ring).
+// Once a minute (owner: don't lose resolution); the lines are kept short
+// instead — the three old ones were 78 % of the ring.
+constexpr uint32_t kTelemetryMs = 60u * 1000u;
 
 platform::Display g_display;
 platform::Touch g_touch;
@@ -76,6 +81,7 @@ platform::Provisioner g_provisioner{g_micra, g_config, g_token_setup};
 platform::Battery g_battery;
 platform::DisplaySettings g_display_settings{g_display, g_config};
 platform::ScheduleSettings g_schedule{g_config};  // Settings > Micra > Schedule (NVS)
+platform::DoseSettings g_dose{g_config};          // Settings > Scale > Shot settings > Dose (NVS)
 platform::Clock g_clock{g_config};
 platform::Network g_network{g_config, g_clock, g_token_setup};  // WiFi station + NTP
 platform::UpdateCheck g_update_check{g_config, g_network};  // daily release check
@@ -180,7 +186,11 @@ void setup() {
 
   // Log ring before the first diagnostic, so the banner onward is replayable
   // from Stats > Info or http://<ip>/log after the fact.
-  platform::log_init();
+  // The Detailed log setting decides the ring's size and what goes in it;
+  // read before anything logs (Preferences works before Config::begin —
+  // an absent namespace reads as the default, off).
+  core::set_log_detail(g_config.detailed_log());
+  platform::log_init(g_config.detailed_log());
   platform::crash_record::install();  // failed-allocation flight recorder
 
   delay(300);  // let USB-CDC enumerate
@@ -402,7 +412,8 @@ void setup() {
     if (static_cast<int>(s.link) != last_link || static_cast<int>(s.power) != last_power) {
       last_link = static_cast<int>(s.link);
       last_power = static_cast<int>(s.power);
-      core::logf("Paddle standby check: link=%d power=%s -> %s\n", last_link,
+      if (core::log_detail())
+        core::logf("Paddle standby check: link=%d power=%s -> %s\n", last_link,
                  s.power == core::Power::On        ? "On"
                  : s.power == core::Power::Standby ? "Standby"
                                                    : "Off",
@@ -476,7 +487,7 @@ void setup() {
 #else
               nullptr,  // no card slot: no Backup page
 #endif
-              g_schedule);
+              g_schedule, &g_dose);
 
   // Settings "Restart display": on RGB boards this is a panel DMA resync, not
   // a reboot — the shifted/ghosted raster is a latched bounce-buffer underrun,
@@ -537,6 +548,7 @@ void setup() {
   // another here silently replaces it (that bit us on 2026-09-12).
 
   NimBLEDevice::init("micra-remote");
+  platform::install_gap_event_log();  // parameter updates + peer requests, in the ring
 
   // Umbra partner GATT service: registered before any link can connect/scan
   // (see ScaleLink::register_partner), and ONLY when partner mode is saved.
@@ -580,6 +592,9 @@ void setup() {
   // Without arbitration a Settings scan silently returned nothing whenever
   // the other device sat in "Connecting" (user-reported on the 4.3C), and the
   // Micra's and the scale's reconnect attempts collided and interleaved by luck.
+  // (The Micra's link runs at NimBLE's defaults, 50 ms / 2.56 s. A 30 ms
+  // interval was tried on 2026-10-31 against the Umbra-induced poll stalls
+  // and changed nothing; set_preferred_conn_params stays available.)
   g_radio.set_hold_hook(core::RadioSlot::kMicra,
                         [](bool on) { g_micra.central().hold_connects(on); });
   g_radio.set_scan_cancel_hook(core::RadioSlot::kMicra,
@@ -628,6 +643,22 @@ void setup() {
     link.set_addr_type_learned([lp](core::AddrType t) {
       g_scale_provisioner.persist_for(*lp, [lp, t](core::ScaleSlot s) {
         if (lp->addr_type() == t) g_config.set_scale_addr_type(s, t);
+      });
+    });
+    // A partner-mode Umbra's battery estimate, persisted into the keys of the
+    // role the link holds when it changes (they follow the scale on a swap),
+    // under the same lock; the state is taken inside it, so a save that
+    // replaced the scale meanwhile writes the new scale's state, not the old.
+    // Time is trusted only after a real NTP sync this boot — a board without
+    // an RTC boots on a seeded guess hours behind (same gate as the schedule).
+    core::ScaleBatteryState battery;
+    g_config.scale_battery(slot, &battery);
+    link.load_battery(battery);
+    link.set_battery_clock(&g_clock, [] { return g_network.ntp_seconds_since_sync() >= 0; });
+    link.set_battery_persist([lp] {
+      g_scale_provisioner.persist_for(*lp, [lp](core::ScaleSlot s) {
+        core::ScaleBatteryState st;
+        if (lp->take_battery_state(&st)) g_config.set_scale_battery(s, st);
       });
     });
     core::logf("Saved %s scale: mac=%s type=%s\n", core::scale_slot_name(slot),
@@ -705,6 +736,7 @@ void loop() {
   g_scale2.poll_partner();
   poll_serial_id();          // web-flasher "which board is this?" responder
   g_brew.poll(millis());     // paddle relay + shot state machine (edge-critical)
+  g_micra.abort_stalled_request(millis());  // a Micra request stuck 5 s: re-dial now, not in 30
   // Frame-cost telemetry, replacing LVGL's on-screen perf overlay (which is a
   // DEBUG tool that had been shipping enabled -- see lv_conf.h -- and which
   // redraws every frame, inflating the very numbers it reports). This costs
@@ -725,17 +757,20 @@ void loop() {
     ++iters;
     if (dt > worst) worst = dt;
     if (pump_dt > pworst) pworst = pump_dt;
-    if (millis() - last >= 60000) {  // telltale cadence, matches the heap line
+    // One compact line a minute (was two: with the heap line they were 78 %
+    // of the ring — owner, 2026-10-31). Fields: frames, avg us, worst us,
+    // % of the window, for lvgl and the graph pump.
+    if (millis() - last >= kTelemetryMs) {
       last = millis();
-      core::logf("lvgl: %u frames, avg %u us, worst %u us (%u%% of wall)\n",
+      if (core::log_detail())
+      core::logf("perf: lvgl %uf avg %u worst %uus %u%% | pump avg %u worst %uus %u%%\n",
                  static_cast<unsigned>(iters),
                  static_cast<unsigned>(iters ? acc / iters : 0),
                  static_cast<unsigned>(worst),
-                 static_cast<unsigned>(acc / 600000));  // % of the 60s window
-      core::logf("pump: avg %u us, worst %u us (%u%% of wall)\n",
+                 static_cast<unsigned>(acc / (kTelemetryMs * 10)),  // % of the window
                  static_cast<unsigned>(iters ? pacc / iters : 0),
                  static_cast<unsigned>(pworst),
-                 static_cast<unsigned>(pacc / 600000));
+                 static_cast<unsigned>(pacc / (kTelemetryMs * 10)));
       acc = iters = worst = 0;
       pacc = pworst = 0;
     }
@@ -799,15 +834,19 @@ void loop() {
   // sampling blind spot and costs nothing to read. It tracks free bytes rather
   // than largest block (the allocator doesn't track that), which is the one
   // thing the sampler did give us -- so largest is still read at log time.
+  // Every minute with Detailed log on, every 15 min off (the memwatch
+  // tripwires and the failed-allocation census log regardless).
   static uint32_t last_heap_log_ms = 0;
-  if (millis() - last_heap_log_ms >= 60u * 1000u) {
+  if (millis() - last_heap_log_ms >= (core::log_detail() ? kTelemetryMs : 15 * kTelemetryMs)) {
     last_heap_log_ms = millis();
     // loop_hw = bytes of THIS task's stack never touched. ARDUINO_LOOP_STACK_SIZE
     // is 16KB by guess (a past overflow on theme rebuild + WiFi bring-up); this
-    // is the number to size it from.
+    // is the number to size it from. PSRAM free is here so the figure is
+    // always in the ring (it was only in a boot-time line before).
+    // Fields are free/largest/lowest for the 8-bit and DMA pools (a legend
+    // is logged once at boot), then PSRAM free and this task's stack slack.
     core::logf(
-        "heap: 8bit free=%u largest=%u lowest=%u | DMA free=%u largest=%u lowest=%u | "
-        "loop_hw=%u\n",
+        "heap: 8bit %u/%u/%u dma %u/%u/%u psram %u hw %u\n",
         static_cast<unsigned>(
             heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
         static_cast<unsigned>(heap_caps_get_largest_free_block(
@@ -820,6 +859,7 @@ void loop() {
             MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)),
         static_cast<unsigned>(heap_caps_get_minimum_free_size(
             MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)),
+        static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM)),
         static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
 
 
@@ -979,7 +1019,8 @@ void loop() {
         boot_done = true;
         core::logf("UpdateCheck: boot check unreachable after retries\n");
       } else {
-        core::logf("UpdateCheck: automatic check at boot (try %d)\n", ++boot_tries);
+        if (core::log_detail())
+          core::logf("UpdateCheck: automatic check at boot (try %d)\n", ++boot_tries);
         g_update_check.begin_check();
         next_boot_try_ms = millis() + 6000;  // space retries while DNS settles
       }
@@ -999,7 +1040,8 @@ void loop() {
         !core::shot_in_flight(g_brew.snapshot()) &&
         millis() - last_repeat_ms >= repeat_ms) {
       last_repeat_ms = millis();
-      core::logf("UpdateCheck: %s automatic check\n",
+      if (core::log_detail())
+        core::logf("UpdateCheck: %s automatic check\n",
                  cadence == 3 ? "hourly" : "daily");
       g_update_check.begin_check();
     }

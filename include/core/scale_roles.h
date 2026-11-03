@@ -39,6 +39,16 @@ class RoleScale : public IScale {
   void set_device_setting(int index, int option_idx) override {
     target()->set_device_setting(index, option_idx);
   }
+  ScaleBatteryInfo battery_info() const override { return target()->battery_info(); }
+  void set_battery_drain_rate(int pct_per_day) override {
+    target()->set_battery_drain_rate(pct_per_day);
+  }
+  void set_battery_calibration(bool armed) override {
+    target()->set_battery_calibration(armed);
+  }
+  int take_battery_calibration_result() override {
+    return target()->take_battery_calibration_result();
+  }
 
  private:
   std::atomic<IScale*> target_;

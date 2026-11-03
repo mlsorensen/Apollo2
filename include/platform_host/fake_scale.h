@@ -16,10 +16,11 @@ class FakeScale : public core::IScale {
         .name = bench_ ? "BOOKOO_SC_U400037" : lunar_ ? "LUNAR-A1B2" : umbra_ ? "UMBRA-7F3A"
                                                                        : "BOOKOO_THEMIS",
         .connected = connected_,
-        .weight_g = bench_ ? 412.5f : 36.4f,
+        .weight_g = bench_ ? bench_weight_ : 36.4f,
         .timer_ms = 27000,
         .battery_valid = true,
-        .battery_pct = bench_ ? 84 : 78,
+        .battery_pct = bench_ ? 84 : battery_estimated_ ? 41 : 78,
+        .battery_estimated = !bench_ && battery_estimated_,
         .seq = 1,
     };
   }
@@ -78,9 +79,30 @@ class FakeScale : public core::IScale {
       setting_value_[i] = v;
   }
 
+  // The partner Umbra's battery estimate (Apollo-side rows; Umbra persona).
+  core::ScaleBatteryInfo battery_info() const override {
+    if (!umbra_ || bench_) return core::ScaleBatteryInfo{};
+    return core::ScaleBatteryInfo{.supported = true,
+                                  .rate_pct_per_day = drain_,
+                                  .armed = armed_,
+                                  .sleep_off = setting_value_[1] == 0};
+  }
+  void set_battery_drain_rate(int pct_per_day) override { drain_ = pct_per_day; }
+  void set_battery_calibration(bool armed) override { armed_ = armed; }
+  int take_battery_calibration_result() override {
+    const int r = cal_result_;
+    cal_result_ = -1;
+    return r;
+  }
+
   void set_connected(bool c) { connected_ = c; }
+  // Render poses: the battery shown as an estimate (a frozen Umbra gauge), a
+  // finished calibration waiting for its Store / Discard modal.
+  void set_battery_estimated(bool e) { battery_estimated_ = e; }
+  void set_calibration_result(int pct_per_day) { cal_result_ = pct_per_day; }
   // Bench persona: the counter scale (a Bookoo Ultra with a milk jug on it).
   void set_bench(bool b) { bench_ = b; }
+  void set_bench_weight(float g) { bench_weight_ = g; }  // dose poses: a loaded portafilter
   // Umbra persona: sleep-capable scale, for rendering the "Sleeping" Home state.
   void set_umbra(bool u) { umbra_ = u; }
   // Lunar persona: Acaia with a Unit row + the read-only weighing-mode row.
@@ -94,6 +116,11 @@ class FakeScale : public core::IScale {
   bool umbra_ = false;
   bool lunar_ = false;
   bool bench_ = false;
+  float bench_weight_ = 412.5f;
+  bool battery_estimated_ = false;
+  bool armed_ = false;
+  int drain_ = 15;
+  int cal_result_ = -1;
   int setting_value_[4] = {3, 2, 0, 3};  // Beep / Auto-off / Unit g / Mode 4
 };
 

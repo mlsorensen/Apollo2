@@ -4,6 +4,7 @@
 #include <string>
 
 #include "core/provisioner.h"        // core::AddrType
+#include "core/scale_battery_estimate.h"
 #include "core/scale_provisioner.h"  // core::ScaleSlot
 
 // Persistent device configuration in NVS flash: the saved machine (BLE MAC +
@@ -53,12 +54,28 @@ class Config {
   void set_scale_addr_type(core::ScaleSlot slot, core::AddrType type);
   void clear_scale(core::ScaleSlot slot = core::ScaleSlot::kEspresso);
   void swap_scales();  // exchange the two slots' stored values
+  // A partner-mode Umbra's battery estimate + drain setting (ADD, v1.3:
+  // `sbatest`, bench `sbatest2` — core::pack_scale_battery's blob, tagged
+  // with the scale's MAC). It follows the scale: a swap exchanges it, a
+  // re-save of the same MAC keeps it, a different scale or Forget drops it.
+  // False = nothing stored for THIS scale (start from the defaults).
+  bool scale_battery(core::ScaleSlot slot, core::ScaleBatteryState* state) const;
+  void set_scale_battery(core::ScaleSlot slot, const core::ScaleBatteryState& state);
 
   // Where the bench scale shows on Home (ADD, v1.2): 0 = in the SCALE card
   // behind an ESPRESSO | BENCH switch (default), 1 = its own card beside the
   // graph.
   int bench_home_style() const;
   void set_bench_home_style(int style);
+  // Dose from the bench scale (v1.3): the Record switch and up to three
+  // stored container weights (0 = empty slot).
+  bool dose_enabled() const;           // default false (opt-in)
+  void set_dose_enabled(bool on);
+  float dose_container(int index) const;
+  void set_dose_container(int index, float grams);
+  float default_dose() const;       // grams, 0 = off (default)
+  float default_dose_last() const;  // the last value set, for the switch to restore
+  void set_default_dose(float grams);
 
   // Brew-by-weight target (grams) — persisted so it survives reboots.
   float target_weight_g() const;       // default 36
@@ -141,6 +158,8 @@ class Config {
 
   bool perf_overlay() const;  // LVGL FPS/CPU overlay (default false)
   void set_perf_overlay(bool on);
+  bool detailed_log() const;  // steady-state chatter in the log ring + a 512 KB ring (default false)
+  void set_detailed_log(bool on);
   bool click_sound() const;  // button-press click (default true; audio boards)
   void set_click_sound(bool on);
   int ready_chime_volume() const;  // warm-up chime level 0..100, 0 = off

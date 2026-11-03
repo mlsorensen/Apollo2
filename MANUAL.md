@@ -43,9 +43,10 @@ Home
 │  ├─ [Connect/Disconnect] · [Tare]
 │  └─ [ESPRESSO | BENCH]  swaps in the BENCH card   *(bench scale paired,
 │                         "In the scale card")*
-├─ BENCH card — status · WEIGHT · [Disconnect] · [Tare]   *(bench scale paired;
-│                beside the graph, or behind the switch above)*
-└─ Flow graph — legend chip: g/s ↔ g (espresso) · bench weight in g
+├─ BENCH card — status · WEIGHT (→ Record <dose>) · [Disconnect] · [Tare]
+│                *(bench scale paired; beside the graph, or behind the switch above)*
+└─ Flow graph — legend chip: live g/s ↔ g (espresso) · live bench g
+                · dose chip above it: <in> g in → <out> g out · 1:ratio (×  clears)
                 · freezes for review after a shot
 
 Settings
@@ -54,7 +55,7 @@ Settings
 │  ├─ Controls  — Wired paddle* · Chime melody* · Chime volume*
 │  │             · Brew Temperature · Steam Enable + Temperature
 │  ├─ Cleaning* — Auto flush · Flush delay · Backflush cleaning  → cleaning mode
-│  └─ Schedule  — Auto-standby after last shot · Show auto-standby timer
+│  └─ Schedule  — Auto-standby when idle · Show auto-standby timer
 │                · Enable schedules · Same every day · Smart Warm-up
 │                └─ Configure schedule — day chips · Day enabled · On at / Off at
 │                                        · range slider · Copy times to
@@ -62,14 +63,17 @@ Settings
 │  ├─ Bluetooth       — Scan → Espresso / Bench · saved scales (ESPRESSO / BENCH:
 │  │                    Connect / Forget) · Swap roles · Umbra pairing
 │  ├─ Shot settings   — Target · Review hold · Detect lead-in
+│  │                    · Record dose · Default dose · Container 1–2 (Capture / ×)
 │  ├─ Device settings — Scale (Espresso / Bench picker)
 │  │                    · the scale's own settings (Beep · Auto-off/sleep · Unit …)
+│  │                    · paired Umbra: Battery drain per day · Calibrate drain
 │  └─ Display         — Battery display (Icon / Percent / Icon + %) · Smoothing
 │                       · Drop negative g/s · Oscilloscope graph · Window growth
 │                       · Bench scale on Home (In the scale card / Beside the graph)
 ├─ Apollo
 │  ├─ Display     — Brightness* · Screen timeout · Idle screen (Lion/Apollo/Alternate/Dim/Off)
 │  │               · Theme · Fahrenheit · Button sounds* · Performance overlay
+│  │               · Detailed log
 │  ├─ Time & date — Time · Date · 24-hour · Timezone
 │  ├─ WiFi        — Enable · Status · Set up WiFi → QR portal (network, time zone,
 │  │                 DHCP / static address) · Forget
@@ -153,7 +157,9 @@ Without a scale, the MICRA card fills the screen as a single hero:
 
 - ① **Status** — `Connected`, `Connecting...`, or `Sleeping` (sleep‑capable
   scales such as the Acaia Umbra with the link switched off). A small battery
-  icon shows the scale's own battery where the scale reports it.
+  icon shows the scale's own battery where the scale reports it. For a
+  paired Umbra that has slept, it is an *estimate* — the percent reads `~41%`
+  (see **Battery drain per day** under Device settings).
 - ② **WEIGHT** — live reading. During a finished shot's review it freezes at the
   net shot weight so lifting the cup doesn't wipe the number you care about.
 - ③ **TARGET** — the brew‑by‑weight stop target in grams (**−/+** on larger
@@ -206,8 +212,12 @@ auto flush), and nothing on this card is ever disabled by a shot.
   **BENCH** to swap the bench card in; tap **ESPRESSO** to swap back. A shot
   starting swaps back by itself, so a shot is never hidden. The status dot
   and battery stay in the header in both positions.
-- ② **WEIGHT** — the bench scale's live reading, with the scale's name under
-  it. Battery and status follow the same rules as the SCALE card's.
+- ② **WEIGHT** — the bench scale's live reading, with the scale's name as
+  its caption (above it on the swap card, on the same lines as the MICRA
+  card's BREW and STEAM; under it on the card beside the graph). Battery
+  and status follow the same rules as the SCALE card's. When what sits on
+  the scale looks like a dose, the caption and reading become the
+  **Record** button — see *Recording your dose* below.
 - ③ **Disconnect / Connect** and **Tare** — the bench scale's own.
 - With **Bench scale on Home** set to *Beside the graph*, the bench card sits
   to the right of the flow graph instead (with just **Tare**), and the graph
@@ -219,15 +229,75 @@ auto flush), and nothing on this card is ever disabled by a shot.
 A bench scale with *no* espresso scale paired takes the SCALE card's place by
 itself, and the graph shows it in grams.
 
+#### Recording your dose
+
+![Dose recorded — the block on the bench card and the chip in the graph](docs/img/manual/home-dose-recorded.png)
+
+Apollo can keep the **dose** (grams in) with each shot and show the **brew
+ratio** (in : out) in the graph and in History. It is off until you turn it
+on, and it has two independent switches under **Settings → Scale → Shot
+settings**:
+
+- **Record dose** — the feature itself. Off (the default), none of this
+  exists: no Record offers on the bench card, no dose chip in the graph,
+  no ratio in History. On, Apollo offers to record a dose whenever one is
+  weighed on the bench scale, and shows the ratio for a shot that has one.
+  It needs an espresso scale paired, since the ratio needs the shot's yield.
+- **Default dose** — optional, and off by default too. On, a dose you set
+  once (18.0 g to start, 5–30 g) is used for every shot you *don't* weigh,
+  so a constant daily dose needs no weighing at all — and the ratio works
+  even with no bench scale. Off, the only doses are the ones you weigh.
+
+**Weighing a dose.** Put the dosed portafilter (or your dosing cup, or beans
+in a tared cup) on the bench scale. Once the reading has held still for a
+second and is dose‑sized, the weight and its caption gain an amber outline
+and the caption reads **Record 18.3 g** — the dose Apollo would store ①. Tap
+it to record; the caption turns to **✓ 18.3 g recorded** until you lift the
+portafilter, and a chip appears above the graph's legend ② with the dose:
+**18.3 g in**. That dose belongs to the **next shot you start**: when the
+shot begins the chip adds a placeholder for the yield (**--.- g out**), fills
+it in live as the shot runs with the ratio growing beside it, and freezes
+with the graph for review (**36.4 g out · 1:2.0**).
+
+- **Containers.** Nothing is subtracted for a tared cup. For a portafilter
+  or a dosing cup that is *not* tared, store its weight once under **Shot
+  settings → Container** and Apollo subtracts it by itself: the reading is
+  matched to the heaviest stored container lighter than it, so a 498 g
+  reading with a 480 g portafilter stored records 18 g. Apollo measures the
+  *step* the load made on the scale (from whatever it read before), so you
+  don't have to tare first — a spoon already on the scale, or a cup you
+  tared earlier, makes no difference. Record is only offered for a step
+  whose dose would be 5–30 g — a milk jug never offers it.
+- **A dose clears** when you record again (the new one replaces it), when
+  you tap the **×** on the chip, or when you've evidently walked away: the
+  screensaver starting, a scale going to sleep (a link that drops and stays
+  down half a minute), the Micra going to standby, or an hour passing.
+- **The default dose** is staged for every shot: the chip shows it as
+  **18.0 g set**, and a dose you weigh overrides it for that one shot. The
+  **×** on a staged default skips it for the next shot only; it is staged
+  again after that shot, or when you've walked away as above. While the
+  switch is on, the BENCH card carries a **− / +** for the value — on the
+  swap card in the row the other cards' steppers use, beside the graph in
+  the scale name's place (a Record offer takes that line back while it
+  shows) — so it can be dialled without leaving Home. Switch it off and
+  those controls go with it.
+- **History** keeps which kind each shot had: a weighed dose reads
+  **18.2 g in** on the shot's card, a default **18.0 g default**, so a ratio
+  can be told apart as measured or assumed. The web page shows the same.
+
 ### Flow graph
 
 ![Flow graph](docs/img/manual/home-flow-graph.png)
 
 Plots the live flow rate (or weight) from the scale.
 
-- The chip ① is a legend: a coloured dot per scale and its unit. Tap it to
-  switch the espresso trace between flow rate (g/s) and weight (g); the
-  caption ② names the time window in view.
+- The chip ① is a legend with live values: a coloured dot per scale and the
+  current reading in that series' unit — the espresso scale's flow rate
+  (or weight), the bench scale's grams. Tap it to switch the espresso trace
+  between flow rate (g/s) and weight (g); the caption ② names the time
+  window in view. A staged dose adds its own chip above the legend that
+  builds up over the shot; only its **×** is a control — see *Recording your
+  dose* under the BENCH card.
 - With a bench scale, the **BENCH** side of the swap card shows the bench
   scale's weight in grams instead (its own amber trace, hundreds of grams on
   the axis). *Beside the graph*, both scales share the plot: the espresso
@@ -382,12 +452,14 @@ schedule in the La Marzocco app — two schedules for one machine conflict and
 confuse. **OK** dismisses it until the next restart; **Don't show again**, for
 good.
 
-- ① **Auto‑standby after last shot** *(default off, 30 min; 10–240 in
+- ① **Auto‑standby when idle** *(default off, 30 min; 10–240 in
   10‑minute steps)* — independent of the schedule rows below: sends the
-  machine to standby this long after the **last shot**, like the Micra's own
-  auto‑standby. Each shot restarts the count; a machine that was switched on
-  but never used is left alone, so a scheduled turn‑on stays up until you use
-  it (and a scheduled turn‑on cancels a running count). It needs only a
+  machine to standby this long after you last **used** it — a shot (in any
+  mode, a Manual pull included), a flush or a backflush — like the Micra's
+  own auto‑standby. Each of those restarts
+  the count, and none of it fires while one is running; a machine that was
+  switched on but never used is left alone, so a scheduled turn‑on stays up
+  until you use it (and a scheduled turn‑on cancels a running count). It needs only a
   paired Micra — no WiFi, no clock, and it works with the schedules switched
   off. It does need to *see* shots, though: through a wired paddle, or a
   paired scale in Shot detect mode. With neither, a line under the row says
@@ -434,14 +506,15 @@ How it behaves:
   once; Off at sends it to standby once. Between them do as you like — switch
   it off by hand and it stays off; switch it on early and On at simply finds
   it already on.
-- **Auto‑standby counts from the last shot, not from turn‑on.** Turn the
-  machine on by hand and pull nothing, and it stays on; pull a shot and the
-  count starts, restarting with every shot. If the count runs out mid‑shot
-  or during the review, it simply restarts when the shot ends. Standby by
+- **Auto‑standby counts from the last use, not from turn‑on.** Turn the
+  machine on by hand and do nothing, and it stays on; pull a shot, run a
+  flush or a backflush and the count starts, restarting with each. If the
+  count runs out mid‑shot, during the review or mid‑cleaning, it simply
+  restarts when that ends. Standby by
   any route — you, the schedule, this — ends the count, and a machine
   already in standby makes the scheduled Off at a no‑op.
-- **Standby waits for the shot.** If Off at lands while a shot is running or
-  still under review, standby holds until the device has been idle for about
+- **Standby waits for the shot.** If Off at lands while a shot is running,
+  still under review or a cleaning cycle is going, standby holds until the device has been idle for about
   two minutes (long enough for the auto‑flush and the cup to come off), then
   goes ahead if the machine is still on.
 - **Only while connected.** A trigger fires only if the Micra is connected at
@@ -516,6 +589,21 @@ which is a weight readout with its own Tare (see the BENCH card above).
   started the shot. Adjust it to match your machine's preinfusion setting as
   needed (roughly your typical paddle‑to‑first‑drip time); 0 starts the shot
   at the first drip.
+- ④ **Record dose** *(off by default; needs an espresso scale)* — the dose
+  chip in the graph, the ratio, and with a bench scale the Record block on
+  the bench card (see *Recording your dose* under the BENCH card). Off, none
+  of it shows and nothing is recorded.
+- ⑤ **Default dose** *(switch, off by default; on: 5–30 g in 0.5 g steps,
+  18.0 g at first)* — a dose staged for every shot when none was recorded;
+  see *Recording your dose*. Off hides the value controls here and on the
+  bench card.
+- ⑥ **Container 1–2** *(bench scale only)* — the weights Apollo subtracts from a bench reading
+  before recording a dose: a portafilter, a dosing cup. Put the empty
+  container on the bench scale and tap **Capture**; **×** forgets it. A
+  container has to weigh at least 50 g, and two containers have to be more
+  than 30 g apart — lighter or closer than that, a dose could be read as
+  the wrong thing, so Capture refuses and says why. Tare anything lighter
+  instead.
 
 These are all about how a shot *runs*; how the graph *looks* is under
 **Display** below.
@@ -539,7 +627,7 @@ model (a Bookoo Themis's ① **Beep** and ② **Auto‑off** shown above):
   and **Auto sleep** (Off / 1–30 min). The Acaia app can
   additionally set *power‑off* timers; those aren't offered here (a
   powered‑off scale can't be woken over Bluetooth) and show as `--` if set
-  elsewhere.
+  elsewhere. A **paired** Umbra adds two battery rows, below.
 - **Acaia Lunar / Pyxis** — **Beep** — the row shows the beep volume the
   scale stores (Off / 1–3), but over Bluetooth the beep can only be toggled:
   tapping cycles **off** and **on**, and *on* restores whatever volume was
@@ -566,6 +654,35 @@ instead). Tap a value to advance to the next choice; the write goes to the
 scale immediately and sticks like any change made from the scale's own
 buttons. Like Tare, the espresso scale's rows are disabled while a shot is
 running; the bench scale's never are.
+
+#### Paired Umbra: battery estimate
+
+![Device settings for a paired Umbra](docs/img/manual/scale-device-umbra.png)
+
+Once an Umbra has been put to sleep, it keeps reporting the battery level it
+had when it went to sleep until it is restarted (charging restarts it), on
+every app. So while it is asleep, Apollo works the level out instead: the last
+level it saw change, less a daily drain for each day since. The estimate shows
+with a `~` (`~41%`) and drives the low‑battery warning like a real reading.
+The first reading that changes means the scale is reporting again, and it
+shows as normal.
+
+- ① **Battery drain per day** *(1–30 %, default 15 %)* — how much charge the
+  scale loses per day, asleep or not; for an Umbra, time matters far more than
+  how long it's used each day. 13–15 % suits a stock battery.
+- ② **Calibrate drain** — measures your scale's own figure. Tap **Start**,
+  charge the scale fully, use it as usual until it runs flat, then charge it
+  again. When it comes back, Apollo shows the measured drain next to the
+  current setting: **Store** saves it, **Discard** keeps the setting (discard
+  it if the scale was charged before it ran flat). If the scale is charged
+  before Apollo has measured a whole sleep, you see **Calibration
+  incomplete** instead; start again to retry. While a calibration is running
+  the button reads **Cancel**.
+
+Both rows are greyed out while the Umbra's **Auto sleep** is **Off**: a scale
+that never sleeps keeps reporting its battery, and nothing needs estimating.
+The estimate needs the clock: a board that hasn't set its time from the
+internet since it started keeps showing the last estimate unchanged.
 
 ### Display
 
@@ -671,6 +788,13 @@ page fits on screen with little to no scrolling.
   powered down until the next restart.
 - ⑦ **Performance overlay** *(default off)* — LVGL FPS/CPU overlay, for
   debugging.
+- ⑧ **Detailed log** *(default off)* — keeps the minute-by-minute
+  housekeeping in the diagnostic log (performance and memory lines, the
+  screensaver's art changes, update checks, the scale finder's traces) and
+  gives the log a 512 KB buffer (about two days) from the next restart.
+  Off, the log holds events only — connections and their reasons, shots,
+  doses, the schedule, memory warnings — in 128 KB, which lasts weeks. Turn
+  it on when asked to help diagnose something.
 
 ### Time & date
 
@@ -889,7 +1013,8 @@ action lives directly on the root:
   weight) or an eye for a **Detect**ed one (inferred from the scale). Only
   those two modes record — a fully manual shot has no armed start/stop, so
   nothing is saved. Tap a shot for a full‑screen card with its
-  result/target/diff, time, average flow, and the weight + flow graph:
+  result/target/diff, time, average flow, the brew ratio when the shot
+  recorded a dose, and the weight + flow graph:
 
   <img src="docs/img/manual/shot-card.png" width="70%" alt="A shot's full-screen card">
 

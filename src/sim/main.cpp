@@ -25,6 +25,7 @@
 #include "platform_host/fake_provisioner.h"
 #include "platform_host/fake_scale.h"
 #include "platform_host/fake_scale_provisioner.h"
+#include "platform_host/fake_dose_settings.h"
 #include "platform_host/fake_schedule.h"
 #include "platform_host/fake_settings_backup.h"
 #include "platform_host/fake_shot_store.h"
@@ -83,7 +84,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
             core::ISettingsBackup* backup = nullptr, int backup_modal = 0,
             int schedule_day = -1, core::ISchedule* schedule = nullptr,
             bool welcome_modal = false, int standby_timer_s = -1,
-            core::IScale* bench = nullptr, int bench_pose = 0) {
+            core::IScale* bench = nullptr, int bench_pose = 0, int dose_pose = 0) {
   std::filesystem::path p(out_path);
   if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path());
 
@@ -92,14 +93,16 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
   static host::FakeSound fake_sound;  // stateless; shared across renders
   ui::App app;
   static host::FakeSchedule fallback_schedule;  // renders that don't pose one
+  host::FakeDoseSettings fake_dose;  // per render: a dose pose may write the default dose
   app.build(machine, provisioner, battery, disp_settings, clock, history, scale, bench,
             scale_provisioner, brew, network, fake_sound, shots, screen, updates,
-            backup, schedule != nullptr ? *schedule : fallback_schedule);
+            backup, schedule != nullptr ? *schedule : fallback_schedule, &fake_dose);
   app.show_tab(tab);
   // Bench poses: 1 = the swap card's BENCH side showing; 2 = the "Save as"
   // modal over a tapped scan result.
   if (bench_pose == 1) app.show_bench_side(true);
   if (bench_pose == 2) app.open_save_scale_modal(0);
+  if (dose_pose != 0) app.pose_dose(dose_pose);  // Record block / dose chip states
   if (settings_section >= 0) app.select_settings_section(settings_section);  if (schedule_day >= 0) app.schedule_pick_day(schedule_day);  // per-day chip pose
   if (welcome_modal) app.open_welcome_modal();
   if (stats_section >= 0) app.select_stats_section(stats_section);
@@ -117,6 +120,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
                    "Connect the scale or switch to Manual mode.");
   if (screensaver) app.pose_screensaver();  // bouncing-art saver, start pose
   if (update_modal) app.open_update_modal();
+  app.poll_battery_calibration();  // a posed calibration result (FakeScale)
   // 1 = back-up confirm, 2 = the same with WiFi opted out, 3 = restore confirm
   // (4 = its "backup is newer than this firmware" refusal, posed by the fake),
   // 5 = backup done, 6 = restore done, 7 = no card in the slot, 8 = the
@@ -153,6 +157,7 @@ bool render(core::IMachine& machine, core::IProvisioner& provisioner,
 }  // namespace
 
 int main() {
+  core::set_log_detail(true);  // the sim prints every diagnostic line
   host::FakeMachine machine;
   host::FakeProvisioner provisioner;
   host::FakeBattery battery;
@@ -177,13 +182,14 @@ int main() {
                bool log_modal = false, uint32_t unwired_midshot_ms = 0,
                bool toast = false, bool join_modal = false, bool screensaver = false,
                bool update_modal = false, int backup_modal = 0, int schedule_day = -1,
-               bool welcome_modal = false, int standby_timer_s = -1, int bench_pose = 0) {
+               bool welcome_modal = false, int standby_timer_s = -1, int bench_pose = 0,
+               int dose_pose = 0) {
     return render(machine, provisioner, battery, disp, clock, history, scale,
                   scale_provisioner, brew, network, shots, s, path, tab, sec, modal, theme,
                   stats, clean_lock, shot_id, history_ym, backflush, log_modal,
                   unwired_midshot_ms, toast, join_modal, screensaver, update_modal,
                   &updates, &backup, backup_modal, schedule_day, &schedule, welcome_modal,
-                  standby_timer_s, &bench, bench_pose);
+                  standby_timer_s, &bench, bench_pose, dose_pose);
   };
   bool ok = true;
   ok &= r({800, 480}, "renders/home_800x480.png");
@@ -208,6 +214,20 @@ int main() {
   ok &= r({800, 480}, "renders/home_sleeping_800x480.png");
   scale_provisioner.set_connect_enabled(core::ScaleSlot::kEspresso, true);
   scale.set_connected(true);
+  // Partner Umbra after a sleep: the frozen gauge's battery shown as an
+  // estimate ("~"), the Device settings page with the drain rows, and a
+  // finished calibration's Store / Discard modal.
+  scale.set_battery_estimated(true);
+  ok &= r({800, 480}, "renders/home_umbra_estimate_800x480.png");
+  disp.set_scale_battery_style(2);  // Icon + %: one "~", on the percent
+  ok &= r({800, 480}, "renders/home_umbra_estimate_both_800x480.png");
+  disp.set_scale_battery_style(0);
+  ok &= r({800, 480}, "renders/scale_device_umbra_800x480.png", 1, ui::kSectionScaleDevice);
+  scale.set_calibration_result(8);
+  ok &= r({800, 480}, "renders/scale_battery_cal_800x480.png", 1, ui::kSectionScaleDevice);
+  scale.set_calibration_result(0);  // charged before a full period: "incomplete"
+  ok &= r({800, 480}, "renders/scale_battery_cal_short_800x480.png", 1, ui::kSectionScaleDevice);
+  scale.set_battery_estimated(false);
   scale.set_umbra(false);
   // Heating: machine on but boilers still below target — the inferred state
   // shows an amber (pulsing on-device) dot + "Heating" instead of "Ready".
@@ -324,14 +344,87 @@ int main() {
   ok &= r({800, 480}, "renders/scale_display_800x480.png", 1, ui::kSectionScaleDisplay);
   ok &= r({800, 480}, "renders/scale_device_pick_800x480.png", 1, ui::kSectionScaleDevice);
   ok &= r({800, 480}, "renders/home_bench_card_800x480.png");
+  ok &= r({1280, 800, 1.6f}, "renders/home_bench_card_1280x800.png");  // the X-8's swap card, ESPRESSO side
+  // BENCH side / beside card with an 18.0 g default dose dialled (pose 5).
   ok &= r({800, 480}, "renders/home_bench_card_bench_800x480.png", 0, -1, false, 0, -1,
-          false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 1);
+          false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 1, 5);
   ok &= r({1280, 800, 1.6f}, "renders/home_bench_card_bench_1280x800.png", 0, -1, false, 0,
-          -1, false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 1);
+          -1, false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 1, 5);
   disp.set_bench_home_style(1);
-  ok &= r({800, 480}, "renders/home_bench_beside_800x480.png");
-  ok &= r({1280, 800, 1.6f}, "renders/home_bench_beside_1280x800.png");
+  ok &= r({800, 480}, "renders/home_bench_beside_800x480.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 5);
+  ok &= r({1280, 800, 1.6f}, "renders/home_bench_beside_1280x800.png", 0, -1, false, 0,
+          -1, false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 5);
   disp.set_bench_home_style(0);
+  // Dose from the bench scale: a loaded portafilter (480 g stored) on the
+  // bench offers Record on the BENCH side; recorded, the chip appears in the
+  // graph and the block says so (beside layout); a shot running on the dose
+  // shows the placeholder out; review fills the out + ratio.
+  bench.set_bench_weight(498.3f);
+  ok &= r({800, 480}, "renders/home_dose_record_800x480.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 1, 1);
+  ok &= r({1280, 800, 1.6f}, "renders/home_dose_record_1280x800.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 1, 1);
+  disp.set_bench_home_style(1);
+  ok &= r({800, 480}, "renders/home_dose_record_beside_800x480.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 1);
+  ok &= r({800, 480}, "renders/home_dose_recorded_800x480.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 2);
+  ok &= r({1280, 800, 1.6f}, "renders/home_dose_recorded_1280x800.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 2);
+  disp.set_bench_home_style(0);
+  bench.set_bench_weight(412.5f);
+  brew.set_phase(core::ShotPhase::kBrewing);
+  brew.set_shot_ms(9000);
+  ok &= r({800, 480}, "renders/home_dose_shot_800x480.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, 9000, false, false, false, false, 0, -1, false, -1, 0, 3);
+  brew.set_phase(core::ShotPhase::kReview);
+  brew.set_shot_ms(27000);
+  ok &= r({800, 480}, "renders/home_dose_review_800x480.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 4);
+  disp.set_bench_home_style(1);  // the narrow graph: the chip's smaller size
+  ok &= r({800, 480}, "renders/home_dose_review_beside_800x480.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 4);
+  ok &= r({1280, 800, 1.6f}, "renders/home_dose_review_beside_1280x800.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 4);
+  disp.set_bench_home_style(0);
+  brew.set_phase(core::ShotPhase::kIdle);
+  ok &= r({800, 480}, "renders/scale_shot_dose_800x480.png", 1, ui::kSectionScaleSettings, false,
+          0, -1, false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 5);
+  // The default dose with NO bench scale: the chip says "set", the settings
+  // page shows the switch + Default dose only (no Capture / containers).
+  scale_provisioner.set_bench_saved(false);
+  ok &= r({800, 480}, "renders/home_dose_default_800x480.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 5);
+  ok &= r({800, 480}, "renders/scale_shot_dose_nobench_800x480.png", 1, ui::kSectionScaleSettings);
+  scale_provisioner.set_bench_saved(true);
+  // The same states in the Ferrari theme (10): the owner's design page.
+  {
+    constexpr int kFerrari = 10;
+    bench.set_bench_weight(498.3f);
+    ok &= r({800, 480}, "renders/dose_ferrari_record_800x480.png", 0, -1, false, kFerrari, -1,
+            false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 1, 1);
+    disp.set_bench_home_style(1);
+    ok &= r({800, 480}, "renders/dose_ferrari_recorded_800x480.png", 0, -1, false, kFerrari, -1,
+            false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 2);
+    ok &= r({1280, 800, 1.6f}, "renders/dose_ferrari_recorded_1280x800.png", 0, -1, false, kFerrari,
+            -1, false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 2);
+    disp.set_bench_home_style(0);
+    bench.set_bench_weight(412.5f);
+    brew.set_phase(core::ShotPhase::kBrewing);
+    brew.set_shot_ms(9000);
+    ok &= r({800, 480}, "renders/dose_ferrari_shot_800x480.png", 0, -1, false, kFerrari, -1,
+            false, -1, 0, false, false, 9000, false, false, false, false, 0, -1, false, -1, 0, 3);
+    brew.set_phase(core::ShotPhase::kReview);
+    brew.set_shot_ms(27000);
+    ok &= r({800, 480}, "renders/dose_ferrari_review_800x480.png", 0, -1, false, kFerrari, -1,
+            false, -1, 0, false, false, 0, false, false, false, false, 0, -1, false, -1, 0, 4);
+    brew.set_phase(core::ShotPhase::kIdle);
+    ok &= r({800, 480}, "renders/dose_ferrari_settings_800x480.png", 1, ui::kSectionScaleSettings,
+            false, kFerrari);
+    ok &= r({800, 480}, "renders/dose_ferrari_shot_card_800x480.png", 2, -1, false, kFerrari, 2,
+            false, 14);
+  }
   scale_provisioner.set_saved(false);
   ok &= r({800, 480}, "renders/home_bench_only_800x480.png");
   scale_provisioner.set_saved(true);

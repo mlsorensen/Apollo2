@@ -23,6 +23,7 @@ class FakeBrewController : public core::IBrewController {
         .paddle_wired = relay && eff != core::ShotMode::kDetect,
         .paddle_pressed = paddle_,
         .brewing = brewing_,
+        .cleaning = false,
         .phase = phase_,
         .mode = eff,
         .shot_ms = shot_ms_,

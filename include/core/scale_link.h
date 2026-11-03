@@ -8,9 +8,11 @@
 #include <vector>
 
 #include "core/ble.h"
+#include "core/clock.h"
 #include "core/provisioner.h"  // core::ScanResult
 #include "core/radio_arbiter.h"
 #include "core/scale.h"
+#include "core/scale_battery_estimate.h"
 #include "core/scale_driver.h"
 
 // Bluetooth-scale connection manager — the scale-side analogue of core::MicraLink,
@@ -70,6 +72,27 @@ class ScaleLink : public IScale, public IScaleSink {
   void set_partner_setting_writer(std::function<void(int, int)> writer) {
     partner_setting_writer_ = std::move(writer);
   }
+  // The partner sent the Umbra the sleep command: the session ending next
+  // was a sleep (its battery gauge freezes from here, see below).
+  void note_partner_sleep() { partner_sleep_sent_.store(true); }
+
+  // Battery estimate for the partner-mode Umbra (core/scale_battery_estimate.h).
+  // The platform seeds it from storage before run(); the link thread calls
+  // `persist` on every change worth keeping (never per reading), and the
+  // platform takes the state with take_battery_state() under whatever lock
+  // ties the link to its keys — a snapshot taken before that lock could be
+  // a scale a save has since replaced.
+  // `trusted` says whether the clock is real time (a sync this boot), not a
+  // seeded guess; untrusted time stamps nothing (see the estimate's rules).
+  void set_battery_clock(const IClock* clock, std::function<bool()> trusted) {
+    clock_ = clock;
+    clock_trusted_ = std::move(trusted);
+  }
+  void load_battery(const ScaleBatteryState& state);
+  void set_battery_persist(std::function<void()> persist) {
+    battery_persist_ = std::move(persist);
+  }
+  bool take_battery_state(ScaleBatteryState* out);  // false = nothing new
 
   // Manual connect gate (a battery remote can drop the scale to save power).
   bool connect_enabled() const { return connect_enabled_.load(); }
@@ -83,6 +106,10 @@ class ScaleLink : public IScale, public IScaleSink {
   ScaleSettingDesc device_setting(int index) const override;
   int device_setting_value(int index) const override;
   void set_device_setting(int index, int option_idx) override;
+  ScaleBatteryInfo battery_info() const override;
+  void set_battery_drain_rate(int pct_per_day) override;
+  void set_battery_calibration(bool armed) override;
+  int take_battery_calibration_result() override;
 
   // Discovery, run on the loop thread (used by the device ScaleProvisioner).
   void request_scan();
@@ -103,6 +130,10 @@ class ScaleLink : public IScale, public IScaleSink {
   void set_connected(bool c);
   bool link_up() const;  // the raw BLE link, before the weight-stream gate
   void sync_radio_state();  // feed the arbiter this link's wants (loop thread)
+  std::time_t now_unix() const {  // trusted Unix time, or 0
+    return clock_ != nullptr && clock_trusted_ && clock_trusted_() ? clock_->now_unix() : 0;
+  }
+  void persist_battery();   // hand a dirty estimate to the platform (loop thread)
 
   ble::ICentral& ble_;
   RadioArbiter& arb_;
@@ -117,6 +148,7 @@ class ScaleLink : public IScale, public IScaleSink {
   // have been known to change it). Link thread only.
   int known_type_fails_ = 0;
   std::function<void(AddrType)> addr_type_learned_;  // set once before run()
+  uint32_t connect_fails_ = 0;  // consecutive; the log keeps the 1st, 2nd, then every 20th
 
   // Model driver for the saved scale; refreshed per connection attempt.
   // Guarded by mutex_; shared_ptr so the notify callback + link loop keep a
@@ -126,11 +158,22 @@ class ScaleLink : public IScale, public IScaleSink {
   mutable std::mutex mutex_;  // guards the cached fields below
   bool connected_ = false;
   bool weight_streaming_ = false;
+  // When this connection subscribed (link task). A link that is up and
+  // subscribed but has never delivered a weight within kFirstWeightMs is
+  // re-dialled: X-8, 2026-11-01, a Bookoo sat blue-lit and silent for 30 s
+  // after a seemingly good subscribe until the scale itself hung up, and the
+  // fresh connection streamed at once. Generic to every driver; the Acaia
+  // driver's own stream watchdog covers a stream that stops later.
+  std::atomic<uint32_t> subscribed_at_ms_{0};
+  static constexpr uint32_t kFirstWeightMs = 5000;
   float weight_g_ = 0.0f;
   uint32_t timer_ms_ = 0;
   int battery_pct_ = 0;
   bool battery_valid_ = false;
   uint32_t seq_ = 0;  // increments per weight update (snapshot.seq)
+  // Partner mode only: the estimate (and its drain setting) replaces the raw
+  // reading; persisted by persist_battery().
+  ScaleBatteryEstimate battery_est_;
   // On-scale setting values as last reported (-1 = unknown). Reset on every
   // connect/disconnect: the scale is the owner, so a stale cache must never
   // outlive the link that read it. Written optimistically by
@@ -154,6 +197,10 @@ class ScaleLink : public IScale, public IScaleSink {
   std::atomic<bool> partner_paired_{false};
   std::atomic<bool> partner_connected_{false};
   std::function<void(int, int)> partner_setting_writer_;
+  std::atomic<bool> partner_sleep_sent_{false};
+  const IClock* clock_ = nullptr;  // set once before run()
+  std::function<bool()> clock_trusted_;                              // ditto
+  std::function<void()> battery_persist_;                          // ditto
   std::atomic<bool> reconnect_requested_{false};
   std::atomic<bool> scanning_{false};
   std::atomic<bool> pending_tare_{false};

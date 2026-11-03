@@ -2,6 +2,8 @@
 
 #include <string>
 
+#include <cstdio>
+
 #include "core/schedule.h"
 
 #include "ui/theme.h"
@@ -297,6 +299,12 @@ void build_device_display_rows(lv_obj_t* page, const lv_font_t* text_font,
   lv_obj_t* rp = make_setting_row(page, "Performance overlay", text_font);
   out.perf_overlay_switch = lv_switch_create(rp);
   lv_obj_set_size(out.perf_overlay_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
+
+  // Detailed log: the per-minute perf/heap lines and other housekeeping in
+  // the log ring (events are always logged). Also sizes the ring at boot.
+  lv_obj_t* rdl = make_setting_row(page, "Detailed log", text_font);
+  out.detailed_log_switch = lv_switch_create(rdl);
+  lv_obj_set_size(out.detailed_log_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 }
 
 // A bare dropdown for a time/date field: tier font on the button AND the popup
@@ -552,9 +560,9 @@ void build_micra_schedule_rows(lv_obj_t* menu, lv_obj_t* page, lv_obj_t* times_p
   // Auto-standby first: independent of the schedule below (App gates it on a
   // paired Micra only — no clock, no master switch). No group headings: the
   // row names carry it, and the page keeps its air.
-  //   Auto-standby after last shot [sw] [-] 30 min [+]
+  //   Auto-standby when idle [sw] [-] 30 min [+]
   //   Show auto-standby timer [sw]        (the countdown on the Home MICRA card)
-  make_switch_stepper(make_setting_row(page, "Auto-standby after last shot", font), font,
+  make_switch_stepper(make_setting_row(page, "Auto-standby when idle", font), font,
                       symbol_font, btn_size, compact, &out.sched_standby_switch,
                       &out.sched_standby_minus, &out.sched_standby_value,
                       &out.sched_standby_plus);
@@ -1239,6 +1247,55 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_t* rl = make_setting_row(out.scale_settings_page, "Detect lead-in", font);
     make_inline_stepper(rl, font, symbol_font, btn_size, &out.lead_minus,
                         &out.lead_value, &out.lead_plus, nullptr);
+
+    // Dose from the bench scale: the Record switch, then the container
+    // weights (a portafilter, a dosing cup) captured from the bench scale.
+    // Record subtracts the heaviest stored container lighter than the
+    // reading; a container under 50 g is refused (it could be a dose).
+    lv_obj_t* rd = make_setting_row(out.scale_settings_page, "Record dose", font);
+    out.dose_switch_row = rd;
+    out.dose_switch = lv_switch_create(rd);
+    lv_obj_set_size(out.dose_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
+    // A default dose (its own switch, off by default): staged for every
+    // shot when nothing was recorded — for a constant daily dose, or no
+    // bench scale. The value controls exist only while the switch is on
+    // (owner, 2026-11-02: no "Off" notch at the bottom of a stepper).
+    out.dose_def_row = make_setting_row(out.scale_settings_page, "Default dose", font);
+    make_switch_stepper(out.dose_def_row, font, symbol_font, btn_size, compact,
+                        &out.dose_def_switch, &out.dose_def_minus, &out.dose_def_value,
+                        &out.dose_def_plus);
+    for (int i = 0; i < core::kMaxDoseContainers; ++i) {
+      char title[16];
+      std::snprintf(title, sizeof(title), "Container %d", i + 1);
+      lv_obj_t* rc = make_setting_row(out.scale_settings_page, title, font);
+      out.dose_container_row[i] = rc;
+      lv_obj_t* grp = lv_obj_create(rc);
+      lv_obj_remove_style_all(grp);
+      lv_obj_remove_flag(grp, LV_OBJ_FLAG_SCROLLABLE);
+      lv_obj_set_size(grp, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+      lv_obj_set_flex_flow(grp, LV_FLEX_FLOW_ROW);
+      lv_obj_set_flex_align(grp, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+      lv_obj_set_style_pad_column(grp, ui::dp(10), 0);
+      out.dose_container_value[i] = lv_label_create(grp);
+      lv_label_set_text(out.dose_container_value[i], "--");
+      lv_obj_set_style_text_color(out.dose_container_value[i], lv_color_hex(ui::theme::text()), 0);
+      lv_obj_set_style_text_font(out.dose_container_value[i], font, 0);
+      auto button = [&](const char* text, uint32_t bg) {
+        lv_obj_t* b = ui::make_button(grp);
+        lv_obj_set_height(b, btn_size);
+        lv_obj_set_style_pad_hor(b, ui::dp(14), 0);
+        lv_obj_set_style_bg_color(b, lv_color_hex(bg), 0);
+        lv_obj_t* l = lv_label_create(b);
+        lv_label_set_text(l, text);
+        lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::text()), 0);
+        lv_obj_set_style_text_font(l, font, 0);
+        lv_obj_center(l);
+        return b;
+      };
+      out.dose_capture_btn[i] = button("Capture", ui::theme::accent());
+      out.dose_clear_btn[i] = button(LV_SYMBOL_CLOSE, ui::theme::card());
+      lv_obj_add_flag(out.dose_clear_btn[i], LV_OBJ_FLAG_HIDDEN);
+    }
   }
 
   // Scale > Display: how the scales SHOW — Apollo's own preferences, none of
@@ -1347,6 +1404,27 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
       lv_obj_center(out.scale_dev_values[i]);
       lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN);
     }
+    // Battery estimate (partner-mode Umbra): the drain rate the estimate runs
+    // on, and the one-shot calibration that measures it. Greyed while the
+    // scale's sleep is Off (App::update_scale_view).
+    out.scale_drain_row = make_setting_row(out.scale_device_page, "Battery drain per day", font);
+    make_inline_stepper(out.scale_drain_row, font, symbol_font, btn_size, &out.scale_drain_minus,
+                        &out.scale_drain_value, &out.scale_drain_plus, nullptr);
+    lv_obj_set_style_opa(out.scale_drain_minus, LV_OPA_40, LV_STATE_DISABLED);
+    lv_obj_set_style_opa(out.scale_drain_plus, LV_OPA_40, LV_STATE_DISABLED);
+    out.scale_cal_row = make_setting_row(out.scale_device_page, "Calibrate drain", font);
+    out.scale_cal_btn = ui::make_button(out.scale_cal_row);
+    lv_obj_set_height(out.scale_cal_btn, btn_size);
+    lv_obj_set_style_pad_hor(out.scale_cal_btn, ui::dp(14), 0);
+    lv_obj_set_style_bg_color(out.scale_cal_btn, lv_color_hex(ui::theme::card()), 0);
+    lv_obj_set_style_opa(out.scale_cal_btn, LV_OPA_40, LV_STATE_DISABLED);
+    out.scale_cal_label = lv_label_create(out.scale_cal_btn);
+    lv_label_set_text(out.scale_cal_label, "Start");
+    lv_obj_set_style_text_color(out.scale_cal_label, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(out.scale_cal_label, font, 0);
+    lv_obj_center(out.scale_cal_label);
+    lv_obj_add_flag(out.scale_drain_row, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(out.scale_cal_row, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(out.scale_dev_hint, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(out.scale_dev_connect_row, LV_OBJ_FLAG_HIDDEN);
   }

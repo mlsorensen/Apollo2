@@ -47,9 +47,27 @@ bool write_with_nul(core::ble::ICentral& ble, const char* uuid,
 namespace core {
 
 bool MicraLink::read_setting(const char* name, std::string& out) {
-  if (!write_with_nul(ble_, kReadUuid, name)) return false;
+  // Two GATT procedures: the request (a write with response) and the answer
+  // (a read). Each is timed so a stall names which one the machine — or the
+  // hosted transport between the C6 and the P4 — never answered.
+  const uint32_t t0 = now_ms();
+  request_started_ms_.store(t0);
+  const bool wrote = write_with_nul(ble_, kReadUuid, name);
+  const uint32_t t_write = now_ms() - t0;
+  if (!wrote || t_write > 2000)
+    logf("MicraLink: request write '%s' %s after %lu ms\n", name, wrote ? "slow" : "FAILED",
+         static_cast<unsigned long>(t_write));
+  if (!wrote) { request_started_ms_.store(0); return false; }
   sleep_ms(150);  // let the machine replace the characteristic value with its answer
-  if (!ble_.read(kReadUuid, out)) return false;
+  const uint32_t t1 = now_ms();
+  request_started_ms_.store(t1);
+  const bool read = ble_.read(kReadUuid, out);
+  request_started_ms_.store(0);
+  const uint32_t t_read = now_ms() - t1;
+  if (!read || t_read > 2000)
+    logf("MicraLink: answer read '%s' %s after %lu ms\n", name, read ? "slow" : "FAILED",
+         static_cast<unsigned long>(t_read));
+  if (!read) return false;
   return !out.empty();
 }
 
@@ -84,7 +102,32 @@ void MicraLink::set_name(std::string name) {
   name_ = name.empty() ? "Micra" : std::move(name);
 }
 
+bool MicraLink::abort_stalled_request(uint32_t now_ms) {
+  const uint32_t t = request_started_ms_.load();
+  if (t == 0 || now_ms - t < kRequestStallMs) return false;
+  request_started_ms_.store(0);
+  recovering_since_ms_.store(now_ms);
+  recovering_.store(true);
+  logf("MicraLink: request unanswered for %lu ms -> dropping the link to re-dial\n",
+       static_cast<unsigned long>(now_ms - t));
+  ble_.disconnect();  // the blocked request returns; the loop re-dials at once
+  return true;
+}
+
 void MicraLink::set_link(Link link) {
+  // A re-dial after a stalled request stays Connected on the outside until
+  // it resolves: Disconnected/Connecting are swallowed, Connected ends the
+  // recovery, anything else (NeedsToken, a failed re-dial — see the loop) is
+  // real and clears it.
+  if (recovering_.load()) {
+    // Bounded: if the radio is withheld (a scale's connect, the portal) the
+    // re-dial can take longer than a hiccup, and the link should then say so.
+    if ((link == Link::Disconnected || link == Link::Connecting) &&
+        now_ms() - recovering_since_ms_.load() < kRecoverMaskMs)
+      return;
+    recovering_.store(false);
+    if (link == Link::Connected) logf("MicraLink: re-dialled after a stalled request\n");
+  }
   std::lock_guard<std::mutex> lk(mutex_);
   if (link != link_) {
     // Silent drops matter: the paddle's wake-vs-shot decision needs Connected,
@@ -138,12 +181,14 @@ void MicraLink::run() {
     // Not fully provisioned: idle in the matching state (don't spin on connect).
     if (addr.empty()) {
       if (connected) { ble_.disconnect(); mark(false); }
+      recovering_.store(false);
       set_link(Link::Unconfigured);
       sleep_ms(500);
       continue;
     }
     if (token.empty()) {
       if (connected) { ble_.disconnect(); mark(false); }
+      recovering_.store(false);
       // No token: the machine can't be read for one (the cloud-issued token is
       // obtained out-of-band, e.g. via lmtoken). Idle in NeedsToken until one is
       // entered (set_token clears this).
@@ -158,6 +203,7 @@ void MicraLink::run() {
     // token arrives (set_token / set_address clear this).
     if (token_bad_.load()) {
       if (connected) { ble_.disconnect(); mark(false); }
+      recovering_.store(false);
       set_link(Link::NeedsToken);
       sleep_ms(500);
       continue;
@@ -167,12 +213,14 @@ void MicraLink::run() {
     // remote can take the Micra's single BLE slot.
     if (!connect_enabled_.load()) {
       if (connected) { ble_.disconnect(); mark(false); }
+      recovering_.store(false);  // the user's Disconnect is real, mask or not
       set_link(Link::Disconnected);
       sleep_ms(500);
       continue;
     }
 
     if (reconnect_requested_.exchange(false) && connected) {
+      logf("MicraLink: re-dial requested (address/token/connect switch) -> dropping the link\n");
       ble_.disconnect();
       mark(false);
     }
@@ -199,6 +247,7 @@ void MicraLink::run() {
                       : preempted ? ReleaseResult::kPreempted : ReleaseResult::kFailed,
                    now_ms());
       if (!ok) {
+        recovering_.store(false);      // a failed re-dial is a real disconnect
         set_link(Link::Disconnected);  // unreachable -> back off and retry
         if (preempted) continue;       // a yielded try is not a failed one
         if (try_type != AddrType::kUnknown) ++known_type_fails_;
@@ -220,6 +269,28 @@ void MicraLink::run() {
         else sleep_ms(300);
       }
       if (!verified) {
+        // Only an ANSWER that isn't JSON means a bad token. Reads that never
+        // completed (a stall, the watchdog dropping the link, a drop) are a
+        // link failure: go round again, don't strand the link in NeedsToken.
+        if (!refresh_bad_data_ || !ble_.connected()) {
+          // A machine that accepts the connection but answers nothing would
+          // otherwise cycle connect -> reads -> drop back to back, holding
+          // the shared radio against the scales: it counts and backs off
+          // like a failed connect (same throttled log).
+          ++connect_fails_;
+          if (connect_fails_ <= 2 || connect_fails_ % 20 == 0)
+            logf("MicraLink: verify reads failed (link) x%u -> retrying\n",
+                 static_cast<unsigned>(connect_fails_));
+          ble_.disconnect();
+          mark(false);
+          set_link(Link::Disconnected);
+          for (uint32_t waited = 0; waited < kReconnectBackoffMs &&
+                                    !arb_.user_scan_pending(RadioSlot::kMicra);
+               waited += 100) {
+            sleep_ms(100);
+          }
+          continue;
+        }
         logf("MicraLink: token rejected (reads failed) -> NeedsToken\n");
         token_bad_.store(true);
         ble_.disconnect();
@@ -239,22 +310,29 @@ void MicraLink::run() {
       continue;
     }
 
+    // A command is taken out of its slot for the write; a write that fails
+    // (the watchdog dropping a stalled one included) puts it back so it
+    // lands after the re-dial — unless a newer value arrived meanwhile.
+    const auto restage = [](std::atomic<int>& slot, int v) {
+      int empty = -1;
+      slot.compare_exchange_strong(empty, v);
+    };
     const int p = pending_power_.exchange(-1);
-    if (p >= 0) do_set_power(p == 1);
+    if (p >= 0 && !do_set_power(p == 1)) restage(pending_power_, p);
     const int b = pending_brew_tenths_.exchange(-1);
     if (b >= 0) {
       char v[8];
       std::snprintf(v, sizeof(v), "%.1f", b / 10.0f);
-      do_set_boiler_target("CoffeeBoiler1", v);
+      if (!do_set_boiler_target("CoffeeBoiler1", v)) restage(pending_brew_tenths_, b);
     }
     const int st = pending_steam_whole_.exchange(-1);
     if (st >= 0) {
       char v[8];
       std::snprintf(v, sizeof(v), "%d", st);
-      do_set_boiler_target("SteamBoiler", v);
+      if (!do_set_boiler_target("SteamBoiler", v)) restage(pending_steam_whole_, st);
     }
     const int se = pending_steam_enable_.exchange(-1);
-    if (se >= 0) { do_set_steam_enabled(se == 1); }
+    if (se >= 0 && !do_set_steam_enabled(se == 1)) restage(pending_steam_enable_, se);
     // No instant read-back after a command: the machine's machineMode answer
     // lags the command by a beat, so an immediate read reliably returns the
     // OLD state (observed on HW). The regular cadence picks up the settled
@@ -273,8 +351,13 @@ bool MicraLink::do_connect(const std::string& address, const std::string& token,
   // A learned type is one try; unknown tries both, public first (Micras
   // advertise a public address more often than not).
   if (!ble_.connect(address, type, /*prefer_random=*/false, kConnectTimeoutMs)) {
-    logf("MicraLink: connect failed (%s)\n",
-         type != AddrType::kUnknown ? addr_type_name(type) : "public+random");
+    // Every 8 s while the machine is off would fill the ring: 1st, 2nd, then
+    // every 20th (~3 min) — the link state line marks the start anyway.
+    ++connect_fails_;
+    if (connect_fails_ <= 2 || connect_fails_ % 20 == 0)
+      logf("MicraLink: connect failed (%s) x%u\n",
+           type != AddrType::kUnknown ? addr_type_name(type) : "public+random",
+           static_cast<unsigned>(connect_fails_));
     return false;
   }
   // Learn the type the connect used so later connects are a single try (a
@@ -326,6 +409,8 @@ bool MicraLink::do_connect(const std::string& address, const std::string& token,
     ble_.read(kDisSoftware, dis_software_);
   }
 
+  connect_fails_ = 0;
+
   logf("MicraLink: connected + authenticated\n");
   return true;
 }
@@ -333,16 +418,31 @@ bool MicraLink::do_connect(const std::string& address, const std::string& token,
 bool MicraLink::do_refresh() {
   std::string mode_json;
   std::string boilers_json;
-  if (!read_setting("machineMode", mode_json)) return false;
-  if (!read_setting("boilers", boilers_json)) return false;
+  refresh_bad_data_ = false;
+  // Timed: a read the machine never answers ends in NimBLE's GATT timeout
+  // (~30 s) and the host dropping the link as "local host terminated" —
+  // the X-8's drops of 2026-10-31 — so a slow or failed read is logged with
+  // its duration to tell that apart from a deliberate re-dial.
+  auto timed = [&](const char* name, std::string& out) {
+    const uint32_t t0 = now_ms();
+    const bool ok = read_setting(name, out);
+    const uint32_t dt = now_ms() - t0;
+    if (!ok || dt > 2000)
+      logf("MicraLink: refresh read '%s' %s after %lu ms\n", name, ok ? "slow" : "FAILED",
+           static_cast<unsigned long>(dt));
+    return ok;
+  };
+  if (!timed("machineMode", mode_json)) return false;
+  if (!timed("boilers", boilers_json)) return false;
 
   // An authenticated machine answers with parseable JSON; a rejected token
   // yields a 1-byte NUL / garbage. Unparseable reads => NOT really authenticated,
   // so this doubles as the token check that gates Connected.
+  // The machine answered — a rejected token yields a NUL / garbage, not JSON.
   JsonDocument mode_doc;
-  if (deserializeJson(mode_doc, mode_json)) return false;
+  if (deserializeJson(mode_doc, mode_json)) { refresh_bad_data_ = true; return false; }
   JsonDocument doc;
-  if (deserializeJson(doc, boilers_json) || !doc.is<JsonArray>()) return false;
+  if (deserializeJson(doc, boilers_json) || !doc.is<JsonArray>()) { refresh_bad_data_ = true; return false; }
 
   const char* mode = mode_doc.as<const char*>();
   const Power power = (mode != nullptr && std::strcmp(mode, "BrewingMode") == 0)
@@ -380,11 +480,14 @@ bool MicraLink::do_refresh() {
   return true;
 }
 
-void MicraLink::do_set_power(bool on) {
+bool MicraLink::do_set_power(bool on) {
   const std::string json =
       on ? R"({"name":"MachineChangeMode","parameter":{"mode":"BrewingMode"}})"
          : R"({"name":"MachineChangeMode","parameter":{"mode":"StandBy"}})";
-  write_with_nul(ble_, kWriteUuid, json);
+  request_started_ms_.store(now_ms());
+  const bool ok = write_with_nul(ble_, kWriteUuid, json);
+  request_started_ms_.store(0);
+  return ok;
 }
 
 MachineSnapshot MicraLink::snapshot() const {
@@ -422,18 +525,24 @@ void MicraLink::set_steam_enabled(bool enabled) {
   pending_steam_enable_.store(enabled ? 1 : 0);
 }
 
-void MicraLink::do_set_boiler_target(const char* identifier, const char* value) {
+bool MicraLink::do_set_boiler_target(const char* identifier, const char* value) {
   std::string json =
       std::string(R"({"name":"SettingBoilerTarget","parameter":{"identifier":")") +
       identifier + R"(","value":)" + value + "}}";
-  write_with_nul(ble_, kWriteUuid, json);
+  request_started_ms_.store(now_ms());
+  const bool ok = write_with_nul(ble_, kWriteUuid, json);
+  request_started_ms_.store(0);
+  return ok;
 }
 
-void MicraLink::do_set_steam_enabled(bool enabled) {
+bool MicraLink::do_set_steam_enabled(bool enabled) {
   std::string json =
       std::string(R"({"name":"SettingBoilerEnable","parameter":{"identifier":"SteamBoiler","state":)") +
       (enabled ? "true" : "false") + "}}";
-  write_with_nul(ble_, kWriteUuid, json);
+  request_started_ms_.store(now_ms());
+  const bool ok = write_with_nul(ble_, kWriteUuid, json);
+  request_started_ms_.store(0);
+  return ok;
 }
 
 void MicraLink::request_scan() {

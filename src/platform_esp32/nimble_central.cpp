@@ -48,6 +48,77 @@ class FinderCallbacks final : public NimBLEScanCallbacks {
 
 }  // namespace
 
+namespace {
+// Evidence for link drops (owner, 2026-10-31: four Micra drops in 14 min
+// on the X-8 with an Umbra connected as a peripheral): the HCI reason the
+// controller gives for every disconnect, and the parameters each link
+// settled on. Supervision timeout = the radio lost it; "remote terminated"
+// = the peer closed it; "local host terminated" = we did.
+const char* hci_reason_name(int reason) {
+  switch (reason >= 0x200 ? reason - 0x200 : reason) {  // BLE_HS_HCI_ERR() base
+    case 0x08: return "supervision timeout";
+    case 0x13: return "remote terminated";
+    case 0x15: return "remote powered off";
+    case 0x16: return "local host terminated";
+    case 0x22: return "LMP response timeout";
+    case 0x3B: return "unacceptable conn interval";
+    case 0x3E: return "failed to establish";
+    default: return "?";
+  }
+}
+
+class LinkCallbacks : public NimBLEClientCallbacks {
+ public:
+  void onConnect(NimBLEClient* c) override {
+    const NimBLEConnInfo info = c->getConnInfo();
+    core::logf("NimbleCentral: %s connected, interval %.2f ms, latency %u, timeout %u ms\n",
+               c->getPeerAddress().toString().c_str(),
+               static_cast<double>(info.getConnInterval()) * 1.25,
+               static_cast<unsigned>(info.getConnLatency()),
+               static_cast<unsigned>(info.getConnTimeout()) * 10);
+  }
+  void onDisconnect(NimBLEClient* c, int reason) override {
+    core::logf("NimbleCentral: %s disconnected, reason 0x%x (%s)\n",
+               c->getPeerAddress().toString().c_str(), static_cast<unsigned>(reason),
+               hci_reason_name(reason));
+  }
+};
+LinkCallbacks g_link_callbacks;  // stateless; shared by every client
+
+// NimBLE's GAP events the client/server callbacks don't surface: the result
+// of a connection parameter update (ours or the peer's) with the parameters
+// in force afterwards, and a peer's own update request.
+int gap_event_log(ble_gap_event* event, void*) {
+  switch (event->type) {
+    case BLE_GAP_EVENT_CONN_UPDATE: {
+      ble_gap_conn_desc d{};
+      const bool have = ble_gap_conn_find(event->conn_update.conn_handle, &d) == 0;
+      core::logf("BLE: conn update on handle %u: status %d%s%.2f ms, latency %u, timeout %u ms\n",
+                 static_cast<unsigned>(event->conn_update.conn_handle), event->conn_update.status,
+                 have ? " -> interval " : " (no desc) ", have ? d.conn_itvl * 1.25 : 0.0,
+                 have ? static_cast<unsigned>(d.conn_latency) : 0u,
+                 have ? static_cast<unsigned>(d.supervision_timeout) * 10 : 0u);
+      break;
+    }
+    case BLE_GAP_EVENT_CONN_UPDATE_REQ:
+    case BLE_GAP_EVENT_L2CAP_UPDATE_REQ:
+      core::logf("BLE: peer requests conn params on handle %u: interval %.2f-%.2f ms, latency %u\n",
+                 static_cast<unsigned>(event->conn_update_req.conn_handle),
+                 event->conn_update_req.peer_params->itvl_min * 1.25,
+                 event->conn_update_req.peer_params->itvl_max * 1.25,
+                 static_cast<unsigned>(event->conn_update_req.peer_params->latency));
+      break;
+    default:
+      break;
+  }
+  return 0;
+}
+}  // namespace
+
+namespace platform {
+void install_gap_event_log() { NimBLEDevice::setCustomGapHandler(gap_event_log); }
+}  // namespace platform
+
 namespace platform {
 
 std::vector<core::ScanResult> NimbleCentral::scan(uint32_t ms) {
@@ -106,8 +177,13 @@ void NimbleCentral::cancel_scan() {
 bool NimbleCentral::connect(const std::string& mac, core::AddrType type,
                             bool prefer_random, uint32_t timeout_ms) {
   ensure_host();
-  if (client_ == nullptr) client_ = NimBLEDevice::createClient();
+  if (client_ == nullptr) {
+    client_ = NimBLEDevice::createClient();
+    client_->setClientCallbacks(&g_link_callbacks, /*deleteCallbacks=*/false);
+  }
   if (timeout_ms > 0) client_->setConnectTimeout(timeout_ms);
+  if (pref_min_ != 0)
+    client_->setConnectionParams(pref_min_, pref_max_, pref_latency_, pref_timeout_);
   conn_type_ = core::AddrType::kUnknown;
   // Arbiter telltale: a connect starting while a scan runs means two links
   // hold the radio at once (the connect would silently kill the scan).
@@ -139,7 +215,14 @@ bool NimbleCentral::connect(const std::string& mac, core::AddrType type,
 
   // Discover everything now so the by-UUID lookups below hit the cache.
   for (NimBLERemoteService* svc : client_->getServices(true)) {
-    svc->getCharacteristics(true);
+    for (NimBLERemoteCharacteristic* c : svc->getCharacteristics(true)) {
+      // Detailed log: which characteristics would take a write WITHOUT a
+      // response (a request the host never waits on — the fallback if the
+      // Micra's acknowledged writes keep stalling).
+      if (core::log_detail() && c->canWriteNoResponse())
+        core::logf("NimbleCentral: %s char %s: write%s, write-no-rsp\n", mac.c_str(),
+                   c->getUUID().toString().c_str(), c->canWrite() ? "" : "(no)");
+    }
   }
   return true;
 }

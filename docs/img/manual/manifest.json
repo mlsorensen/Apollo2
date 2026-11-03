@@ -433,7 +433,7 @@
     "callouts": []
   },
   {
-    "src": "renders/scale_settings_800x480.png",
+    "src": "renders/scale_shot_dose_800x480.png",
     "out": "scale-shot-settings.png",
     "size": [
       800,
@@ -460,6 +460,27 @@
         "y": 214,
         "w": 695,
         "h": 56
+      },
+      {
+        "n": 4,
+        "x": 100,
+        "y": 270,
+        "w": 695,
+        "h": 48
+      },
+      {
+        "n": 5,
+        "x": 100,
+        "y": 320,
+        "w": 695,
+        "h": 52
+      },
+      {
+        "n": 6,
+        "x": 100,
+        "y": 374,
+        "w": 695,
+        "h": 100
       }
     ]
   },
@@ -482,6 +503,30 @@
         "n": 2,
         "x": 100,
         "y": 148,
+        "w": 695,
+        "h": 61
+      }
+    ]
+  },
+  {
+    "src": "renders/scale_device_umbra_800x480.png",
+    "out": "scale-device-umbra.png",
+    "size": [
+      800,
+      480
+    ],
+    "callouts": [
+      {
+        "n": 1,
+        "x": 100,
+        "y": 210,
+        "w": 695,
+        "h": 61
+      },
+      {
+        "n": 2,
+        "x": 100,
+        "y": 272,
         "w": 695,
         "h": 61
       }
@@ -958,5 +1003,29 @@
       480
     ],
     "callouts": []
+  },
+  {
+    "src": "renders/home_dose_recorded_800x480.png",
+    "out": "home-dose-recorded.png",
+    "size": [
+      800,
+      480
+    ],
+    "callouts": [
+      {
+        "n": 1,
+        "x": 586,
+        "y": 330,
+        "w": 172,
+        "h": 62
+      },
+      {
+        "n": 2,
+        "x": 148,
+        "y": 303,
+        "w": 148,
+        "h": 46
+      }
+    ]
   }
 ]

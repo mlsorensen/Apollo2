@@ -87,7 +87,7 @@ void stats_select_section(StatsWidgets& w, int section);
 // `diff_color` (skipped when empty — untargeted shots), and the duration.
 // The returned row carries no callback — App attaches one with the shot id.
 lv_obj_t* history_add_row(StatsWidgets& w, const char* when, const char* mode,
-                          const char* result, const char* diff,
+                          const char* ratio, const char* result, const char* diff,
                           uint32_t diff_color, const char* duration,
                           const ScreenProfile& screen);
 void history_clear_rows(StatsWidgets& w);

@@ -14,6 +14,8 @@
 #include "core/settings_backup.h"
 #include "core/update_check.h"
 #include "core/ready_chime.h"
+#include "core/dose.h"
+#include "core/dose_settings.h"
 #include "core/schedule.h"
 #include "core/scale.h"
 #include "core/scale_provisioner.h"
@@ -44,7 +46,8 @@ class App {
              core::IBrewController& brew,
              core::INetwork& network, core::ISound& sound, core::IShotStore& shots,
              const ScreenProfile& screen, core::IUpdateSource* updates,
-             core::ISettingsBackup* backup, core::ISchedule& schedule);
+             core::ISettingsBackup* backup, core::ISchedule& schedule,
+             core::IDoseSettings* dose);  // not defaulted: see the `updates` NOTE
   // NOTE: `updates` is deliberately NOT defaulted. It used to be, and the
   // internal layout-rebuild call omitted it -- so every rebuild silently set
   // updates_ = nullptr, hiding the Info page's "Check for updates" button and
@@ -87,6 +90,13 @@ class App {
   // Scale > Settings "On the scale" rows: advance descriptor slot `index` to
   // its next option (writes to the scale; refused offline or mid-shot).
   void cycle_scale_device_setting(int index);
+  // Partner Umbra battery estimate (Device settings): step the drain rate,
+  // the Calibrate button (arm prompt / cancel), and the result modal.
+  void adjust_battery_drain(int delta);
+  void battery_calibration_tapped();
+  void arm_battery_calibration();
+  void store_battery_calibration(bool store);
+  void poll_battery_calibration();  // a finished run -> the Store / Discard modal
   void toggle_flow_units();    // Home graph unit button (g/s <-> g)
   void start_scan();           // Settings "Scan" button
   void save_scanned(int index);  // a result row in the Settings list
@@ -195,11 +205,28 @@ class App {
   void set_drop_negative_flow(bool on);  // Scale "Drop negative g/s" switch
   void set_scope_graph(bool on);         // Scale "Oscilloscope graph" switch
   void set_perf_overlay(bool on);        // Device "Performance overlay" switch
+  void set_detailed_log(bool on);        // Device "Detailed log" switch
   void set_click_sound(bool on);         // Device "Button sounds" switch
   // Micra "Chime volume": linear 0-100 (0 = Off), slider + [-]/[+]. sound.cpp
   // maps it onto a dB curve so the steps are even by ear.
   void set_ready_chime_vol(int percent, bool audition);
   void ready_chime_vol_adjust(int dir);  // one step per [-]/[+] tap
+  // Dose from the bench scale (core::DoseTracker, fed from refresh()): the
+  // bench card's Record block, the graph chip, and the shot record's dose.
+  void dose_tick(const core::MachineSnapshot& snap);
+  void record_dose();       // the bench card's Record block
+  void refit_bench_outline();  // re-fit the Record outline to its labels
+  void clear_dose();        // the chip's x
+  void default_dose_adjust(int dir);  // the Default dose stepper: 5..30 g by 0.5
+  void set_default_dose_enabled(bool on);  // its switch: on = the last value (18 g at first)
+  void set_dose_enabled(bool on);
+  void capture_dose_container(int index);  // Settings: store the bench reading (arms if moving)
+  void clear_dose_container(int index);
+  void sync_dose_settings_rows();
+  // Sim-only: 1 = Record offered (a loaded portafilter held on the bench),
+  // 2 = recorded (pending dose + chip), 3 = a shot running on that dose
+  // (chip with the placeholder out), 4 = the shot in review (out + ratio).
+  void pose_dose(int pose);
   void cycle_ready_melody();             // Micra "Chime melody": Off/Blue/Pink/...
   void theme_select(int index);          // Device theme roller selection
   void apply_pending_theme();            // deferred rebuild (from lv_async_call)
@@ -277,6 +304,19 @@ class App {
   bool ntp_ready() const;      // WiFi on + NTP on + a real sync landed this boot
   core::ScheduleInputs schedule_inputs(const core::MachineSnapshot& snap) const;
   void schedule_tick(const core::MachineSnapshot& snap);
+  // The dose feature (chip, ratio, default dose) needs the feature on and
+  // an espresso scale to brew with; RECORDING (the bench block, Capture, the
+  // containers) needs a bench scale on top.
+  bool dose_active() const {
+    return dose_enabled_ && dose_settings_ != nullptr && !home_.bench_only && espresso_saved();
+  }
+  bool dose_record_active() const {
+    return dose_active() && bench_ != nullptr && home_.bench_enabled;
+  }
+  bool espresso_saved() const {
+    return scale_provisioner_ != nullptr && !scale_provisioner_->saved_name().empty();
+  }
+
   void apply_scheduled_power(bool on, bool auto_standby);
   core::DaySchedule& sched_edit_day();
   static void format_clock_min(char* out, size_t n, int min_of_day, bool h24);
@@ -334,6 +374,8 @@ class App {
   core::IScale* scale_ = nullptr;
   core::IScale* bench_ = nullptr;   // the bench slot's port (optional)
   core::IScale* dev_scale() const;  // the slot Scale > Device settings addresses
+  core::IScale* cal_scale_ = nullptr;  // whose calibration result is on screen
+  int cal_result_ = -1;                // that result, %/day
   int pending_scan_index_ = -1;     // the tapped result while the save modal is up
   core::IScaleProvisioner* scale_provisioner_ = nullptr;
   core::IBrewController* brew_ = nullptr;
@@ -485,6 +527,15 @@ class App {
   // internal .bss for the engine + the working config copy; no heap, no task.
   core::ISchedule* schedule_ = nullptr;
   core::ScheduleEngine schedule_engine_;
+  core::IDoseSettings* dose_settings_ = nullptr;
+  core::DoseTracker dose_;
+  bool dose_enabled_ = false;
+  float shot_dose_g_ = 0.0f;  // the dose the running / reviewed shot spent
+  core::DoseSource shot_dose_src_ = core::DoseSource::kNone;  // ... and where it came from
+  float review_out_g_ = 0.0f; // the settled yield, latched at the freeze (0 = not yet)
+  int capture_slot_ = -1;     // a Capture waiting for the bench reading to hold still
+  uint32_t capture_deadline_ms_ = 0;
+  void finish_capture(int index, float grams);
   core::ScheduleConfig schedule_cfg_;      // the page's working copy
   bool schedule_loaded_ = false;           // schedule_cfg_ read from the port once
   bool schedule_warned_ = false;           // cloud-app notice shown this session

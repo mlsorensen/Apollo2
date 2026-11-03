@@ -2,6 +2,12 @@
 
 #include <cmath>
 #include <cstdio>
+#ifdef ESP_PLATFORM
+#include <esp_heap_caps.h>
+#endif
+
+#include "core/dose.h"
+#include "core/system.h"
 #include <cstring>
 
 #include "ui/theme.h"
@@ -222,14 +228,25 @@ void set_flow_ylabels(HomeWidgets& w) {
 // The unit chip is a legend: a coloured dot per series + its unit. Mode 0/1
 // = the espresso trace in the accent; mode 2 = the bench trace in the bench
 // colour; beside mode shows both entries.
+// The legend's rows carry LIVE values (owner, 2026-11-01: nowhere else
+// shows the flow rate): the espresso row in the unit on show, the bench row
+// in grams. "--" while there is no data.
 void update_flow_legend(HomeWidgets& w) {
   if (w.flow_unit_label == nullptr) return;
   const bool bench_active = w.flow_mode == 2;
-  ui::set_text(w.flow_unit_label, flow_unit(w.flow_mode));
+  char b[24];
+  const float v = bench_active ? w.legend_bench_g : (w.flow_mode == 1 ? w.legend_g : w.legend_gps);
+  if (v < 0.0f) std::snprintf(b, sizeof(b), "-- %s", flow_unit(w.flow_mode));
+  else std::snprintf(b, sizeof(b), "%.1f %s", static_cast<double>(v), flow_unit(w.flow_mode));
+  ui::set_text(w.flow_unit_label, b);
   if (w.flow_legend_dot != nullptr)
     ui::set_bg_color(w.flow_legend_dot,
                      bench_active ? ui::theme::bench() : ui::theme::accent());
-  if (w.flow_unit_label2 != nullptr) ui::set_text(w.flow_unit_label2, "g");
+  if (w.flow_unit_label2 != nullptr) {
+    if (w.legend_bench_g < 0.0f) std::snprintf(b, sizeof(b), "-- g");
+    else std::snprintf(b, sizeof(b), "%.1f g", static_cast<double>(w.legend_bench_g));
+    ui::set_text(w.flow_unit_label2, b);
+  }
   if (w.flow_legend_dot2 != nullptr) ui::set_bg_color(w.flow_legend_dot2, ui::theme::bench());
 }
 
@@ -382,7 +399,15 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   if (ph < 16) ph = 16;
 
   const uint32_t stride_bytes = lv_draw_buf_width_to_stride(pw, LV_COLOR_FORMAT_RGB565);
-  out.flow_buf = static_cast<uint16_t*>(lv_malloc(stride_bytes * static_cast<size_t>(ph)));
+  ui::flow_buf_alloc(out, stride_bytes * static_cast<size_t>(ph));
+  // Evidence for "the graph is just an empty box" (owner, X-8, 2026-11-01,
+  // after switching Bench scale on Home): the size the card had at build
+  // and whether the canvas got its buffer. A 16x16 means the layout wasn't
+  // final; a null buffer means the LVGL pool refused ~pw*ph*2 bytes.
+  if (core::log_detail() || out.flow_buf == nullptr)
+    core::logf("graph: canvas %dx%d (%u B) %s\n", pw, ph,
+               static_cast<unsigned>(stride_bytes * static_cast<size_t>(ph)),
+               out.flow_buf != nullptr ? "ok" : "NO BUFFER");
   if (out.flow_buf == nullptr) return;  // OOM: no graph (flow_canvas stays null)
 
   lv_obj_t* canvas = lv_canvas_create(card);
@@ -434,6 +459,8 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
                                       : nullptr;
   if (out.flow_weights == nullptr || out.flow_flows == nullptr ||
       (want_bench_ring && out.bench_weights == nullptr)) {  // OOM: tick no-ops
+    core::logf("graph: ring allocation failed (%d columns, bench ring %s)\n", pw,
+               want_bench_ring ? "wanted" : "not wanted");
     if (out.flow_weights != nullptr) lv_free(out.flow_weights);
     if (out.flow_flows != nullptr) lv_free(out.flow_flows);
     if (out.bench_weights != nullptr) lv_free(out.bench_weights);
@@ -451,7 +478,21 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   // which sits in the left margin): a coloured dot + the unit per series. Tap
   // flips the espresso trace g/s <-> g, re-scaling and redrawing the existing
   // trace in the new unit; the bench entry is always grams.
-  lv_obj_t* btn = lv_button_create(card);
+  // The top-left block is a column: the dose chip (when there is a dose)
+  // ABOVE the legend, both boxes flush left. Two boxes because they are two
+  // controls — the x on the chip clears the dose, a tap on the legend flips
+  // the unit — and because each box starting at the left edge keeps the
+  // longest line (the review's "in / out / ratio") clear of the bench axis
+  // in the beside layout (owner, 2026-11-01).
+  lv_obj_t* legend_row = lv_obj_create(card);
+  lv_obj_remove_style_all(legend_row);
+  lv_obj_remove_flag(legend_row, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_size(legend_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(legend_row, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(legend_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+  lv_obj_set_style_pad_row(legend_row, ui::dp(4), 0);
+  lv_obj_align(legend_row, LV_ALIGN_TOP_LEFT, ui::dp(6), ui::dp(6));
+  lv_obj_t* btn = lv_button_create(legend_row);
   lv_obj_remove_style_all(btn);
   lv_obj_set_style_bg_color(btn, lv_color_hex(ui::theme::bg()), 0);
   lv_obj_set_style_bg_opa(btn, LV_OPA_70, 0);
@@ -462,25 +503,94 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   lv_obj_set_size(btn, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_align(btn, LV_ALIGN_TOP_LEFT, ui::dp(6), ui::dp(6));
-  out.flow_legend_dot = make_dot(btn, ui::dp(10), ui::theme::accent());
-  lv_obj_t* blab = lv_label_create(btn);
+  // Two entries (beside the graph) stack one per row, dots and values
+  // flush left.
+  lv_obj_t* entry1 = btn;
+  if (out.bench_overlay) {
+    lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START,
+                          LV_FLEX_ALIGN_START);  // rows flush left: the dots line up (owner)
+    lv_obj_set_style_pad_row(btn, ui::dp(2), 0);
+    lv_obj_set_style_pad_ver(btn, ui::dp(4), 0);
+    auto entry = [&]() {
+      lv_obj_t* e = lv_obj_create(btn);
+      lv_obj_remove_style_all(e);
+      lv_obj_remove_flag(e, LV_OBJ_FLAG_SCROLLABLE);
+      lv_obj_add_flag(e, LV_OBJ_FLAG_EVENT_BUBBLE);  // the tap reaches the button
+      lv_obj_set_size(e, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+      lv_obj_set_flex_flow(e, LV_FLEX_FLOW_ROW);
+      lv_obj_set_flex_align(e, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+      lv_obj_set_style_pad_column(e, ui::dp(8), 0);
+      return e;
+    };
+    entry1 = entry();
+  }
+  out.flow_legend_dot = make_dot(entry1, ui::dp(10), ui::theme::accent());
+  lv_obj_t* blab = lv_label_create(entry1);
   lv_label_set_text(blab, flow_unit(out.flow_mode));
   lv_obj_set_style_text_color(blab, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(blab, ui::font_dp(20), 0);
   out.flow_unit_btn = btn;
   out.flow_unit_label = blab;
   if (out.bench_overlay) {
-    lv_obj_t* spacer = lv_obj_create(btn);
-    lv_obj_remove_style_all(spacer);
-    lv_obj_set_size(spacer, ui::dp(6), 1);
-    out.flow_legend_dot2 = make_dot(btn, ui::dp(10), ui::theme::bench());
-    out.flow_unit_label2 = lv_label_create(btn);
+    lv_obj_t* entry2 = lv_obj_create(btn);
+    lv_obj_remove_style_all(entry2);
+    lv_obj_remove_flag(entry2, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(entry2, LV_OBJ_FLAG_EVENT_BUBBLE);
+    lv_obj_set_size(entry2, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(entry2, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(entry2, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(entry2, ui::dp(8), 0);
+    out.flow_legend_dot2 = make_dot(entry2, ui::dp(10), ui::theme::bench());
+    out.flow_unit_label2 = lv_label_create(entry2);
     lv_label_set_text(out.flow_unit_label2, "g");
     lv_obj_set_style_text_color(out.flow_unit_label2, lv_color_hex(ui::theme::text()), 0);
     lv_obj_set_style_text_font(out.flow_unit_label2, ui::font_dp(20), 0);
   }
   update_flow_legend(out);
+
+  // The dose chip, above the legend: same shell, no dot (the legend's
+  // amber dot already names the bench series; the ratio is amber itself —
+  // owner, 2026-11-01), built up by set_dose_chip (in -> placeholder out ->
+  // out + ratio). Hidden until a dose is staged; only its x is a control
+  // (the chip body is inert, so a tap meant for the legend that lands high
+  // does nothing).
+  {
+    lv_obj_t* chip = lv_obj_create(legend_row);
+    lv_obj_remove_style_all(chip);
+    lv_obj_remove_flag(chip, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(chip, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_move_to_index(chip, 0);  // on top of the legend
+    lv_obj_set_style_bg_color(chip, lv_color_hex(ui::theme::bg()), 0);
+    lv_obj_set_style_bg_opa(chip, LV_OPA_70, 0);
+    lv_obj_set_style_radius(chip, ui::dp(8), 0);
+    lv_obj_set_style_pad_hor(chip, ui::dp(12), 0);
+    lv_obj_set_style_pad_ver(chip, ui::dp(7), 0);
+    lv_obj_set_style_pad_column(chip, ui::dp(8), 0);
+    lv_obj_set_size(chip, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(chip, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(chip, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    auto label = [&](uint32_t color, int size) {
+      lv_obj_t* l = lv_label_create(chip);
+      lv_label_set_text(l, "");
+      lv_obj_set_style_text_color(l, lv_color_hex(color), 0);
+      lv_obj_set_style_text_font(l, ui::font_dp(size), 0);
+      return l;
+    };
+    const int chip_font = 20;  // the legend stacks beside the graph, so the chip keeps its size
+    out.dose_in_label = label(ui::theme::text(), chip_font);
+    out.dose_out_label = label(ui::theme::muted(), chip_font);
+    lv_obj_set_style_pad_left(out.dose_out_label, ui::dp(6), 0);
+    out.dose_ratio_label = label(ui::theme::bench(), chip_font);
+    lv_obj_set_style_pad_left(out.dose_ratio_label, ui::dp(6), 0);
+    out.dose_x_label = label(ui::theme::muted(), 14);
+    lv_label_set_text(out.dose_x_label, LV_SYMBOL_CLOSE);
+    lv_obj_add_flag(out.dose_x_label, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ext_click_area(out.dose_x_label, ui::dp(12));  // a thumb-sized target
+    lv_obj_add_flag(chip, LV_OBJ_FLAG_HIDDEN);
+    out.dose_chip = chip;
+    out.dose_chip_state = 0;
+  }
 
   // Four Y labels (0, max/3, 2max/3, max) in the left margin, aligned to the plot
   // rows. The top three are dynamic (updated on rescale); the bottom "0" is static.
@@ -555,6 +665,11 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
     if (out.flow_mode == 2) out.flow_ymax = out.bench_ymax;
     set_flow_ylabels(out);
   }
+  // The legend's live values: a mid-shot column (the newest is the taper's 0).
+  out.legend_gps = out.flow_flows[pw / 2];
+  out.legend_g = out.flow_weights[pw / 2];
+  out.legend_bench_g = out.bench_weights != nullptr ? out.bench_weights[pw - 1] : -1.0f;
+  update_flow_legend(out);
   redraw_flow_from_ring(out);
 #endif
 }
@@ -565,6 +680,15 @@ const char* battery_icon(int pct) {
   if (pct >= 40) return LV_SYMBOL_BATTERY_2;
   if (pct >= 15) return LV_SYMBOL_BATTERY_1;
   return LV_SYMBOL_BATTERY_EMPTY;
+}
+
+// The level icon; "~" in front when the level is an estimate (a partner
+// Umbra's frozen gauge) and the icon is all there is — with the percent
+// beside it, the percent carries the one "~".
+void set_batt_icon(lv_obj_t* label, int pct, bool estimated) {
+  char buf[8];
+  std::snprintf(buf, sizeof(buf), "%s%s", estimated ? "~" : "", battery_icon(pct));
+  ui::set_text(label, buf);
 }
 
 // The full-width power button at the bottom (both layouts).
@@ -993,6 +1117,8 @@ lv_obj_t* make_pill(lv_obj_t* seg, const char* text, const lv_font_t* font, uint
   lv_obj_set_style_radius(b, ui::dp(14), 0);
   lv_obj_set_style_opa(b, LV_OPA_40, LV_STATE_DISABLED);
   // The pill is caption-sized; the thumb isn't. Catch taps well around it.
+  // (An extended click area only counts inside the parents' rectangles, so
+  // the pill's own height is what really sets the target: keep it.)
   lv_obj_set_ext_click_area(b, ui::dp(10));
   lv_obj_set_style_bg_color(b, lv_color_hex(color), 0);
   lv_obj_set_style_bg_opa(b, LV_OPA_TRANSP, 0);  // show_bench_side fills the active one
@@ -1045,11 +1171,15 @@ void add_bench_battery(lv_obj_t* status_group, const lv_font_t* cap_font,
 // battery), a hero weight with the scale's name under it, and the actions —
 // Disconnect + Tare in the panel slot, Tare alone beside the graph (its
 // Connect lives in Settings; the beside card is the readout).
+// set_font / btn_size / symbol_font size the default-dose stepper: the
+// caller picks a smaller button where the card is short (beside the graph
+// at 800x480).
 lv_obj_t* build_bench_panel(lv_obj_t* parent, const lv_font_t* cap_font,
                             const lv_font_t* status_font, const lv_font_t* val_font,
-                            int pad, int action_h, const lv_font_t* action_font,
-                            bool with_status_text, bool with_connect, bool with_switch,
-                            HomeWidgets& out) {
+                            const lv_font_t* set_font, int btn_size,
+                            const lv_font_t* symbol_font, int pad, int action_h,
+                            const lv_font_t* action_font, bool with_status_text,
+                            bool with_connect, bool with_switch, HomeWidgets& out) {
   lv_obj_t* card = make_panel_card(parent, pad);
   make_panel_header(card, "BENCH", cap_font, status_font, &out.bench_status_dot,
                     with_status_text ? &out.bench_status_label : nullptr);
@@ -1058,19 +1188,97 @@ lv_obj_t* build_bench_panel(lv_obj_t* parent, const lv_font_t* cap_font,
   if (with_switch) add_segmented_switch(lv_obj_get_child(card, 0), 1, cap_font, out);
 
   lv_obj_t* body = make_panel_body(card);
-  lv_obj_set_flex_flow(body, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_flex_align(body, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
-                        LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_row(body, ui::dp(8), 0);  // air between the weight and its name
-  out.bench_weight = lv_label_create(body);
-  lv_label_set_text(out.bench_weight, "-- g");
-  lv_obj_set_style_text_font(out.bench_weight, val_font, 0);  // = the other card values
-  lv_obj_set_style_text_color(out.bench_weight, lv_color_hex(ui::theme::text()), 0);
-  out.bench_name = lv_label_create(body);
-  lv_label_set_text(out.bench_name, "");
-  lv_obj_set_style_text_font(out.bench_name, cap_font, 0);
-  lv_obj_set_style_text_color(out.bench_name, lv_color_hex(ui::theme::muted()), 0);
-
+  // Dose block: the Record control. Outlined (amber) while the reading is a
+  // dose candidate, filled once recorded, invisible otherwise; its caption
+  // is the scale's name when dormant (set_bench_dose).
+  auto make_block = [&](lv_obj_t* parent) {
+    lv_obj_t* blk = lv_obj_create(parent);
+    lv_obj_remove_style_all(blk);
+    lv_obj_remove_flag(blk, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(blk, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_radius(blk, ui::dp(12), 0);
+    lv_obj_set_style_border_width(blk, 0, 0);
+    lv_obj_set_style_border_color(blk, lv_color_hex(ui::theme::bench()), 0);
+    lv_obj_set_style_bg_color(blk, lv_color_hex(ui::theme::bench()), 0);
+    lv_obj_set_style_bg_opa(blk, LV_OPA_TRANSP, 0);
+    return blk;
+  };
+  auto make_labels = [&](lv_obj_t* parent, bool name_first) {
+    for (int i = 0; i < 2; ++i) {
+      if ((i == 0) == name_first) {
+        out.bench_name = lv_label_create(parent);
+        lv_label_set_text(out.bench_name, "");
+        lv_obj_set_style_text_font(out.bench_name, cap_font, 0);
+        lv_obj_set_style_text_color(out.bench_name, lv_color_hex(ui::theme::muted()), 0);
+      } else {
+        out.bench_weight = lv_label_create(parent);
+        lv_label_set_text(out.bench_weight, "-- g");
+        lv_obj_set_style_text_font(out.bench_weight, val_font, 0);  // = the other card values
+        lv_obj_set_style_text_color(out.bench_weight, lv_color_hex(ui::theme::text()), 0);
+      }
+    }
+  };
+  out.bench_dose_state = 0;
+  out.bench_dose_on_caption = !with_connect;
+  if (with_connect) {
+    // Panel slot (swap / bench-only): ONE panel column like the MICRA and
+    // SCALE cards' — the scale's name on the caption line, the weight on
+    // the value line, the dose stepper on the stepper line — so every row
+    // lines up across the cards (owner, 2026-11-01). The outline is NOT in
+    // the flow: a layout-ignoring object sized over the caption + value
+    // after layout and drawn behind them (the labels aren't clickable, so
+    // a tap on the text reaches it).
+    lv_obj_t* col = lv_obj_create(body);
+    lv_obj_remove_style_all(col);
+    lv_obj_remove_flag(col, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_flex_grow(col, 1);
+    lv_obj_set_height(col, lv_pct(100));
+    lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(col, ui::dp(6), 0);  // = make_panel_column
+    out.bench_block = make_block(col);
+    lv_obj_add_flag(out.bench_block, LV_OBJ_FLAG_IGNORE_LAYOUT);
+    make_labels(col, /*name_first=*/true);
+    make_stepper_group(col, btn_size, symbol_font, set_font, &out.bench_dose_value,
+                       &out.bench_dose_minus, &out.bench_dose_plus);
+    out.bench_dose_group = lv_obj_get_parent(out.bench_dose_value);
+    // The stepper's SLOT stays when the stepper isn't shown (the group keeps
+    // its height; App hides its children): the rows above must not move
+    // when the dose feature is off. Centred like the MICRA columns.
+    lv_obj_set_height(out.bench_dose_group, btn_size);
+    for (uint32_t i = 0; i < lv_obj_get_child_count(out.bench_dose_group); ++i)
+      lv_obj_add_flag(lv_obj_get_child(out.bench_dose_group, i), LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_flex_align(col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  } else {
+    // Beside the graph (the graph's height): the weight with the name under
+    // it in a block that IS the flow, and the dose stepper takes the name's
+    // line while it shows (App hides one or the other; set_bench_dose gives
+    // the outline its padding only while it draws). Every px counts here —
+    // 800x480 leaves ~65 px of body for a 34 px weight and a 32 px stepper —
+    // so the card's row gap is 8 dp, not the panels' 12.
+    lv_obj_set_flex_flow(body, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(body, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_t* blk = make_block(body);
+    lv_obj_set_size(blk, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(blk, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(blk, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_hor(blk, ui::dp(16), 0);
+    lv_obj_set_style_pad_row(blk, ui::dp(4), 0);
+    out.bench_block = blk;
+    make_labels(blk, /*name_first=*/false);
+    lv_obj_set_style_pad_row(card, ui::dp(8), 0);
+    // The weight sits a little higher than the layout puts it, into the
+    // header gap, so the stepper gets air under the value (owner) — only
+    // while the stepper is on the line: the body clips its children, and
+    // the outline's top would go with it (set_bench_dose).
+    lv_obj_set_style_translate_y(blk, -ui::dp(5), 0);
+    lv_obj_set_style_pad_top(body, 0, 0);
+    make_stepper_group(body, btn_size, symbol_font, set_font, &out.bench_dose_value,
+                       &out.bench_dose_minus, &out.bench_dose_plus);
+    out.bench_dose_group = lv_obj_get_parent(out.bench_dose_value);
+    lv_obj_set_style_margin_top(out.bench_dose_group, 0, 0);
+    lv_obj_add_flag(out.bench_dose_group, LV_OBJ_FLAG_HIDDEN);
+  }
   lv_obj_t* acts = lv_obj_create(card);
   lv_obj_remove_style_all(acts);
   lv_obj_remove_flag(acts, LV_OBJ_FLAG_SCROLLABLE);
@@ -1090,6 +1298,137 @@ lv_obj_t* build_bench_panel(lv_obj_t* parent, const lv_font_t* cap_font,
 }  // namespace
 
 namespace ui {
+
+void flow_buf_alloc(HomeWidgets& w, size_t bytes) {
+  w.flow_buf = nullptr;
+  w.flow_buf_in_pool = false;
+#ifdef ESP_PLATFORM
+  w.flow_buf = static_cast<uint16_t*>(
+      heap_caps_aligned_alloc(64, bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  if (w.flow_buf != nullptr) return;
+#endif
+  w.flow_buf = static_cast<uint16_t*>(lv_malloc(bytes));  // the pool (host sim; no PSRAM)
+  w.flow_buf_in_pool = w.flow_buf != nullptr;
+}
+
+void flow_buf_free(HomeWidgets& w) {
+  if (w.flow_buf == nullptr) return;
+#ifdef ESP_PLATFORM
+  if (!w.flow_buf_in_pool) heap_caps_free(w.flow_buf);
+  else lv_free(w.flow_buf);
+#else
+  lv_free(w.flow_buf);
+#endif
+  w.flow_buf = nullptr;
+}
+
+void set_bench_dose(HomeWidgets& w, int state, float dose_g) {
+  if (w.bench_block == nullptr) return;
+  char cap[40];
+  if (state == 1) std::snprintf(cap, sizeof(cap), "Record %.1f g", static_cast<double>(dose_g));
+  else if (state == 2)
+    std::snprintf(cap, sizeof(cap), LV_SYMBOL_OK "  %.1f g recorded", static_cast<double>(dose_g));
+  if (state != 0) ui::set_text(w.bench_name, cap);
+  if (state != 0 && !w.bench_dose_on_caption && !lv_obj_has_flag(w.bench_card, LV_OBJ_FLAG_HIDDEN)) {
+    // Panel column: the outline is a layout-ignoring box behind the caption
+    // and value; fit it to them (the weight's width changes per reading).
+    // Not while the card is hidden: flex skips hidden items, so the labels
+    // sit wherever they last were (App refits when the side shows).
+    lv_obj_t* col = lv_obj_get_parent(w.bench_block);
+    lv_obj_update_layout(col);
+    lv_area_t n, v, c;
+    lv_obj_get_coords(w.bench_name, &n);
+    lv_obj_get_coords(w.bench_weight, &v);
+    lv_obj_get_content_coords(col, &c);
+    const int ph = ui::dp(12), pt = ui::dp(3), pb = ui::dp(4);
+    const int wdt = std::max(lv_area_get_width(&n), lv_area_get_width(&v)) + 2 * ph;
+    lv_obj_set_size(w.bench_block, wdt, (v.y2 - n.y1 + 1) + pt + pb);
+    lv_obj_set_pos(w.bench_block, ((c.x1 + c.x2 + 1) / 2 - c.x1) - wdt / 2, (n.y1 - c.y1) - pt);
+  }
+  if (state == w.bench_dose_state) return;
+  w.bench_dose_state = state;
+  // Dormant: no border, no fill, muted caption (update_home restores the
+  // scale's name on its next pass). Candidate: amber outline + faint fill.
+  // Recorded: a deeper fill.
+  lv_obj_set_style_border_width(w.bench_block, state == 0 ? 0 : ui::dp(2), 0);
+  if (w.bench_dose_on_caption) {  // beside the graph: outline padding + the
+    lv_obj_set_style_pad_top(w.bench_block, state == 0 ? 0 : ui::dp(2), 0);  // centred block
+    lv_obj_set_style_pad_bottom(w.bench_block, state == 0 ? 0 : ui::dp(6), 0);  // only with the
+    lv_obj_set_style_translate_y(w.bench_block, state == 0 ? -ui::dp(5) : 0, 0);  // outline
+  }
+  lv_obj_set_style_bg_opa(w.bench_block, state == 0 ? LV_OPA_TRANSP
+                                         : state == 1 ? LV_OPA_10 : LV_OPA_30, 0);
+  lv_obj_set_style_text_color(w.bench_name,
+                              lv_color_hex(state == 0 ? ui::theme::muted() : ui::theme::bench()), 0);
+  if (state == 0) ui::set_text(w.bench_name, "");  // the name comes back on the next update
+}
+
+void log_bench_card_geometry(HomeWidgets& w) {
+  if (!core::log_detail() || w.bench_card == nullptr || lv_obj_get_child_count(w.bench_card) < 3) return;
+  lv_obj_update_layout(w.bench_card);  // the stepper / caption were just shown or hidden
+  lv_obj_t* body = lv_obj_get_child(w.bench_card, 1);
+  lv_area_t b; lv_obj_get_coords(body, &b);
+  // The lowest edge among the body's children against the body's bottom:
+  // > 0 is clipped (LVGL clips children to the parent's rectangle, gap or
+  // no gap below it).
+  int low = b.y1;
+  // The panel column's children are what can overflow; the beside card's
+  // body holds the block and the stepper directly.
+  lv_obj_t* holder = w.bench_dose_on_caption ? body : lv_obj_get_child(body, 0);
+  for (uint32_t i = 0; i < lv_obj_get_child_count(holder); ++i) {
+    lv_obj_t* c = lv_obj_get_child(holder, i);
+    if (lv_obj_has_flag(c, LV_OBJ_FLAG_HIDDEN) || lv_obj_has_flag(c, LV_OBJ_FLAG_IGNORE_LAYOUT)) continue;
+    lv_area_t a; lv_obj_get_coords(c, &a);
+    if (a.y2 > low) low = a.y2;
+  }
+  core::logf("home: bench card h=%d body=%d clipped=%d stepper=%d caption=%d\n",
+             static_cast<int>(lv_obj_get_height(w.bench_card)), static_cast<int>(lv_area_get_height(&b)),
+             static_cast<int>(low - b.y2),
+             w.bench_dose_group != nullptr &&
+                     !lv_obj_has_flag(w.bench_dose_on_caption ? w.bench_dose_group
+                                                              : lv_obj_get_child(w.bench_dose_group, 0),
+                                      LV_OBJ_FLAG_HIDDEN) ? 1 : 0,
+             w.bench_name != nullptr && !lv_obj_has_flag(w.bench_name, LV_OBJ_FLAG_HIDDEN) ? 1 : 0);
+}
+
+void set_dose_chip(HomeWidgets& w, int state, float in_g, float out_g, bool is_default) {
+  if (w.dose_chip == nullptr) return;
+  if (state == 0) {
+    if (w.dose_chip_state != 0) lv_obj_add_flag(w.dose_chip, LV_OBJ_FLAG_HIDDEN);
+    w.dose_chip_state = 0;
+    return;
+  }
+  char b[24];
+  // "in" was weighed on the bench scale; "set" is the default-dose setting.
+  std::snprintf(b, sizeof(b), is_default ? "%.1f g set" : "%.1f g in", static_cast<double>(in_g));
+  ui::set_text(w.dose_in_label, b);
+  if (state == 1) {
+    ui::set_text(w.dose_out_label, "");
+    ui::set_text(w.dose_ratio_label, "");
+  } else if (state == 2) {
+    ui::set_text(w.dose_out_label, "--.- g out");
+    ui::set_text(w.dose_ratio_label, "");
+  } else {
+    std::snprintf(b, sizeof(b), "%.1f g out", static_cast<double>(out_g));
+    ui::set_text(w.dose_out_label, b);
+    const float r = core::brew_ratio(out_g, in_g);
+    if (r > 0.0f) std::snprintf(b, sizeof(b), "1:%.1f", static_cast<double>(r));
+    else b[0] = '\0';
+    ui::set_text(w.dose_ratio_label, b);
+  }
+  if (state != w.dose_chip_state) {
+    w.dose_chip_state = state;
+    lv_obj_remove_flag(w.dose_chip, LV_OBJ_FLAG_HIDDEN);
+    // The out / ratio labels only take room once they have text; the x
+    // shows while the dose can still be cleared (before the shot spends it).
+    if (state == 1) lv_obj_remove_flag(w.dose_x_label, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(w.dose_x_label, LV_OBJ_FLAG_HIDDEN);
+    if (state >= 2) lv_obj_remove_flag(w.dose_out_label, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(w.dose_out_label, LV_OBJ_FLAG_HIDDEN);
+    if (state == 3) lv_obj_remove_flag(w.dose_ratio_label, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(w.dose_ratio_label, LV_OBJ_FLAG_HIDDEN);
+  }
+}
 
 void build_rail_tray(lv_obj_t* rail, const lv_font_t* font, HomeWidgets& out) {
   // The caller switches the rail to SPACE_BETWEEN, so the three tab buttons spread
@@ -1208,7 +1547,13 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   // Bench scale widgets: large scale-aware layout only (bench_weights is
   // freed by App before each rebuild, with the other rings).
   out.scale_card = out.bench_card = nullptr;
-  out.bench_weight = out.bench_name = nullptr;
+  out.bench_weight = out.bench_name = out.bench_block = nullptr;
+  out.bench_dose_state = 0;
+  out.bench_dose_group = out.bench_dose_value = out.bench_dose_minus = out.bench_dose_plus = nullptr;
+  out.bench_dose_on_caption = false;
+  out.dose_chip = out.dose_in_label = out.dose_out_label = out.dose_ratio_label =
+      out.dose_x_label = nullptr;
+  out.dose_chip_state = 0;
   out.bench_status_dot = out.bench_status_label = nullptr;
   out.bench_batt_label = out.bench_batt_pct_label = nullptr;
   out.bench_tare_btn = out.bench_connect_btn = out.bench_connect_label = nullptr;
@@ -1375,7 +1720,8 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   if (out.bench_only) {
     // No espresso scale: the bench card takes the SCALE slot alone (status
     // text, Disconnect + Tare, no switch) and the graph shows it in grams.
-    build_bench_panel(panels, panel_cap, panel_status, panel_val, panel_pad, action_h, btn_font,
+    build_bench_panel(panels, panel_cap, panel_status, panel_val, panel_set, panel_btn,
+                      panel_sym, panel_pad, action_h, btn_font,
                       /*with_status_text=*/true, /*with_connect=*/true,
                       /*with_switch=*/false, out);
   } else {
@@ -1387,12 +1733,37 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
       // state, as on the compact cards). The bench card starts hidden.
       lv_obj_t* scale_hdr = lv_obj_get_child(out.scale_card, 0);
       add_segmented_switch(scale_hdr, 0, panel_cap, out);
+      // The switch makes the header ~12 dp taller than the caption it
+      // replaces, and the card's height is fixed by the panel row: without
+      // this the body overflows under the action row and the stepper row and
+      // shot pill lose their bottoms (owner's X-8, 2026-11-01). The 16 dp
+      // the steppers sit lower by (see make_stepper_group / build_scale_panel)
+      // is the slack: on the swap card they sit where the values' row ends.
+      // The MICRA card takes the same shape — its header set to the switch
+      // header's height, the same slack out of its body — so BREW / STEAM /
+      // WEIGHT / TIMER, the values and the steppers share lines (owner).
+      auto flatten = [](lv_obj_t* stepper_btn) {
+        if (stepper_btn == nullptr) return;
+        lv_obj_t* stepper = lv_obj_get_parent(stepper_btn);
+        lv_obj_set_style_margin_top(stepper, 0, 0);
+        lv_obj_t* col = lv_obj_get_parent(stepper);
+        lv_obj_set_style_pad_top(lv_obj_get_parent(col), 0, 0);
+      };
+      flatten(out.target_minus);
+      flatten(out.brew_minus);
+      flatten(out.boiler_minus);
+      if (out.shot_btn != nullptr) lv_obj_set_style_margin_top(out.shot_btn, 0, 0);
       lv_obj_add_flag(out.scale_status_label, LV_OBJ_FLAG_HIDDEN);
       out.scale_status_label = nullptr;
-      build_bench_panel(panels, panel_cap, panel_status, panel_val, panel_pad, action_h, btn_font,
+      build_bench_panel(panels, panel_cap, panel_status, panel_val, panel_set, panel_btn,
+                        panel_sym, panel_pad, action_h, btn_font,
                         /*with_status_text=*/false, /*with_connect=*/true,
                         /*with_switch=*/true, out);
       lv_obj_add_flag(out.bench_card, LV_OBJ_FLAG_HIDDEN);
+      flatten(out.bench_dose_minus);
+      lv_obj_update_layout(scale_hdr);
+      lv_obj_t* micra_hdr = lv_obj_get_child(lv_obj_get_child(panels, 0), 0);
+      lv_obj_set_height(micra_hdr, lv_obj_get_height(scale_hdr));
     }
   }
 
@@ -1414,7 +1785,13 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
     lv_obj_set_height(graph_card, lv_pct(100));
     lv_obj_set_width(graph_card, 0);
     lv_obj_set_flex_grow(graph_card, 2);
-    build_bench_panel(lower, panel_cap, panel_status, panel_val, panel_pad, action_h, btn_font,
+    // The card is the graph's height: at 800x480 its body (~65 px) holds
+    // the weight plus a 32 dp stepper, no more; the X boards' extra height
+    // (500 logical) takes the panel-size button.
+    const bool tall = screen.height > ui::dp(480);
+    build_bench_panel(lower, panel_cap, panel_status, panel_val, panel_set,
+                      tall ? panel_btn : ui::dp(32), tall ? panel_sym : ui::font_dp(16),
+                      panel_pad, action_h, btn_font,
                       /*with_status_text=*/false, /*with_connect=*/false,
                       /*with_switch=*/false, out);
     lv_obj_set_flex_grow(out.bench_card, 1);
@@ -1427,6 +1804,29 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   // to the card's real content box.
   lv_obj_update_layout(parent);
   populate_flow_graph(graph_card, out);
+  // Evidence for the swap card's clipped stepper / pill (owner, X-8,
+  // 2026-11-01; the sim doesn't reproduce it): the SCALE card's slot and the
+  // heights its header, body and action row got, plus where the shot pill
+  // ends against the action row's top. Detailed log only.
+  if (core::log_detail() && out.scale_card != nullptr && lv_obj_get_child_count(out.scale_card) >= 3) {
+    lv_obj_t* hdr = lv_obj_get_child(out.scale_card, 0);
+    lv_obj_t* body = lv_obj_get_child(out.scale_card, 1);
+    lv_obj_t* acts = lv_obj_get_child(out.scale_card, 2);
+    // overflow = how far the columns' children (the steppers, the shot pill)
+    // run past the bottom edge: > 0 is exactly the clipped amount. Measured
+    // on the COLUMNS — lv_obj_get_scroll_bottom sees direct children only,
+    // and the body's are the columns, which are sized to it (always 0).
+    int overflow = 0;
+    for (uint32_t i = 0; i < lv_obj_get_child_count(body); ++i) {
+      const int o = static_cast<int>(lv_obj_get_scroll_bottom(lv_obj_get_child(body, i)));
+      if (o > overflow) overflow = o;
+    }
+    core::logf("home: scale card h=%d hdr=%d body=%d overflow=%d acts=%d y=%d; swap=%d\n",
+               static_cast<int>(lv_obj_get_height(out.scale_card)), static_cast<int>(lv_obj_get_height(hdr)),
+               static_cast<int>(lv_obj_get_height(body)), overflow,
+               static_cast<int>(lv_obj_get_height(acts)), static_cast<int>(lv_obj_get_y(acts)),
+               out.bench_enabled && out.bench_mode == 0 ? 1 : 0);
+  }
   // Swap mode starts on the ESPRESSO side: paint the pills to match.
   if (bench_enabled && out.bench_mode == 0 && !out.bench_only) show_bench_side(out, false);
 }
@@ -1466,7 +1866,13 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     else std::snprintf(wb, sizeof(wb), "-- g");
     ui::set_text(w.bench_weight, wb);
     char nb[32];
-    ui::set_text(w.bench_name, ui::friendly_scale_name(bench->name, nb, sizeof(nb)));
+    if (w.bench_dose_state == 0) {  // the dose block owns the caption otherwise
+      ui::friendly_scale_name(bench->name, nb, sizeof(nb));
+      if (!w.bench_dose_on_caption)  // the panel column's caption line, like BREW / WEIGHT
+        for (char* q = nb; *q != '\0'; ++q)
+          if (*q >= 'a' && *q <= 'z') *q = static_cast<char>(*q - 'a' + 'A');
+      ui::set_text(w.bench_name, nb);
+    }
     const char* btxt;
     uint32_t bdot;
     if (bench->connected) {
@@ -1498,12 +1904,13 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
       };
       if (show_pct) {
         char sb[8];
-        std::snprintf(sb, sizeof(sb), "%d%%", bench->battery_pct);
+        std::snprintf(sb, sizeof(sb), "%s%d%%", bench->battery_estimated ? "~" : "", bench->battery_pct);
         ui::set_text(w.bench_batt_pct_label, sb);
         ui::set_text_color(w.bench_batt_pct_label, color);
       }
       if (show_icon) {
-        ui::set_text(w.bench_batt_label, battery_icon(bench->battery_pct));
+        set_batt_icon(w.bench_batt_label, bench->battery_pct,
+                      bench->battery_estimated && !show_pct);
         ui::set_text_color(w.bench_batt_label, color);
       }
       show(w.bench_batt_pct_label, show_pct);
@@ -1720,12 +2127,12 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
     };
     if (show_pct) {
       char sb[8];
-      std::snprintf(sb, sizeof(sb), "%d%%", scale.battery_pct);
+      std::snprintf(sb, sizeof(sb), "%s%d%%", scale.battery_estimated ? "~" : "", scale.battery_pct);
       ui::set_text(w.scale_batt_pct_label, sb);
       ui::set_text_color(w.scale_batt_pct_label, color);
     }
     if (show_icon) {
-      ui::set_text(w.scale_batt_label, battery_icon(scale.battery_pct));
+      set_batt_icon(w.scale_batt_label, scale.battery_pct, scale.battery_estimated && !show_pct);
       ui::set_text_color(w.scale_batt_label, color);
     }
     show(w.scale_batt_pct_label, show_pct);
@@ -2421,7 +2828,8 @@ void end_shot_plot(HomeWidgets& w) {
   apply_flow_xaxis_labels(w);  // restore the labels for the active sweep style
 }
 
-void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
+void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale,
+                    const core::ScaleSnapshot* bench) {
   if (!w.flow_shot_plot || w.flow_canvas == nullptr || w.flow_buf == nullptr ||
       w.flow_w <= 1)
     return;
@@ -2437,6 +2845,12 @@ void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale) {
   bool full = w.shot_x_painted < 0;
   if (scale.seq != w.shot_seq_seen) {
     w.shot_seq_seen = scale.seq;
+    // The legend's live values: the scroll path feeds them per step, but it
+    // isn't running during a shot (the owner's X-8, 2026-11-02: g/s frozen).
+    w.legend_g = rw;
+    w.legend_gps = flow_gap(rf) ? -1.0f : rf;
+    w.legend_bench_g = bench != nullptr && bench->connected ? bench->weight_g : -1.0f;
+    update_flow_legend(w);
     if (w.shot_n == 0 || now - w.shot_last_sample_ms >= kShotSampleMs) {
       if (w.shot_n > 0) {  // track the achieved storage cadence (sizes the edge lag)
         const uint32_t dt = now - w.shot_last_sample_ms;
@@ -2776,6 +3190,8 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale,
     if (!w.flow_blanked) {
       reset_flow_graph(w);
       reset_flow_history(w);  // reconnect weights won't relate to these samples
+      w.legend_gps = w.legend_g = w.legend_bench_g = -1.0f;  // "--", like the plot
+      update_flow_legend(w);
     }
     return;
   }
@@ -2882,6 +3298,12 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale,
     }
   }
   if (steps == 0) return;
+  // The legend's live values follow the plot's steps on both paths (the
+  // scope branch used to be left out).
+  w.legend_g = flow_gap(rw) ? -1.0f : rw;
+  w.legend_gps = flow_gap(rf) ? -1.0f : rf;
+  w.legend_bench_g = flow_gap(bw) ? -1.0f : bw;
+  update_flow_legend(w);
 
   // Auto-range the Y axis: grow immediately to fit the window's peak; shrink back
   // toward the mode default only once the peak drops below half scale (hysteresis,
