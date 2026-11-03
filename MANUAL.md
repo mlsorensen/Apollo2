@@ -1134,12 +1134,11 @@ in the firmware). It does not work with the S3‑4.3C.
 ### Paddle pin protection & per‑unit remapping
 
 - **Protect the sense pin.** The P4 boards' paddle inputs are plain GPIO
-  pins, and two have failed on paddle wiring; the cause is not established.
-  The [wiring guide](docs/WIRING.md) now puts a 1 kΩ resistor and a 100 nF
-  capacitor in the sense wire, which a scope shows taking the pin cleanly to
-  zero on every flip where a bare wire rang it below its rated range, and it
-  says to plug the paddle block in with the board powered off. Two cheap
-  parts, no change in behaviour.
+  pins. The [wiring guide](docs/WIRING.md) puts a 1 kΩ resistor and a 100 nF
+  capacitor in the paddle‑sense wire, in the screw‑terminal block, which keeps
+  the pin inside its rated range against the switch's own ringing and against
+  transients the cable can carry; and it says to plug the paddle block in with
+  the board powered off. Two cheap parts, no change in behaviour.
 - **The paddle breaker.** A failing sense pin announces itself: it starts
   registering paddle flips that nobody made, dozens a minute, each one a shot
   start. Apollo watches for that signature — raw flickers too short to be a

@@ -106,8 +106,6 @@ double‑check the silkscreen before clipping on):
 
 ![The P4 header corner — GND, 52, 51 in a row](img/wiring/p4-header-pins.jpg)
 
-![Screw-terminal block on the pins, cable attached](img/wiring/p4-header-terminal.jpg)
-
 The cable can run out through a hole in the 3D‑printed backplate. From there,
 the opto module provides the isolation, and two small parts in the terminal
 block protect the sense pin:
@@ -139,25 +137,31 @@ In detail:
   `make padsense PIN=<n>` / `make paddrive PIN=<n>` with the board on USB —
   see the manual's "Paddle pin protection & per‑unit remapping" section.
 
+**Building the block.** Phase 1: the 4‑slot block with its fourth header pin
+bent clear and the 1 kΩ resistor jumpering the paddle‑wire slot to the
+GPIO 51 slot:
+
+![4-slot terminal block, fourth pin bent clear, resistor jumpering the two slots](img/wiring/paddle-resistor-terminal.jpg)
+
+Phase 2, finished: the 100 nF capacitor added from the GPIO 51 slot past
+GPIO 52 to GND, and the cable's wires landed:
+
+![Finished terminal block: resistor, capacitor and the cable's wires in the slots](img/wiring/paddle-rc-terminal.jpg)
+
 ### The sense RC
 
-The P4 boards' paddle inputs are plain GPIO pins, and two of them have failed
-on this wiring (one on a bare wire, one behind a 1 kΩ resistor on an Apollo
-Link). The cause is **not established**. What an oscilloscope on the pin does
-show (November 2026) is that a bare mechanical switch at the end of two metres
-of cable rings the pin to about −1 V at each bounce of the contact as the
-paddle closes — outside the chip's rated −0.3 V — a resistor alone halves
-that, a capacitor alone makes it worse (−1.7 V, the switch shorting a charged
-capacitor through the cable's inductance), and **resistor then capacitor**
-takes the pin cleanly to zero. Whether the ring wears a pin over years is not
-known; keeping the pin inside its rating costs two parts and nothing in
-behaviour, so the guide specifies them. The machine's own pump and solenoid,
-for the record, put nothing on the wire at all.
+The two parts keep the GPIO 51 pin inside its rated range. A mechanical
+switch at the end of a long cable rings the pin below ground on every bounce
+of the contact as the paddle closes, and the cable can carry other transients
+to the pin; both are the kind of thing that can damage a GPIO over time. The
+resistor limits what reaches the pin and the capacitor holds the pin steady.
+Fit **both**, in that order: a resistor alone only halves the ringing, and a
+capacitor alone makes it worse (the switch shorts a charged capacitor through
+the cable's inductance). With both, an oscilloscope on the pin shows a clean
+fall to zero and nothing beneath it, and the paddle behaves exactly as before.
 
-**Already built this cable without the two parts?** Add them at either end
-as above; nothing else changes. If you built the two‑module version this
-page briefly described (a second module at the Apollo end, GPIO 50 feeding
-its LED), it measures clean and needs no change.
+**Already built this cable without the two parts?** Add them in the block
+as above; nothing else changes.
 
 **Plug the block in with the board powered off**, and keep the block's screw
 heads covered (a dab of hot glue or a strip of tape) if the back of the
