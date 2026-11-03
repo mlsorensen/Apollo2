@@ -6933,7 +6933,7 @@
 				)
 			)
 		)
-		(property "Description" "ESD diode on SENSE at J1 (Nexperia PESD5V0L1BA, 5 V working, <1 uA leakage): clamps a static hit on the cable or the plug before the remote's pad sees it"
+		(property "Description" "ESD diode on SENSE at J1 (Nexperia PESD5V0L1UA or any UNIDIRECTIONAL 5 V SOD-323 ESD diode, <1 uA leakage; a ...1BA is bidirectional, not this): clamps a static hit on the cable or the plug before the remote's pad sees it"
 			(at 264.16 93.98 0)
 			(hide yes)
 			(show_name no)

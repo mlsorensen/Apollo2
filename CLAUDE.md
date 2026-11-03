@@ -923,7 +923,7 @@ GT911 all up; NimBLE host inits. Paddle/audio/ADC since confirmed, 2026-09-11):
    **Apollo Link (v1.0, 2026-10-01; rev 0.7 drawn 2026-11-03):** the bridge
    board (hardware/paddle-bridge; rev 0.7 = rev 0.6 + U4 PC817 + D2 1N4148W
    + R6 560R from 5V so SENSE is opto-isolated, + C1 100 nF on SENSE + D3
-   PESD5V0L1BA ESD diode at J1; an opto-only 0.7 was ordered and cancelled
+   PESD5V0L1UA ESD diode at J1 (UNIDIRECTIONAL; Nexperia 1UA = uni, 1BA = bi); an opto-only 0.7 was ordered and cancelled
    the same week, never built, and this 0.7 supersedes it — there is no
    0.8; connectors unchanged, rev 0.6 boards in the field lack all of it;
    bridge:D_H pin 1 = K to match the footprint band — D1 on 0.5/0.6 boards
