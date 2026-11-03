@@ -915,13 +915,15 @@ GT911 all up; NimBLE host inits. Paddle/audio/ADC since confirmed, 2026-09-11):
    cap ALONE rings -1.7 V (LC with the cable), 1k+cap is clean; pump/solenoid
    put nothing on the wire. Whether the ring kills pads is NOT established —
    the RC is hygiene, the dead-pad cause is open. A two-module variant
-   (second module at the Apollo end with its LED fed from GPIO50,
-   kPaddleSenseSupplyPin) was built, measured clean, and DROPPED from the
-   guide as too complex; the GPIO50 supply stays in firmware (harmless, high
-   while running, released with CTRL by own(false)). Never a dual module
-   board: shared output GND would tie the Micra's black to Apollo GND.
-   **Apollo Link (v1.0, 2026-10-01; rev 0.7 drawn 2026-11-02):** the bridge
-   board (hardware/paddle-bridge; rev 0.7 = rev 0.6 + U4 PC817 + D2 1N4148W
+   (second module at the Apollo end with its LED fed from GPIO50) was built,
+   measured clean, and DROPPED from the guide as too complex; its GPIO50
+   supply (kPaddleSenseSupplyPin) was removed from the firmware the same day
+   — GPIO50 is a free pin again. Never a dual module board: shared output
+   GND would tie the Micra's black to Apollo GND.
+   **Apollo Link (v1.0, 2026-10-01; rev 0.8 drawn 2026-11-03):** the bridge
+   board (hardware/paddle-bridge; rev 0.8 = rev 0.6 + U4 PC817 + D2 1N4148W
+   + C1 100 nF on SENSE + D3 PESD5V0L1BA ESD diode at J1; rev 0.7 was
+   ordered, cancelled, never built; rev 0.7 = rev 0.6 + U4 PC817 + D2 1N4148W
    + R6 560R from 5V so SENSE is opto-isolated on the board, connectors
    unchanged, rev 0.6 boards in the field lack it; bridge:D_H pin 1 = K to
    match the footprint band — D1 on 0.5/0.6 boards is fitted reversed,

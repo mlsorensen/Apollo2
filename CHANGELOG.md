@@ -20,7 +20,7 @@ the headings as plain lines); leave out a list that would be empty.
 - **Paddle wiring setting.** Settings > Micra > Controls > Paddle wiring tells a
   P4 board which paddle pin set your cable uses — Apollo Link, or the opto cable
   on the corner pins — so the unused set is ignored. Auto, the default, watches
-  both as before. The opto cable's new second module is powered from GPIO 50.
+  both as before.
 - **Paddle breaker.** If the paddle sense input starts flickering on its own —
   the signature of a failing GPIO pin, which once ran a pump for hours — Apollo
   now switches the paddle drive off, hands the paddle back to the machine on an
