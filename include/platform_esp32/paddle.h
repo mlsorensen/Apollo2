@@ -23,7 +23,11 @@ class Paddle : public core::IPaddle {
   // unit (the NVS "padsense"/"paddrive" repair knobs — a board with a damaged
   // pad moves its wire without forking the board config). Ignored on IOEXT
   // boards.
-  void begin(int sense_pin_override = -1, int drive_pin_override = -1);
+  // link_sense_override: -2 = the board's kLinkSensePin, -1 = that input
+  // DISABLED, >= 0 = moved to that pin (NVS "lnksense"; the X-8 whose GPIO5
+  // died reads it stuck closed, which would OR the paddle permanently on).
+  void begin(int sense_pin_override = -1, int drive_pin_override = -1,
+             int link_sense_override = -2);
 
   bool available() const override;
   bool sensed() override;

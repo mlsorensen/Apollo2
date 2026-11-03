@@ -18,7 +18,8 @@ namespace platform {
 // output = opto LED on = contact closed; low input = paddle-switch current
 // flowing). The expander is begun by the display before the paddle is used.
 
-void Paddle::begin(int /*sense_pin_override*/, int /*drive_pin_override*/) {
+void Paddle::begin(int /*sense_pin_override*/, int /*drive_pin_override*/,
+                   int /*link_sense_override*/) {
   // (No native pins to remap on this board — overrides are ignored.)
   // Re-assert the direction mask here too: the expander can ACK the display's
   // early begin() yet drop that first mode write (seen on hardware — inputs
@@ -53,7 +54,8 @@ void Paddle::own(bool /*owned*/) {}  // no transfer switch on the 4.3C's termina
 // Native-GPIO boards: drive an external relay, sense the switch to GND with the
 // internal pull-up. Pins < 0 = not wired on this board.
 
-void Paddle::begin(int sense_pin_override, int drive_pin_override) {
+void Paddle::begin(int sense_pin_override, int drive_pin_override,
+                   int link_sense_override) {
   drive_pin_ =
       drive_pin_override >= 0 ? drive_pin_override : board::kPaddleDrivePin;
   if (drive_pin_ >= 0) {
@@ -85,11 +87,15 @@ void Paddle::begin(int sense_pin_override, int drive_pin_override) {
     gpio_set_level(static_cast<gpio_num_t>(link_drive_pin_), 0);
     pinMode(link_drive_pin_, OUTPUT);
   }
-  link_sense_pin_ = board::kLinkSensePin;
+  link_sense_pin_ = link_sense_override >= -1 ? link_sense_override : board::kLinkSensePin;
   if (link_sense_pin_ >= 0) {
     pinMode(link_sense_pin_, INPUT_PULLUP);
-    core::logf("Paddle: Link sense GPIO%d raw=%s at init\n", link_sense_pin_,
+    core::logf("Paddle: Link sense GPIO%d%s raw=%s at init\n", link_sense_pin_,
+               link_sense_override >= 0 ? " (NVS override)" : "",
                digitalRead(link_sense_pin_) == LOW ? "LOW (closed)" : "HIGH (open)");
+  } else if (link_sense_override == -1 && board::kLinkSensePin >= 0) {
+    core::logf("Paddle: Link sense GPIO%d DISABLED on this unit (NVS lnksense)\n",
+               board::kLinkSensePin);
   }
   // Two-module opto cable: the sense module's LED is fed from this pin (see
   // board_config.h). HIGH from here on, like CTRL — it is the cable's "Apollo

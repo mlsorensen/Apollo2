@@ -194,6 +194,13 @@ padsense:
 	@test -n "$(PIN)" || { echo "usage: make padsense PIN=<gpio|-1> [PORT=/dev/...]"; exit 1; }
 	@PORT="$(PORT)" tools/padpin.sh sense "$(PIN)"
 
+# Per-unit Apollo Link sense input: PIN=off disables it (a dead Link sense
+# pad that reads closed ORs the paddle permanently on), PIN=<gpio> moves it,
+# PIN=default restores the board pin.
+linksense:
+	@test -n "$(PIN)" || { echo "usage: make linksense PIN=<off|gpio|default> [PORT=/dev/...]"; exit 1; }
+	@PORT="$(PORT)" tools/padpin.sh link "$(PIN)"
+
 paddrive:
 	@test -n "$(PIN)" || { echo "usage: make paddrive PIN=<gpio|-1> [PORT=/dev/...]"; exit 1; }
 	@PORT="$(PORT)" tools/padpin.sh drive "$(PIN)"

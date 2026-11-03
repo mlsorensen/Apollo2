@@ -915,7 +915,13 @@ GT911 all up; NimBLE host inits. Paddle/audio/ADC since confirmed, 2026-09-11):
    module's INPUT GND terminal (the LED cathode is the switch input);
    module OUT -> GPIO51, output GND -> GND, VCC open. A 4-slot block on
    the corner column GND/52/51/50. Same 3-conductor cable, same
-   machine-end splice. GPIO50 is therefore NOT a free remap target on P4s. Never a dual module: those share the output GND and
+   machine-end splice. GPIO50 is therefore NOT a free remap target on P4s.
+   NVS `lnksense` (ADD, 2026-11-03): per-unit Link sense override — absent =
+   board pin, -1 = DISABLED, >= 0 = moved; serial `linksense=off|<n>|default`,
+   `make linksense PIN=...`. Needed because a dead Link sense pad can read
+   LOW (the owner's X-8's GPIO5 did after it died) and the two senses are
+   ORed, so the paddle reads permanently closed. Per-unit key: stays out of
+   backups like padsense/paddrive. Never a dual module: those share the output GND and
    would tie the Micra's black to Apollo GND. WHY: two P4 sense pads died
    on a bare switch wire (P4-5 GPIO51 2026-07 on that single-module cable;
    the owner's X-8 GPIO5 2026-11-02 on a rev 0.6 Link) — phantom flips when

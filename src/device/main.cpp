@@ -384,7 +384,8 @@ void setup() {
   // paddle rides it; pins honor the per-unit NVS "padsense"/"paddrive" repair
   // overrides — see poll_serial_id). Seed the shot config from NVS and wire
   // the persisters.
-  platform::paddle().begin(g_config.paddle_sense_pin(), g_config.paddle_drive_pin());
+  platform::paddle().begin(g_config.paddle_sense_pin(), g_config.paddle_drive_pin(),
+                           g_config.link_sense_pin());
   g_brew.seed(g_config.target_weight_g(), g_config.shot_mode(), g_config.overshoot_g(),
               g_config.review_hold_s(), g_config.wired_paddle(), g_config.flush_s(),
               g_config.flush_delay_s(), g_config.hint_overshoot_g(),
@@ -718,7 +719,30 @@ void poll_serial_id() {
         // Re-run begin() with the resolved pins so the change is live
         // immediately (also releases the drive line; harmless outside a shot).
         platform::paddle().begin(g_config.paddle_sense_pin(),
-                                 g_config.paddle_drive_pin());
+                                 g_config.paddle_drive_pin(),
+                                 g_config.link_sense_pin());
+      } else if (std::strncmp(buf, "linksense=", 10) == 0) {
+        // The Apollo Link sense input, per unit: "linksense=off" (or -1)
+        // disables it — a dead Link sense pad that reads closed would
+        // otherwise OR the paddle permanently on; "linksense=<n>" moves it;
+        // "linksense=default" restores the board pin. NVS, survives reflashes.
+        const char* arg = buf + 10;
+        int pin;
+        if (std::strcmp(arg, "off") == 0) pin = -1;
+        else if (std::strcmp(arg, "default") == 0) pin = platform::Config::kLinkSenseDefault;
+        else pin = std::atoi(arg);
+        g_config.set_link_sense_pin(pin);
+        if (pin == -1) {
+          core::logf("linksense: DISABLED on this unit — applying now\n");
+        } else if (pin < -1) {
+          core::logf("linksense: override cleared (board default GPIO%d) — applying now\n",
+                     board::kLinkSensePin);
+        } else {
+          core::logf("linksense: override saved (GPIO%d) — applying now\n", pin);
+        }
+        platform::paddle().begin(g_config.paddle_sense_pin(),
+                                 g_config.paddle_drive_pin(),
+                                 g_config.link_sense_pin());
       }
       n = 0;
     } else if (n < sizeof(buf) - 1) {

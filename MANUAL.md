@@ -1163,4 +1163,7 @@ in the firmware). It does not work with the S3‑4.3C.
   upgrades, so stock releases keep working on a remapped unit — and takes
   effect on the next boot, which logs it: `Paddle: sense GPIO21 (NVS
   override)`. The board's default pins stay unchanged for everyone else.
-  (GPIO 50 is taken on the P4 boards: it powers the sense module.)
+  (GPIO 50 is taken on the P4 boards: it powers the sense module.) The
+  Apollo Link's sense input has the same knob: `make linksense PIN=off`
+  disables it on a unit whose Link sense pin has died — a dead pin that reads
+  "closed" would otherwise hold the paddle on — and `PIN=default` restores it.
