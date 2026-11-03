@@ -998,16 +998,20 @@ in the firmware). It does not work with the S3‑4.3C.
 
 ### Paddle pin protection & per‑unit remapping
 
-- **Suggested: a 1 kΩ resistor in line with the paddle's sense wire** (at the
-  screw terminal, between the board pin and the switch). It protects the
-  input by limiting current from static or stray voltage on the wire —
-  one cheap part, no effect on normal operation. The
-  [wiring guide](docs/WIRING.md) shows a no‑solder way to add it with a
-  4‑slot screw‑terminal block.
+- **Keep the sense pin off the paddle wire.** The P4 boards' paddle inputs
+  are plain GPIO pins, and two of them have failed on sense wiring that ran
+  straight from the paddle switch to the pin — one on the single‑module cable
+  this guide used to describe, one on an Apollo Link rev 0.6. The
+  [wiring guide](docs/WIRING.md) now puts an opto module in front of the
+  sense pin as well as the drive pin, and Apollo Link rev 0.7 does the same on
+  the board, so the pin only ever sees the module. If you built the earlier
+  single‑module cable, the guide shows the change, which is confined to the
+  Apollo end of the cable.
 - **If a paddle pin ever does fail** (symptom: the paddle stops registering
   or behaves erratically while everything meters fine — the diagnostic log's
-  `Paddle: raw sense ...` lines will show a line stuck or drifting on its
-  own), the pins are **remappable per unit** without a custom firmware
+  `Paddle: raw sense ...` lines will show a line stuck, drifting, or flipping
+  on its own; the X‑8 that failed logged hundreds of phantom flips an hour
+  before the pin went deaf), the pins are **remappable per unit** without a custom firmware
   build: move the wire to a free GPIO on the header, connect the device over
   USB, and run
 
