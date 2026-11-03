@@ -1,20 +1,45 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700" font-family="Helvetica, Arial, sans-serif">
   <rect x="0" y="0" width="1200" height="700" fill="#ffffff"/>
-  <text x="600" y="58" text-anchor="middle" font-size="28" font-weight="bold" fill="#222222">Apollo P4 &#8594; opto module &#8594; Micra (drive + paddle sense, with the sense RC)</text>
+  <text x="600" y="58" text-anchor="middle" font-size="28" font-weight="bold" fill="#222222">Apollo P4 &#8594; opto module &#8594; Micra (drive + paddle sense, RC in the terminal block)</text>
 
   <!-- Apollo P4 box: pins listed in PHYSICAL header order (GND, 52, 51 adjacent) -->
-  <rect x="50" y="130" width="200" height="300" rx="16" fill="#2456C4"/>
-  <text x="150" y="195" text-anchor="middle" font-size="34" font-weight="bold" fill="#ffffff">Apollo</text>
-  <text x="150" y="232" text-anchor="middle" font-size="22" fill="#ffffff">P4 GPIO header</text>
-  <text x="238" y="287" text-anchor="end" font-size="20" font-weight="bold" fill="#ffffff">GND</text>
-  <text x="238" y="337" text-anchor="end" font-size="20" font-weight="bold" fill="#ffffff">GPIO 52</text>
-  <text x="238" y="392" text-anchor="end" font-size="20" font-weight="bold" fill="#ffffff">GPIO 51</text>
-  <circle cx="250" cy="280" r="6" fill="#ffffff"/>
-  <circle cx="250" cy="330" r="6" fill="#ffffff"/>
-  <circle cx="250" cy="385" r="6" fill="#ffffff"/>
-  <text x="150" y="460" text-anchor="middle" font-size="18" fill="#555555">GND &#183; 52 &#183; 51 sit side by side on the</text>
-  <text x="150" y="483" text-anchor="middle" font-size="18" fill="#555555">header &#8212; a 3-pin screw-terminal</text>
-  <text x="150" y="506" text-anchor="middle" font-size="18" fill="#555555">block clips straight on</text>
+  <rect x="30" y="130" width="130" height="340" rx="16" fill="#2456C4"/>
+  <text x="95" y="195" text-anchor="middle" font-size="30" font-weight="bold" fill="#ffffff">Apollo</text>
+  <text x="95" y="226" text-anchor="middle" font-size="18" fill="#ffffff">P4 header</text>
+  <text x="152" y="286" text-anchor="end" font-size="18" font-weight="bold" fill="#ffffff">GND</text>
+  <text x="152" y="336" text-anchor="end" font-size="18" font-weight="bold" fill="#ffffff">52</text>
+  <text x="152" y="391" text-anchor="end" font-size="18" font-weight="bold" fill="#ffffff">51</text>
+  <!-- header pins into the block (slot 4's pin is bent clear: nothing on the board side) -->
+  <rect x="160" y="276" width="60" height="8" fill="#C9C9C9" stroke="#555555" stroke-width="2"/>
+  <rect x="160" y="326" width="60" height="8" fill="#C9C9C9" stroke="#555555" stroke-width="2"/>
+  <rect x="160" y="381" width="60" height="8" fill="#C9C9C9" stroke="#555555" stroke-width="2"/>
+  <path d="M 220 440 L 200 440 L 190 422" fill="none" stroke="#555555" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- 4-slot screw-terminal block -->
+  <rect x="220" y="255" width="80" height="210" rx="6" fill="#2E8B57" stroke="#1E5C34" stroke-width="3"/>
+  <circle cx="260" cy="280" r="12" fill="#DDF3E4" stroke="#1E5C34" stroke-width="3"/>
+  <circle cx="260" cy="330" r="12" fill="#DDF3E4" stroke="#1E5C34" stroke-width="3"/>
+  <circle cx="260" cy="385" r="12" fill="#DDF3E4" stroke="#1E5C34" stroke-width="3"/>
+  <circle cx="260" cy="440" r="12" fill="#DDF3E4" stroke="#1E5C34" stroke-width="3"/>
+  <line x1="252" y1="280" x2="268" y2="280" stroke="#1E5C34" stroke-width="3"/>
+  <line x1="252" y1="330" x2="268" y2="330" stroke="#1E5C34" stroke-width="3"/>
+  <line x1="252" y1="385" x2="268" y2="385" stroke="#1E5C34" stroke-width="3"/>
+  <line x1="252" y1="440" x2="268" y2="440" stroke="#1E5C34" stroke-width="3"/>
+  <text x="260" y="246" text-anchor="middle" font-size="16" font-weight="bold" fill="#333333">4-slot block</text>
+  <text x="225" y="488" text-anchor="middle" font-size="15" fill="#555555">slot 4 takes the paddle wire;</text>
+  <text x="225" y="508" text-anchor="middle" font-size="15" fill="#555555">its header pin is bent clear</text>
+  <!-- 100 nF between slot 3 (GPIO 51) and slot 1 (GND), on the pin side of the block -->
+  <polyline points="268,385 345,385 345,362" fill="none" stroke="#222222" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="335" y1="362" x2="355" y2="362" stroke="#333333" stroke-width="5" stroke-linecap="round"/>
+  <line x1="335" y1="350" x2="355" y2="350" stroke="#333333" stroke-width="5" stroke-linecap="round"/>
+  <polyline points="345,350 345,280" fill="none" stroke="#222222" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="345" cy="280" r="6" fill="#222222"/>
+  <text x="362" y="362" font-size="16" font-weight="bold" fill="#333333">100 nF</text>
+  <!-- 1 kOhm between slot 4 (paddle wire) and slot 3 (GPIO 51), on the wire side -->
+  <polyline points="268,440 322,440 322,428" fill="none" stroke="#222222" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="313" y="396" width="18" height="32" rx="3" fill="#E8D9A0" stroke="#7A6A2E" stroke-width="3"/>
+  <polyline points="322,396 322,385 268,385" fill="none" stroke="#222222" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="340" y="418" font-size="16" font-weight="bold" fill="#333333">1 k&#937;</text>
 
   <!-- Opto module -->
   <text x="620" y="140" text-anchor="middle" font-size="22" font-weight="bold" fill="#222222">PC817-style opto module</text>
@@ -54,13 +79,14 @@
   <!-- Drive wires: Apollo -> module input. Wire colors match the real cable:
        black = GND, red = GPIO 52 (drive), white = GPIO 51 (sense). -->
   <!-- GND pin -> module input GND, with a junction feeding the paddle branch -->
-  <line x1="250" y1="280" x2="480" y2="320" stroke="#222222" stroke-width="5" stroke-linecap="round"/>
+  <polyline points="300,280 385,280 480,320" fill="none" stroke="#222222" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
   <circle cx="460" cy="317" r="7" fill="#222222"/>
   <polyline points="460,317 460,368 700,368 700,530" fill="none" stroke="#222222" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
   <!-- GPIO 52 -> IO, hopping OVER the GND wire (not connected to it) -->
-  <line x1="250" y1="330" x2="301.9" y2="298.4" stroke="#D63E3E" stroke-width="5" stroke-linecap="round"/>
-  <path d="M 301.9 298.4 A 14 14 0 0 1 325.8 283.8" fill="none" stroke="#D63E3E" stroke-width="5" stroke-linecap="round"/>
-  <line x1="325.8" y1="283.8" x2="480" y2="190" stroke="#D63E3E" stroke-width="5" stroke-linecap="round"/>
+  <line x1="300" y1="330" x2="333" y2="330" stroke="#D63E3E" stroke-width="5" stroke-linecap="round"/>
+  <path d="M 333 330 A 12 12 0 0 1 357 330" fill="none" stroke="#D63E3E" stroke-width="5" stroke-linecap="round"/>
+  <line x1="357" y1="330" x2="400" y2="330" stroke="#D63E3E" stroke-width="5" stroke-linecap="round"/>
+  <line x1="400" y1="330" x2="480" y2="190" stroke="#D63E3E" stroke-width="5" stroke-linecap="round"/>
 
   <!-- Module output -> Micra (isolated dry contact) -->
   <line x1="760" y1="265" x2="950" y2="353" stroke="#777777" stroke-width="8" stroke-linecap="round"/>
@@ -68,29 +94,15 @@
   <line x1="760" y1="320" x2="950" y2="398" stroke="#222222" stroke-width="6" stroke-linecap="round"/>
 
   <!-- Paddle sense: GPIO 51 and the GND branch meet at the physical paddle switch -->
-  <polyline points="250,385 520,385 520,455" fill="none" stroke="#777777" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
-  <polyline points="250,385 520,385 520,455" fill="none" stroke="#F4F4F4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- R: 1 kOhm in series, at the machine end, between the cable and the switch -->
-  <rect x="508" y="455" width="24" height="50" rx="4" fill="#E8D9A0" stroke="#7A6A2E" stroke-width="3"/>
-  <text x="498" y="486" text-anchor="end" font-size="19" font-weight="bold" fill="#333333">1 k&#937;</text>
-  <polyline points="520,505 520,530 535,530" fill="none" stroke="#777777" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
-  <polyline points="520,505 520,530 535,530" fill="none" stroke="#F4F4F4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- C: 100 nF from the cable side of the resistor to the shared ground -->
-  <circle cx="520" cy="430" r="7" fill="#777777"/>
-  <line x1="520" y1="430" x2="596" y2="430" stroke="#777777" stroke-width="5" stroke-linecap="round"/>
-  <line x1="596" y1="416" x2="596" y2="444" stroke="#333333" stroke-width="6" stroke-linecap="round"/>
-  <line x1="610" y1="416" x2="610" y2="444" stroke="#333333" stroke-width="6" stroke-linecap="round"/>
-  <line x1="610" y1="430" x2="700" y2="430" stroke="#222222" stroke-width="5" stroke-linecap="round"/>
-  <circle cx="700" cy="430" r="7" fill="#222222"/>
-  <text x="603" y="405" text-anchor="middle" font-size="19" font-weight="bold" fill="#333333">100 nF</text>
+  <polyline points="300,440 380,440 380,470 520,470 520,530 535,530" fill="none" stroke="#777777" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="300,440 380,440 380,470 520,470 520,530 535,530" fill="none" stroke="#F4F4F4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
   <line x1="700" y1="530" x2="685" y2="530" stroke="#222222" stroke-width="5" stroke-linecap="round"/>
   <circle cx="543" cy="530" r="8" fill="#ffffff" stroke="#444444" stroke-width="4"/>
   <circle cx="677" cy="530" r="8" fill="#ffffff" stroke="#444444" stroke-width="4"/>
   <line x1="549" y1="527" x2="662" y2="490" stroke="#444444" stroke-width="5" stroke-linecap="round"/>
   <text x="610" y="575" text-anchor="middle" font-size="20" font-weight="bold" fill="#333333">Micra paddle switch</text>
   <text x="610" y="600" text-anchor="middle" font-size="18" fill="#555555">(connects only to Apollo, never the Micra)</text>
-  <text x="610" y="625" text-anchor="middle" font-size="17" fill="#555555">The 1 k&#937; and 100 nF sit at the machine end, beside the module: the resistor in the</text>
-  <text x="610" y="646" text-anchor="middle" font-size="17" fill="#555555">sense wire, the capacitor from the cable side of it to the shared ground.</text>
+  <text x="610" y="626" text-anchor="middle" font-size="17" fill="#555555">Sense wire &#8594; slot 4 &#8594; 1 k&#937; &#8594; slot 3 (GPIO 51); 100 nF from slot 3 to slot 1 (GND). No soldering.</text>
 
   <!-- caption -->
   <text x="600" y="682" text-anchor="middle" font-size="19" fill="#444444">GPIO 52 high &#8594; module LED on &#8594; isolated OUT/GND contact closes &#8594; the Micra sees the paddle ON.</text>

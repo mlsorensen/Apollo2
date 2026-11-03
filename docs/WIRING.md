@@ -33,9 +33,10 @@ it), but you will have the machine open — **unplug the Micra first**.
   e.g. [this one](https://a.co/d/03qHqcyM) — anything similar works — plus
   a **1 kΩ resistor** and a **100 nF ceramic capacitor** for the paddle‑sense
   wire (see [the sense RC](#the-sense-rc)). (The S3‑4.3C has isolators built
-  in; no module needed.) A
+  in; no module needed.) A **4‑slot**
   [2.54 mm screw‑terminal block](https://a.co/d/0eVdsD4h) that clips onto the
-  P4's GPIO header makes the board‑side connection clean and solder‑free.
+  P4's GPIO header makes the board‑side connection clean and solder‑free —
+  three slots on the pins, the fourth holding the two parts.
 
 (P4 boards have an optional alternative to the module and the splice: the
 [Apollo Link](#apollo-link-optional-p4-boards) board, described at the end
@@ -95,8 +96,10 @@ bullet connectors at the machine end (two on the shared ground conductor):
 On the P4‑WIFI6‑Touch‑LCD‑5 (and the 4.3), the paddle uses three native pins
 that sit **side by side** on the corner of the GPIO header — **GND, GPIO 52,
 GPIO 51**, in that order on the silkscreen — so a
-[2.54 mm 3‑pin screw‑terminal block](https://a.co/d/0eVdsD4h) clips straight
-onto them, no soldering. The X‑series boxes (7"/8") use the **same three
+[2.54 mm screw‑terminal block](https://a.co/d/0eVdsD4h) clips straight onto
+them, no soldering. Use a **4‑slot** block with its fourth pin **bent or cut
+off** so it does not enter the header: that slot is where the paddle‑sense
+wire lands, and the resistor and capacitor sit in the block with it. The X‑series boxes (7"/8") use the **same three
 pins**: on their 40‑pin header one pin column runs GND, IO52, IO51 in a row
 near the header's end (per the schematic — the photos below show the 5";
 double‑check the silkscreen before clipping on):
@@ -106,8 +109,8 @@ double‑check the silkscreen before clipping on):
 ![Screw-terminal block on the pins, cable attached](img/wiring/p4-header-terminal.jpg)
 
 The cable can run out through a hole in the 3D‑printed backplate. From there,
-the opto module provides the isolation, and two small parts protect the
-sense pin:
+the opto module provides the isolation, and two small parts in the terminal
+block protect the sense pin:
 
 ![Apollo P4 → opto module → Micra wiring, with the sense RC](img/wiring/p4-opto-wiring.svg)
 
@@ -119,14 +122,15 @@ In detail:
   contact: module **OUT** → Micra **white**, module output **GND** → Micra
   **black**. When Apollo raises GPIO 52, the contact closes — exactly like the
   paddle.
-- **Sense (paddle → Apollo):** one paddle‑switch wire → Apollo **GPIO 51**,
-  the other → Apollo **GND**. The physical paddle now touches only Apollo,
-  never the Micra. **In the GPIO 51 wire, at the machine end beside the
-  module:** a **1 kΩ resistor** in series, and a **100 nF capacitor** from the
-  cable side of that resistor to the shared ground, as drawn. The two parts
-  can equally live at the Apollo end — resistor into the GPIO 51 slot of the
-  block, capacitor from that slot to GND, in that order — if you would rather
-  keep the machine end to the module alone.
+- **Sense (paddle → Apollo):** one paddle‑switch wire → Apollo **GND**, the
+  other → **slot 4** of the block (the slot with no pin). The **1 kΩ resistor**
+  jumpers slot 4 to slot 3 (**GPIO 51**), and the **100 nF capacitor** goes
+  from slot 3 to slot 1 (**GND**), its leads reaching past slot 2. Order
+  matters: wire → resistor → pin, with the capacitor on the pin's side. The
+  physical paddle touches only Apollo, never the Micra, and nothing is
+  soldered. (The same two parts work spliced in at the machine end instead,
+  resistor in the sense wire and capacitor from its cable side to ground, if
+  you prefer the block bare.)
 - **Tell the firmware which pins:** **Settings → Micra → Controls → Paddle
   wiring → Opto cable**. Auto (the default) also works; picking the cable makes
   the firmware ignore the Apollo Link pins entirely.
