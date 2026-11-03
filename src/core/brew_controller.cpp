@@ -182,6 +182,9 @@ void BrewController::poll_clean(uint32_t now_ms) {
     set_drive(edge == 1);
     return;
   }
+  // The breaker can trip inside sense_paddle_edge (cancel_shot -> end_clean):
+  // the cycle is over, and the phase logic below must not start a new pulse.
+  if (clean_ == CleanMode::kOff) return;
 
   if (clean_ == CleanMode::kManual) {
     if (reached(now_ms, clean_until_ms_)) {
@@ -309,10 +312,12 @@ int BrewController::sense_paddle_edge(uint32_t now_ms) {
   }
   if (on == paddle_on_) return -1;
   paddle_on_ = on;
-  // An accepted edge hard on the heels of the previous one is the second
-  // breaker signature (see the header). Counted before the tripped check so
-  // a reset under continuing flicker re-trips at once.
-  if (last_edge_ms_ != 0 && now_ms - last_edge_ms_ < kBreakerShortMs)
+  // An ON that goes OFF again inside kBreakerShortMs is the second breaker
+  // signature (see the header): an ON period no hand produces. Only the
+  // ON->OFF width counts — a brisk OFF->ON after a long ON is a person
+  // reaching for the next shot. Counted before the tripped check so a reset
+  // under continuing flicker re-trips at once.
+  if (!on && last_edge_ms_ != 0 && now_ms - last_edge_ms_ < kBreakerShortMs)
     breaker_note(short_count_, short_win_ms_, now_ms, kBreakerShortTrip, "short");
   last_edge_ms_ = now_ms;
   if (tripped_) return -1;  // the level is tracked, the edge goes to nobody

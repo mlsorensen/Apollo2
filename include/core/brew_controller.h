@@ -132,8 +132,8 @@ class BrewController : public IBrewController {
   //       candidate level that changed again before kSenseStablePolls). A
   //       hand's bounce is ~1 ms and invisible at the 25 ms poll; a leaky pad
   //       gives tens per second. kBreakerRejectTrip in kBreakerWindowMs.
-  //   (2) SHORT accepted pulses: an accepted edge less than kBreakerShortMs
-  //       after the previous one. A flush holds >= 1 s, a shot 20+ s; one
+  //   (2) SHORT accepted pulses: an accepted ON that goes OFF again less than
+  //       kBreakerShortMs later. A flush holds >= 1 s, a shot 20+ s; one
   //       quick flick a person might do, kBreakerShortTrip in a minute nobody.
   // NOT a rate rule on accepted edges — a manual backflush is 10+ ON edges in
   // two minutes and must never trip. Tripped = cancel whatever is running,

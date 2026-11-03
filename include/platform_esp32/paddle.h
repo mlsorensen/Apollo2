@@ -45,6 +45,7 @@ class Paddle : public core::IPaddle {
   core::PaddleWiring wiring_ = core::PaddleWiring::kAuto;
   int sense_override_ = -1;  // begin() arguments, kept for set_wiring's re-run
   int drive_override_ = -1;
+  bool begun_ = false;       // set_wiring() before begin() only records the choice
   bool use_corner() const { return wiring_ != core::PaddleWiring::kLink; }
   bool use_link() const { return wiring_ != core::PaddleWiring::kCable; }
 };

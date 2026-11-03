@@ -184,7 +184,7 @@ The module sits happily there.
 ## Bench‑test before installing
 
 The whole cable can be validated before it ever touches the machine. Connect
-it to Apollo, power up, and turn on **Settings → Micra → Settings → Wired
+it to Apollo, power up, and turn on **Settings → Micra → Controls → Wired
 paddle**. Apollo relays the paddle regardless of anything else, so:
 
 1. **Touch the two paddle‑sense wires together** — to Apollo that's the
@@ -196,7 +196,10 @@ paddle**. Apollo relays the paddle regardless of anything else, so:
    and **open** when you separate them.
 
 That's the whole contract — paddle closed ⇒ Micra‑side contact closed — so if
-both steps behave, the install will work.
+both steps behave, the install will work. (Touching bare wires together is
+a scratchy switch; if Apollo pops a **Paddle disconnected** notice during
+this test, that is its paddle breaker reacting to the flicker — tap Reset
+and carry on with a cleaner touch.)
 
 ## Closing up
 
@@ -231,16 +234,15 @@ nothing else.
 
 Everything about it lives in the repo under
 [`hardware/paddle-bridge`](../hardware/paddle-bridge): the KiCad schematic
-and layout, a Mouser‑ready BOM (15 line items) and the gerbers to have the
-board made. It is young — the first boards were built in October 2026 — so
+and layout, a Mouser‑ready BOM and the gerbers to have the board made. It is young — the first boards were built in October 2026 — so
 expect rough edges.
 
 **Revisions.** Rev 0.6 (October 2026) is the board in the photos. Rev 0.7
-(never built) and rev 0.8 (November 2026) add an opto‑isolator in front of
-the sense input and a 100 nF capacitor on it, after an X‑8 running a rev 0.6
-lost its sense pin (see [the sense RC](#the-sense-rc)). The connectors and
-every wire below are identical on all revisions, and the firmware cannot
-tell them apart; a rev 0.6 board in service keeps working.
+(never built) and rev 0.8 (November 2026) add an opto‑isolator, a 100 nF
+capacitor and an ESD diode on the sense input, for the same reasons as the
+cable's [sense RC](#the-sense-rc). The connectors and every wire below are
+identical on all revisions, and the firmware cannot tell them apart; a
+rev 0.6 board in service keeps working.
 
 **Parts:** the Link board, assembled; two JST PH housings (PHR‑5 for the
 Apollo side, PHR‑4 for the machine side) with their crimp contacts; a
@@ -267,8 +269,8 @@ and **GND … 5V** on the inner row, so a 14‑way IDC plug (Omron XG2A‑1401)
 covers them in one go; the other positions in the block stay unwired, since
 they carry the I2C bus (**SCL**, **SDA**), the console UART (**37**, **38**),
 **2** and 3.3 V. The corner pins the opto cable uses (**GND / 52 / 51**) stay
-free — the firmware drives both sets at once, so there is nothing to set,
-and either cable works on any P4 unit.
+free. Either cable works on any P4 unit: **Settings → Micra → Controls →
+Paddle wiring** names the one in use (Auto, the default, watches both).
 
 ![Apollo Link plug on the 5 V end of the P4 header](img/wiring/link-apollo-header.jpg)
 

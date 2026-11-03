@@ -929,10 +929,38 @@ GT911 all up; NimBLE host inits. Paddle/audio/ADC since confirmed, 2026-09-11):
    match the footprint band — D1 on 0.5/0.6 boards is fitted reversed,
    harmless) uses a SECOND native set on the header's 5V end
    so one 5-wire cable also POWERS the unit: DRV GPIO3, SENSE GPIO5, CTRL
-   GPIO4 (schematic pins 12/11/14; plus 5V at 1/3 and GND at 5/13). Both
-   sets are driven and polled together (paddle.cpp) — no connector setting,
-   on purpose (owner): the unused set is an open pin. CTRL is held HIGH from
-   begin() (Apollo owns the paddle while booted; input = copper otherwise).
+   GPIO4 (schematic pins 12/11/14; plus 5V at 1/3 and GND at 5/13). By
+   default (Paddle wiring = Auto) both sets are driven and polled together
+   (paddle.cpp) and the unused set is an open pin; since 2026-11-03 the
+   PADDLE WIRING setting below can pin the unit to one set. CTRL is held
+   HIGH from begin() (Apollo owns the paddle while booted; input = copper
+   otherwise) and dropped by IPaddle::own(false) when the breaker trips.
+   **PADDLE WIRING (2026-11-03):** `core::PaddleWiring` Auto/Link/Cable on
+   the IPaddle port (wiring_selectable / set_wiring / wiring), NVS
+   `padwire` (ADD, i32 0/1/2; per-unit, kept OUT of backups like
+   padsense/paddrive), Settings > Micra > Controls > Paddle wiring (P4
+   boards only; the 4.3C's terminals report no choice). Auto = both sets
+   as always; Link or Cable leaves the other set an open input
+   (Paddle::set_wiring drops only the departing set's outputs and re-runs
+   begin(); before begin() it just records the choice — main.cpp sets it
+   first). WHY: the two senses are ORed and a dead Link sense pad can read
+   LOW (the owner's X-8's GPIO5 did), holding the paddle closed. The manual
+   shows the Controls page as two screenshots (micra_controls_2 render,
+   App::scroll_settings_section).
+   **PADDLE BREAKER (core/brew_controller, 2026-11-03):** every drive goes
+   through `set_drive()`, the one choke point. Trips on either signature in
+   a 60 s window: 10 REJECTED pulses (raw transitions the 75 ms glitch
+   filter threw away) or 4 SHORT accepted pulses (an ON that goes OFF under
+   500 ms; OFF->ON gaps don't count). NEVER a rate rule on accepted edges —
+   a manual backflush is 10+ ON edges in 2 min. Tripped: cancel_shot()
+   (ends cleaning/flush/shot, opens the line; poll_clean returns right
+   after), every drive refused, can_clean false, IPaddle::own(false) drops
+   the Link's CTRL (copper), `paddle_trip_seq` ticks -> the UI's modal with
+   Reset (reset_paddle_breaker(); re-trips at once if the flicker goes on).
+   Nothing persists; a reboot clears it. First real trip 2026-11-03: loose
+   terminal-block contacts while the owner fitted the resistor live. `make
+   test-paddle` replays the X-8's chatter, a bouncy backflush, quick flicks,
+   trips mid-cleaning and a reset — keep it green.
    GPIO2 deliberately avoided (touch INT on the 4.3); GPIO7/8 = I2C and
    GPIO37/38 = console UART are unusable. X boards: the SAME set since
    2026-10-16 — the X schematic's J8 is pin-identical at the 5V end (11 =

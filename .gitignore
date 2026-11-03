@@ -22,3 +22,7 @@ site/vendor/
 include/platform_esp32/webapp_dist.h
 
 *.swp
+
+# Python bytecode from tools/
+__pycache__/
+*.pyc

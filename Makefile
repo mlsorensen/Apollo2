@@ -194,7 +194,6 @@ padsense:
 	@test -n "$(PIN)" || { echo "usage: make padsense PIN=<gpio|-1> [PORT=/dev/...]"; exit 1; }
 	@PORT="$(PORT)" tools/padpin.sh sense "$(PIN)"
 
-
 paddrive:
 	@test -n "$(PIN)" || { echo "usage: make paddrive PIN=<gpio|-1> [PORT=/dev/...]"; exit 1; }
 	@PORT="$(PORT)" tools/padpin.sh drive "$(PIN)"

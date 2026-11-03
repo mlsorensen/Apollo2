@@ -58,6 +58,7 @@ void Paddle::set_wiring(core::PaddleWiring /*w*/) {}
 void Paddle::begin(int sense_pin_override, int drive_pin_override) {
   sense_override_ = sense_pin_override;
   drive_override_ = drive_pin_override;
+  begun_ = true;
   // The set the wiring setting excludes is left exactly as reset left it: an
   // open input. kAuto (the shipped default) brings up both, as it always has.
   drive_pin_ =
@@ -123,15 +124,22 @@ bool Paddle::wiring_selectable() const {
 void Paddle::set_wiring(core::PaddleWiring w) {
   if (!wiring_selectable()) return;
   if (w == wiring_) return;
-  // Hand back the set we are leaving: drive low, CTRL/supply low, then an
+  const core::PaddleWiring was = wiring_;
+  wiring_ = w;
+  if (!begun_) return;  // boot: main.cpp sets the choice, then begin() applies it once
+  // Hand back only the set we are leaving: drive low, CTRL low, then an
   // input so it is an open pin from here on (a Link on it drops to copper).
-  for (int pin : {drive_pin_, link_drive_pin_, ctrl_pin_}) {
+  // The set we keep is untouched — begin() below re-asserts it in place.
+  const bool leaving_corner = (w == core::PaddleWiring::kLink);
+  const bool leaving_link = (w == core::PaddleWiring::kCable);
+  for (int pin : {leaving_corner ? drive_pin_ : -1,
+                  leaving_link ? link_drive_pin_ : -1,
+                  leaving_link ? ctrl_pin_ : -1}) {
     if (pin < 0) continue;
     digitalWrite(pin, LOW);
     pinMode(pin, INPUT);
   }
-  wiring_ = w;
-  core::logf("Paddle: wiring -> %s\n",
+  core::logf("Paddle: wiring %d -> %s\n", static_cast<int>(was),
              w == core::PaddleWiring::kLink ? "Apollo Link"
              : w == core::PaddleWiring::kCable ? "opto cable" : "auto (both sets)");
   begin(sense_override_, drive_override_);

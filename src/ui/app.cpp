@@ -3827,9 +3827,9 @@ void App::show_breaker_modal() {
                 "Apollo saw its paddle input flickering on its own: a possible GPIO or "
                 "wiring fault. The paddle drive is switched off and every flush and "
                 "cleaning cycle is refused until you reset it. %s\n\n"
-                "Check the sense wiring (the wiring guide's \"Why the second module\"), "
-                "then tap Reset and watch the next few shots. It trips again at once if "
-                "the flicker continues.",
+                "Check the paddle wiring (the wiring guide's \"The sense RC\"), then tap "
+                "Reset and watch the next few shots. It trips again at once if the "
+                "flicker continues.",
                 handed);
   lv_obj_t* card = open_modal("Paddle disconnected", body);
   modal_button(modal_button_row(card), "Reset", ui::theme::accent(), on_breaker_reset, this);

@@ -24,8 +24,8 @@ the headings as plain lines); leave out a list that would be empty.
 - **Paddle breaker.** If the paddle sense input starts flickering on its own —
   the signature of a failing GPIO pin, which once ran a pump for hours — Apollo
   now switches the paddle drive off, hands the paddle back to the machine on an
-  Apollo Link, and shows a modal with a Reset button. Flipping the paddle quickly
-  or running a backflush never trips it.
+  Apollo Link, and shows a modal with a Reset button. Ordinary use, quick
+  flicks and backflushing included, does not trip it.
 - **Umbra battery estimate.** A paired Umbra's battery level freezes once it sleeps, so Apollo now estimates it from a daily drain (Settings > Scale > Device settings), shown as `~41%`, with the usual low-battery warning. Calibrate drain measures your scale's real figure over one charge.
 
 ### Fixes

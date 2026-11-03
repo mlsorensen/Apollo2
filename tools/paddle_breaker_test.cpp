@@ -267,6 +267,30 @@ void test_reset() {
   CHECK(r.pad.own_true == 2);
 }
 
+// Reviewer's case (2026-11-03): a trip that lands on a backflush phase
+// boundary used to fall through poll_clean's phase logic after cancel_shot
+// had ended the cycle, logging a new pulse and leaving backflush_on set.
+void test_trip_on_backflush_boundary() {
+  std::printf("a trip landing on a backflush phase boundary leaves no stale pulse state\n");
+  for (uint32_t lead = 0; lead <= 400; lead += 25) {
+    Rig r;
+    CHECK(r.bc.start_backflush());
+    // The first pulse is flush_s (3 s) long; start the chatter so the 10th
+    // rejected pulse lands around the boundary, sweeping across it.
+    r.pad.level = false;
+    r.run(3000 - 400 + lead);
+    r.chatter(600);
+    CHECK(r.tripped());
+    CHECK(!r.pad.driven);
+    CHECK(!r.bc.snapshot().backflush_active);
+    CHECK(!r.bc.snapshot().backflush_on);
+    r.pad.level = false;
+    r.run(8000);
+    CHECK(!r.pad.driven);
+    CHECK(!r.bc.snapshot().backflush_on);
+  }
+}
+
 void test_boot_adoption_is_not_a_pulse() {
   std::printf("boot with the paddle left ON adopts the level without counting\n");
   FakePaddle pad;
@@ -288,6 +312,7 @@ int main() {
   test_short_pulses();
   test_trip_mid_cleaning();
   test_reset();
+  test_trip_on_backflush_boundary();
   test_boot_adoption_is_not_a_pulse();
   if (g_fail != 0) {
     std::printf("paddle breaker: %d FAILED\n", g_fail);

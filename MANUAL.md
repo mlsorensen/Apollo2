@@ -368,7 +368,7 @@ Plots the live flow rate (or weight) from the scale.
   cancels the shot.
 - ② **Paddle wiring** *(P4 boards; Auto / Apollo Link / Opto cable, default
   Auto)* — which of the board's two paddle pin sets your cable uses: the
-  corner pins (GND · 52 · 51 · 50) for the opto cable, or the pins at the 5 V
+  corner pins (GND · 52 · 51) for the opto cable, or the pins at the 5 V
   end for an Apollo Link. **Auto** watches both, which is how every unit has
   always worked and needs nothing from you. Pick your wiring to have the
   firmware ignore the unused set entirely — worth doing, because a pin on the
@@ -1146,8 +1146,10 @@ in the firmware). It does not work with the S3‑4.3C.
   a minute — and when it sees it, switches the paddle drive off, refuses every
   flush and cleaning cycle, hands the paddle back to the machine on an Apollo
   Link (the machine then works as stock), and shows a modal explaining what it
-  saw. Nothing a person does trips it: flipping the paddle a few times quickly,
-  a flush‑flush‑shot morning or a ten‑cycle manual backflush all pass. Tap
+  saw. Ordinary use does not trip it — a quick flick, a flush‑flush‑shot
+  morning, a ten‑cycle manual backflush all pass; only a run of several
+  sub‑half‑second pulses, or a line that flickers too fast to be a hand, does
+  (touching bare sense wires together during a bench test can). Tap
   **Reset** once you have looked at the wiring; if the flicker is still there
   it trips again at once, which is itself the diagnosis. A reboot also clears
   it. The diagnostic log records each trip with its counts.
