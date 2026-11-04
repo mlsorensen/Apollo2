@@ -5086,9 +5086,18 @@ void App::update_scale_view() {
     const int count = have_scale ? dsc->device_setting_count() : 0;
     // The espresso scale's rows lock mid-shot; the bench scale's never do.
     const bool shot = !bench_picked && brew_ != nullptr && core::shot_in_flight(brew_->snapshot());
-    show(settings_.scale_dev_hint, !have_scale);
-    show(settings_.scale_dev_connect_row, have_scale && !connected);
-    if (have_scale && !connected)
+    // The hint covers both empty states: no scale saved, or a scale whose
+    // driver exposes nothing (the Varia Aku: weight, tare and battery only —
+    // the page read as blank, owner 2026-11-04). The count is known from the
+    // saved name, so this holds while disconnected too, and there is nothing
+    // to connect FOR.
+    show(settings_.scale_dev_hint, !have_scale || count == 0);
+    if (!have_scale)
+      ui::set_text(settings_.scale_dev_hint, "Pair a scale to adjust its settings");
+    else if (count == 0)
+      ui::set_text(settings_.scale_dev_hint, "No device settings available for this scale");
+    show(settings_.scale_dev_connect_row, have_scale && !connected && count > 0);
+    if (have_scale && !connected && count > 0)
       ui::set_text(settings_.scale_dev_connect_label,
                    (bench_picked ? bench_connect_enabled() : scale_provisioner_->connect_enabled())
                        ? "Connecting..." : "Connect");

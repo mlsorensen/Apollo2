@@ -646,6 +646,9 @@ model (a Bookoo Themis's ① **Beep** and ② **Auto‑off** shown above):
   (Off / 5–60 min), **Unit** (g / oz), and **Mode** — the scale's current
   weighing mode, shown for reference only (the Acaia protocol has no way to
   change mode remotely; use the scale's buttons).
+- **Varia Aku** — none. Its Bluetooth protocol exposes weight, tare and
+  battery only, so the page says *No device settings available for this
+  scale*.
 
 **Unit** only changes what the *scale's own display* shows — Apollo always
 works and displays in grams (an oz‑mode Lunar/Pyxis streams ounces over

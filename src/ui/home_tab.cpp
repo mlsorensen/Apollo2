@@ -235,7 +235,11 @@ void set_flow_ylabels(HomeWidgets& w) {
 // every digit measured as the font's widest one, so "2.4 g/s" and "3.1 g/s"
 // are the same width and the box only moves when the digit count does (a
 // box that twitched by a pixel or two with each reading — owner, 2026-11-04).
-void set_text_shaped(lv_obj_t* label, const char* text) {
+// `min_shape` is the mode's usual widest reading ("88.8 g/s", "888.8 g"):
+// the label never shrinks below it, and its text is right-aligned, so the
+// unit stays put while the number grows into the room on its left; only a
+// reading wider than that steps the box out.
+void set_text_shaped(lv_obj_t* label, const char* text, const char* min_shape) {
   const lv_font_t* font = lv_obj_get_style_text_font(label, LV_PART_MAIN);
   static const lv_font_t* s_font = nullptr;  // the widest digit, per font
   static char s_wide = '8';
@@ -256,7 +260,10 @@ void set_text_shaped(lv_obj_t* label, const char* text) {
   shape[i] = 0;
   lv_point_t sz;
   lv_text_get_size(&sz, shape, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-  if (lv_obj_get_style_width(label, LV_PART_MAIN) != sz.x) lv_obj_set_width(label, sz.x);
+  lv_point_t min_sz;
+  lv_text_get_size(&min_sz, min_shape, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+  const int32_t width = sz.x > min_sz.x ? sz.x : min_sz.x;
+  if (lv_obj_get_style_width(label, LV_PART_MAIN) != width) lv_obj_set_width(label, width);
   ui::set_text(label, text);
 }
 
@@ -267,14 +274,14 @@ void update_flow_legend(HomeWidgets& w) {
   const float v = bench_active ? w.legend_bench_g : (w.flow_mode == 1 ? w.legend_g : w.legend_gps);
   if (v < 0.0f) std::snprintf(b, sizeof(b), "-- %s", flow_unit(w.flow_mode));
   else std::snprintf(b, sizeof(b), "%.1f %s", static_cast<double>(v), flow_unit(w.flow_mode));
-  set_text_shaped(w.flow_unit_label, b);
+  set_text_shaped(w.flow_unit_label, b, w.flow_mode == 0 ? "88.8 g/s" : "888.8 g");
   if (w.flow_legend_dot != nullptr)
     ui::set_bg_color(w.flow_legend_dot,
                      bench_active ? ui::theme::bench() : ui::theme::accent());
   if (w.flow_unit_label2 != nullptr) {
     if (w.legend_bench_g < 0.0f) std::snprintf(b, sizeof(b), "-- g");
     else std::snprintf(b, sizeof(b), "%.1f g", static_cast<double>(w.legend_bench_g));
-    set_text_shaped(w.flow_unit_label2, b);
+    set_text_shaped(w.flow_unit_label2, b, "888.8 g");
   }
   if (w.flow_legend_dot2 != nullptr) ui::set_bg_color(w.flow_legend_dot2, ui::theme::bench());
 }
@@ -559,6 +566,7 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
   lv_label_set_text(blab, flow_unit(out.flow_mode));
   lv_obj_set_style_text_color(blab, lv_color_hex(ui::theme::text()), 0);
   lv_obj_set_style_text_font(blab, ui::font_dp(20), 0);
+  lv_obj_set_style_text_align(blab, LV_TEXT_ALIGN_RIGHT, 0);  // the unit pinned at the right
   out.flow_unit_btn = btn;
   out.flow_unit_label = blab;
   if (out.bench_overlay) {
@@ -575,6 +583,7 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
     lv_label_set_text(out.flow_unit_label2, "g");
     lv_obj_set_style_text_color(out.flow_unit_label2, lv_color_hex(ui::theme::text()), 0);
     lv_obj_set_style_text_font(out.flow_unit_label2, ui::font_dp(20), 0);
+    lv_obj_set_style_text_align(out.flow_unit_label2, LV_TEXT_ALIGN_RIGHT, 0);
   }
   update_flow_legend(out);
 
