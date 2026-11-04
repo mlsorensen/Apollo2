@@ -231,7 +231,6 @@ struct HomeWidgets {
   float legend_gps = -1.0f;   // < 0 = no data
   float legend_g = -1.0f;
   float legend_bench_g = -1.0f;
-  uint32_t legend_drawn_ms = 0;  // last repaint of the live values (the 250 ms throttle)
   lv_obj_t* flow_ylabels[3] = {nullptr, nullptr, nullptr};  // Y = max, 2max/3, max/3
   // Bench series on the live sweep. A third per-column ring (NaN = no bench
   // data in that column: disconnected). flow_mode 2 = the BENCH side of the

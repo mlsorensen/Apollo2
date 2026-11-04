@@ -231,29 +231,50 @@ void set_flow_ylabels(HomeWidgets& w) {
 // The legend's rows carry LIVE values (owner, 2026-11-01: nowhere else
 // shows the flow rate): the espresso row in the unit on show, the bench row
 // in grams. "--" while there is no data.
-// The live paths (a shot's samples at the scale's rate, the idle scroll at
-// step rate) repaint at most every kLegendRepaintMs: the value is read, not
-// watched, and each repaint is a label relayout over the canvas (owner,
-// 2026-11-04, the 4.3C). Mode flips, resets and rebuilds pass force.
-constexpr uint32_t kLegendRepaintMs = 250;
-void update_flow_legend(HomeWidgets& w, bool force = true) {
+// The value labels are sized to the SHAPE of their text, not its glyphs:
+// every digit measured as the font's widest one, so "2.4 g/s" and "3.1 g/s"
+// are the same width and the box only moves when the digit count does (a
+// box that twitched by a pixel or two with each reading — owner, 2026-11-04).
+void set_text_shaped(lv_obj_t* label, const char* text) {
+  const lv_font_t* font = lv_obj_get_style_text_font(label, LV_PART_MAIN);
+  static const lv_font_t* s_font = nullptr;  // the widest digit, per font
+  static char s_wide = '8';
+  if (font != s_font) {
+    s_font = font;
+    int best = 0;
+    for (char d = '0'; d <= '9'; ++d) {
+      const char one[2] = {d, 0};
+      lv_point_t sz;
+      lv_text_get_size(&sz, one, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+      if (sz.x > best) { best = sz.x; s_wide = d; }
+    }
+  }
+  char shape[32];
+  size_t i = 0;
+  for (; text[i] != 0 && i + 1 < sizeof(shape); ++i)
+    shape[i] = (text[i] >= '0' && text[i] <= '9') ? s_wide : text[i];
+  shape[i] = 0;
+  lv_point_t sz;
+  lv_text_get_size(&sz, shape, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+  if (lv_obj_get_style_width(label, LV_PART_MAIN) != sz.x) lv_obj_set_width(label, sz.x);
+  ui::set_text(label, text);
+}
+
+void update_flow_legend(HomeWidgets& w) {
   if (w.flow_unit_label == nullptr) return;
-  const uint32_t now = lv_tick_get();
-  if (!force && now - w.legend_drawn_ms < kLegendRepaintMs) return;
-  w.legend_drawn_ms = now;
   const bool bench_active = w.flow_mode == 2;
   char b[24];
   const float v = bench_active ? w.legend_bench_g : (w.flow_mode == 1 ? w.legend_g : w.legend_gps);
   if (v < 0.0f) std::snprintf(b, sizeof(b), "-- %s", flow_unit(w.flow_mode));
   else std::snprintf(b, sizeof(b), "%.1f %s", static_cast<double>(v), flow_unit(w.flow_mode));
-  ui::set_text(w.flow_unit_label, b);
+  set_text_shaped(w.flow_unit_label, b);
   if (w.flow_legend_dot != nullptr)
     ui::set_bg_color(w.flow_legend_dot,
                      bench_active ? ui::theme::bench() : ui::theme::accent());
   if (w.flow_unit_label2 != nullptr) {
     if (w.legend_bench_g < 0.0f) std::snprintf(b, sizeof(b), "-- g");
     else std::snprintf(b, sizeof(b), "%.1f g", static_cast<double>(w.legend_bench_g));
-    ui::set_text(w.flow_unit_label2, b);
+    set_text_shaped(w.flow_unit_label2, b);
   }
   if (w.flow_legend_dot2 != nullptr) ui::set_bg_color(w.flow_legend_dot2, ui::theme::bench());
 }
@@ -534,20 +555,10 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
     entry1 = entry();
   }
   out.flow_legend_dot = make_dot(entry1, ui::dp(10), ui::theme::accent());
-  // The value labels are FIXED to their widest reading so the box keeps one
-  // size while the digits change (owner, 2026-11-04): "888.8 g/s" covers
-  // both espresso units, "8888.8 g" a container on the bench.
-  const lv_font_t* legend_font = ui::font_dp(20);
-  auto legend_w = [&](const char* s) {
-    lv_point_t sz;
-    lv_text_get_size(&sz, s, legend_font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-    return sz.x;
-  };
   lv_obj_t* blab = lv_label_create(entry1);
   lv_label_set_text(blab, flow_unit(out.flow_mode));
   lv_obj_set_style_text_color(blab, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(blab, legend_font, 0);
-  lv_obj_set_width(blab, legend_w("888.8 g/s"));
+  lv_obj_set_style_text_font(blab, ui::font_dp(20), 0);
   out.flow_unit_btn = btn;
   out.flow_unit_label = blab;
   if (out.bench_overlay) {
@@ -563,8 +574,7 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
     out.flow_unit_label2 = lv_label_create(entry2);
     lv_label_set_text(out.flow_unit_label2, "g");
     lv_obj_set_style_text_color(out.flow_unit_label2, lv_color_hex(ui::theme::text()), 0);
-    lv_obj_set_style_text_font(out.flow_unit_label2, legend_font, 0);
-    lv_obj_set_width(out.flow_unit_label2, legend_w("8888.8 g"));
+    lv_obj_set_style_text_font(out.flow_unit_label2, ui::font_dp(20), 0);
   }
   update_flow_legend(out);
 
@@ -2869,7 +2879,7 @@ void shot_plot_tick(HomeWidgets& w, const core::ScaleSnapshot& scale,
     w.legend_g = rw;
     w.legend_gps = flow_gap(rf) ? -1.0f : rf;
     w.legend_bench_g = bench != nullptr && bench->connected ? bench->weight_g : -1.0f;
-    update_flow_legend(w, /*force=*/false);
+    update_flow_legend(w);
     if (w.shot_n == 0 || now - w.shot_last_sample_ms >= kShotSampleMs) {
       if (w.shot_n > 0) {  // track the achieved storage cadence (sizes the edge lag)
         const uint32_t dt = now - w.shot_last_sample_ms;
@@ -3322,7 +3332,7 @@ void flow_graph_tick(HomeWidgets& w, const core::ScaleSnapshot& scale,
   w.legend_g = flow_gap(rw) ? -1.0f : rw;
   w.legend_gps = flow_gap(rf) ? -1.0f : rf;
   w.legend_bench_g = flow_gap(bw) ? -1.0f : bw;
-  update_flow_legend(w, /*force=*/false);
+  update_flow_legend(w);
 
   // Auto-range the Y axis: grow immediately to fit the window's peak; shrink back
   // toward the mode default only once the peak drops below half scale (hysteresis,
