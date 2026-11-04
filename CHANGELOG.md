@@ -24,6 +24,7 @@ the headings as plain lines); leave out a list that would be empty.
 ### Fixes
 
 - **Fewer nuisance disconnects with a paired Umbra.** An unanswered Micra request is re-dialled after 5 s with no visible disconnect, instead of a 30 s drop and reconnect. A queued command still lands.
+- **Device settings page no longer blank for a scale that has none.** A Varia Aku now shows "No device settings available for this scale" instead of an empty page.
 - **Graph no longer comes up empty on the 8" box.** Changing Bench scale on Home could leave the flow graph blank until a restart.
 
 ## v1.2.0
