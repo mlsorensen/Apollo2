@@ -19,7 +19,9 @@ static_assert(build_check::str_eq(kVersion, APOLLO_STRINGIZE(APOLLO_EXPECT_VERSI
 
 // What lies under the app on this board (pinned bootloader + partition table),
 // which OTA can't change. Comes from platformio.ini `custom_flash_epoch` via
-// tools/pio_flash_layout.py; a release whose meta.json lists a higher epoch for
+// tools/pio_version.py (the pre script defines APOLLO_FLASH_EPOCH;
+// tools/pio_flash_layout.py only records it into flash_layout.json); a
+// release whose meta.json lists a higher epoch for
 // this board's slug must be web-flashed (update_check.cpp). The sim has none.
 #ifdef APOLLO_FLASH_EPOCH
 inline constexpr int kFlashEpoch = APOLLO_FLASH_EPOCH;

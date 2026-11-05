@@ -35,6 +35,8 @@
 #   make test-csv           host check of the shot index row format (plain g++, <1 s)
 #   make docs-img           regenerate the manual's annotated screenshots
 #                           (docs/img/manual/) from the sim renders
+#   make adr-index          regenerate the index in docs/adr/README.md from
+#                           the records' headers (fails on a malformed one)
 #   make webapp             rebuild the embedded web app (needs node; every
 #                           device build/flash target does this for you)
 #   make site-vendor        rebuild the web flasher's esp-web-tools bundle into
@@ -79,7 +81,7 @@ site-vendor:
         build-p4-x-7 build-p4-x-8 build-p4-x-10-1 \
         build-7b build-4-3b build-4-3c build-p4 \
         build-release build-all \
-        webapp site-vendor monitor padsense paddrive sim test-schedule test-battery test-dose test-csv docs-img lmtoken lmtoken-release lmtoken-publish clean
+        webapp site-vendor monitor padsense paddrive sim test-schedule test-battery test-dose test-csv docs-img adr-index lmtoken lmtoken-release lmtoken-publish clean
 
 flash: $(WEBAPP_HDR)
 	@tools/flash.sh $(BOARD)
@@ -163,7 +165,8 @@ build-p4-x-10-1: $(WEBAPP_HDR)
 # --- Sweeps ------------------------------------------------------------------
 # build-release compiles exactly what CI publishes (the six released images:
 # four products, the two P4 boards in both silicon revisions) plus the sim -
-# run it before pushing a platform change or cutting a release.
+# run it before pushing a platform, bootloader or partition-table change. It
+# is NOT a release step: CI's matrix builds the images for every tag.
 # build-all adds the internal-only boards, so a refactor that touches shared
 # driver/board code can be proven against every env we keep.
 build-release: build-p4-5 build-p4-4-3 build-p4-5-rev3 build-p4-4-3-rev3 \
@@ -245,6 +248,9 @@ test-paddle:
 # tools/annotate_docs.py for the update rules when the UI changes.
 docs-img: sim
 	python3 tools/annotate_docs.py
+
+adr-index:
+	python3 tools/adr_index.py
 
 lmtoken:
 	$(MAKE) -C tools/lmtoken build

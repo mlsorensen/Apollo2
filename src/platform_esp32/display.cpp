@@ -1708,13 +1708,11 @@ bool Display::begin() {
 #endif
   size_t buf_bytes = static_cast<size_t>(w) * kBufferLines * sizeof(lv_color_t);
 #if defined(BOARD_DISPLAY_RGB) || defined(BOARD_DISPLAY_DSI)
-  // Draw scratch: prefer a SMALL chunk in INTERNAL RAM. LVGL's software renderer
-  // does read-modify-write blending per pixel, and over the PSRAM bus that made
-  // full-page redraws (settings scrolls) crawl at ~4fps / 160ms render. A
-  // 40-line internal chunk (~64KB on 800px) renders at SRAM speed with more,
-  // cheaper chunks. Historical NO_MEM caution: an EARLIER build starved
-  // esp_wifi_init with a 200-line internal buffer; 40 lines leaves that
-  // headroom. Fallback: the old 200-line PSRAM buffer (slow but always fits).
+  // Draw scratch: the 200-line (kBufferLines) chunk in PSRAM, always. LVGL's
+  // software renderer does read-modify-write blending per pixel, and over the
+  // PSRAM bus that makes full-page redraws (settings scrolls) crawl at ~4fps /
+  // 160ms render; a small INTERNAL chunk rendered at SRAM speed but starved
+  // the radio (details below), so there is no internal path any more.
   //
   // TEARING (why we accept it): the flow graph tears slightly because this is a
   // SINGLE framebuffer. A direct-ESP-IDF esp_lcd double-framebuffer + vsync swap

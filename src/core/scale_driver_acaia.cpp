@@ -23,7 +23,7 @@
 //    write-without-response only, NO keepalive of any kind — it pushes weight
 //    continuously and a status frame every ~850 ms unprompted (that push is
 //    where battery comes from; it sends no battery events at all). Deliberately
-//    never polled: see b7892e5, extra traffic was implicated in the 62 s blip.
+//    never polled: see 8745696, extra traffic was implicated in the 62 s blip.
 //    Has a sleep mode: a sleeping scale still advertises, and connecting wakes
 //    it, so "sleeping" is a disconnected state, never a connected-but-idle one.
 //  - New Lunar / Pyxis: 49535343-... service, write-with-response. The
@@ -304,7 +304,7 @@ class AcaiaDriver : public IScaleDriver {
 
     if (gen_ == Gen::kUmbra) {
       // Nothing to send: it streams weight unprompted and pushes its own status
-      // frames. Deliberately never polled (b7892e5).
+      // frames. Deliberately never polled (8745696).
       return true;
     }
 

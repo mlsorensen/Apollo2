@@ -97,7 +97,7 @@ display isn't up.
   Config::beta_channel ("updbeta") fetches instead — ONE fetch either way, and
   a stable release newer than the last beta still wins. 404 on it falls back to
   the stable list. Ordering lives in two places that must agree:
-  semver_newer() in update_check.cpp and order_key() in the workflow's pages
+  semver_newer() in include/core/semver.h (update_check.cpp uses it) and order_key() in the workflow's pages
   job (a release outranks every beta of the same number; beta.2 outranks
   beta.1). Only `-beta.N` is understood — any other pre-release form parses as
   "not newer" and is ignored. PROMOTING a beta is a REBUILD at the real tag,
@@ -161,7 +161,7 @@ display isn't up.
   are garbage, so any flash fetch in that window is a jump into nowhere or
   a bus hang. `l2_cache_256k()` had IRAM_ATTR but GCC INLINED it into the
   ESP_SYSTEM_INIT_FN entry, which is flash code — every build from
-  2026-10-18 to 2026-10-26 (v1.1.0-beta.3 .. v1.2.0-beta.2) ran the switch
+  2026-10-18 to 2026-10-26 (v1.1.0-beta.4 .. v1.2.0-beta.2; beta.3 only re-linked and reserved, the switch landed after its tag) ran the switch
   from flash and booted or not by where the code happened to land (about
   half of a dozen bench builds of the same source looped at the
   bootloader's 9 s watchdog with nothing printed; the CI images were the
@@ -323,7 +323,7 @@ runs a live probe (product id "911", "9271" on the X-8, config version, raw stat
 level) ON THE LVGL TASK between two polls (a second task's register read
 would move the chip's pointer mid-poll; the S3s serve HTTP from loop() and
 run it inline). `?reset=1` pulses TP_RST (native GPIO or the expander bit;
-the 2-inch has neither) and re-probes — the in-place recovery. NEXT TIME:
+the 2-inch has neither, and the P4-5 / X-7 / X-10.1 have kTouchRst = -1 and no expander, so ?reset=1 is a no-op there too) and re-probes — the in-place recovery. NEXT TIME:
 fetch /api/touch BEFORE any reset; ack=false / empty product = the chip stopped
 answering, ack=true with status bit7 never set = answering but not
 sensing. No auto-reset yet, on purpose: which of the two it is decides the
@@ -454,7 +454,7 @@ per weekday, with a global warm-up lead. Shape of it:
   `sched_asb_status` line when there is neither.
   Range 10..240 in 10-min steps (`sanitize_auto_standby_min`), default 30.
   UI: the Schedule page is TWO lv_menu pages — the switches (one per line,
-  NO group headings: "Auto-standby after last shot", "Show auto-standby
+  NO group headings: "Auto-standby when idle", "Show auto-standby
   timer" (Home MICRA header shows "<power> N min" via
   ui::set_micra_standby_timer from refresh(); IDisplaySettings key
   `schasbt`), then the gate line and the master labelled "Enable schedules"
@@ -523,7 +523,7 @@ labels, never a box in the flow; the only card exempt is the one beside
 the graph (nothing beside it to align with, and the graph's height to
 live in). Before saying a layout is right, LOOK: crop the card from the
 sim render at 2-3x (the Preview-sized image hides a cut ring), and read
-the detail log's `home: scale card` / `home: bench card ... clipped=N`
+the detail log's `home: scale card ... overflow=N` / `home: bench card ... clipped=N`
 lines — measured AFTER the App's show/hide pass, on visible children's
 raw coordinates (a build-time measurement of a hidden widget is
 meaningless, and `lv_obj_get_scroll_bottom` sees direct children only).

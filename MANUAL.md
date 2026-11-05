@@ -139,7 +139,7 @@ Without a scale, the MICRA card fills the screen as a single hero:
 - ② ③ **BREW / STEAM** — live boiler temperatures. On larger screens each has a
   **−/+** stepper that edits the set‑point directly; the small grey number is
   the current target. Edits are written to the machine as you tap.
-- ④ **Power button** — `Standby` / `Turn on` when connected. After a tap it
+- ④ **Power button** — `Standby` / `Turn On` when connected. After a tap it
   briefly reads `Working...` (disabled) until the machine reports the change —
   the Micra's answer trails the command by a couple of seconds, and the button
   would otherwise look like it did nothing (a command sent by the
@@ -977,7 +977,7 @@ and comes out.
 > Why the button: on the P4 boards the card slot and the WiFi/Bluetooth
 > radio share one bus controller, and searching an empty slot every few
 > seconds was found to disturb the radio badly enough to restart the device
-> (v1.0.3). Checking once at startup and when you tap Mount removes that;
+> (v1.1.0). Checking once at startup and when you tap Mount removes that;
 > a mounted card in normal use never did it.
 - **Your shots aren't part of this** — they are already on the card, and a
   restore doesn't touch them.

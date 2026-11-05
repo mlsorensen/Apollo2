@@ -312,9 +312,10 @@ constexpr int  kRgbB[5] = {14, 38, 18, 17, 10};      // B3..B7
 constexpr int  kRgbHsyncFront = 8,   kRgbHsyncPulse = 4,  kRgbHsyncBack = 8;
 constexpr int  kRgbVsyncFront = 8,   kRgbVsyncPulse = 4,  kRgbVsyncBack = 8;
 constexpr int  kRgbPclkActiveNeg = 1;
-// Underrun-margin tuning (ghost-raster prevention, 2026-07-25): the ghosted/
-// shifted raster is a bounce-buffer underrun latching a frame-position offset
-// (see Display::rgb_resync). Two knobs widen the refill margin:
+// Underrun-margin tuning (2026-07-25). The ghosted/shifted raster turned out
+// to be the driver's bounce-buffer PARITY latch, healed every frame in
+// rgb_vsync_cb since 2026-09-10 (display.cpp) — not an underrun; these two
+// knobs only widen the refill margin against traffic-induced bouncing:
 //  - PCLK 16 -> 14 MHz (demo value was 16). Refresh ~39 -> ~34 fps; LVGL only
 //    delivers 25-30 fps here, so nothing visible is lost. Mind the floor:
 //    the 7B's panel showed no image below its stable range — if this panel
@@ -366,9 +367,10 @@ constexpr float kUsbPowerVolts = 4.15f;
 // Drive: DO0 (EXIO6) is an open-collector "contact" to the terminal GND —
 //   Micra white (4.9V) -> DO0, Micra black (0V) -> GND. Expander pin LOW turns
 //   the opto LED on -> transistor conducts -> paddle circuit closed.
-// Sense: the physical paddle switch wires between DI COM (internally biased
-//   ~5V) and DI0 (EXIO0). PC814 opto input is polarity-free; expander pin
-//   reads LOW when the paddle is closed.
+// Sense: the physical paddle switch wires between DI0 (EXIO0) and the terminal
+//   GND — NOT DI COM, which is the internally biased (~5V) side of the input
+//   opto; a dry contact there does nothing. Expander pin reads LOW when the
+//   paddle is closed.
 #define BOARD_PADDLE_VIA_IOEXT
 constexpr int  kPaddleIoExtDrive = 6;  // EXIO6 = DO0, active-LOW (low = closed)
 constexpr int  kPaddleIoExtSense = 0;  // EXIO0 = DI0, LOW = paddle on
@@ -532,10 +534,12 @@ constexpr bool kPaddleActiveHigh = true;
 //     SENSE <- paddle through the Link's NO contact (INPUT_PULLUP, low = closed),
 //     CTRL -> the four LH1502 LEDs (~26 mA, drive strength 3): HIGH hands the
 //     paddle to Apollo, LOW/floating (Apollo off, unplugged, install mode)
-//     leaves it wired to the Micra in copper. Driven and polled TOGETHER with
-//     the corner pins above — no connector setting; whichever cable is fitted
-//     works and the other set is an open pin. GPIO2 is NOT used on purpose:
-//     the 4.3 wires it to the touch INT. ---
+//     leaves it wired to the Micra in copper. By default (Paddle wiring =
+//     Auto, NVS `padwire`) driven and polled TOGETHER with the corner pins
+//     above — whichever cable is fitted works and the other set is an open
+//     pin; Settings > Micra > Controls can pin the unit to one set (Apollo
+//     Link / Opto cable). GPIO2 is NOT used on purpose: the 4.3 wires it to
+//     the touch INT. ---
 constexpr int  kLinkDrivePin = 3;
 constexpr int  kLinkSensePin = 5;
 constexpr int  kLinkCtrlPin  = 4;
@@ -683,10 +687,12 @@ constexpr bool kPaddleActiveHigh = true;
 //     SENSE <- paddle through the Link's NO contact (INPUT_PULLUP, low = closed),
 //     CTRL -> the four LH1502 LEDs (~26 mA, drive strength 3): HIGH hands the
 //     paddle to Apollo, LOW/floating (Apollo off, unplugged, install mode)
-//     leaves it wired to the Micra in copper. Driven and polled TOGETHER with
-//     the corner pins above — no connector setting; whichever cable is fitted
-//     works and the other set is an open pin. GPIO2 is NOT used on purpose:
-//     the 4.3 wires it to the touch INT. ---
+//     leaves it wired to the Micra in copper. By default (Paddle wiring =
+//     Auto, NVS `padwire`) driven and polled TOGETHER with the corner pins
+//     above — whichever cable is fitted works and the other set is an open
+//     pin; Settings > Micra > Controls can pin the unit to one set (Apollo
+//     Link / Opto cable). GPIO2 is NOT used on purpose: the 4.3 wires it to
+//     the touch INT. ---
 constexpr int  kLinkDrivePin = 3;
 constexpr int  kLinkSensePin = 5;
 constexpr int  kLinkCtrlPin  = 4;

@@ -10,8 +10,10 @@
 //    GND). kPaddleActiveHigh sets the drive polarity.
 //    The P4 boards carry a SECOND native set for the Apollo Link bridge
 //    (kLinkDrivePin/kLinkSensePin, active-high, plus kLinkCtrlPin held HIGH
-//    while booted). Both sets are driven and polled together, so either cable
-//    works with no setting; the unused set is just an open pin.
+//    while booted). By default (core::PaddleWiring::kAuto, NVS "padwire")
+//    both sets are driven and polled together, so either cable works; the
+//    unused set is just an open pin. set_wiring(kLink / kCable) pins the unit
+//    to one set and leaves the other an open input.
 // Neither configured -> available() == false and the brew controller idles.
 
 namespace platform {

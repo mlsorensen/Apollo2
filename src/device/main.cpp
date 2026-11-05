@@ -782,16 +782,16 @@ void loop() {
   g_web_ui.poll();           // S3 boards serve here; no-op on the P4s (task)
 
 #if defined(BOARD_DISPLAY_RGB)
-  // One-shot raster resync at 2 s for the boot ghost (~1/4 of cold boots come
-  // up latched a few px off from underruns while setup floods the PSRAM bus).
-  // The resync is VSYNC-aligned (armed here, executed inside vertical
-  // blanking by the display's resync task) but still shows a one-frame ~5 px
-  // jump — the bounce-buffer refill runs with the timing engine stopped —
-  // which is why it's NOT on a periodic timer: the user found a 5 s cadence
-  // distracting. Runtime ghosts are healed manually via Settings > "Restart
-  // display" instead. (An earlier mid-frame, non-VSYNC-aligned version was
-  // far worse: full blank AND could itself latch a fresh ghost — keep the
-  // alignment if refactoring.)
+  // One-shot raster resync at 2 s for the boot ghost (the driver's bounce-
+  // buffer PARITY latch, flipped by a coalesced EOF ISR while setup floods
+  // the bus — see display.cpp). The resync is VSYNC-aligned (armed here,
+  // executed inside vertical blanking by the display's resync task) but still
+  // shows a one-frame ~5 px jump — the bounce-buffer refill runs with the
+  // timing engine stopped — which is why it's NOT on a periodic timer: the
+  // user found a 5 s cadence distracting. Runtime ghosts need no restart:
+  // rgb_vsync_cb heals the parity every frame (2026-09-10). (An earlier
+  // mid-frame, non-VSYNC-aligned version was far worse: full blank AND could
+  // itself latch a fresh ghost — keep the alignment if refactoring.)
   static bool boot_resync_done = false;
   if (!boot_resync_done && millis() >= 2000) {
     boot_resync_done = true;

@@ -22,8 +22,9 @@ class IDisplaySettings {
   virtual void set_screen_timeout_min(int minutes) = 0;
   // Live screensaver state — NOT persisted; the saved brightness preference is
   // untouched either way. kDim keeps the panel visible for the bouncing-logo
-  // saver: 5% where the backlight can PWM, full brightness where it can only
-  // switch (the logo must stay visible). kBlank switches the backlight fully
+  // saver: the board's kSaverDimPercent (10 on the S3s, 5 on the P4s) where
+  // the backlight can PWM, full brightness where it can only switch (the logo
+  // must stay visible). kBlank switches the backlight fully
   // off on every board. kOff restores the user's brightness.
   enum class SaverMode { kOff = 0, kDim = 1, kBlank = 2 };
   virtual void set_screensaver(SaverMode mode) = 0;

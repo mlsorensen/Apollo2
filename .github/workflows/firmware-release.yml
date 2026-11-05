@@ -59,7 +59,7 @@ jobs:
     name: build ${{ matrix.board }} ${{ inputs.tag }}
     runs-on: ubuntu-latest
     strategy:
-      # One board's transient failure must not cancel the other seven and skip
+      # One board's transient failure must not cancel the other five and skip
       # publishing. v0.12.1 died exactly that way: a 500 from the package CDN
       # while fetching esptoolpy took out the x-7 job, fail-fast cancelled the
       # rest, and `release`/`pages` were SKIPPED -- leaving a pushed tag with no
@@ -91,14 +91,14 @@ jobs:
           # site/index.html, and NOT in the README. Do not add one back
           # without asking - see the "Support matrix" section of CLAUDE.md.
           #
-          # COMING: rev v3 production silicon. Waveshare does NOT change the
-          # SKU, so a buyer cannot tell which they got and the PRODUCT list
-          # must stay four - the silicon split doubles the IMAGES, not the
-          # boards. Each P4 product then has two rows, the plain slug meaning
-          # rev v1.x ("es") and a -rev3 sibling (p4-wifi6-touch-lcd-5-rev3,
-          # p4-wifi6-touch-lcd-4.3-rev3, ...), with the flasher picking
-          # between them. Never rename a plain slug: fielded units self-update
-          # from it.
+          # Rev v3 production silicon (the -rev3 rows above): Waveshare does
+          # NOT change the SKU, so a buyer cannot tell which they got and the
+          # PRODUCT list must stay four - the silicon split doubles the
+          # IMAGES, not the boards. Each P4 product has two rows, the plain
+          # slug meaning rev v1.x ("es") and a -rev3 sibling
+          # (p4-wifi6-touch-lcd-5-rev3, p4-wifi6-touch-lcd-4.3-rev3), with
+          # the flasher picking between them. Never rename a plain slug:
+          # fielded units self-update from it.
     steps:
       # A STABLE tag is cut from main only. Betas may come from a feature
       # branch (the 1.0 line lives on feat/v1.0 and ships as v1.0.0-beta.N
@@ -128,7 +128,7 @@ jobs:
           # forces a FULL re-download from the CDN: the previous cache for this
           # env is restored and only the delta is fetched. That matters because a
           # full fetch is when a transient CDN outage can take out a release (a
-          # one-line monitor_dtr change invalidated all eight jobs' caches).
+          # one-line monitor_dtr change once invalidated every job's cache).
           key: pio-${{ matrix.env }}-${{ hashFiles('platformio.ini') }}
           restore-keys: |
             pio-${{ matrix.env }}-

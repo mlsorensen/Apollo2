@@ -354,4 +354,4 @@ visible difference is that the paddle keeps working when Apollo is off.
 | LED lit, paddle flips do nothing on Apollo | SENSE not on GPIO 5, or P1/P2 not on the paddle wires (rev 0.7: U4 or D2 fitted backwards) | Check the plug position and the J2 wires |
 | Touch or sound stops while the Link is plugged in | A wire landed on SCL/SDA — the plug is rotated | Unplug it; nothing is damaged without the Link's power |
 | Apollo runs from its own USB but not from the Link | 5V/GND not on the 5V/GND pins, or the PTC has tripped | Fix the plug; a tripped PTC resets by itself once the adapter is unplugged |
-| "USB power" shown but a fitted battery never charges | Expected — the Link does not charge a battery | Charge from Apollo's own USB‑C |
+| "USB power" shown but a fitted battery never charges (P4‑5 / P4‑4.3) | Expected on those boards — header power does not reach their charger (the X 8" does charge from the Link, see above) | Charge from Apollo's own USB‑C |

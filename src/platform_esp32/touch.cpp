@@ -49,7 +49,9 @@ bool g_streak_logged = false;
 uint32_t g_streak_log_ms = 0;
 
 // Whether this board can pulse the controller's reset line (an IO-extension
-// bit or a native GPIO; the 2-inch CST816 board has neither).
+// bit or a native GPIO). False on the 2-inch CST816 board and on the P4-5,
+// X-7 and X-10.1, whose GT911 reset is not wired to the P4 (kTouchRst = -1,
+// no IO extension).
 constexpr bool kTouchCanReset =
 #if defined(BOARD_HAS_IO_EXTENSION)
     true;
@@ -299,10 +301,11 @@ void read_cb(lv_indev_t* /*indev*/, lv_indev_data_t* data) {
 
     // One line per press, for coordinate calibration -- but only the first few
     // of a boot. Calibrating swap/mirror flags on a new board takes a handful of
-    // taps; logging every press for the life of the session floods the 64KB ring
-    // exactly when someone is using the machine, which is when the surrounding
-    // history matters most. (Measured 2026-09-09: the ring holds only ~3.3h at
-    // steady state, so anything unbounded costs real diagnostic history.)
+    // taps; logging every press for the life of the session floods the 128KB
+    // ring (512KB with Detailed log) exactly when someone is using the machine,
+    // which is when the surrounding history matters most. (Measured 2026-09-09:
+    // the ring holds only ~3.3h at steady state, so anything unbounded costs
+    // real diagnostic history.)
     constexpr uint32_t kMaxLoggedPresses = 10;
     static uint32_t logged_presses = 0;
     if (!g_logged_press && logged_presses < kMaxLoggedPresses) {

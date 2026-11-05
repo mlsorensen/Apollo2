@@ -369,7 +369,8 @@ pio run -e sim                    # native simulator
 
 `platformio.ini` also carries a few envs for boards that aren't released — they
 build, and they're kept as the record of how those boards differ. `make
-build-release` compiles the three published images; `make build-all` compiles
+build-release` compiles the six published images (four products, the two P4
+boards in both silicon revisions); `make build-all` compiles
 every env.
 
 Build environments and per‑board flags live in
@@ -415,6 +416,8 @@ include/ui/             UI headers (widgets, screen profiles, timezones)
 include/vendor/         Vendored third-party headers (stb_image_write)
 src/                    Implementations (see Architecture above)
 hardware/3d-prints/     Printable stand, board shells + mounts (3MF)
+docs/adr/               Decision and engineering log: why things are built
+                        the way they are, with the bench evidence
 tools/                  sim.sh, flash.sh, lmtoken (Go), PlatformIO helper scripts
 renders/                Simulator output (PNG)
 ```

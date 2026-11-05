@@ -217,7 +217,7 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
   lv_obj_set_flex_flow(parent, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_style_pad_row(parent, ui::dp(8), 0);
 
-  // --- Segmented selector: Brew / Boiler / Info ---------------------------
+  // --- Segmented selector: Brew / Boiler / History / Info -----------------
   lv_obj_t* seg_row = lv_obj_create(parent);
   lv_obj_remove_style_all(seg_row);
   lv_obj_set_width(seg_row, lv_pct(100));

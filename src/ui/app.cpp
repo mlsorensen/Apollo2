@@ -5759,8 +5759,9 @@ void App::sync_dose_settings_rows() {
   }
 }
 
-// The Home power button's own path minus the tap: same command, same
-// "Working..." hold while the machine's report catches up. The toast is
+// The Home power button's own path minus the tap: same command, a shorter
+// "Working..." hold (8 s here vs the tap's 12 s in toggle_power) while the
+// machine's report catches up. The toast is
 // skipped under the screensaver — a 06:00 turn-on has nobody to read it, and a
 // notice deferred to the next touch would be hours stale.
 void App::apply_scheduled_power(bool on, bool auto_standby) {

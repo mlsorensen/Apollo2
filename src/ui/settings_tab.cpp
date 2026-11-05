@@ -513,8 +513,9 @@ lv_obj_t* split_half(lv_obj_t* split, const char* label, const lv_font_t* font,
 
 // Micra > Schedule: scheduled on / standby (core::ScheduleConfig), on TWO
 // pages so neither scrolls. The Schedule page is a list of switches, one per
-// line — Enabled, Same every day, Smart Warm-up (+ its lead), Auto-standby
-// (reserved) — and a "Configure schedule" entry that drills into the times:
+// line — Auto-standby when idle (+ its minutes), Show auto-standby timer,
+// Enable schedules, Same every day, Smart Warm-up (+ its lead) — and a
+// "Configure schedule" entry that drills into the times:
 // the weekday chip strip and the selected day's own switch (per-day mode
 // only), the On at / Off at pickers, a range slider that shows the same
 // window, and Copy times to. App fills the dropdowns (the hour list follows
