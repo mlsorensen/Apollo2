@@ -22,6 +22,7 @@ the headings as plain lines); leave out a list that would be empty.
 - **Umbra battery estimate.** A paired Umbra's battery reading freezes once it sleeps, so Apollo estimates it from a daily drain rate, shown as `~41%`. Calibrate drain measures your scale's real figure.
 
 ### Fixes
+- **Settings restore keeps the Paddle wiring choice.** The per-unit Paddle wiring setting (Auto / Apollo Link / Opto cable) is left out of the backup file on purpose, but a restore used to erase it and fall back to Auto. It now survives a restore like the pad repair knobs.
 
 - **Fewer nuisance disconnects with a paired Umbra.** An unanswered Micra request is re-dialled after 5 s with no visible disconnect, instead of a 30 s drop and reconnect. A queued command still lands.
 - **Device settings page no longer blank for a scale that has none.** A Varia Aku now shows "No device settings available for this scale" instead of an empty page.

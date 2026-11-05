@@ -946,7 +946,9 @@ copies the settings onto that same card, so a replacement can pick them up.
 A few things worth knowing:
 
 - **Moving between boards is the point.** A backup taken on any supported board
-  restores onto any other; nothing in it is board-specific.
+  restores onto any other; nothing in it is board-specific. Settings that
+  belong to the board itself — the paddle pin repair knobs and the Paddle
+  wiring choice — stay on the board and are untouched by a restore.
 - **A backup from newer firmware is refused** — update this Apollo first, then
   restore. Older backups are always fine.
 - **Nothing happens on its own.** No automatic backup, no automatic restore;

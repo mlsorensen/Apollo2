@@ -30,7 +30,11 @@ constexpr size_t kMaxLine = 256;  // "str:" + 15-char key + kMaxValue + slack
 // install mode), the Umbra pairing-prompt flag (a one-boot UI hand-off — never
 // written, and simply dropped by a restore's erase), the hourly clock seed,
 // and Preferences' own namespace marker.
-// Never written to the file, and held back from the erase on restore.
+// Never written to the file. The repair knobs, the wiring choice, the
+// install flag and the clock seed are lifted out before the erase and put
+// back after it (UnitKeys below); the pairing-prompt flags and the
+// namespace marker are simply dropped by the erase (the marker is
+// re-created at boot).
 bool is_unit_key(const char* k) {
   static const char* kUnit[] = {"padsense", "paddrive", "padwire", "otainst", "sprpend", "sprpend2",
                                 "lastunix", "_init"};
@@ -211,8 +215,9 @@ bool apply_line(nvs_handle_t h, char* line) {
 
 // The per-unit keys, lifted out before the erase and put back after it.
 struct UnitKeys {
-  bool has_sense = false, has_drive = false, has_pending = false, has_seed = false;
-  int32_t sense = 0, drive = 0;
+  bool has_sense = false, has_drive = false, has_wire = false, has_pending = false,
+       has_seed = false;
+  int32_t sense = 0, drive = 0, wire = 0;
   int64_t seed = 0;
   char pending[32] = "";
 };
@@ -220,6 +225,7 @@ struct UnitKeys {
 void read_unit_keys(nvs_handle_t h, UnitKeys& u) {
   u.has_sense = nvs_get_i32(h, "padsense", &u.sense) == ESP_OK;
   u.has_drive = nvs_get_i32(h, "paddrive", &u.drive) == ESP_OK;
+  u.has_wire = nvs_get_i32(h, "padwire", &u.wire) == ESP_OK;  // v1.3: Paddle wiring
   u.has_seed = nvs_get_i64(h, "lastunix", &u.seed) == ESP_OK;
   size_t len = sizeof(u.pending);
   u.has_pending = nvs_get_str(h, "otainst", u.pending, &len) == ESP_OK;
@@ -228,6 +234,7 @@ void read_unit_keys(nvs_handle_t h, UnitKeys& u) {
 void write_unit_keys(nvs_handle_t h, const UnitKeys& u) {
   if (u.has_sense) nvs_set_i32(h, "padsense", u.sense);
   if (u.has_drive) nvs_set_i32(h, "paddrive", u.drive);
+  if (u.has_wire) nvs_set_i32(h, "padwire", u.wire);
   if (u.has_seed) nvs_set_i64(h, "lastunix", u.seed);
   if (u.has_pending) nvs_set_str(h, "otainst", u.pending);
 }
