@@ -14,7 +14,7 @@ the headings as plain lines); leave out a list that would be empty.
 ### Features
 
 - **Record your dose, see the ratio.** Put the dosed portafilter on the bench scale and tap Record; the graph then shows dose, yield and brew ratio live, and History keeps all three. A Default dose switch stages a fixed dose for every shot instead.
-- **Live readings in the graph legend.** The legend shows the espresso scale's flow rate or weight and the bench scale's grams, not just the units.
+- **Live readings in the graph legend.** The legend shows the espresso scale's flow rate or weight and the bench scale's grams, not just the units. The readings line up on their decimal point and the units stand in a column, so nothing shifts as the numbers change.
 - **Detailed log switch.** Settings > Apollo > Display > Detailed log keeps the minute-by-minute housekeeping in the diagnostic log; off, the log holds events only and lasts weeks.
 - **Auto-standby counts inactivity.** A flush or backflush restarts the auto-standby count like a shot does, and nothing fires in the middle of one. The row is now "Auto-standby when idle".
 - **Paddle wiring setting.** Settings > Micra > Controls > Paddle wiring pins a P4 board to the Apollo Link or the opto cable, so the unused pins are ignored. Auto, the default, watches both as before.

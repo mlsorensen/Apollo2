@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** ux
-- **First decided:** 2026-11-04 · **Last changed:** 2026-11-04
+- **First decided:** 2026-11-04 · **Last changed:** 2026-11-05
 - **Boards:** all with the large Home layout; the complaint was raised on the S3 4.3C
 
 ## Context
@@ -18,15 +18,19 @@ presentation only; the graph's render cost is in
 
 ## Decision
 
-The value labels are sized to the SHAPE of their text: `set_text_shaped()`
-measures the text with every digit as the font's widest, so every reading
-with the same digit count gets the same box, and the box steps only when the
-digit count changes. Each mode's usual widest reading is a floor ("88.8 g/s"
-for flow, "888.8 g" for weights), and the labels are right-aligned, so the
-number grows into the room on its left and the unit never moves
-([why right-aligned](#alternatives-and-dead-ends)); only a reading past the
-floor steps the box out. The legend repaints per sample, with no throttle
-([why no throttle](#evidence)).
+Each legend row is three widgets: the dot, the reading and the unit. The
+readings sit right-aligned in one value box shared by both rows, so their
+decimal points and last digits line up, and the units start at the same x a
+fixed gap after it, so the two "g" stand in a column and never move
+([why not one label per row](#alternatives-and-dead-ends)). The box is sized
+to the SHAPE of the wider reading: `shaped_width()` measures the text with
+every digit as the font's widest, so every reading with the same digit count
+gets the same box and it steps only when the digit count changes. Each mode's
+usual widest reading is a floor ("88.8" in g/s, "888.8" in g), so the number
+grows into the room on its left and only a reading past the floor steps the
+box out. The font stays proportional; the earlier digits align only
+approximately, which was accepted. The legend repaints per sample, with no
+throttle ([why no throttle](#evidence)).
 
 ## Consequences
 
@@ -59,6 +63,7 @@ repaint is the cost of a live legend and is accepted as such.
 - A repaint throttle: rejected, it read as a low frame rate.
 - Left-aligned shaped text: the unit moved with every step; right alignment
   pins it.
+- One right-aligned label per row holding "value unit": pins the unit within a row, but across two rows the units only line up when both readings have the same digit count, and the gap before the unit is a space glyph. Replaced 2026-11-05 by the shared value box.
 
 ### History
 
@@ -71,6 +76,7 @@ repaint is the cost of a live legend and is accepted as such.
 - 2026-11-04: the three sizing iterations above; the manual's flow-graph
   callout refit three times the same day; `62218cc` shipped in
   v1.3.0-beta.3.
+- 2026-11-05: one label per row ("2.4 g/s" right-aligned) split into a value label and a unit label; the value box is shared by both rows so the decimals line up and the units stand in a column (requested after beta.3: align on the point between value and unit, no monospace font).
 
 ### Sources
 

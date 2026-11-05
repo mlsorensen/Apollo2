@@ -69,7 +69,7 @@ record's header; do not edit by hand.
 - 2026-10-24 [Two scales on Home and in Settings: card swap or beside the graph, scan then choose, Swap roles](2026-10-24-two-scales-home-and-settings.md) (Accepted; last changed 2026-11-01)
 - 2026-10-30 [Dose and brew ratio: Record is the bench weight block, the chip builds in, out, ratio](2026-10-30-dose-and-ratio-on-home.md) (Accepted; last changed 2026-11-02)
 - 2026-11-01 [Home panel cards share their rows, and a line never moves without asking](2026-11-01-home-cards-share-rows.md) (Accepted; last changed 2026-11-01)
-- 2026-11-04 [The graph legend's box: shaped to its digits, unit pinned, no repaint throttle](2026-11-04-graph-legend-sizing.md) (Accepted; last changed 2026-11-04)
+- 2026-11-04 [The graph legend's box: shaped to its digits, unit pinned, no repaint throttle](2026-11-04-graph-legend-sizing.md) (Accepted; last changed 2026-11-05)
 
 #### display
 
@@ -149,7 +149,7 @@ record's header; do not edit by hand.
 | 2026-10-30 | 2026-11-01 | [Umbra battery: estimate the level once the scale's gauge freezes on sleep](2026-10-30-umbra-battery-estimate.md) | radio | Open |
 | 2026-11-01 | 2026-11-01 | [Home panel cards share their rows, and a line never moves without asking](2026-11-01-home-cards-share-rows.md) | ux | Accepted |
 | 2026-11-03 | 2026-11-03 | [The paddle breaker: a flickering sense input opens the drive until a person resets it](2026-11-03-paddle-breaker.md) | hardware | Accepted |
-| 2026-11-04 | 2026-11-04 | [The graph legend's box: shaped to its digits, unit pinned, no repaint throttle](2026-11-04-graph-legend-sizing.md) | ux | Accepted |
+| 2026-11-04 | 2026-11-05 | [The graph legend's box: shaped to its digits, unit pinned, no repaint throttle](2026-11-04-graph-legend-sizing.md) | ux | Accepted |
 <!-- index:end -->
 
 ## Conventions

@@ -213,10 +213,12 @@ struct HomeWidgets {
   float* flow_weights = nullptr;      // per-column weight (g) ring (freed by App)
   float* flow_flows = nullptr;        // per-column flow rate (g/s) ring (freed by App)
   float flow_ymax = 6.0f;             // current axis full-scale
-  lv_obj_t* flow_unit_btn = nullptr;  // the unit chip: a LEGEND (dot + unit, x1 or x2)
-  lv_obj_t* flow_unit_label = nullptr;
-  lv_obj_t* flow_legend_dot = nullptr;    // coloured dot before the unit
+  lv_obj_t* flow_unit_btn = nullptr;  // the unit chip: a LEGEND (dot + value + unit, x1 or x2)
+  lv_obj_t* flow_value_label = nullptr;   // the reading, right-aligned in a shared box
+  lv_obj_t* flow_unit_label = nullptr;    // the unit, left-aligned after it
+  lv_obj_t* flow_legend_dot = nullptr;    // coloured dot before the value
   lv_obj_t* flow_legend_dot2 = nullptr;   // beside mode: the bench entry
+  lv_obj_t* flow_value_label2 = nullptr;
   lv_obj_t* flow_unit_label2 = nullptr;
   // The dose chip ABOVE the legend (its own box; only its x is a control):
   // builds up over the shot (see set_dose_chip). Hidden with no dose.

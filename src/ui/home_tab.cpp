@@ -225,22 +225,11 @@ void set_flow_ylabels(HomeWidgets& w) {
   }
 }
 
-// The unit chip is a legend: a coloured dot per series + its unit. Mode 0/1
-// = the espresso trace in the accent; mode 2 = the bench trace in the bench
-// colour; beside mode shows both entries.
-// The legend's rows carry LIVE values (owner, 2026-11-01: nowhere else
-// shows the flow rate): the espresso row in the unit on show, the bench row
-// in grams. "--" while there is no data.
-// The value labels are sized to the SHAPE of their text, not its glyphs:
-// every digit measured as the font's widest one, so "2.4 g/s" and "3.1 g/s"
-// are the same width and the box only moves when the digit count does (a
-// box that twitched by a pixel or two with each reading — owner, 2026-11-04).
-// `min_shape` is the mode's usual widest reading ("88.8 g/s", "888.8 g"):
-// the label never shrinks below it, and its text is right-aligned, so the
-// unit stays put while the number grows into the room on its left; only a
-// reading wider than that steps the box out.
-void set_text_shaped(lv_obj_t* label, const char* text, const char* min_shape) {
-  const lv_font_t* font = lv_obj_get_style_text_font(label, LV_PART_MAIN);
+// Width of `text` with every digit replaced by the font's widest digit, so
+// readings with the same digit count measure the same and a box sized from
+// it only moves when the digit count does (a box that twitched by a pixel
+// or two with each reading — owner, 2026-11-04).
+int32_t shaped_width(const lv_font_t* font, const char* text) {
   static const lv_font_t* s_font = nullptr;  // the widest digit, per font
   static char s_wide = '8';
   if (font != s_font) {
@@ -260,28 +249,48 @@ void set_text_shaped(lv_obj_t* label, const char* text, const char* min_shape) {
   shape[i] = 0;
   lv_point_t sz;
   lv_text_get_size(&sz, shape, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-  lv_point_t min_sz;
-  lv_text_get_size(&min_sz, min_shape, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-  const int32_t width = sz.x > min_sz.x ? sz.x : min_sz.x;
-  if (lv_obj_get_style_width(label, LV_PART_MAIN) != width) lv_obj_set_width(label, width);
-  ui::set_text(label, text);
+  return sz.x;
 }
 
+void set_width_if_changed(lv_obj_t* obj, int32_t width) {
+  if (lv_obj_get_style_width(obj, LV_PART_MAIN) != width) lv_obj_set_width(obj, width);
+}
+
+// The legend's rows are dot, value, unit. The values sit right-aligned in
+// ONE box shared by both rows, sized to the wider reading's shape and never
+// narrower than the mode's usual widest reading ("88.8" in g/s, "888.8" in
+// g), so the decimal points and last digits line up and the units start at
+// the same x: the two "g" stand in a column and the unit never shifts while
+// the number grows into the room on its left (owner, 2026-11-05).
 void update_flow_legend(HomeWidgets& w) {
-  if (w.flow_unit_label == nullptr) return;
+  if (w.flow_value_label == nullptr) return;
   const bool bench_active = w.flow_mode == 2;
-  char b[24];
+  char v1[16], v2[16];
   const float v = bench_active ? w.legend_bench_g : (w.flow_mode == 1 ? w.legend_g : w.legend_gps);
-  if (v < 0.0f) std::snprintf(b, sizeof(b), "-- %s", flow_unit(w.flow_mode));
-  else std::snprintf(b, sizeof(b), "%.1f %s", static_cast<double>(v), flow_unit(w.flow_mode));
-  set_text_shaped(w.flow_unit_label, b, w.flow_mode == 0 ? "88.8 g/s" : "888.8 g");
+  if (v < 0.0f) std::snprintf(v1, sizeof(v1), "--");
+  else std::snprintf(v1, sizeof(v1), "%.1f", static_cast<double>(v));
+  const lv_font_t* font = lv_obj_get_style_text_font(w.flow_value_label, LV_PART_MAIN);
+  int32_t width = shaped_width(font, v1);
+  const int32_t floor1 = shaped_width(font, w.flow_mode == 0 ? "88.8" : "888.8");
+  if (floor1 > width) width = floor1;
+  if (w.flow_value_label2 != nullptr) {
+    if (w.legend_bench_g < 0.0f) std::snprintf(v2, sizeof(v2), "--");
+    else std::snprintf(v2, sizeof(v2), "%.1f", static_cast<double>(w.legend_bench_g));
+    const int32_t w2 = shaped_width(font, v2);
+    const int32_t floor2 = shaped_width(font, "888.8");
+    if (w2 > width) width = w2;
+    if (floor2 > width) width = floor2;
+  }
+  set_width_if_changed(w.flow_value_label, width);
+  ui::set_text(w.flow_value_label, v1);
+  ui::set_text(w.flow_unit_label, flow_unit(w.flow_mode));
   if (w.flow_legend_dot != nullptr)
     ui::set_bg_color(w.flow_legend_dot,
                      bench_active ? ui::theme::bench() : ui::theme::accent());
-  if (w.flow_unit_label2 != nullptr) {
-    if (w.legend_bench_g < 0.0f) std::snprintf(b, sizeof(b), "-- g");
-    else std::snprintf(b, sizeof(b), "%.1f g", static_cast<double>(w.legend_bench_g));
-    set_text_shaped(w.flow_unit_label2, b, "888.8 g");
+  if (w.flow_value_label2 != nullptr) {
+    set_width_if_changed(w.flow_value_label2, width);
+    ui::set_text(w.flow_value_label2, v2);
+    ui::set_text(w.flow_unit_label2, "g");
   }
   if (w.flow_legend_dot2 != nullptr) ui::set_bg_color(w.flow_legend_dot2, ui::theme::bench());
 }
@@ -561,14 +570,21 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
     };
     entry1 = entry();
   }
+  // A legend row: dot, the reading right-aligned in the shared value box,
+  // the unit left-aligned a fixed gap after it (see update_flow_legend).
+  auto legend_labels = [&](lv_obj_t* row, lv_obj_t*& value, lv_obj_t*& unit) {
+    value = lv_label_create(row);
+    lv_obj_set_style_text_color(value, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(value, ui::font_dp(20), 0);
+    lv_obj_set_style_text_align(value, LV_TEXT_ALIGN_RIGHT, 0);
+    unit = lv_label_create(row);
+    lv_obj_set_style_text_color(unit, lv_color_hex(ui::theme::text()), 0);
+    lv_obj_set_style_text_font(unit, ui::font_dp(20), 0);
+    lv_obj_set_style_margin_left(unit, -ui::dp(3), 0);  // value-to-unit gap narrower than dot-to-value
+  };
   out.flow_legend_dot = make_dot(entry1, ui::dp(10), ui::theme::accent());
-  lv_obj_t* blab = lv_label_create(entry1);
-  lv_label_set_text(blab, flow_unit(out.flow_mode));
-  lv_obj_set_style_text_color(blab, lv_color_hex(ui::theme::text()), 0);
-  lv_obj_set_style_text_font(blab, ui::font_dp(20), 0);
-  lv_obj_set_style_text_align(blab, LV_TEXT_ALIGN_RIGHT, 0);  // the unit pinned at the right
+  legend_labels(entry1, out.flow_value_label, out.flow_unit_label);
   out.flow_unit_btn = btn;
-  out.flow_unit_label = blab;
   if (out.bench_overlay) {
     lv_obj_t* entry2 = lv_obj_create(btn);
     lv_obj_remove_style_all(entry2);
@@ -579,11 +595,7 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
     lv_obj_set_flex_align(entry2, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(entry2, ui::dp(8), 0);
     out.flow_legend_dot2 = make_dot(entry2, ui::dp(10), ui::theme::bench());
-    out.flow_unit_label2 = lv_label_create(entry2);
-    lv_label_set_text(out.flow_unit_label2, "g");
-    lv_obj_set_style_text_color(out.flow_unit_label2, lv_color_hex(ui::theme::text()), 0);
-    lv_obj_set_style_text_font(out.flow_unit_label2, ui::font_dp(20), 0);
-    lv_obj_set_style_text_align(out.flow_unit_label2, LV_TEXT_ALIGN_RIGHT, 0);
+    legend_labels(entry2, out.flow_value_label2, out.flow_unit_label2);
   }
   update_flow_legend(out);
 
@@ -1576,8 +1588,8 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   // at objects lv_obj_clean already freed, and apply_flow_xaxis_labels / update_home
   // dereference them (LoadProhibited on forget-scale).
   out.flow_canvas = nullptr;  // flow_buf is freed by App before each rebuild
-  out.flow_unit_btn = out.flow_unit_label = nullptr;
-  out.flow_legend_dot = out.flow_legend_dot2 = out.flow_unit_label2 = nullptr;
+  out.flow_unit_btn = out.flow_unit_label = out.flow_value_label = nullptr;
+  out.flow_legend_dot = out.flow_legend_dot2 = out.flow_unit_label2 = out.flow_value_label2 = nullptr;
   out.flow_xspan_label = nullptr;
   for (lv_obj_t*& yl : out.flow_ylabels) yl = nullptr;
   for (lv_obj_t*& yl : out.flow_ylabels_r) yl = nullptr;
