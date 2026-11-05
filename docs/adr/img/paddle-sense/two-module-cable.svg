@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="780" viewBox="0 0 1400 780" font-family="Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="1400" height="780" fill="#ffffff"/>
+  <text x="700" y="52" text-anchor="middle" font-size="28" font-weight="bold" fill="#222222">Apollo P4 &#8594; two opto modules &#8594; Micra (drive and paddle sense, both isolated)</text>
+
+  <!-- Apollo P4 box: GND / 52 / 51 in physical header order, 3V3 from any 3V3 pin -->
+  <rect x="50" y="120" width="200" height="400" rx="16" fill="#2456C4"/>
+  <text x="150" y="168" text-anchor="middle" font-size="34" font-weight="bold" fill="#ffffff">Apollo</text>
+  <text x="150" y="196" text-anchor="middle" font-size="22" fill="#ffffff">P4 GPIO header</text>
+  <text x="238" y="217" text-anchor="end" font-size="20" font-weight="bold" fill="#ffffff">GND</text>
+  <text x="238" y="267" text-anchor="end" font-size="20" font-weight="bold" fill="#ffffff">GPIO 52</text>
+  <text x="238" y="317" text-anchor="end" font-size="20" font-weight="bold" fill="#ffffff">GPIO 51</text>
+  <text x="238" y="507" text-anchor="end" font-size="20" font-weight="bold" fill="#ffffff">GPIO 50</text>
+  <circle cx="250" cy="210" r="6" fill="#ffffff"/>
+  <circle cx="250" cy="260" r="6" fill="#ffffff"/>
+  <circle cx="250" cy="310" r="6" fill="#ffffff"/>
+  <circle cx="250" cy="500" r="6" fill="#ffffff"/>
+  <text x="150" y="365" text-anchor="middle" font-size="15" fill="#ffffff">GND &#183; 52 &#183; 51 &#183; 50 sit in a row</text>
+  <text x="150" y="386" text-anchor="middle" font-size="15" fill="#ffffff">on the header corner: a 4-slot</text>
+  <text x="150" y="407" text-anchor="middle" font-size="15" fill="#ffffff">screw-terminal block clips on.</text>
+  <text x="150" y="428" text-anchor="middle" font-size="15" fill="#ffffff">GPIO 50 is held at 3.3 V by the</text>
+  <text x="150" y="449" text-anchor="middle" font-size="15" fill="#ffffff">firmware while Apollo runs.</text>
+
+  <!-- Sense module (new), at the Apollo end: output side faces Apollo, input side faces the cable -->
+  <text x="405" y="338" font-size="20" font-weight="bold" fill="#222222">Sense module (new), turned 180&#176;</text>
+  <rect x="400" y="350" width="260" height="160" rx="10" fill="#3E9E5B"/>
+  <circle cx="590" cy="430" r="11" fill="#D93A2B"/>
+  <rect x="510" y="412" width="56" height="34" rx="4" fill="#1E1E1E"/>
+  <circle cx="400" cy="390" r="7" fill="#DDF3E4" stroke="#1E5C34" stroke-width="3"/>
+  <circle cx="400" cy="430" r="7" fill="#DDF3E4" stroke="#1E5C34" stroke-width="3"/>
+  <circle cx="400" cy="470" r="7" fill="#DDF3E4" stroke="#1E5C34" stroke-width="3"/>
+  <text x="416" y="397" font-size="18" font-weight="bold" fill="#ffffff">GND</text>
+  <text x="416" y="437" font-size="18" font-weight="bold" fill="#ffffff">OUT</text>
+  <text x="416" y="477" font-size="18" font-weight="bold" fill="#ffffff">VCC</text>
+  <circle cx="660" cy="390" r="7" fill="#DDF3E4" stroke="#1E5C34" stroke-width="3"/>
+  <circle cx="660" cy="470" r="7" fill="#DDF3E4" stroke="#1E5C34" stroke-width="3"/>
+  <text x="644" y="397" text-anchor="end" font-size="18" font-weight="bold" fill="#ffffff">GND</text>
+  <text x="644" y="477" text-anchor="end" font-size="18" font-weight="bold" fill="#ffffff">IO</text>
+  <!-- sense VCC left open -->
+  <line x1="393" y1="470" x2="368" y2="470" stroke="#9A9A9A" stroke-width="4" stroke-dasharray="8,7"/>
+  <line x1="352" y1="460" x2="332" y2="480" stroke="#C43B3B" stroke-width="5" stroke-linecap="round"/>
+  <line x1="332" y1="460" x2="352" y2="480" stroke="#C43B3B" stroke-width="5" stroke-linecap="round"/>
+  <text x="342" y="498" text-anchor="middle" font-size="14" fill="#555555">open</text>
+  <text x="530" y="536" text-anchor="middle" font-size="14" fill="#555555">sits at the Apollo end. Output GND &#8594; Apollo GND.</text>
+  <text x="530" y="554" text-anchor="middle" font-size="14" fill="#555555">The input-side "GND" terminal is the switch input</text>
+  <text x="530" y="572" text-anchor="middle" font-size="14" fill="#555555">(nothing else connects to it): GPIO 50 &#8594; IO &#8594; LED &#8594;</text>
+  <text x="530" y="590" text-anchor="middle" font-size="14" fill="#555555">that terminal &#8594; paddle &#8594; GND.</text>
+
+  <!-- Cable: the same 3-conductor cable as before -->
+  <rect x="720" y="120" width="100" height="520" rx="10" fill="none" stroke="#9A9A9A" stroke-width="3" stroke-dasharray="10,8"/>
+  <text x="770" y="660" text-anchor="middle" font-size="18" fill="#555555">3-conductor cable</text>
+  <text x="770" y="682" text-anchor="middle" font-size="16" fill="#555555">(ground shared, as before)</text>
+
+  <!-- Drive module (unchanged), at the machine end -->
+  <text x="1010" y="98" text-anchor="middle" font-size="20" font-weight="bold" fill="#222222">Drive module (as before, at the machine end)</text>
+  <rect x="880" y="110" width="260" height="160" rx="10" fill="#3E9E5B"/>
+  <circle cx="950" cy="190" r="11" fill="#D93A2B"/>
+  <rect x="975" y="172" width="56" height="34" rx="4" fill="#1E1E1E"/>
+  <circle cx="880" cy="150" r="7" fill="#DDF3E4" stroke="#1E5C34" stroke-width="3"/>
+  <circle cx="880" cy="210" r="7" fill="#DDF3E4" stroke="#1E5C34" stroke-width="3"/>
+  <text x="896" y="157" font-size="18" font-weight="bold" fill="#ffffff">IO</text>
+  <text x="896" y="217" font-size="18" font-weight="bold" fill="#ffffff">GND</text>
+  <circle cx="1140" cy="150" r="7" fill="#DDF3E4" stroke="#1E5C34" stroke-width="3"/>
+  <circle cx="1140" cy="190" r="7" fill="#DDF3E4" stroke="#1E5C34" stroke-width="3"/>
+  <circle cx="1140" cy="230" r="7" fill="#DDF3E4" stroke="#1E5C34" stroke-width="3"/>
+  <text x="1124" y="157" text-anchor="end" font-size="18" font-weight="bold" fill="#ffffff">VCC</text>
+  <text x="1124" y="197" text-anchor="end" font-size="18" font-weight="bold" fill="#ffffff">OUT</text>
+  <text x="1124" y="237" text-anchor="end" font-size="18" font-weight="bold" fill="#ffffff">GND</text>
+  <!-- drive VCC left open -->
+  <line x1="1147" y1="150" x2="1170" y2="150" stroke="#9A9A9A" stroke-width="4" stroke-dasharray="8,7"/>
+  <line x1="1165" y1="128" x2="1183" y2="146" stroke="#C43B3B" stroke-width="5" stroke-linecap="round"/>
+  <line x1="1183" y1="128" x2="1165" y2="146" stroke="#C43B3B" stroke-width="5" stroke-linecap="round"/>
+  <text x="1174" y="118" text-anchor="middle" font-size="14" fill="#555555">open</text>
+
+  <!-- Micra box -->
+  <rect x="1200" y="110" width="170" height="160" rx="16" fill="#C4542B"/>
+  <text x="1285" y="152" text-anchor="middle" font-size="32" font-weight="bold" fill="#ffffff">Micra</text>
+  <text x="1285" y="176" text-anchor="middle" font-size="16" fill="#ffffff">thin loom wires</text>
+  <text x="1212" y="197" font-size="18" font-weight="bold" fill="#ffffff">&#8592; white (+5 V)</text>
+  <text x="1212" y="237" font-size="18" font-weight="bold" fill="#ffffff">&#8592; black (GND)</text>
+  <circle cx="1200" cy="190" r="6" fill="#ffffff"/>
+  <circle cx="1200" cy="230" r="6" fill="#ffffff"/>
+
+  <!-- GND (black): header GND -> through the cable -> drive module input GND; junctions feed the sense module's output GND and the paddle return -->
+  <line x1="250" y1="210" x2="880" y2="210" stroke="#222222" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="320" cy="210" r="7" fill="#222222"/>
+  <polyline points="320,210 320,390 400,390" fill="none" stroke="#222222" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="860" cy="210" r="7" fill="#222222"/>
+  <line x1="860" y1="210" x2="860" y2="552" stroke="#222222" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- GPIO 52 (red) -> drive module IO, hopping over the GND bus and the GND conductor -->
+  <line x1="250" y1="260" x2="308" y2="260" stroke="#D63E3E" stroke-width="5" stroke-linecap="round"/>
+  <path d="M 308 260 A 12 12 0 0 1 332 260" fill="none" stroke="#D63E3E" stroke-width="5" stroke-linecap="round"/>
+  <polyline points="332,260 360,260 360,222" fill="none" stroke="#D63E3E" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 360 222 A 12 12 0 0 1 360 198" fill="none" stroke="#D63E3E" stroke-width="5" stroke-linecap="round"/>
+  <polyline points="360,198 360,150 880,150" fill="none" stroke="#D63E3E" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- GPIO 51 (white) <- sense module OUT, hopping over the GND bus -->
+  <line x1="250" y1="310" x2="308" y2="310" stroke="#777777" stroke-width="8" stroke-linecap="round"/>
+  <line x1="250" y1="310" x2="308" y2="310" stroke="#F4F4F4" stroke-width="4" stroke-linecap="round"/>
+  <path d="M 308 310 A 12 12 0 0 1 332 310" fill="none" stroke="#777777" stroke-width="8" stroke-linecap="round"/>
+  <path d="M 308 310 A 12 12 0 0 1 332 310" fill="none" stroke="#F4F4F4" stroke-width="4" stroke-linecap="round"/>
+  <polyline points="332,310 380,310 380,430 400,430" fill="none" stroke="#777777" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="332,310 380,310 380,430 400,430" fill="none" stroke="#F4F4F4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- GPIO 50 (orange, 3.3 V while Apollo runs) -> sense module IO; stays at the Apollo end -->
+  <polyline points="250,500 330,500 330,620 690,620 690,470 660,470" fill="none" stroke="#E08A1E" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Paddle wire (blue): sense module input GND terminal -> through the cable -> one paddle wire; hops the 3V3 riser -->
+  <polyline points="660,390 840,390 840,600 960,600 960,568" fill="none" stroke="#4A90D9" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Drive module output -> Micra (isolated dry contact) -->
+  <line x1="1140" y1="190" x2="1200" y2="190" stroke="#777777" stroke-width="8" stroke-linecap="round"/>
+  <line x1="1140" y1="190" x2="1200" y2="190" stroke="#F4F4F4" stroke-width="4" stroke-linecap="round"/>
+  <line x1="1140" y1="230" x2="1200" y2="230" stroke="#222222" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- Paddle switch at the machine end: one wire on the shared ground, the other back to the sense module -->
+  <circle cx="860" cy="560" r="8" fill="#ffffff" stroke="#444444" stroke-width="4"/>
+  <circle cx="960" cy="560" r="8" fill="#ffffff" stroke="#444444" stroke-width="4"/>
+  <line x1="867" y1="557" x2="945" y2="522" stroke="#444444" stroke-width="5" stroke-linecap="round"/>
+  <text x="910" y="612" text-anchor="middle" font-size="20" font-weight="bold" fill="#333333">Micra paddle switch</text>
+  <text x="1100" y="640" text-anchor="middle" font-size="14" fill="#555555">one wire on the shared ground (as before); the other now ends at the</text>
+  <text x="1100" y="658" text-anchor="middle" font-size="14" fill="#555555">sense module's LED instead of GPIO 51. It never touches a GPIO or the Micra.</text>
+
+  <!-- captions -->
+  <text x="700" y="730" text-anchor="middle" font-size="19" fill="#444444">Paddle closed &#8594; the sense module's LED lights (GPIO 50 &#8594; IO &#8594; LED &#8594; paddle &#8594; GND) &#8594; OUT pulls GPIO 51 low. GPIO 51 touches only the module.</text>
+  <text x="700" y="758" text-anchor="middle" font-size="19" fill="#444444">GPIO 52 high &#8594; drive module LED on &#8594; isolated OUT/GND contact closes &#8594; the Micra sees the paddle ON.</text>
+</svg>
