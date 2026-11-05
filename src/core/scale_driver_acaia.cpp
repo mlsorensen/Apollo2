@@ -268,6 +268,7 @@ class AcaiaDriver : public IScaleDriver {
   }
 
   uint32_t first_weight_ms() const override { return 0; }  // own watchdog: a 3 s quiet start + re-handshakes
+  bool sleeps_on_disconnect() const override { return gen_ == Gen::kPyxis; }  // Lunar / Pyxis only
   bool tick(ble::ICentral& ble) override {
     const uint32_t now = now_ms();
     // LIVENESS IS THE WEIGHT STREAM, NOT THE LINK. Timing any-notification

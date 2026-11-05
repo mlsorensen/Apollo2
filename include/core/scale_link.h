@@ -97,6 +97,14 @@ class ScaleLink : public IScale, public IScaleSink {
   // Manual connect gate (a battery remote can drop the scale to save power).
   bool connect_enabled() const { return connect_enabled_.load(); }
   void set_connect_enabled(bool enabled);
+  // The remote is idle (screensaver or setup portal up, no shot running): a
+  // scale whose driver says it sleeps_on_disconnect() is dropped so it can
+  // sleep, and left alone until idle ends. The caller parks this slot's
+  // reconnects for the same span, so nothing re-dials it meanwhile; on wake
+  // the park lifts and the normal reconnect brings it back. Other scales
+  // keep their link (they manage their own power).
+  void set_idle(bool idle) { idle_.store(idle); }
+  bool idle() const { return idle_.load(); }
 
   // core::IScale — thread-safe cached read + posted command.
   ScaleSnapshot snapshot() const override;
@@ -193,6 +201,7 @@ class ScaleLink : public IScale, public IScaleSink {
   std::vector<ScanResult> scan_results_;
 
   std::atomic<bool> connect_enabled_{true};  // scales auto-connect when saved
+  std::atomic<bool> idle_{false};            // see set_idle
   std::atomic<bool> partner_mode_{false};
   std::atomic<bool> partner_paired_{false};
   std::atomic<bool> partner_connected_{false};

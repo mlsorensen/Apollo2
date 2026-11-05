@@ -962,6 +962,8 @@ void loop() {
     // every Micra Settings scan).
     if (saver != saver_prev) {
       saver_prev = saver;
+      core::logf("radio: scale reconnects %s (screensaver %s)\n", saver ? "parked" : "released",
+                 saver ? "on" : "off");
       g_radio.set_parked(core::RadioSlot::kScaleEspresso, core::ParkSource::kSaver, saver);
       g_radio.set_parked(core::RadioSlot::kScaleBench, core::ParkSource::kSaver, saver);
       g_scale.pause_partner(saver || portal);
@@ -973,6 +975,22 @@ void loop() {
       g_radio.set_parked(core::RadioSlot::kScaleBench, core::ParkSource::kPortal, portal);
       g_scale.pause_partner(saver || portal);
       g_scale2.pause_partner(saver || portal);
+    }
+    // A scale that only sleeps once its link drops (the Lunar / Pyxis: its
+    // auto-off never runs while connected and our status poll is the
+    // keepalive) is dropped while the remote is idle, under the same two
+    // sources that park its reconnects, and never during a shot or its
+    // review (issue #10, 2026-11-05: a Lunar sat lit under the saver all
+    // night). The Bookoo and a partner-mode Umbra are untouched: the one
+    // shuts itself down, the other is sent to sleep above.
+    {
+      static bool idle_prev = false;
+      const bool idle = (saver || portal) && g_brew.snapshot().phase == core::ShotPhase::kIdle;
+      if (idle != idle_prev) {
+        idle_prev = idle;
+        g_scale.set_idle(idle);
+        g_scale2.set_idle(idle);
+      }
     }
     // The BENCH scale's reconnects (and any finder scan) stay out of the
     // radio while a shot runs or sits in review: the espresso scale is

@@ -9,6 +9,11 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 Each version lists `### Features` first, then `### Fixes` (the device shows
 the headings as plain lines); leave out a list that would be empty.
 
+## v1.4.0
+
+### Fixes
+- **A Lunar or Pyxis sleeps while Apollo is idle.** Those scales stay awake for as long as they are connected, so Apollo now drops the link when the screensaver or setup portal comes up and reconnects when it ends. The Bookoo and a paired Umbra are unchanged.
+
 ## v1.3.0
 
 ### Features

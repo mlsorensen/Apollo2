@@ -730,10 +730,13 @@ end‑of‑day / morning routine differs by model. In every case, if the Micra h
 an auto‑on schedule, the scale step below is the *only* thing you do — the
 machine is already warming up when you arrive.
 
-- **Acaia Lunar** — stays running for as long as Bluetooth is connected (it
-  won't auto‑sleep on you mid‑connection). Recommended routine: just **power
-  the scale off** when you're done and **power it on** in the morning — Apollo
-  reconnects to it automatically.
+- **Acaia Lunar / Pyxis** — stays running for as long as Bluetooth is
+  connected (it won't auto‑sleep on you mid‑connection), so Apollo drops the
+  link when its screensaver or setup portal comes up and the scale's own
+  auto‑sleep takes over; when you touch the screen again Apollo reconnects,
+  which wakes the scale. Nothing to do at the end of the day, then, as long
+  as the scale's **Auto sleep** (Device settings) isn't Off. Powering the
+  scale off and on by hand works too.
 - **Acaia Umbra** — can be used exactly like the Lunar, but it also has a real
   sleep mode that Apollo can wake it from. Recommended routine: tap
   **Disconnect** on Apollo's scale card when you're done (the Umbra won't
@@ -749,7 +752,7 @@ machine is already warming up when you arrive.
   touch the screen — or tap **Disconnect** when you're done and **Connect**
   when you need it.
 - **Bookoo Themis** — has a sleep mode, but it genuinely powers down: Apollo
-  **cannot** wake it with Connect. Treat it like the Lunar: leave Apollo
+  **cannot** wake it with Connect. Leave Apollo
   connecting, **turn the scale on** in the morning and you're good; when
   you're done, just walk away — the scale sleeps on its own from inactivity.
 

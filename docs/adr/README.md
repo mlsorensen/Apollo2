@@ -49,7 +49,7 @@ record's header; do not edit by hand.
 - 2026-07-19 [Shot detect (unwired) mode: the weight stream drives the shot state machine](2026-07-19-unwired-shot-detect-mode.md) (Open; last changed 2026-10-17)
 - 2026-08-20 [On-scale settings are descriptor-driven and owned by the scale](2026-08-20-scale-device-settings.md) (Accepted; last changed 2026-11-04)
 - 2026-08-24 [The Micra Bluetooth token is minted by a cloud-seed handshake, so Apollo takes it from lmtoken](2026-08-24-micra-pairing-token.md) (Accepted; last changed 2026-08-29)
-- 2026-09-08 [Scale reconnects are parked while the screensaver or setup portal is up; the Micra's only for the portal](2026-09-08-scale-connects-parked-while-idle.md) (Accepted; last changed 2026-10-24)
+- 2026-09-08 [Scale reconnects are parked while the screensaver or setup portal is up; the Micra's only for the portal](2026-09-08-scale-connects-parked-while-idle.md) (Accepted; last changed 2026-11-05)
 - 2026-10-05 [Micra link resilience: the stalled-request watchdog and the "machine wedged" rule](2026-10-05-micra-link-resilience.md) (Open; last changed 2026-11-04)
 - 2026-10-16 [Umbra partner mode: Apollo acts as the scale's paired device so it sleeps and wakes](2026-10-16-umbra-partner-mode.md) (Accepted; last changed 2026-10-18)
 - 2026-10-17 [Apollo is grams-only; a scale's Unit row is kept only where it changes the scale's own display](2026-10-17-scale-units-grams-only.md) (Accepted; last changed 2026-10-17)
@@ -126,7 +126,7 @@ record's header; do not edit by hand.
 | 2026-09-07 | 2026-11-04 | [NVS settings are add-only, and a restore from the card is a replace](2026-09-07-nvs-add-only-settings-compat.md) | ota-release | Accepted |
 | 2026-09-07 | 2026-09-22 | [OTA install runs in its own early-boot mode, not inside the running app](2026-09-07-ota-install-boot-mode.md) | ota-release | Accepted |
 | 2026-09-08 | 2026-09-30 | [P4 flash layout: both app slots stay entirely below the 16 MB boundary](2026-09-08-p4-app-slots-under-16mb.md) | ota-release | Accepted |
-| 2026-09-08 | 2026-10-24 | [Scale reconnects are parked while the screensaver or setup portal is up; the Micra's only for the portal](2026-09-08-scale-connects-parked-while-idle.md) | radio | Accepted |
+| 2026-09-08 | 2026-11-05 | [Scale reconnects are parked while the screensaver or setup portal is up; the Micra's only for the portal](2026-09-08-scale-connects-parked-while-idle.md) | radio | Accepted |
 | 2026-09-09 | 2026-09-17 | [Screensaver frame cost: the saver runs on its own screen](2026-09-09-screensaver-frame-cost.md) | display | Accepted |
 | 2026-09-10 | 2026-10-26 | [No new RAM use on a device build without its cost stated and an explicit OK](2026-09-10-memory-budget-rule.md) | platform | Accepted |
 | 2026-09-10 | 2026-09-22 | [Four boards are released; every other env is internal-only, de-listed not deleted](2026-09-10-supported-board-matrix.md) | ota-release | Accepted |

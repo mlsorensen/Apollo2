@@ -320,6 +320,17 @@ void ScaleLink::run() {
       set_connected(false);
     }
 
+    // Idle remote + a scale that only sleeps once the link drops: let it.
+    // The slot is parked for the same span, so the loop below sits in
+    // kIdle until the saver or portal ends, then reconnects as usual.
+    if (connected && idle_.load() && drv && drv->sleeps_on_disconnect()) {
+      logf("ScaleLink: %s dropped while the remote is idle so it can sleep\n", drv->model());
+      ble_.disconnect();
+      connected = false;
+      set_connected(false);
+      continue;
+    }
+
     if (!connected) {
       retare = false;  // a resend never crosses a link drop: taring whatever
                        // sits on a freshly relinked scale could zero a mid-shot cup

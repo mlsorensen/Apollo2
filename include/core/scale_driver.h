@@ -58,6 +58,15 @@ class IScaleDriver {
   // re-dialling (ScaleLink's guard). 0 = the driver watches its own stream
   // (the Acaia's quiet start + re-handshakes, the Aku's stream timeout).
   virtual uint32_t first_weight_ms() const { return 5000; }
+  // True for a scale that stays awake for as long as a link is up and sleeps
+  // on its own only once the link drops (the Lunar / Pyxis generation: its
+  // auto-off timer never runs while connected, and the driver's status poll
+  // is the keepalive that holds it). ScaleLink drops such a scale while the
+  // remote is idle (screensaver, setup portal) so it can sleep, and
+  // reconnects when the idle ends. Default: the scale manages its own power
+  // (the Bookoo's inactivity shutdown; an unpaired Umbra, which powers OFF a
+  // few minutes after a drop and would need its button to come back).
+  virtual bool sleeps_on_disconnect() const { return false; }
 
   virtual void tare(ble::ICentral& ble) = 0;
 
