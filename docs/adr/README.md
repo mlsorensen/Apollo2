@@ -14,18 +14,30 @@ confirmed from the repository it says so.
 ## Conventions
 
 - **One record per topic.** A topic that changed over time has ONE file
-  with a dated **History** section, never two records that disagree. The
-  body always states the current position; the History says how it got
+  with a dated **History** in its Details, never two records that disagree.
+  The body always states the current position; the History says how it got
   there and what was believed before.
 - **Files are named `YYYY-MM-DD-<topic>.md`**, the date being when the
   topic was first decided (or first investigated, for an engineering log).
   Later changes are dated inside the file and listed in the index below.
+- **The body is the design as it stands; the details sit below a rule.**
+  Context, Decision and Consequences are written in the present tense and
+  are all a reader needs to understand the current design and why it is
+  that way. Evidence, alternatives, history and sources live under
+  `## Details` at the end, and the body links to the specific detail it
+  rests on (`[measured on the 4.3C](#evidence)`, `[why not a capacitor
+  alone](#alternatives-and-dead-ends)`, or a named anchor placed with
+  `<a id="..."></a>` before a table). Nobody scrolls unless they want to.
 - **Two kinds of record** share one template. A *decision* has a clear
   Decision section; an *engineering log* (a performance campaign, a
   bring-up, a root-cause hunt) uses the Decision section for what was kept
-  and leans on Evidence and History.
+  and carries its measurements in the Details.
 - **Status** is `Accepted`, `Open` (the decision stands but something it
   rests on is unproven), `Superseded` (the body says by what) or `Dropped`.
+- **Voice:** written as a team. "We measured", "a developer", "a maintainer
+  approves"; hardware is named by where it sits ("the bench X 8\""). Not a
+  journal: a slip caught the same day is not history unless it explains a
+  rule that survives.
 - Images live in `img/<topic>/`, downscaled and metadata-stripped, and
   only where the text cites them. UI records cite the existing manual
   screenshots in `../img/manual/`.
@@ -43,28 +55,40 @@ confirmed from the repository it says so.
 - **Boards:** which boards this applies to, or all
 
 ## Context
-What was true, what went wrong, or what was wanted. The constraint that
-forced a choice.
+What is true and what constrains the choice, in the present tense. Two
+or three sentences; the story of how it was found belongs in Details.
 
 ## Decision
-What we do now, stated plainly. For an engineering log: what we kept.
-
-## Evidence
-Measurements, scope captures, logs, test results, with the date and the
-unit they were taken on. Numbers go in a table.
-
-## Alternatives and dead ends
-What else was tried or considered, and why it lost. Dropped work is
-recorded here so nobody re-walks it.
+What we do now, stated plainly, with a link to the detail each claim
+rests on. For an engineering log: what we kept.
 
 ## Consequences
 What follows: rules that now bind the code, costs accepted, things left
 open.
 
-## History
-- YYYY-MM-DD: what changed and why (commit `abcdef0`, issue #N).
+---
 
-## Sources
+## Details
+
+### Design detail
+Optional. Reference tables that are design rather than evidence and too
+long for the body: constants, frame formats, key lists, enums. Anchored
+so the body can link to one table.
+
+### Evidence
+Measurements, scope captures, logs, test results, with the date and the
+unit they were taken on. Numbers go in a table. Name an anchor
+(`<a id="ev-something"></a>`) where the body links to one table.
+
+### Alternatives and dead ends
+What else was tried or considered, and why it lost, so nobody re-walks
+it.
+
+### History
+- YYYY-MM-DD: what changed and why (commit `abcdef0`, issue #N). Only
+  turns that changed the design or explain a surviving rule.
+
+### Sources
 Commits, tags, issues, files.
 ```
 

@@ -7,12 +7,12 @@
 
 ## Context
 
-A failing sense pad announces itself hours ahead. On 2026-11-02 the
-bench X 8" GPIO5 produced 238 accepted phantom ON edges in two hours
-(120 in one five-minute window), each a shot start; only an offline scale
-kept the pump off. The Micra's own cutoff (about a minute) bounds one
-run; the harm is the repetition. The model we chose: a circuit breaker. It trips on a fault
-signature, never in normal use, and a person resets it.
+A failing sense pad announces itself hours ahead: hundreds of phantom
+closures while the machine is warm, each one a shot start
+([the bench X 8" night](#ev-chatter)). The Micra's own cutoff (about a
+minute) bounds one run; the harm is the repetition. The model is a
+circuit breaker: it trips on a fault signature, never in normal use, and
+a person resets it.
 
 ## Decision
 
@@ -25,45 +25,78 @@ trips on either:
 | short accepted pulses | an accepted ON that goes OFF again in under 500 ms (ON->OFF only; a brisk OFF->ON after a long ON is a hand reaching for the next shot) | 4 per window |
 
 **There is deliberately NO rate rule on accepted edges**: a manual
-backflush is ten ON edges in well under two minutes (`kBackflushCycles`
-= 10 cycles of the flush duration on, `kBackflushOffMs` = 3 s off) and
-must never trip. A hand's ~1 ms contact bounce is invisible at the 25 ms
-poll, so a healthy pin counts about zero forever; a flush holds a second
-or more, a shot twenty.
+backflush is ten ON edges in well under two minutes and must never trip
+([the numbers](#alternatives-and-dead-ends)); a healthy pin
+[counts about zero forever](#ev-margins).
 
 Tripped: every drive goes through one choke point, `set_drive()`, which
 refuses to close the line; `cancel_shot()` ends whatever was running (a
 shot, an auto-flush, a cleaning cycle) and opens the line; `can_clean()`
 is false; `IPaddle::own(false)` drops the Link's CTRL so the paddle
-reverts to the Micra in copper (on the opto cable and the 4.3C there is no
-transfer switch: the paddle is dead until reset, and the modal says so).
-`paddle_trip_seq` ticks and the UI shows a modal with one button, Reset.
-Reset clears the counters and re-takes CTRL; continuing flicker re-trips
-at once, which is the diagnosis. Nothing persists; a reboot clears it.
+reverts to the Micra in copper (the opto cable and the 4.3C have no
+transfer switch: the paddle is dead until reset). `paddle_trip_seq` ticks
+and the UI shows a modal with one button, Reset, which clears the
+counters and re-takes CTRL; continuing flicker re-trips at once, which is
+the diagnosis. Nothing persists; a reboot clears it.
 
-## Evidence
+## Consequences
 
-- Cost: about 20 B of .bss in BrewController (two counters, three timestamps, a flag, a sequence), no task, no heap; the modal is a transient LVGL object. X 8" build RAM unchanged at 94,408 B.
-- `make test-paddle` (tools/paddle_breaker_test.cpp, plain g++) replays the X 8"'s chatter, a bouncy 10-cycle manual backflush, flush-flush-shot, three quick flicks versus four, trips mid-backflush / mid-flush / mid-shot, reset under flicker and when quiet, a trip landing on a backflush phase boundary, and boot with the paddle left ON. Keep it green.
-- **First real trip, 2026-11-03:** a developer fitted the sense resistor into the X 8"'s terminal block with the board powered; the loose contacts chattered, the drive opened and the modal showed, exactly as designed (working notes and CLAUDE.md; the time of day is not recorded). The guide now says to plug the block in powered off, and that touching bare wires together during the bench test can trip it (`78cd3e3`, `24f9302`).
+- Cost: about 20 B of .bss, no task, no heap ([measured](#ev-cost)).
+- `make test-paddle` replays the fault and the normal uses that must not
+  trip ([what it covers](#ev-test)). Keep it green.
+- `poll_clean` returns once a trip has ended the cycle, and the short
+  rule counts ON->OFF only ([review fixes](#history)).
+- 4.3C: `Paddle::sensed()` keeps the last good level on an expander read
+  failure, since "open on error" is a rejected pulse under a held paddle
+  ([fix](#history)).
+- The modal says what the trip did to the paddle for the wiring in use
+  (Link: paddle in copper; cable: paddle dead until reset).
+- Fit the sense parts with the board powered off; bare wires touched
+  together during the bench test can trip it
+  ([the first real trip](#ev-first-trip)).
 
-## Alternatives and dead ends
+---
 
-- A rate rule on accepted edges: rejected before building (the backflush).
+## Details
+
+### Evidence
+
+- <a id="ev-chatter"></a>2026-11-02, bench X 8", GPIO5: 238 accepted
+  phantom ON edges in two hours (120 in one five-minute window), each a
+  shot start; only an offline scale kept the pump off.
+- <a id="ev-margins"></a>Margins: a hand's ~1 ms contact bounce is
+  invisible at the 25 ms poll, so a healthy pin counts about zero
+  forever; a flush holds a second or more, a shot twenty.
+- <a id="ev-cost"></a>Cost: about 20 B of .bss in BrewController (two
+  counters, three timestamps, a flag, a sequence), no task, no heap; the
+  modal is a transient LVGL object. X 8" build RAM unchanged at 94,408 B.
+- <a id="ev-test"></a>`make test-paddle` (tools/paddle_breaker_test.cpp,
+  plain g++) replays the X 8"'s chatter, a bouncy 10-cycle manual
+  backflush, flush-flush-shot, three quick flicks versus four, trips
+  mid-backflush / mid-flush / mid-shot, reset under flicker and when
+  quiet, a trip landing on a backflush phase boundary, and boot with the
+  paddle left ON.
+- <a id="ev-first-trip"></a>**First real trip, 2026-11-03:** a developer
+  fitted the sense resistor into the X 8"'s terminal block with the board
+  powered; the loose contacts chattered, the drive opened and the modal
+  showed, exactly as designed (working notes and CLAUDE.md; the time of
+  day is not recorded). The guide now says to plug the block in powered
+  off, and that touching bare wires together during the bench test can
+  trip it (`78cd3e3`, `24f9302`).
+
+### Alternatives and dead ends
+
+- A rate rule on accepted edges: rejected before building. A manual backflush is `kBackflushCycles` = 10 cycles of the flush duration on, `kBackflushOffMs` = 3 s off: ten ON edges in well under two minutes.
 - Dropping only the drive line while letting flushes and cleaning run: rejected ("stop driving the Micra at all"), hence the single choke point.
 - Auto-clear or a persisted trip: not wanted; a person looks at the wiring.
 - A no-flow guard (shot running, no weight arriving): out of scope.
 
-## Consequences
-
-- Review fixes the same day (`24f9302`): `poll_clean` returns once a trip has ended the cycle (it used to fall through and log a phantom pulse), and the short rule counts ON->OFF only.
-- 4.3C: an I2C read failure on the expander used to read as "open", which under the breaker is a rejected pulse whenever the paddle is held closed; `Paddle::sensed()` now keeps the last good level (`0fec2f2`). "Open on error" bought nothing, the drive goes through the same chip.
-- The breaker's modal names the wiring in use (Link: paddle in copper; cable: paddle dead until reset).
-
-## History
+### History
 
 - 2026-11-03: built, host test, shipped in v1.3.0-beta.2 (`f81dc59`, `24f9302`, `0fec2f2`, release `1d4199b`).
+- 2026-11-03: review fixes the same day (`24f9302`): `poll_clean` returns once a trip has ended the cycle (it used to fall through and log a phantom pulse), and the short rule counts ON->OFF only.
+- 2026-11-03: 4.3C, an I2C read failure on the expander used to read as "open", which under the breaker is a rejected pulse whenever the paddle is held closed; `Paddle::sensed()` now keeps the last good level (`0fec2f2`). "Open on error" bought nothing, the drive goes through the same chip.
 
-## Sources
+### Sources
 
 src/core/brew_controller.cpp (`sense_paddle_edge`, `breaker_note`, `trip_breaker`, `set_drive`); include/core/brew_controller.h (`kBreaker*`); tools/paddle_breaker_test.cpp; MANUAL.md "Paddle pin protection"; the sense-protection record `2026-07-31-paddle-sense-protection.md`.

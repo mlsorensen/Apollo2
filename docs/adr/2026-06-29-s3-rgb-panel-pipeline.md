@@ -9,38 +9,69 @@
 The S3 RGB panels have no memory of their own: the framebuffer lives in
 PSRAM and the LCD peripheral scans it continuously through two small
 internal bounce buffers the IDF driver refills from a DMA end-of-buffer
-interrupt. Two problems followed: the flow graph tears (one framebuffer,
-partial flushes during scan), and from the first S3 boards every RGB board
-(the 4.3C most watched) would occasionally latch a corrupted picture, every
-tenth row flickering with the band above, the frame about ten pixels high
-with the bottom wrapped to the top, sometimes from power-on, cleared only
-by a reboot or luck.
+interrupt. With one framebuffer the flow graph tears (partial flushes
+during scan), and the driver's bounce bookkeeping can latch a corrupted
+picture that only a reboot clears ([the symptom](#ev-ghost)).
 
 ## Decision
 - The RGB path stays on Arduino_GFX with ONE framebuffer and the vendor
   bounce size (`kRgbBouncePx` = width x 10 lines); the LVGL draw buffer is
-  200 lines in PSRAM. Cosmetic tearing on the graph is accepted.
-- The ghost is the driver's bounce-buffer PARITY latch; our `on_vsync`
-  callback zeroes the driver's private `bb_eof_count` every frame
-  (`rgb_vsync_cb`, display.cpp) through a mirrored struct prefix, guarded by
-  IDF version (5.5.x, S3 only) and validated at boot against framebuffer
-  and bounce sizes, EOF count, resolution, pixel clock and buffer pointers
-  (`rgb_bounce_fix_arm`). On a mismatch it stays disarmed and says so in
-  the log.
-- A VSYNC-aligned `esp_lcd_panel_init` resync (`Display::rgb_resync`)
-  remains as a one-shot at 2 s after boot (`loop()`, main.cpp); the manual
-  "Restart display" row went on 2026-09-11, its handler left unbound.
+  200 lines in PSRAM. Cosmetic tearing on the graph is accepted ([a double
+  framebuffer runs at ~5 fps](#ev-pipeline); [an internal-RAM draw buffer
+  starves WiFi](#alternatives-and-dead-ends)).
+- The ghost is the driver's bounce-buffer PARITY latch: `rgb_vsync_cb`
+  zeroes the driver's private `bb_eof_count` every frame, armed only after
+  `rgb_bounce_fix_arm` has validated the IDF 5.5.x struct layout at boot
+  ([mechanism and A/B](#ev-parity); [what it checks](#sources)).
+- A VSYNC-aligned `esp_lcd_panel_init` resync (`Display::rgb_resync`) runs
+  once, 2 s after boot ([0 fresh ghosts in 60 aligned trials](#ev-ghost));
+  there is no manual "Restart display" row ([removed](#history)).
 - The 4.3C keeps PCLK at 14 MHz (vendor value 16); the 7B and 4.3B keep
-  their vendor clocks.
+  their vendor clocks ([refresh cost](#ev-ghost)).
 
-## Evidence
+## Consequences
+- The parity fix depends on the IDF 5.5.x struct layout; after a platform
+  bump the boot line `RGB: bounce parity fix armed` is the proof it still
+  applies. Each absorbed flip is logged from `loop()`.
+- PCLK 14 MHz was never measured in isolation; it costs no RAM and ~5 fps
+  of refresh LVGL cannot use, so it stays as a setting, not as evidence.
+- Bounce size and task stacks are DMA-pool budget ([x12 cost
+  6.4 KB](#alternatives-and-dead-ends)).
+- No ghost has been recorded in the notes or commits since the fix landed
+  on 2026-09-10.
+
+---
+
+## Details
+
+### Evidence
+
+<a id="ev-pipeline"></a>
+Bounce buffer and framebuffer count (2026-06-29 to 07-01):
+
 | Date | Board | Observation |
 |---|---|---|
 | 2026-06-29 | 7B | 30 MHz PCLK from PSRAM flickers/tears without a bounce buffer; width x 10 fixes it |
 | 2026-07-01 | 4.3B | esp_lcd double framebuffer: tear-free, but FULL-mode re-render is 126 ms (~5 fps) against the single-FB ~13 fps |
+
+<a id="ev-ghost"></a>
+The ghost and the underrun theory (2026-07-25, 4.3C). The symptom, seen on
+every RGB board from the first S3 units and most on the 4.3C: a latched
+corrupted picture, every tenth row flickering with the band above, the
+frame about ten pixels high with the bottom wrapped to the top, sometimes
+from power-on, cleared only by a reboot or luck.
+
+| Date | Board | Observation |
+|---|---|---|
 | 2026-07-25 | 4.3C | ghost on ~1/4 of cold boots, or latched while serving web pages |
 | 2026-07-25 | 4.3C | mid-frame `esp_lcd_panel_init` latches a fresh ghost ~30 % of the time; VSYNC-aligned 0 in 60 trials |
 | 2026-07-25 | 4.3C | PCLK 16 to 14 MHz: refresh ~39 to ~34 fps; LVGL delivers 25-30 anyway |
+
+<a id="ev-parity"></a>
+Root cause: the parity latch (2026-09-10, 4.3C).
+
+| Date | Board | Observation |
+|---|---|---|
 | 2026-09-10 | 4.3C | telemetry on the driver's counter: a 47-EOF frame flipped parity odd at the second the ghost appeared, odd every frame after |
 | 2026-09-10 | 4.3C | A/B over six `GET /coredump?erase=1` flash erases: fix out, parity latched odd and the screen ghosted until reboot; fix in, every flip healed on the next frame, one visible blip |
 | 2026-09-10 | 4.3C | bounce x12 to x10 and task-stack trims: largest DMA-capable block 2,932 to 21,492 B idle |
@@ -52,7 +83,7 @@ off guarantees it) advance the counter once for two buffers. In the
 prebuilt libs' `RESTART_IN_VSYNC` build nothing resets it, so every refill
 lands in the buffer being scanned. The flash-erase repro is deterministic.
 
-## Alternatives and dead ends
+### Alternatives and dead ends
 - Direct esp_lcd RGB with two framebuffers and a VSYNC swap (built
   2026-06-30 to 07-01 on the 4.3B, never merged; it survives only as a
   stash on the bench clone, "esp_lcd double-FB v2" on
@@ -75,16 +106,7 @@ lands in the buffer being scanned. The flash-erase repro is deterministic.
   heap and WiFi failed on every attempt; reverted the same day (`e1842d2`),
   the call made: working WiFi over scroll fps.
 
-## Consequences
-- The parity fix depends on the IDF 5.5.x struct layout; after a platform
-  bump the boot line `RGB: bounce parity fix armed` is the proof it still
-  applies. Each absorbed flip is logged from `loop()`.
-- PCLK 14 MHz on the 4.3C was never measured in isolation; it costs no RAM
-  and ~5 fps of refresh LVGL cannot use, so it stays, as a setting, not as
-  evidence.
-- No ghost has been recorded in the notes or commits since 2026-09-10.
-
-## History
+### History
 - 2026-06-29: 7B bounce buffer added (`526eb5e`).
 - 2026-07-01: double-framebuffer verdict recorded, single FB kept (`3614e5f`).
 - 2026-07-25: underrun theory: 14 MHz + x12, VSYNC-aligned resync (`9690c5c`).
@@ -92,11 +114,16 @@ lands in the buffer being scanned. The flash-erase repro is deterministic.
   root cause: parity latch, fix in `on_vsync` (`4380721`, v0.12.3). The
   underrun story was superseded: the symptom was real, the mechanism was
   bookkeeping, not bandwidth.
-- 2026-09-11: "Restart display" row dropped (`4c2beef`).
+- 2026-09-11: the manual "Restart display" row dropped (`4c2beef`), its
+  handler left unbound; the boot-time one-shot resync stays.
 
-## Sources
-`src/platform_esp32/display.cpp` (`RgbPanelMirror`, `rgb_vsync_cb`,
-`rgb_bounce_fix_arm`, `rgb_resync`, `rgb_poll`), `src/device/main.cpp`
-(the 2 s one-shot), `include/platform_esp32/board_config.h` 4.3C block,
+### Sources
+`src/platform_esp32/display.cpp` (`RgbPanelMirror`, the mirrored struct
+prefix; `rgb_vsync_cb`, the `on_vsync` callback; `rgb_bounce_fix_arm`,
+guarded by IDF version, 5.5.x and S3 only, validating framebuffer and
+bounce sizes, EOF count, resolution, pixel clock and buffer pointers at
+boot, and on a mismatch staying disarmed and saying so in the log;
+`rgb_resync`, `rgb_poll`), `src/device/main.cpp` (the 2 s one-shot
+in `loop()`), `include/platform_esp32/board_config.h` 4.3C block,
 commits `526eb5e`, `3614e5f`, `280bedf`, `e1842d2`, `9690c5c`, `4b69e95`,
 `4380721`, `4c2beef`, CHANGELOG v0.12.2 and v0.12.3.

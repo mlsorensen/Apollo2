@@ -7,43 +7,74 @@
 
 ## Context
 
-Until v1.1 Apollo knew one scale. We wanted a second one on the
-counter (a plate hides the scale's own display) whose weight is readable on
-Home, with no shot role. "Just add a second link" was wrong twice over: the
-code had no notion of which scale does the shot work, and a
-`platform::ScaleLink` is bound to its radio slot, its task and, for a paired
-Umbra, the partner GATT service, none of which can move at runtime, so
-"swap the two scales" could not be a swap of links.
+A second scale on the counter (a plate hides the scale's own display)
+needs its weight readable on Home, with no shot role. "Just add a second
+link" is wrong twice over: the code needs a notion of which scale does the
+shot work, and a `platform::ScaleLink` is bound to its radio slot, its task
+and, for a paired Umbra, the partner GATT service, none of which can move at
+runtime, so "swap the two scales" cannot be a swap of links.
 
 ## Decision
 
 - Two SLOTS named by role. ESPRESSO holds every shot role (auto-stop, the
   tare at shot start, shot detect, the auto-flush cup-off, the graph); BENCH
-  is a weight readout with its own Tare, never refused mid-shot.
+  is a weight readout with its own Tare, never refused mid-shot ([why a
+  full `IScale`](#alternatives-and-dead-ends)).
 - The user picks the slot at save time, every time: Scan, tap a result,
-  "Use <name> as which scale?". No auto-slotting. A one-scale user taps
-  Espresso and never sees a bench row.
-- ROLES OVER LINKS (`core::ScaleRoles`): every consumer of "the espresso
-  scale" (BrewController, Home, Device settings) reads through a `RoleScale`
-  proxy, an atomic pointer to whichever link holds the role. At boot the
-  mapping is identity (link A seeded from the espresso keys). "Swap roles"
-  flips the two pointers AND exchanges the stored NVS records, so a
-  rolled-back build still finds its espresso scale under the original keys.
-  Both links keep their connections: no reconnect, no restart.
-- The espresso keys keep their names (`smac`, `sname`, `sprtnr`, `sprpend`,
-  `satype`, `sbatest`); the bench set is the same names suffixed `2`. All
-  ADDs.
+  "Use <name> as which scale?". No auto-slotting; a one-scale user taps
+  Espresso and never sees a bench row ([why not a
+  registry](#alternatives-and-dead-ends)).
+- ROLES OVER LINKS (`core::ScaleRoles`): consumers read "the espresso
+  scale" through a `RoleScale` proxy. "Swap roles" flips the two proxies AND
+  exchanges the stored NVS records, so a rolled-back build still finds its
+  espresso scale under the original keys, and both links keep their
+  connections ([mechanism](#dd-roles), [measured](#evidence)).
+- The espresso keys keep their names; the bench set is the same names
+  suffixed `2`. All ADDs ([keys](#dd-keys)).
 - The flip and the key exchange run under ONE lock,
-  `ScaleProvisioner::swap_mu_` (issue #6). Every per-link persister (learned
-  address type, battery blob) goes through `persist_for(link, fn)`, which
-  takes the lock, resolves `slot_of` and writes; `save_scale`, `forget` and
-  `set_partner_mode` hold it too. It is the OUTERMOST lock (links, arbiter,
-  NVS run under it); a persister is called holding nothing. Backup/restore
-  stay outside it (restore reboots; accepted).
+  `ScaleProvisioner::swap_mu_`; every per-link persister goes through
+  `persist_for(link, fn)` under it ([why ordering alone is not
+  safe](#alternatives-and-dead-ends), [lock discipline](#dd-lock)).
 - Umbra partner mode works in either slot, one at a time; a second is
   refused and saved as a plain link.
 
-## Evidence
+## Consequences
+
+- The shot park follows the ROLE: after a swap the bench role sits on radio
+  slot kScaleEspresso and main.cpp parks that slot; the espresso role is never
+  shot-parked.
+- `link_for(slot)` / `slot_of(link)` are the only role-to-link lookups.
+- A save or forget that overtakes a connect drops that connect's learned
+  type.
+- Max 3 connections (prebuilt NimBLE): Micra + two scales, or Micra + one
+  inbound partner Umbra + one scale. Two partner Umbras are deferred.
+- Cost: ~24 B .bss for the roles, 8 B for the lock, and the second link's
+  share of the S3's DMA-capable pool ([measured](#evidence)).
+
+---
+
+## Details
+
+### Design detail
+
+<a id="dd-roles"></a>
+The `RoleScale` proxy is an atomic pointer to whichever link holds the
+role; BrewController, Home and Device settings all read through it. At boot
+the mapping is identity (link A seeded from the espresso keys). A swap is
+no reconnect and no restart.
+
+<a id="dd-keys"></a>
+Espresso: `smac`, `sname`, `sprtnr`, `sprpend`, `satype`, `sbatest`. Bench:
+the same names suffixed `2`.
+
+<a id="dd-lock"></a>
+`persist_for(link, fn)` takes `swap_mu_`, resolves `slot_of` and writes;
+the persisters today are the learned address type and the battery blob.
+`save_scale`, `forget` and `set_partner_mode` hold the lock too. It is the
+OUTERMOST lock (links, arbiter, NVS run under it); a persister is called
+holding nothing. Backup/restore stay outside it (restore reboots; accepted).
+
+### Evidence
 
 | Measurement | Value | Where / when |
 |---|---|---|
@@ -53,7 +84,7 @@ Umbra, the partner GATT service, none of which can move at runtime, so
 | Swap with Umbra partner (espresso) + Lunar (bench) | zero reconnects | P4-5, 2026-10-24 (per the working notes) |
 | Micra + inbound Umbra + Lunar | Micra connected in 6 s | P4-5, 2026-10-24 (per the working notes) |
 
-## Alternatives and dead ends
+### Alternatives and dead ends
 
 - A multi-scale registry with a last-used marker, planned 2026-07-18 and
   dropped the same day ("no reason to remember multiple
@@ -68,24 +99,13 @@ Umbra, the partner GATT service, none of which can move at runtime, so
   workflow could treat the bench slot as a full `core::IScale` (it did, in
   v1.3.0).
 
-## Consequences
-
-- The shot park follows the ROLE: after a swap the bench role sits on radio
-  slot kScaleEspresso and main.cpp parks that slot; the espresso role is never
-  shot-parked.
-- `link_for(slot)` / `slot_of(link)` are the only role-to-link lookups.
-- A save or forget that overtakes a connect drops that connect's learned
-  type (30a6317).
-- Max 3 connections (prebuilt NimBLE): Micra + two scales, or Micra + one
-  inbound partner Umbra + one scale. Two partner Umbras are deferred.
-
-## History
+### History
 
 - 2026-07-18: a multi-scale registry dropped.
-- 2026-10-24: design settled; second link + slot-aware provisioner (0134038), roles over links (d075cdd), review fixes (0316f74); v1.2.0-beta.1/2.
-- 2026-10-30: issue #6 fixed, `swap_mu_` + `persist_for` (740a54c), save/forget/partner RMW under the lock (30a6317); v1.2.0.
+- 2026-10-24: design settled (until v1.1 Apollo knew one scale); second link + slot-aware provisioner (0134038), roles over links (d075cdd), review fixes (0316f74); v1.2.0-beta.1/2.
+- 2026-10-30: issue #6 fixed, `swap_mu_` + `persist_for` (740a54c), save/forget/partner RMW under the lock, a save or forget overtaking a connect drops its learned type (30a6317); v1.2.0.
 
-## Sources
+### Sources
 
 - Commits 0134038, d075cdd, 0316f74, 740a54c, 30a6317; tags v1.2.0-beta.1, v1.2.0; issue #6.
 - `include/core/scale_roles.h`, `include/core/scale_provisioner.h`, `src/platform_esp32/scale_provisioner.cpp`, `src/device/main.cpp`.

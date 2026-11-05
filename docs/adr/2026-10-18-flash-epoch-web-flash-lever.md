@@ -9,56 +9,38 @@
 
 OTA replaces the app slot only. A release that changes what lies UNDER the
 app, the bootloader or the partition table, cannot be installed over the air
-on a unit with the old one; the 16 MB table (2026-09-08) and the L2 cache
-break (2026-10-18) both needed a one-time web flash. Before this lever such
-a release installed, died, rolled back and re-offered itself forever, and
-nothing in the pipeline noticed the change.
+on a unit with the old one; the under-16 MB P4 table and the L2 cache fix
+both needed a one-time web flash ([when](#history)). Without a lever such a
+release installs, dies, rolls back and re-offers itself forever, and nothing
+in the pipeline notices the change.
 
 ## Decision
 
 A per-board integer, the flash epoch, names the bootloader + partition-table
-generation a unit was last web-flashed with.
+generation a unit was last web-flashed with. Everything is epoch 1.
 
 - `custom_flash_epoch` in `platformio.ini` (per chip-family base env,
   inherited, overridable) becomes `fw::kFlashEpoch` through a PRE-script
-  define; a device build without it fails (`#error` in `version.h`). Bump it
-  in the commit that changes what lies under the app. Everything is epoch 1.
+  define ([why PRE](#evidence)); a device build without it fails (`#error`
+  in `version.h`). Bump it in the commit that changes what lies under the
+  app.
 - The workflow's `meta` job (ungated, before approval) describes every
   board's bootloader and partition table from its factory image
   (`tools/flash_layout.py describe`), compares with the newest earlier
-  release that has a `<tag>/meta.json` (`tools/release_meta.py`) and FAILS
-  the run on a change without a bump, or an epoch going down. It publishes
-  `<tag>/meta.json` as `{"epoch":{slug:N,...},"layout":{...}}`, epoch map
-  first and ending within 448 B (`DEVICE_META_BUDGET`, under the device's
-  512 B fetch, `core::kMaxMetaBytes`), and reads it back with the device's
-  own parser (`core/release_meta.h` via `tools/meta_epoch.cpp`).
-- Only a release that raises an epoch leads its notes and `notes.txt` with
-  `**WEB FLASH REQUIRED** (<boards>)`, for firmware from before the lever.
-- Device (`update_check.cpp`): once a newer version's image is served,
-  fetch its `meta.json`. 404 = pre-meta release = epoch 1. No answer or our
-  slug missing = not offered this round. Epoch above `kFlashEpoch` =
-  `UpdateInfo::web_flash`: the modal says the update "must be installed from
-  a computer" and has NO Install button.
-- The index files stay flat tag lists. Bootloader IDF version and epoch are
-  logged at boot and in `/api/summary` as evidence; the epoch is the gate.
-
-## Evidence
-
-| Date | Unit | Result |
-|---|---|---|
-| 2026-10-19 | rev v1.3 P4-5, build with `custom_flash_epoch = 0` | booted reporting epoch 1: the define came from a POST script and never reached the sources (`ebdd41c` fixed it) |
-| 2026-10-19 | same unit, fixed build | logs `v1.1.0-beta.5 needs flash epoch 1 (this unit: 0) - web flash only`; check-task stack high-water 2,820 of 6,144 B |
-| 2026-10-19 | CI, v1.1.0-beta.5 | first `meta` job run; `meta.json` lists epoch 1 for every slug. Its images were built before the define fix and compiled the fallback, also 1 |
-| 2026-10-21 | same P4-5, still epoch 0 | modal reads "must be installed from a computer", no Install button |
-
-## Alternatives and dead ends
-
-- A marker line in `notes.txt` as the only flag (the first sketch): kept
-  as the human-readable half; older firmware can only display it and newer
-  firmware needs a per-slug value.
-- Changing the index format: refused, every fielded device parses it.
-- Reasoning from the bootloader's version string at runtime: logged, but a
-  version does not say whether a given app loads under it; the epoch does.
+  release carrying a `<tag>/meta.json` (`tools/release_meta.py`), and FAILS
+  the run on a change without a bump or an epoch going down. It publishes
+  this release's `meta.json` ([format and budget](#ev-meta-format)).
+- A release that raises an epoch leads its notes and `notes.txt` with
+  `**WEB FLASH REQUIRED** (<boards>)`, for firmware from before the lever
+  ([why that line is not the whole lever](#alternatives-and-dead-ends)).
+- Device (`update_check.cpp`): once a newer version's image is served, fetch
+  its `meta.json`. 404 = a pre-meta release = epoch 1. No answer, or our slug
+  missing = not offered this round. Epoch above `kFlashEpoch` =
+  `UpdateInfo::web_flash`: the modal says "must be installed from a computer"
+  and has NO Install button ([seen on the bench](#evidence)).
+- The index files stay flat tag lists ([why](#alternatives-and-dead-ends)).
+  Bootloader IDF version and epoch are logged at boot and in `/api/summary`
+  as evidence only; the epoch is the gate.
 
 ## Consequences
 
@@ -69,15 +51,45 @@ generation a unit was last web-flashed with.
   its only help.
 - One small extra request per offered version.
 
-## History
+---
 
-- 2026-10-18: levers decided after the L2 break.
+## Details
+
+### Evidence
+
+<a id="ev-meta-format"></a>
+`<tag>/meta.json` is `{"epoch":{slug:N,...},"layout":{...}}`, the epoch map
+first and ending within 448 B (`DEVICE_META_BUDGET`, under the device's
+512 B fetch, `core::kMaxMetaBytes`); the `meta` job reads it back with the
+device's own parser (`core/release_meta.h` via `tools/meta_epoch.cpp`).
+
+| Date | Unit | Result |
+|---|---|---|
+| 2026-10-19 | rev v1.3 P4-5, build with `custom_flash_epoch = 0` | booted reporting epoch 1: the define came from a POST script and never reached the sources (`ebdd41c` fixed it) |
+| 2026-10-19 | same unit, fixed build | logs `v1.1.0-beta.5 needs flash epoch 1 (this unit: 0) - web flash only`; check-task stack high-water 2,820 of 6,144 B |
+| 2026-10-19 | CI, v1.1.0-beta.5 | first `meta` job run; `meta.json` lists epoch 1 for every slug. Its images were built before the define fix and compiled the fallback, also 1 |
+| 2026-10-21 | same P4-5, still epoch 0 | modal reads "must be installed from a computer", no Install button |
+
+### Alternatives and dead ends
+
+- A marker line in `notes.txt` as the only flag (the first sketch): kept
+  as the human-readable half; older firmware can only display it and newer
+  firmware needs a per-slug value.
+- Changing the index format: refused, every fielded device parses it.
+- Reasoning from the bootloader's version string at runtime: logged, but a
+  version does not say whether a given app loads under it; the epoch does.
+
+### History
+
+- 2026-09-08: the under-16 MB P4 partition table, the first change under
+  the app that needed a web flash (see that record).
+- 2026-10-18: the L2 cache break, the second; levers decided the same day.
 - 2026-10-19: built (`f4d2639`) and shipped in v1.1.0-beta.5 (`46bc62e`);
   the pre-script define fix (`ebdd41c`) landed an hour after that tag and
   shipped in v1.1.0-beta.6.
 - 2026-10-21: device path confirmed on the epoch-0 bench unit.
 
-## Sources
+### Sources
 
 `f4d2639`, `ebdd41c`, `46bc62e`; `.github/workflows/firmware-release.yml`
 (`meta` job), `tools/release_meta.py`, `tools/flash_layout.py`,

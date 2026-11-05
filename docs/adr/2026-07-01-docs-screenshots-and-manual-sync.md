@@ -9,25 +9,23 @@
 
 The UI compiles unchanged in a host simulator that renders PNGs
 (`2026-06-28-host-simulator-ui-verification.md`), so every screen can be
-pictured without a board. GitHub cannot show git-ignored `renders/`, and a
-manual that describes screens by hand drifts from them. The
-standing rule, first set 2026-07-24 and widened on 2026-08-31, is
-that docs never drift from the firmware.
+pictured without a board. GitHub cannot show the git-ignored `renders/`,
+and a manual that describes screens by hand drifts from them. The standing
+rule is that docs never drift from the firmware.
 
 ## Decision
 
 - **800x480 is the reference size.** Every documentation screenshot and
   example render is the 800x480 layout (the 4.3" panels, and the logical
   size the 5" and 4.3" P4 boards scale from). Other sizes appear only when
-  the point is to show that the UI scales. The first 800x480 render landed
-  2026-06-28 (`bbe52e3`) and the rule was set on 2026-07-01 (`ed9781c`,
-  "use 800x480 screenshots as the reference size"), the day the README
-  gallery was built. All 38 entries of the manual's manifest are 800x480.
-- **Screenshots are generated, never captured.** README images are curated
-  copies of sim renders in `docs/img/`; the manual's are produced by
-  `make docs-img` (`tools/annotate_docs.py` draws numbered callout boxes
-  from `docs/img/manual/manifest.json` onto the deterministic renders).
-  Refreshing them is part of any UI change.
+  the point is to show that the UI scales
+  ([every manifest entry is 800x480](#evidence)).
+- **Screenshots are generated, never captured**
+  ([why](#alternatives-and-dead-ends)). README images are curated copies of
+  sim renders in `docs/img/`; the manual's come from `make docs-img`
+  (`tools/annotate_docs.py` draws numbered callout boxes from
+  `docs/img/manual/manifest.json` onto the deterministic renders).
+  Refreshing them is part of any UI change ([the rule at work](#evidence)).
 - **MANUAL.md is updated in the same change** as any feature, setting,
   screen or board change: the prose and defaults, the "Where everything
   lives" tree, the TOCs, `docs/HARDWARE.md` for boards, and the screenshots.
@@ -37,8 +35,20 @@ that docs never drift from the firmware.
 - **User-facing docs cover released boards only.** An internal-only board's
   change updates CLAUDE.md and the code, never README, HARDWARE or the site.
 
-## Evidence
+## Consequences
 
+- The DOCS SYNC RULE in CLAUDE.md binds every change; the README's
+  simulator section states the screenshot rule for contributors.
+- `docs/img/manual/manifest.json` is a maintained artifact: a layout change
+  without a manifest check ships a callout pointing at the wrong row.
+
+---
+
+## Details
+
+### Evidence
+
+- All 38 entries of the manual's manifest are 800x480.
 - 2026-08-31 docs overhaul (`867dd37`): a TOC, a navigation map of every
   screen and setting, a screenshot for every major section with callouts
   referenced from the bullets; two sim renders added for coverage.
@@ -46,7 +56,7 @@ that docs never drift from the firmware.
   one day (`a82f7c7`, `c6fca82`, `62218cc`) and refit the flow-graph callout
   each time, which is the rule working as intended.
 
-## Alternatives and dead ends
+### Alternatives and dead ends
 
 - A mermaid rendering of the navigation map (`867dd37`): dropped the same
   day for the ASCII tree, "too big" (`f3594d1`).
@@ -55,23 +65,19 @@ that docs never drift from the firmware.
 - Hand-captured screenshots from a board: never used; they cannot be
   regenerated and the renders are deterministic.
 
-## Consequences
+### History
 
-- The DOCS SYNC RULE in CLAUDE.md binds every change; the README's
-  simulator section states the screenshot rule for contributors.
-- `docs/img/manual/manifest.json` is a maintained artifact: a layout change
-  without a manifest check ships a callout pointing at the wrong row.
-
-## History
-
+- 2026-06-28: the first 800x480 render (`bbe52e3`).
 - 2026-07-01: README screenshots from `docs/img/` with a keep-in-sync note
-  (`f69d5a3`); 800x480 made the reference size (`ed9781c`).
+  (`f69d5a3`); 800x480 made the reference size (`ed9781c`, "use 800x480
+  screenshots as the reference size"), the day the README gallery was
+  built.
 - 2026-07-24: manual sync becomes a standing instruction (docs landed with
   `ded5d27`).
-- 2026-08-31: manual callouts, map, TOCs, `make docs-img`; HARDWARE.md
-  split out (`24a02d3`, `867dd37`, `f3594d1`).
+- 2026-08-31: the rule widened to the manual's callouts, map and TOCs,
+  `make docs-img`; HARDWARE.md split out (`24a02d3`, `867dd37`, `f3594d1`).
 
-## Sources
+### Sources
 
 Commits `bbe52e3`, `f69d5a3`, `ed9781c`, `ded5d27`, `24a02d3`, `867dd37`,
 `f3594d1`;

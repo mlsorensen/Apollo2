@@ -7,15 +7,14 @@
 
 ## Context
 
-The first on-device OTA of v0.11.0 (3,763,920 B) on the P4-5 downloaded and
-wrote cleanly, then failed every time: the app-side verify reported a
-different bad checksum per attempt, and with that bypassed the second-stage
-bootloader rejected the slot with `invalid segment length 0x69666957`
-("WiFi" in little-endian, a data string where a segment header should be)
-and fell back to app0. The S3 4.3C installed the same-shaped image fine.
-
-The stock `default_32MB.csv` puts app1 at 0xc90000 (12.56 MB). A 3.76 MB
-image there ends at 0x1026ed0, about 160 KB past 0x1000000.
+The P4 boards carry 32 MB of flash, and reads through the cache mapping (the
+bootloader's boot-time verify, IDF's `esp_image_verify`, `esp_partition_mmap`)
+go wrong above 0x1000000, consistent with a 3-byte flash address wrapping at
+16 MB; driver reads and the ROM loader see the right bytes
+([the single-variable proof](#ev-boundary)). The stock `default_32MB.csv`
+puts app1 at 0xc90000 (12.56 MB), so a 3.76 MB image there ends about 160 KB
+past the boundary and is rejected at boot although it was written
+byte-perfect.
 
 ## Decision
 
@@ -33,9 +32,37 @@ P4 env:
 
 Rules: never let a P4 app partition or its image cross 16 MB, and never
 cache-map (`esp_partition_mmap` / `spi_flash_mmap`) anything above 16 MB on
-the P4. Driver reads (`esp_partition_read`) of that region are fine.
+the P4 ([the coredump fault](#ev-coredump)). Driver reads
+(`esp_partition_read`) of that region are fine. No app-side workaround
+remains ([what was built and reverted](#alternatives-and-dead-ends)).
 
-## Evidence
+## Consequences
+
+- A partition-table change cannot ship over the air, so fielded P4 units
+  need a one-time web flash of v0.11.0 or later; OTA works permanently after
+  that. App-only OTA images are byte-identical whichever table a unit has;
+  the fix is in the factory image.
+- `GET /coredump` reads the coredump partition's SHA note via
+  `esp_partition_read` in `web_ui.cpp`, never through
+  `esp_core_dump_get_summary()`, which mmaps it and faults
+  ([how that was found](#ev-coredump)). The partition stays put; moving it
+  is another table change.
+- esptool `read-flash` at 115200 baud is the definitive view of a P4's flash
+  (higher rates fail on its USB-CDC).
+
+---
+
+## Details
+
+### Evidence
+
+<a id="ev-boundary"></a>
+The first on-device OTA of v0.11.0 (3,763,920 B) on the P4-5 downloaded and
+wrote cleanly, then failed every time: the app-side verify reported a
+different bad checksum per attempt, and with that bypassed the second-stage
+bootloader rejected the slot with `invalid segment length 0x69666957`
+("WiFi" in little-endian, a data string where a segment header should be)
+and fell back to app0. The S3 4.3C installed the same-shaped image fine.
 
 Single-variable proof on the P4-5, 2026-09-08: the SAME v0.11.0 image through
 the SAME standard `esp_ota` path booted from app1 once app1 moved under
@@ -56,7 +83,15 @@ byte-identical to the published image. Only reads through the cache mapping,
 the bootloader's verify and IDF's `esp_image_verify`, went wrong, consistent
 with a 3-byte flash address wrapping at 16 MB in that path.
 
-## Alternatives and dead ends
+<a id="ev-coredump"></a>
+Corollary, 2026-09-30, P4-5 (rev v1.3) on v1.0.0-beta.6: `GET /coredump`
+panicked every P4 because `esp_core_dump_get_summary()` mmaps the coredump
+partition at 0x1ff0000 and the first load faults (3/3, and the new dump
+overwrote the wanted one). Fixed the same day (`e77f033`): `web_ui.cpp`
+reads the SHA note via `esp_partition_read`; a 26,084 B dump over HTTP
+matched the ROM-loader read.
+
+### Alternatives and dead ends
 
 - "Random, size-driven, P4-only download or write corruption" (the morning
   of 2026-09-08): the per-attempt checksum differences looked like PSRAM or
@@ -67,28 +102,13 @@ with a 3-byte flash address wrapping at 16 MB in that path.
   symptom was the same boundary in a different read path.
 - A bootloader with 4-byte addressing: also a full reflash, riskier, no gain.
 
-## Consequences
-
-- A partition-table change cannot ship over the air, so fielded P4 units
-  needed a one-time web flash of v0.11.0 or later; OTA works permanently
-  after that. App-only OTA images are byte-identical whichever table a unit
-  has; the fix is in the factory image.
-- Corollary, 2026-09-30, P4-5 (rev v1.3) on v1.0.0-beta.6: `GET /coredump` panicked every P4
-  because `esp_core_dump_get_summary()` mmaps the coredump partition at
-  0x1ff0000 and the first load faults (3/3, and the new dump overwrote the
-  wanted one). Fixed the same day (`e77f033`): `web_ui.cpp` reads the SHA
-  note via `esp_partition_read`; a 26,084 B dump over HTTP matched the
-  ROM-loader read. The partition stays put; moving it is another table change.
-- esptool `read-flash` at 115200 baud is the definitive view of a P4's flash
-  (higher rates fail on its USB-CDC).
-
-## History
+### History
 
 - 2026-09-08: corruption theory formed and discarded within the day;
   boundary proven; v0.11.0 re-cut with the new table (`f8637cc`).
 - 2026-09-30: coredump mmap fault root-caused and fixed (`e77f033`).
 
-## Sources
+### Sources
 
 `f8637cc`, `e77f033`; `boards/p4_ota_under16.csv`, `platformio.ini`,
 `src/platform_esp32/web_ui.cpp`.
