@@ -51,8 +51,9 @@ possible partner, so Apollo can be the partner from its own address
   record. Its gauge freezes after sleep; see the battery estimate record.
 - Partner mode is what lets an Umbra sleep on the saver; the idle drop
   added for the Lunar (the parked-while-idle record) deliberately excludes
-  an unpaired Umbra, which would power off after a drop and need its
-  button.
+  an unpaired Umbra: it drops the link on its own timer while the remote
+  idles and powers off five minutes later anyway, so a drop by us would only
+  bring the power-off forward. Unpaired use is not recommended.
 
 ---
 

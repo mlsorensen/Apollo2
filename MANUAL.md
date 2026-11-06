@@ -737,20 +737,17 @@ machine is already warming up when you arrive.
   again Apollo reconnects at once if the scale is still awake; if it has
   already gone to sleep, press its button to wake it and Apollo connects on
   its own. Nothing else to do at the end of the day.
-- **Acaia Umbra** — can be used exactly like the Lunar, but it also has a real
-  sleep mode that Apollo can wake it from. Recommended routine: tap
-  **Disconnect** on Apollo's scale card when you're done (the Umbra won't
-  sleep *while connected*, so disconnecting is what lets it doze — the card
-  then shows `Sleeping`), and tap **Connect** in the morning, which wakes the
-  Umbra over Bluetooth. The Umbra's battery lasts about a **week** in sleep
-  mode — and once it's flat, Connect naturally can't wake it, so put it on a
-  charger if it's been sitting. **Umbra firmware 1.0.8:** an *unpaired* Umbra
-  powers off about 5 minutes after the link drops instead of sleeping, so
-  Connect can't wake it — **pair** it (Bluetooth above) to keep the sleep
-  behaviour. With a **paired** Umbra, either let the screensaver manage it —
-  the Umbra goes to sleep when the screensaver starts and wakes when you
-  touch the screen — or tap **Disconnect** when you're done and **Connect**
-  when you need it.
+- **Acaia Umbra** — **pair it** (Bluetooth above); using it unpaired is not
+  recommended. Paired, the Umbra has a real sleep mode Apollo can wake it
+  from: either let the screensaver manage it — the Umbra goes to sleep when
+  the screensaver starts and wakes when you touch the screen — or tap
+  **Disconnect** when you're done (the card shows `Sleeping`) and **Connect**
+  when you need it, which wakes it over Bluetooth. Its battery lasts about a
+  **week** asleep; once flat, Connect naturally can't wake it, so put it on a
+  charger if it's been sitting. *Unpaired* (firmware 1.0.8 and later), the
+  Umbra drops the link on its own timer while Apollo sits idle and then
+  **powers off** about 5 minutes later, and a powered-off scale cannot be
+  woken over Bluetooth: you press its button every morning.
 - **Bookoo Themis** — has a sleep mode, but it genuinely powers down: Apollo
   **cannot** wake it with Connect. Leave Apollo
   connecting, **turn the scale on** in the morning and you're good; when

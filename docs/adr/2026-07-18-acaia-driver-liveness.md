@@ -48,8 +48,10 @@ a Lunar can sit "connected" with no weight flowing ([evidence](#evidence)).
 - The Lunar/Pyxis status poll is the keepalive that holds the scale awake,
   so the driver declares `sleeps_on_disconnect()` for that generation and
   `ScaleLink` drops it while the remote is idle (the parked-while-idle
-  record). The Umbra does not declare it: unpaired it powers off a few
-  minutes after a drop; paired, partner mode sends it to sleep.
+  record). The Umbra does not declare it: unpaired it drops the link on its
+  own timer while the remote idles and powers off a few minutes later (a
+  drop by us would only start that countdown sooner); paired, partner mode
+  sends it to sleep.
 - Open: [the hold once fired on a Lunar](#ev-lunar-hold); worst case is 1 s
   of latency on a small negative change. Do not gate the hold to the Umbra
   without evidence.
