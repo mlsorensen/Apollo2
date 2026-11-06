@@ -44,14 +44,14 @@ record's header; do not edit by hand.
 
 #### radio
 
-- 2026-07-18 [Acaia driver: weight-stream liveness, the excursion hold, and no vendor references](2026-07-18-acaia-driver-liveness.md) (Accepted; last changed 2026-07-27)
+- 2026-07-18 [Acaia driver: weight-stream liveness, the excursion hold, and no vendor references](2026-07-18-acaia-driver-liveness.md) (Accepted; last changed 2026-11-05)
 - 2026-07-18 [Auto-stop fires at target minus a learned overshoot, taught only by target-triggered stops](2026-07-18-auto-stop-overshoot-learning.md) (Accepted; last changed 2026-11-04)
 - 2026-07-19 [Shot detect (unwired) mode: the weight stream drives the shot state machine](2026-07-19-unwired-shot-detect-mode.md) (Open; last changed 2026-10-17)
 - 2026-08-20 [On-scale settings are descriptor-driven and owned by the scale](2026-08-20-scale-device-settings.md) (Accepted; last changed 2026-11-04)
 - 2026-08-24 [The Micra Bluetooth token is minted by a cloud-seed handshake, so Apollo takes it from lmtoken](2026-08-24-micra-pairing-token.md) (Accepted; last changed 2026-08-29)
 - 2026-09-08 [Scale reconnects are parked while the screensaver or setup portal is up; the Micra's only for the portal](2026-09-08-scale-connects-parked-while-idle.md) (Accepted; last changed 2026-11-05)
 - 2026-10-05 [Micra link resilience: the stalled-request watchdog and the "machine wedged" rule](2026-10-05-micra-link-resilience.md) (Open; last changed 2026-11-04)
-- 2026-10-16 [Umbra partner mode: Apollo acts as the scale's paired device so it sleeps and wakes](2026-10-16-umbra-partner-mode.md) (Accepted; last changed 2026-10-18)
+- 2026-10-16 [Umbra partner mode: Apollo acts as the scale's paired device so it sleeps and wakes](2026-10-16-umbra-partner-mode.md) (Accepted; last changed 2026-11-05)
 - 2026-10-17 [Apollo is grams-only; a scale's Unit row is kept only where it changes the scale's own display](2026-10-17-scale-units-grams-only.md) (Accepted; last changed 2026-10-17)
 - 2026-10-21 [One radio listener at a time: the arbiter, the finder and learned address types](2026-10-21-radio-arbiter-and-address-type.md) (Open; last changed 2026-10-30)
 - 2026-10-24 [Two scale slots: the slot is the role, and roles sit over links](2026-10-24-two-scale-slots-roles-over-links.md) (Accepted; last changed 2026-10-30)
@@ -63,7 +63,7 @@ record's header; do not edit by hand.
 - 2026-06-29 [Stats tab: temperature history with a tap-to-zoom window, device info from the standard DIS, a manual clock](2026-06-29-stats-tab.md) (Accepted; last changed 2026-09-08)
 - 2026-07-01 [Docs rules: 800x480 is the reference size, screenshots come from the sim, the manual moves with the code](2026-07-01-docs-screenshots-and-manual-sync.md) (Accepted; last changed 2026-08-31)
 - 2026-07-22 [Flush and backflush: one duration everywhere, the sequence in the controller, Standby \| Flush on Home](2026-07-22-flush-and-backflush-on-home.md) (Accepted; last changed 2026-11-03)
-- 2026-09-04 [Idle screen: Lion / Apollo / Alternate / Dim / Off, with a per-board dim floor](2026-09-04-idle-screen-styles.md) (Accepted; last changed 2026-09-17)
+- 2026-09-04 [Idle screen: Lion / Apollo / Alternate / Dim / Off, with a per-board dim floor](2026-09-04-idle-screen-styles.md) (Accepted; last changed 2026-11-05)
 - 2026-09-12 [Backup and Storage pages: opt-out credentials, restore reboots, Mount is a tap](2026-09-12-backup-and-storage-ux.md) (Accepted; last changed 2026-11-04)
 - 2026-09-22 [Schedule page: one switch per line, triggers not periods, auto-standby from the last use](2026-09-22-schedule-page-design.md) (Accepted; last changed 2026-11-02)
 - 2026-10-24 [Two scales on Home and in Settings: card swap or beside the graph, scan then choose, Swap roles](2026-10-24-two-scales-home-and-settings.md) (Accepted; last changed 2026-11-01)
@@ -106,7 +106,7 @@ record's header; do not edit by hand.
 | 2026-07-09 | 2026-10-24 | [A platform-free core, ports for everything the hardware does, and one header per board](2026-07-09-architecture-layering.md) | platform | Accepted |
 | 2026-07-09 | 2026-09-22 | [DSI panels on the P4 family: one pipeline, a table and a few polarities per glass](2026-07-09-p4-dsi-panels.md) | display | Accepted |
 | 2026-07-09 | 2026-10-18 | [P4 radio over the on-board ESP32-C6: esp-nimble-cpp, hostedInitBLE first, a self-updating slave, and measure the DMA pool](2026-07-09-p4-hosted-radio.md) | platform | Accepted |
-| 2026-07-18 | 2026-07-27 | [Acaia driver: weight-stream liveness, the excursion hold, and no vendor references](2026-07-18-acaia-driver-liveness.md) | radio | Accepted |
+| 2026-07-18 | 2026-11-05 | [Acaia driver: weight-stream liveness, the excursion hold, and no vendor references](2026-07-18-acaia-driver-liveness.md) | radio | Accepted |
 | 2026-07-18 | 2026-11-04 | [Auto-stop fires at target minus a learned overshoot, taught only by target-triggered stops](2026-07-18-auto-stop-overshoot-learning.md) | radio | Accepted |
 | 2026-07-18 | 2026-11-03 | [The paddle path by board: expander DI/DO on the 4.3C, native GPIO plus an external opto on the P4s](2026-07-18-paddle-output-path-by-board.md) | hardware | Accepted |
 | 2026-07-18 | 2026-09-09 | [S3 boards: bring NimBLE up before WiFi, and never script a reset over USB-CDC](2026-07-18-s3-boot-order-and-serial-reset-trap.md) | platform | Accepted |
@@ -122,7 +122,7 @@ record's header; do not edit by hand.
 | 2026-08-20 | 2026-11-04 | [On-scale settings are descriptor-driven and owned by the scale](2026-08-20-scale-device-settings.md) | radio | Accepted |
 | 2026-08-24 | 2026-08-29 | [The Micra Bluetooth token is minted by a cloud-seed handshake, so Apollo takes it from lmtoken](2026-08-24-micra-pairing-token.md) | radio | Accepted |
 | 2026-08-24 | 2026-10-01 | [No "Start anyway" override for a paddle flip refused without a scale](2026-08-24-paddle-override-without-scale.md) | hardware | Dropped |
-| 2026-09-04 | 2026-09-17 | [Idle screen: Lion / Apollo / Alternate / Dim / Off, with a per-board dim floor](2026-09-04-idle-screen-styles.md) | ux | Accepted |
+| 2026-09-04 | 2026-11-05 | [Idle screen: Lion / Apollo / Alternate / Dim / Off, with a per-board dim floor](2026-09-04-idle-screen-styles.md) | ux | Accepted |
 | 2026-09-07 | 2026-11-04 | [NVS settings are add-only, and a restore from the card is a replace](2026-09-07-nvs-add-only-settings-compat.md) | ota-release | Accepted |
 | 2026-09-07 | 2026-09-22 | [OTA install runs in its own early-boot mode, not inside the running app](2026-09-07-ota-install-boot-mode.md) | ota-release | Accepted |
 | 2026-09-08 | 2026-09-30 | [P4 flash layout: both app slots stay entirely below the 16 MB boundary](2026-09-08-p4-app-slots-under-16mb.md) | ota-release | Accepted |
@@ -137,7 +137,7 @@ record's header; do not edit by hand.
 | 2026-09-22 | 2026-11-02 | [Schedule page: one switch per line, triggers not periods, auto-standby from the last use](2026-09-22-schedule-page-design.md) | ux | Accepted |
 | 2026-09-29 | 2026-09-29 | [The web flasher's engine is vendored and rebuilt with a newer esptool-js](2026-09-29-web-flasher-vendored.md) | ota-release | Accepted |
 | 2026-10-05 | 2026-11-04 | [Micra link resilience: the stalled-request watchdog and the "machine wedged" rule](2026-10-05-micra-link-resilience.md) | radio | Open |
-| 2026-10-16 | 2026-10-18 | [Umbra partner mode: Apollo acts as the scale's paired device so it sleeps and wakes](2026-10-16-umbra-partner-mode.md) | radio | Accepted |
+| 2026-10-16 | 2026-11-05 | [Umbra partner mode: Apollo acts as the scale's paired device so it sleeps and wakes](2026-10-16-umbra-partner-mode.md) | radio | Accepted |
 | 2026-10-17 | 2026-10-17 | [Apollo is grams-only; a scale's Unit row is kept only where it changes the scale's own display](2026-10-17-scale-units-grams-only.md) | radio | Accepted |
 | 2026-10-18 | 2026-10-21 | [Flash epochs and meta.json: how a release declares itself web-flash-only](2026-10-18-flash-epoch-web-flash-lever.md) | ota-release | Open |
 | 2026-10-18 | 2026-10-26 | [P4 L2 cache geometry and the pinned bootloader on every board](2026-10-18-p4-l2-cache-bootloader-pin.md) | ota-release | Accepted |

@@ -2,7 +2,7 @@
 
 - **Status:** Accepted (one observation open: the excursion hold once fired on a Lunar; whether the Lunar runs the same internal cycle is unproven)
 - **Area:** radio
-- **First decided:** 2026-07-18 · **Last changed:** 2026-07-27
+- **First decided:** 2026-07-18 · **Last changed:** 2026-11-05
 - **Boards:** all
 
 ## Context
@@ -45,6 +45,11 @@ a Lunar can sit "connected" with no weight flowing ([evidence](#evidence)).
 - The 3 s quiet period is load-bearing ([a 300 ms shortcut was
   overruled](#ev-quiet)). Do not optimise it away.
 - Auto shot cannot arm on a link without a stream.
+- The Lunar/Pyxis status poll is the keepalive that holds the scale awake,
+  so the driver declares `sleeps_on_disconnect()` for that generation and
+  `ScaleLink` drops it while the remote is idle (the parked-while-idle
+  record). The Umbra does not declare it: unpaired it powers off a few
+  minutes after a drop; paired, partner mode sends it to sleep.
 - Open: [the hold once fired on a Lunar](#ev-lunar-hold); worst case is 1 s
   of latency on a small negative change. Do not gate the hold to the Umbra
   without evidence.
@@ -134,6 +139,7 @@ not established.
 - 2026-07-19: hold releases on contact, timeout 1.0 s (ce283fa).
 - 2026-07-27: Lunar dead-link fix: weight liveness, 9-byte registration, length table, reactive handshake, 3 s quiet (9bddfe2).
 - 2026-10-17: connected = streaming for all scales (95f792f).
+- 2026-11-05: `sleeps_on_disconnect()` on the driver interface, true for the Lunar/Pyxis generation only; the idle drop lives in `ScaleLink` (issue #10, feat/v1.4).
 
 ### Sources
 

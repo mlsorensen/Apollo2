@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** ux
-- **First decided:** 2026-09-04 · **Last changed:** 2026-09-17
+- **First decided:** 2026-09-04 · **Last changed:** 2026-11-05
 - **Boards:** all; the dim floor differs per board family
 
 ## Context
@@ -42,6 +42,10 @@ choice there. The saver runs as its own screen, not on the top layer
   is `ssstyle2` ([why a new key](#alternatives-and-dead-ends)).
 - A modal on the top layer is parked by the artwork saver and restored on
   wake ([how found](#history)).
+- The saver is also the idle signal for the scales: it parks their
+  reconnects, puts a partner-mode Umbra to sleep and drops a Lunar/Pyxis so
+  it can sleep (the parked-while-idle record), so the Screen timeout is
+  also how long a Lunar stays awake after the last touch.
 - Screenshot: `../img/manual/device-display.png`.
 
 ---
@@ -92,6 +96,7 @@ choice there. The saver runs as its own screen, not on the top layer
   its own screen (`3f83449`, v0.14.1); Alternate swap HW-tested on the 4.3C.
 - 2026-09-22: a modal on the top layer (the schedule's first-visit notice)
   found parked by the artwork saver; it is restored on wake (`194dd92`).
+- 2026-11-05: the saver now also drops a Lunar/Pyxis link so the scale can sleep (issue #10).
 
 ### Sources
 

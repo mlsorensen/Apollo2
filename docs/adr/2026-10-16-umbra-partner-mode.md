@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** radio
-- **First decided:** 2026-10-16 · **Last changed:** 2026-10-18
+- **First decided:** 2026-10-16 · **Last changed:** 2026-11-05
 - **Boards:** all (a P4 runs the peripheral role through the C6)
 
 ## Context
@@ -49,6 +49,10 @@ possible partner, so Apollo can be the partner from its own address
   P4 4.3 and S3 4.3C](#ev-ram)).
 - The Umbra REJECTS connection-parameter updates; see the Micra link
   record. Its gauge freezes after sleep; see the battery estimate record.
+- Partner mode is what lets an Umbra sleep on the saver; the idle drop
+  added for the Lunar (the parked-while-idle record) deliberately excludes
+  an unpaired Umbra, which would power off after a drop and need its
+  button.
 
 ---
 
@@ -126,6 +130,7 @@ data alone was ignored for 70 to 80 s; both together paired in 2 s.
 - 2026-10-17: end to end on the S3; advert filter tests; partner mode (df8e5a6), reboot-to-pair (f48897c), v1.1.0-beta.1.
 - 2026-10-18: partner advert excluded from scale scans (4dcb776).
 - 2026-10-24: partner pause split from the radio yield (67e6f3e).
+- 2026-11-05: the saver-driven idle drop for the Lunar/Pyxis does not apply to the Umbra in either mode; partner mode stays the Umbra's sleep path.
 
 ### Sources
 
