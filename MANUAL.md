@@ -733,10 +733,10 @@ machine is already warming up when you arrive.
 - **Acaia Lunar / Pyxis** — stays running for as long as Bluetooth is
   connected (it won't auto‑sleep on you mid‑connection), so Apollo drops the
   link when its screensaver or setup portal comes up and the scale's own
-  auto‑sleep takes over; when you touch the screen again Apollo reconnects,
-  which wakes the scale. Nothing to do at the end of the day, then, as long
-  as the scale's **Auto sleep** (Device settings) isn't Off. Powering the
-  scale off and on by hand works too.
+  **Auto sleep** (Device settings) takes over. When you touch the screen
+  again Apollo reconnects at once if the scale is still awake; if it has
+  already gone to sleep, press its button to wake it and Apollo connects on
+  its own. Nothing else to do at the end of the day.
 - **Acaia Umbra** — can be used exactly like the Lunar, but it also has a real
   sleep mode that Apollo can wake it from. Recommended routine: tap
   **Disconnect** on Apollo's scale card when you're done (the Umbra won't

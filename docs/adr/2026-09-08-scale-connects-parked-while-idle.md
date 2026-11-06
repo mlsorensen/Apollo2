@@ -22,7 +22,8 @@ join ([a 90 s join](#evidence)).
   generation, whose auto-off never runs while connected and whose keepalive
   is our status poll) is dropped under the same two sources, and never
   during a shot or its review, so it can sleep; the park keeps it down and
-  the normal reconnect brings it back when the idle ends
+  the normal reconnect brings it back when the idle ends (a Lunar that has
+  already slept needs its button first; it does not wake over Bluetooth)
   ([the lit Lunar](#ev-lunar)). Both scale slots park their reconnects while
   the screensaver is on and while the portal is up, and the park is logged.
 - The Micra parks for the PORTAL ONLY, released the moment a token is
