@@ -157,7 +157,10 @@ record's header; do not edit by hand.
 - **One record per topic.** A topic that changed over time has ONE file
   with a dated **History** in its Details, never two records that disagree.
   The body always states the current position; the History says how it got
-  there and what was believed before.
+  there and what was believed before. A solved issue updates the record(s)
+  whose decision it changes (body, a dated History line, Last changed), and
+  every sibling that stated the old behaviour; a new file is for a new
+  topic, not a new fix.
 - **Files are named `YYYY-MM-DD-<topic>.md`**, the date being when the
   topic was first decided (or first investigated, for an engineering log).
   Later changes are dated inside the file and listed in the index below.
