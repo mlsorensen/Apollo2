@@ -33,7 +33,8 @@ rule is that docs never drift from the firmware.
   the script warns when a render's size changes, but same-size row shifts
   must be eyeballed.
 - **User-facing docs cover released boards only.** An internal-only board's
-  change updates CLAUDE.md and the code, never README, HARDWARE or the site.
+  change updates the code and its decision record, never README, HARDWARE or
+  the site.
 
 ## Consequences
 

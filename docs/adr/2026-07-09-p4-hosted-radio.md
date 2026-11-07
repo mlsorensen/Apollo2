@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** platform
-- **First decided:** 2026-07-09 · **Last changed:** 2026-10-18
+- **First decided:** 2026-07-09 · **Last changed:** 2026-11-07
 - **Boards:** all P4 boards (P4-4.3, P4-5, X 7"/8"/10.1", both silicon revisions)
 
 ## Context
@@ -50,12 +50,38 @@ display's GDMA descriptors, the I2S ring and SD-MMC.
   record (radio area) is built around that cap.
 - `APOLLO_SKIP_C6_UPDATE` (a build flag no env sets) leaves a factory slave
   alone for a dump-and-restore validation build.
-- The silicon-revision split (`esp32p4_es` vs `esp32p4`) and the bootloader
-  pin are the hardware and ota-release areas' records.
+- The silicon-revision images (`esp32p4_es` vs `esp32p4`) are the
+  supported-board-matrix record's; the bootloader pin is the P4 L2-cache
+  record's.
 
 ---
 
 ## Details
+
+### Design detail
+
+- `hostedInitBLE()` (from `esp32-hal-hosted.h`) is called in `main.cpp`
+  before `NimBLEDevice::init()`, guarded by
+  `CONFIG_ESP_HOSTED_ENABLE_BT_NIMBLE`. The hosted SDIO pin defaults match
+  the Waveshare boards exactly; no `WiFi.setPins` call is needed.
+- Why the slave is updated at all: a factory slave does not match the
+  pinned host library, so the version RPC times out every boot and, the
+  reason the updater exists, its RX buffer handling asserts under a
+  sustained download, which blocks the on-device OTA install. The basics
+  (WiFi join, BLE) work on it.
+- The update runs early in `setup()`, with the display up for a progress
+  bar and before WiFi or NimBLE start. The transfer is host-to-slave TX over
+  SDIO, which works even while the stale slave's RX path is broken.
+  `hostedHasUpdate()` decides (a slave that cannot answer the version RPC
+  reads as 0, so it is always "older"). The consecutive-failure counter is
+  NVS `c6try` in the `micra` namespace, cleared once the slave is current;
+  at 3 the updater gives up and stays on the old slave.
+- `APOLLO_SKIP_C6_UPDATE` is set only from the command line,
+  `PLATFORMIO_BUILD_FLAGS="-D APOLLO_SKIP_C6_UPDATE" pio run -e <env> -t
+  upload`, for a unit that must be flash-dumped, tried and restored to
+  factory in every respect (used for the first X 8" boot). The boot log
+  says `C6 update: SKIPPED`. Changing `PLATFORMIO_BUILD_FLAGS` wipes every
+  env's build directory (the build-discipline record).
 
 ### Evidence
 
@@ -109,6 +135,7 @@ display's GDMA descriptors, the I2S ring and SD-MMC.
 - 2026-09-07: C6 auto-update shipped with the OTA work (`89e1d0e`).
 - 2026-09-22: image marked valid before the C6-driven reboot (`9a24cb5`).
 - 2026-10-18: slave blob and host library to 2.12.13 (`99f66fd`).
+- 2026-11-07: folded in from the project's working notes (CLAUDE.md).
 
 ### Sources
 
@@ -116,6 +143,6 @@ Commits `400d95f`, `a84f57b`, `a4af25b`, `89e1d0e`, `9a24cb5`, `99f66fd`;
 NimBLE-Arduino issue #906 (the maintainer's statement that the P4 is
 unsupported); esp-hosted-mcu issue #180 (the scan stall after 60-90 s);
 `platformio.ini` P4 base env comments; `src/device/main.cpp`;
-`src/platform_esp32/c6_update.cpp`, `display.cpp` (the miss line),
+`src/platform_esp32/c6_update.cpp` and `c6_update.h`, `display.cpp` (the miss line),
 `sound.cpp`; CLAUDE.md "Hosted BLE bring-up" and
 "C6 auto-update".

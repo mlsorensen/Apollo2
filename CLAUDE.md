@@ -5,8 +5,8 @@ Read README.md "Developer documentation" first — the architecture section is
 accurate and the layering rules there are hard rules:
 
 - `include/core/` + `src/core/` must stay free of LVGL/Arduino/NimBLE/SDL.
-  The BLE protocol code (Micra link, Bookoo scale) lives in `src/core/` over
-  the `core::ble::ICentral` port; only transports (`nimble_central.cpp`) are
+  The BLE protocol code (Micra link, scales) lives in `src/core/` over the
+  `core::ble::ICentral` port; only transports (`nimble_central.cpp`) are
   per-platform. New platforms (Pi/BlueZ, Pico/btstack) implement ICentral,
   never touch protocol code.
 - The UI depends only on `core::` interfaces. It compiles unchanged on-device
@@ -14,597 +14,365 @@ accurate and the layering rules there are hard rules:
   check UI work).
 - DOCS SYNC RULE: when features, settings, screens, or boards change, update
   in the same change: MANUAL.md prose + its "Where everything lives" tree +
-  TOCs, docs/HARDWARE.md,
-  README.md, and the screenshots. NOTE the user-facing docs cover only the
-  RELEASED boards (see "Support matrix" below) — a change to an internal-only
-  board updates CLAUDE.md and the code, and must NOT add that board to
-  README/HARDWARE/site — refresh the affected docs/img/*.png from
-  renders/ and re-run `make docs-img` (tools/annotate_docs.py +
-  docs/img/manual/manifest.json; re-measure callout boxes if the layout
-  moved — the script warns when a render's size changes).
+  TOCs, docs/HARDWARE.md, README.md, the screenshots, and the docs/adr/
+  record(s) the change touches. The user-facing docs cover only the RELEASED
+  boards (see "Support matrix") — a change to an internal-only board updates
+  the code and its ADR, and must NOT add that board to README/HARDWARE/site.
+  Refresh the affected docs/img/*.png from renders/ and re-run `make
+  docs-img` (tools/annotate_docs.py + docs/img/manual/manifest.json;
+  re-measure callout boxes if the layout moved — the script warns when a
+  render's size changes).
 - Board differences live in `include/platform_esp32/board_config.h` blocks +
   feature macros; driver code never hardcodes pins.
 
-## Web flasher engine is VENDORED (2026-09-29)
+## Where knowledge lives: the decision log is `docs/adr/`
 
-`site/index.html` loads esp-web-tools from `site/vendor/esp-web-tools/`
-(git-ignored; built by `tools/build_esp_web_tools.sh` = `make site-vendor`,
-and by the pages job on every deploy), NOT from unpkg. Reason, bench-proven
-on the rev v3.2 X-8: esptool-js <= 0.6 reads the chip-detect "magic"
-register 0x40001000 right after sync and the rev v3 P4 ROM goes SILENT on
-it ("Serial data stream stopped" = a 3 s read timeout, not noise), so every
-web flash of rev v3 silicon died after the erase/confirm dialogs while
-`make flash` (esptool.py, GET_SECURITY_INFO detection) was fine. esptool-js
-0.7.0 fixed detection; esp-web-tools (10.4.0 and main) still pins ^0.6.0,
-so we rebuild it with esptool-js pinned. Bump the two pins in the script
-together, and re-prove a rev v3 P4 from Chrome before deploying. A site-only
-hot deploy = build, then commit index.html + vendor/ on gh-pages (the OWNER
-pushes it; the assistant's push is refused as a CI-gate bypass).
+This file holds the rules a session must know before it touches code, and
+where things live. The WHY — mechanisms, bench evidence, measurements, dead
+ends, history — lives in `docs/adr/` (index by area and date in `docs/adr/README.md`). Each section below links its records (`→`).
 
-## Static IP (v1.0.0-beta.7)
+- **Reading.** Before answering a "why is it built this way" question, or
+  changing a subsystem, open `docs/adr/README.md`'s index and read the
+  record(s) for that topic. They are the reasoning of record; this file is
+  the summary. Don't re-derive or re-walk a dead end a record already lists.
+- **Writing.** A finding, a decision, a root cause, a measurement or a dead
+  end goes into the ADR, not into this file. Memory keeps only session state
+  (what is in flight, where to resume, bench units' whereabouts) and points
+  at the record for the design. Follow the
+  README's Conventions and Template exactly:
+  - One record per TOPIC. A solved issue UPDATES the record(s) whose
+    decision it changes — present-tense body, a dated `- YYYY-MM-DD:` History
+    bullet naming the issue/commit, **Last changed** — and every sibling that
+    states the old behaviour. `grep -l` the folder first. A new file
+    (`YYYY-MM-DD-<topic>.md`, the date it was first decided) only for a topic
+    no record covers; say so in the commit message.
+  - Body (Context / Decision / Consequences) = the current design and the
+    reasons that still bind it; evidence, alternatives, history and sources
+    go under `## Details`, linked from the body by anchor. History keeps only
+    turns that changed the design or explain a surviving rule.
+  - Team voice ("we measured", "a maintainer approves", "the bench X 8\"") —
+    never "the owner", no diary phrasing. No LAN addresses, home paths,
+    credentials, or vendor source references.
+  - Run `make adr-index` after any header change (it fails on a malformed
+    header or a filename date that disagrees with First decided).
+- **This file changes only** when a new binding rule, file location or
+  owner decision appears — one or two lines plus the `→` link. Never paste
+  rationale here.
+- **Mid-debug findings are hypotheses** (global rule): an ADR records what
+  the bench proved. An unproven theory goes in as `Status: Open` with what
+  is unproven said plainly, or waits.
 
-Set ONLY on the WiFi setup portal (TokenSetup's WiFi page: a "Network
-address" select, DHCP default; Static reveals ip/mask/gw/dns, validated by
-the page's regex AND by IPAddress::fromString in handle_wifi — a bad set is
-refused, nothing half-saved). No on-device editor by design (owner): change
-it by re-running Set up WiFi; handle_root pre-fills the stored values.
-Network::start_station applies WiFi.config() before begin(), or an all-zero
-config() to return to DHCP within the same boot. NVS keys (ADDs) `ipstatic`
-(bool) + `ipaddr`/`ipmask`/`ipgw`/`ipdns` (strings, as typed); they travel in
-the backup's WiFi opt-out group. INetwork::static_ip() (default false) feeds
-the Info row "x.x.x.x (static|DHCP)".
+## Web flasher engine is vendored
 
-## OTA self-update (v0.11+)
+- `site/index.html` loads esp-web-tools from the git-ignored
+  `site/vendor/esp-web-tools/` (built by `tools/build_esp_web_tools.sh` =
+  `make site-vendor`, and by the pages job), never from unpkg: the stock
+  bundle's esptool-js cannot flash rev v3 P4 silicon.
+- Bump the script's two pins (esp-web-tools tag, esptool-js exact) together,
+  and re-prove a rev v3 P4 from Chrome before deploying.
+- Site-only hot deploy = build, then commit `index.html` + `vendor/` on
+  gh-pages; the OWNER pushes it (the assistant's push is refused as a
+  CI-gate bypass).
+- → docs/adr/2026-09-29-web-flasher-vendored.md
 
-Two separate parts: a CHECK/notify port (`update_check.*`) and an INSTALL that
-runs in a dedicated early-boot mode (`install_mode.*`). Full rationale +
-measurements: the `ota-p4-solution` memory. The short version of WHY install is
-its own boot mode: a bulk download over the hosted-radio SDIO link needs a
-~64 KB CONTIGUOUS internal-DMA buffer, and Apollo's graph-optimized DSI display
-(use_dma2d + async double-buffer) fragments that pool to ~16 KB → the download
-asserts `sdio_rx_get_buffer`; and flash writes disable the cache, stalling the
-DSI's PSRAM framebuffer scan → the panel strobes. Both go away when the full
-display isn't up.
+## OTA self-update
 
-- Artifact contract: `<site>/<tag>/firmware/app/<kUpdateSlug>.bin` (app-only
-  image). The parts/ files are NOT usable for OTA — they bundle otadata with
-  the app. CI asserts kUpdateSlug (board_config.h) == the matrix `board` field.
-- Check (update_check.cpp): a short-lived task fetches releases.json + notes.txt
-  via esp_http_client + `crt_bundle_attach` (the cert bundle in the core libs;
-  the Arduino NetworkClientSecure wrapper CANNOT reach it). mbedTLS is pointed
-  at PSRAM (use_psram_for_tls) so the small fetch runs with BLE up. Cadence Off/
-  On boot/Daily (Config::update_check_mode). Notify only — never installs.
-- Install (install_mode.cpp): "Install now" stashes the version in NVS
-  (Config::pending_install) and reboots. VERY EARLY in setup() — before the full
-  display / BLE / app — main runs install_mode::run(): a LIGHTWEIGHT display
-  (display.cpp `install_panel_*`: same per-board DSI init but num_fbs=2, no
-  use_dma2d, no async sync) shows a progress UI, downloads the whole image into
-  PSRAM (no flash writes → clean), then blanks the backlight and writes
-  PSRAM→flash (screen glitches during flash writes regardless) and reboots.
-  Per display: DSI uses the light panel above; RGB (native-WiFi S3, no DMA-pool
-  problem) uses the normal full Display and just blanks the backlight for the
-  flash write. No-op only on the SPI 2-inch dev board (no real update UI there).
-  Install mode inherits the RTC and only NTP-syncs as a failsafe — NOT for
-  the certificate: the prebuilt core's mbedTLS has MBEDTLS_HAVE_TIME_DATE off,
-  so cert validity dates are never checked (verified 2026-09-19); the sync is
-  a "network really up" proof, like the check's SNTP gate.
-- BETA CHANNEL (v0.14+): two indexes on the site. `releases.json` is
-  RELEASES ONLY and its format is frozen — every fielded device reads it, and
-  firmware older than the pre-release-aware parser reads "0.14.0-beta.1" as
-  0.14.0 (plain sscanf takes the numbers and ignores the tail), so a beta in
-  that file installs itself on stable devices. `releases-beta.json` merges
-  releases + pre-releases, newest first, and is what a device with
-  Config::beta_channel ("updbeta") fetches instead — ONE fetch either way, and
-  a stable release newer than the last beta still wins. 404 on it falls back to
-  the stable list. Ordering lives in two places that must agree:
-  semver_newer() in include/core/semver.h (update_check.cpp uses it) and order_key() in the workflow's pages
-  job (a release outranks every beta of the same number; beta.2 outranks
-  beta.1). Only `-beta.N` is understood — any other pre-release form parses as
-  "not newer" and is ignored. PROMOTING a beta is a REBUILD at the real tag,
-  never a copy of the artifacts: kVersion is compiled in and CI asserts it
-  equals the tag, so a copied binary reports the beta version forever and
-  re-prompts (the v0.12.3 failure). Betas accumulate on gh-pages (keep_files);
-  prune by hand if the list ever gets silly.
-- NVS RULE (settings compatibility): a release may only ADD keys to the `micra`
-  namespace — never change the meaning, type or value RANGE of a key an older
-  shipped build already reads. Every getter is isKey()-guarded with a default,
-  so an unknown key is inert; but stored enums index fixed arrays (kCadence[]),
-  so a widened value is an out-of-bounds read in a binary that can no longer be
-  patched. This is not hypothetical for betas: rollback puts an older image
-  back UNATTENDED. New semantics = new key + read the old one as a fallback
-  (updchk->updmode, ssstyle->ssstyle2, rdychimev->rdychimeu).
-- Rollback: BOOTLOADER_APP_ROLLBACK_ENABLE=y in all cores. main.cpp overrides
-  `verifyRollbackLater()` -> true and marks the image valid after 60 s of
-  healthy loop() — an image that bootloops is auto-reverted. Consequence:
-  bootloader/partition-table changes CANNOT ship via OTA (app slot only).
-- P4 16MB-FLASH-BOUNDARY RULE (found the hard way, see the
-  `ota-p4-16mb-boundary` memory): the P4's 2nd-stage bootloader mis-reads flash
-  ABOVE 0x1000000 (16MB) during its boot-time image verify (3-byte addressing
-  wraps), so an OTA'd app that spills past 16MB is rejected as "invalid segment
-  length" and rolls back — even though the flash content is byte-perfect (the
-  write + the running app's reads are fine; only the bootloader's read wraps).
-  COROLLARY (decoded 2026-09-30): the running app's DRIVER reads
-  (esp_partition_read) above 16MB are fine, but a CACHE-MAPPED read
-  (esp_partition_mmap / spi_flash_mmap) of that region FAULTS on the current
-  core — the coredump partition lives at 0x1ff0000, so
-  esp_core_dump_get_summary()/get_panic_reason() (both mmap) panic the
-  caller; web_ui.cpp reads the SHA note itself via esp_partition_read. Never
-  mmap anything above 16MB on the P4.
-  FIX: `boards/p4_ota_under16.csv` (7MB app slots) keeps BOTH app slots entirely
-  under 16MB (app1 ends ~14MB); all P4 envs use it via the base env. Never let a
-  P4 app partition or its image cross 16MB. This is a partition-table change, so
-  existing P4 units need a one-time web-flash to adopt it (then OTA works). S3
-  boards are 16MB flash — no >16MB region, unaffected.
-- P4 L2-CACHE / BOOTLOADER RULE (issue #4, found 2026-10-18): OTA never
-  replaces the bootloader, so an app must load under the bootloader a unit
-  was last WEB-flashed with. Core 3.3.12 (lib-builder #395) cut the P4's L2
-  cache 256 KB -> 128 KB, moving the app's RAM image into what every <= 3.3.11
-  bootloader maps as cache: v1.1.0-beta.2 installed fine, then died at entry
-  (Illegal instruction) and rolled back on every P4. FIX, all P4 envs:
-  `tools/pio_p4_l2_compat.py` links at the 256 KB layout, and
-  `src/platform_esp32/l2_cache_compat.cpp` reserves the 128 KB window the
-  libs' heap table would otherwise hand out (rev3 0x4ff20000-0x4ff40000,
-  rev v1.x 0x4ff80000-0x4ffa0000). The window is NOT reclaimable at runtime
-  (Store access fault from setup(), bench-proven), so l2_cache_compat.cpp
-  hands it back to the CACHE instead: 256 KB / 128 B lines at the CORE init
-  stage — beta.1's exact geometry (graph ~1,200 frames/min; ~1,000 at
-  256 KB / 64 B, ~875 at the libs' 128 KB / 64 B; bench 2026-10-21 on rev v3
-  AND rev v1.x). The 128 B line is SAFE with libs built for 64 B: IDF reads
-  the line size off the register at runtime everywhere but the startup
-  mode-set, misaligned invalidates are refused not rounded, and the L2 only
-  fronts PSRAM (internal DMA buffers are behind the 64 B L1). The core
-  itself shipped 256 KB / 128 B on every P4 build Feb-Sep 2026 (lib-builder
-  #350, an ESP-SR override; #395 dropped it as a "cleanup"). The ROM offers
-  only 64 B and 128 B — there is no larger line to try.
-  THE SWITCH ITSELF MUST RUN FROM IRAM (found 2026-10-26, the X-8 boot
-  loop): between the geometry write and the invalidate the L2's contents
-  are garbage, so any flash fetch in that window is a jump into nowhere or
-  a bus hang. `l2_cache_256k()` had IRAM_ATTR but GCC INLINED it into the
-  ESP_SYSTEM_INIT_FN entry, which is flash code — every build from
-  2026-10-18 to 2026-10-26 (v1.1.0-beta.4 .. v1.2.0-beta.2; beta.3 only re-linked and reserved, the switch landed after its tag) ran the switch
-  from flash and booted or not by where the code happened to land (about
-  half of a dozen bench builds of the same source looped at the
-  bootloader's 9 s watchdog with nothing printed; the CI images were the
-  lucky half and, being fixed bytes, stay that way). Now
-  `__attribute__((noinline))`, and the boot log's `l2:` line prints the
-  geometry read back from the controller plus the function's address with
-  an IRAM / NOT IRAM verdict — a build whose line says NOT IRAM must not
-  ship. The sequence is the libs' own startup order (cache enabled, write
-  the two mode registers, invalidate); the ROM's Cache_Set_L2_Cache_Mode is
-  two register writes and ignores its ways argument (pass the enum anyway);
-  Cache_WriteBack_All is the libs' IRAM patch, the rest is ROM. Do NOT
-  suspend the L2 around the write: with the suspend bit set the size write
-  itself never returns.
-  BOOTLOADER PIN (owner, 2026-10-18; S3 too since 2026-10-19): we NEVER
-  publish a bootloader the fleet doesn't run, on ANY board.
-  `tools/pio_flash_layout.py` (every device env but dltest) swaps the core's
-  bootloader for `firmware_blobs/p4_bootloader_{rev3,rev1}.bin` /
-  `s3_bootloader.bin` (byte-for-byte the v1.1.0-beta.1 ones, core 3.3.9 /
-  IDF 5.5.4; cut with `tools/flash_layout.py extract`) in FLASH_EXTRA_IMAGES,
-  so factory images, the web flasher and `make flash` all carry it. (beta.4's
-  S3 web flash shipped the unpinned IDF 5.5.5 one; harmless, bench units
-  only.) Before ANY platform bump: diff `.iram0.text`/heap regions of old vs
-  new ELF and prove a real app-only OTA on a bench unit running the PINNED
+- Two parts: a notify-only CHECK (`update_check.*`) and an INSTALL in its own
+  early-boot mode (`install_mode.*`). "Install now" sets
+  `Config::pending_install` and reboots; `install_mode::run()` runs at the
+  very start of `setup()`, before the full display/BLE/app. Don't move the
+  install into the running app (the P4's hosted radio and DSI panel can't
+  take it). DSI uses the light `install_panel_*` in display.cpp; RGB uses
+  the normal Display; the SPI 2-inch is a no-op. Proving ground: the
+  `esp32-p4-dltest` env (`src/dltest/`) — keep it.
+  → docs/adr/2026-09-07-ota-install-boot-mode.md
+- Artifact: `<site>/<tag>/firmware/app/<kUpdateSlug>.bin` (app-only). The
+  `parts/` files are NOT OTA images. `kUpdateSlug` (board_config.h) must
+  equal the CI matrix `board`.
+- Check: `esp_http_client` + `crt_bundle_attach` (the Arduino
+  NetworkClientSecure wrapper can't reach the cert bundle);
+  `use_psram_for_tls()` keeps TLS out of internal RAM. Cadence
+  `Config::update_check_mode` Off / On boot / Daily / Hourly; the repeating
+  ones fire only under the screensaver.
+- Rollback: `verifyRollbackLater()` → true, image marked valid after 60 s of
+  healthy `loop()` (main.cpp). So bootloader and partition-table changes
+  CANNOT ship via OTA — app slot only.
+- BETA CHANNEL: a beta NEVER goes in `releases.json` (format frozen; old
+  firmware reads `X.Y.Z-beta.N` as `X.Y.Z` and installs it). Beta-channel
+  devices (`Config::beta_channel`, NVS `updbeta`) fetch `releases-beta.json`
+  instead (404 → stable list). Ordering lives in `core::semver_newer()`
+  (include/core/semver.h — don't fork it) AND `order_key()` in the
+  workflow's pages job; change both together. Only `-beta.N` is
+  understood. Promoting a beta is a REBUILD at the real tag, never a copy
+  of its artifacts. → docs/adr/2026-09-12-beta-channel-two-indexes.md
+- NVS RULE: a release may only ADD keys to the `micra` namespace — never
+  change the meaning, type or value range of a key an older build reads
+  (stored enums index fixed arrays; rollback runs old builds unattended).
+  New semantics = new key + fallback read of the old one.
+  → docs/adr/2026-09-07-nvs-add-only-settings-compat.md
+- P4 16 MB BOUNDARY: never let a P4 app partition or its image cross
+  0x1000000, and never cache-map (`esp_partition_mmap` / `spi_flash_mmap`)
+  anything above 16 MB on the P4 — use `esp_partition_read` (the coredump
+  partition at 0x1ff0000 is read that way in web_ui.cpp; never call
+  `esp_core_dump_get_summary()`/`get_panic_reason()` there). All P4 envs use
+  `boards/p4_ota_under16.csv` via the base env.
+  → docs/adr/2026-09-08-p4-app-slots-under-16mb.md
+
+- **P4 L2 cache (issue #4).** OTA never replaces the bootloader, so an app
+  must load under the one a unit was last WEB-flashed with. All P4 envs link
+  at the 256 KB-cache layout (`tools/pio_p4_l2_compat.py`) and
+  `src/platform_esp32/l2_cache_compat.cpp` reserves the 128 KB window and
+  gives it back to the cache as 256 KB / 128 B lines at the CORE init stage.
+  The window is NOT reclaimable as RAM. The switch MUST run from IRAM: keep
+  `l2_cache_256k()` `IRAM_ATTR __attribute__((noinline))` (GCC once inlined
+  it into flash code). **A build whose boot `l2:` line says NOT IRAM must not
+  ship.** Never suspend the L2 around the mode write (it hangs). Keep 128 B
+  lines (the ROM offers only 64/128).
+  → docs/adr/2026-10-18-p4-l2-cache-bootloader-pin.md
+- **Bootloader pin, every board (owner's call):** never publish a bootloader
+  the fleet doesn't run. `tools/pio_flash_layout.py` (every device env but
+  dltest) swaps in `firmware_blobs/p4_bootloader_{rev3,rev1}.bin` /
+  `s3_bootloader.bin` for factory images, the web flasher AND `make flash`.
+  **Before ANY platform bump:** diff `.iram0.text`/heap regions of old vs new
+  ELF and prove a real app-only OTA on a bench unit running the PINNED
   bootloader before releasing.
-- FLASH EPOCH = THE WEB-FLASH LEVER (v1.1, 2026-10-19). `custom_flash_epoch`
-  in platformio.ini (set on the S3 and P4 base envs, inherited, overridable
-  per env) -> `fw::kFlashEpoch`. Bump it IN THE COMMIT that changes what lies
-  under the app for those envs (a new pinned bootloader, a partition table)
-  — that is, whenever a unit can only take the release by web flash. The
-  release workflow's `meta` job (ungated, before approval) describes every
-  board's bootloader + partition table from its factory image
-  (`tools/flash_layout.py`), compares them with the newest earlier release
-  that has a `<tag>/meta.json` on gh-pages (`tools/release_meta.py`) and
-  FAILS the run on a change without an epoch bump, or an epoch going down.
-  It publishes `<tag>/meta.json` (`{"epoch":{slug:N},"layout":{...}}`, the
-  epoch map first and within `core::kMaxMetaBytes`), checks it with the
-  device's own parser (`core/release_meta.h` via `tools/meta_epoch.cpp`),
-  and — only on a release that RAISES an epoch — leads the release notes
-  and notes.txt with a `**WEB FLASH REQUIRED** (<boards>)` line, for
-  firmware from before the lever (it can only show notes). The index files
-  are UNCHANGED (flat tag lists: old firmware and the flasher read them).
-  Device (update_check.cpp): once a newer version's image is served, fetch
-  its meta.json; 404 = a release from before meta.json = epoch 1; no answer
-  or our slug missing = don't offer it this round; epoch > kFlashEpoch =
-  `UpdateInfo::web_flash` -> the modal says "must be installed from a
-  computer" and has NO Install button. The bootloader's IDF version is
-  logged at boot (`boot: bootloader IDF ...`) and in /api/summary
-  (`bootloader`, `epoch`) — evidence only; the epoch is the gate.
-- C6 auto-update (c6_update.cpp): on every P4 boot, if the on-board ESP32-C6
-  esp-hosted slave is older than the host lib, flash the embedded matching image
-  (`firmware_blobs/c6_slave.bin`, committed, embedded on all P4 envs) to the C6
-  over SDIO and reboot. Fixes the stale-factory-slave boot-WiFi delay. Bump the
-  blob when the pinned platform's esp-hosted host version changes.
-- Proving ground: the `esp32-p4-dltest` env (src/dltest/) is the standalone
-  firmware the install mode was developed + verified in; keep it.
-- Apollo Link bench tester: the `esp32-p4-linktest` env (+ `-rev3`,
-  src/linktest/main.cpp; `make build-linktest` / `flash-linktest`) is a
-  standalone P4-5 firmware for checking Link boards one after another: both
-  paddle senses live, SHOT/CTRL buttons, a guided meter test with PASS/FAIL,
-  serial mirror (`drv/ctrl/pulse/status/test/pass/fail/abort`). Boots CTRL
-  OFF on purpose (Link in copper) — the opposite of the shipping firmware.
-  Reuses display.cpp/touch.cpp/system.cpp only; no NVS, no radio. Internal.
+  → docs/adr/2026-10-18-p4-l2-cache-bootloader-pin.md
+- **Flash epoch = the web-flash lever.** `custom_flash_epoch` in
+  platformio.ini (S3 and P4 base envs, inherited) -> `fw::kFlashEpoch`.
+  **Bump it in the commit that changes what lies under the app** (a pinned
+  bootloader, a partition table); the release workflow's `meta` job fails a
+  layout change without a bump, or an epoch going down. Device side:
+  `update_check.cpp` fetches `<tag>/meta.json` and, when the epoch is above
+  ours, shows "must be installed from a computer" with no Install button.
+  The index files stay flat tag lists (old firmware and the flasher read
+  them). Tools: `tools/flash_layout.py`, `tools/release_meta.py`,
+  `core/release_meta.h` (+ `tools/meta_epoch.cpp`).
+  → docs/adr/2026-10-18-flash-epoch-web-flash-lever.md
+- **C6 auto-update** (`c6_update.cpp`): every P4 boot reflashes an older C6
+  slave from the committed, embedded `firmware_blobs/c6_slave.bin`. Bump the
+  blob whenever the pinned platform's esp-hosted host version changes.
+  → docs/adr/2026-07-09-p4-hosted-radio.md
+- **`esp32-p4-dltest`** (`src/dltest/`): the standalone download/install
+  proving ground; keep it. Not shipped, no pinned bootloader.
+  → docs/adr/2026-09-07-ota-install-boot-mode.md
+- **`esp32-p4-linktest`** (+ `-rev3`; `src/linktest/main.cpp`,
+  `make build-linktest` / `flash-linktest`): internal P4-5 bench tester for
+  Apollo Link boards (both senses, SHOT/CTRL, guided meter PASS/FAIL, serial
+  `drv/ctrl/pulse/status/test/pass/fail/abort`). Boots CTRL OFF on purpose
+  (Link in copper), the opposite of shipping firmware. Reuses
+  display/touch/system (+ io_extension, log_ring) only; no NVS, no radio.
+  → docs/adr/2026-09-16-apollo-link-bridge.md
 
-## Two scales + the radio arbiter (v1.2, 2026-10-24)
+## Two scales + the radio arbiter (v1.2)
 
-Two scale SLOTS: ESPRESSO (every shot role: auto-stop, the tare at shot
-start, shot detect, the auto-flush cup-off, the graph) and BENCH (a weight
-readout + its own Tare, never refused mid-shot). The slot IS the role, and
-every save goes Scan -> tap a result -> "Use <name> as which scale?" modal
-(no auto-slotting; a one-scale user taps Espresso and never sees a bench
-row). ROLES OVER LINKS (`core::ScaleRoles`, include/core/scale_roles.h):
-the two platform::ScaleLinks (A = radio slot kScaleEspresso, B =
-kScaleBench) are bound to their radio slot, task and — for a paired Umbra —
-the partner GATT service, none of which can move at runtime; so every
-consumer of "the espresso scale" (BrewController, the Home cards, Device
-settings) reads through a `RoleScale` proxy, and `Swap roles` flips the
-two role pointers AND exchanges the stored keys (so a rolled-back build
-still finds its espresso scale under the original keys) — both links keep
-their connections, no reconnect, no restart. The flip and the key swap
-run under ONE lock (`ScaleProvisioner::swap_mu_`, issue #6): mid-swap the
-pointers and keys disagree in EITHER order, so every per-link persister
-(learned type today) must go through `persist_for(link, fn)`, which takes
-the same lock, resolves `slot_of` and writes. save_scale / forget hold it
-too (record + link together), set_partner_mode around its record RMW; a
-learn that a save overtook is dropped (the link's type is the new record's
-by then). It is the OUTERMOST lock — links, arbiter (incl. NimBLE's
-connect cancel, a short HCI round trip), NVS run under it; a persister
-must be called holding nothing (ScaleLink does). Backup/restore are NOT under it
-(restore reboots; accepted). At boot the
-mapping is identity (link A seeded from the espresso keys). Corollary: the
-shot park follows the ROLE — after a swap the bench role sits on radio
-slot kScaleEspresso and main.cpp parks THAT slot; the espresso ROLE is
-never shot-parked (it must reconnect mid-shot). The provisioner's
-`link_for(slot)` / `slot_of(link)` are the only role<->link lookups. NVS: the espresso keys keep their original names (`smac`/`sname`/
-`sprtnr`/`sprpend`/`satype`), the bench slot is the same set suffixed `2`,
-plus `benchhome` (0 in the scale card, 1 beside the graph). Umbra partner
-mode works in EITHER slot but only ONE at a time (one GATT service, one
-inbound session): `ScaleProvisioner::save_scale` refuses a second and the UI
-saves it as a plain link + toasts. `core::IScaleProvisioner` takes a
-`ScaleSlot`; `App::build` takes the bench `IScale*` (nullable).
+**Slots and roles** → docs/adr/2026-10-24-two-scale-slots-roles-over-links.md
+- ESPRESSO slot = every shot role (auto-stop, shot-start tare, shot detect, auto-flush cup-off, graph); BENCH = weight readout + its own Tare, never refused mid-shot.
+- Every save is Scan → tap → "Use <name> as which scale?". No auto-slotting, ever (owner's call).
+- Consumers read "the espresso scale" through `core::ScaleRoles` / `RoleScale` (include/core/scale_roles.h), never a link directly. `ScaleProvisioner::link_for(slot)` / `slot_of(link)` are the only role↔link lookups.
+- Swap roles flips the role pointers AND exchanges the stored keys under ONE lock, `ScaleProvisioner::swap_mu_` (issue #6). Every per-link persister (learned type, battery blob) goes through `persist_for(link, fn)`. It is the OUTERMOST lock: call a persister holding nothing; never call back into the provisioner or the UI under it.
+- NVS: espresso keys keep their names (`smac`/`sname`/`sprtnr`/`sprpend`/`satype`/`sbatest`); bench = same suffixed `2`; plus `benchhome` (0 card / 1 beside graph). ADD-only.
+- The shot park follows the ROLE (after a swap the bench role sits on radio slot kScaleEspresso); the espresso role is never shot-parked.
+- One Umbra partner at a time, either slot: `save_scale` refuses a second, the UI saves it plain + toasts. Max 3 connections: Micra + two scales, or Micra + inbound partner Umbra + one scale.
 
-Home: `build_home_tab(..., scale_enabled, bench_enabled, bench_mode, ...)`.
-Mode 0 = the SCALE card's caption becomes an ESPRESSO | BENCH switch and the
-two cards share the panel slot (`show_bench_side`; a shot starting snaps
-back to ESPRESSO from pump_scale_chart). Mode 1 = the lower row splits 2:1,
-bench card beside the graph. Bench-only = the bench card in the SCALE slot.
-Graph: a third ring `bench_weights` (no-data = `kFlowNoData`, pen up —
-never 0, so one scale's drop doesn't blank the other); `flow_mode` 2 = the
-bench ring in grams on the left axis (BENCH side / bench-only), `bench_
-overlay` = both series on one canvas, bench against its own right axis
-(`flow_ylabels_r`). The unit chip is a legend (dot + unit per series); the
-tap toggles only the espresso unit. Theme role `bench` (amber) for all of it.
-Settings > Scale: Bluetooth (two rows + Swap), Shot settings (Target /
-Review hold / Detect lead-in ONLY), Device settings (an Espresso/Bench
-picker when both saved, then the scale's own rows), Display (Battery
-display, Smoothing, Drop negative g/s, Oscilloscope graph, Window growth,
-Bench scale on Home). Sim: `FakeScale::set_bench`, render poses 1 (BENCH
-side) / 2 (save modal), renders `home_bench_*`, `scale_bt_bench`,
-`scale_bt_modal`, `scale_display*`, `scale_device_pick`.
+**Home and Settings** → docs/adr/2026-10-24-two-scales-home-and-settings.md
+- `build_home_tab(..., scale_enabled, bench_enabled, bench_mode, ...)`: mode 0 = ESPRESSO | BENCH switch in the SCALE card (`show_bench_side`), mode 1 = bench card beside the graph; bench-only takes the SCALE slot. Both modes on every board.
+- Graph ring `bench_weights`: no data = `kFlowNoData` (pen up), never 0. `flow_mode` 2 / `bench_overlay` / `flow_ylabels_r`. Theme role `bench` (amber).
+- Settings > Scale: Bluetooth (two rows + Swap), Shot settings (Target / Review hold / Detect lead-in only), Device settings (Espresso/Bench picker), Display (incl. Bench scale on Home).
+- Sim: `FakeScale::set_bench`, poses 1 (BENCH side) / 2 (save modal); renders `home_bench_*`, `scale_bt_bench`, `scale_bt_modal`, `scale_display*`, `scale_device_pick`.
+- Home cards share rows: see the Row alignment rule.
 
-RADIO ARBITER (`core::RadioArbiter`, include/core/radio_arbiter.h; host
-test `make test-radio`): the NimBLE host runs ONE listen at a time (a
-connect-by-address or a scan), refuses to scan while a connect is pending,
-and its connect-cancel is GLOBAL (`ble_gap_conn_cancel` aborts whichever
-client is initiating). So: the arbiter is the ONLY thing that cancels, only
-ever the current holder, through per-slot hold hooks; core link code never
-calls `ble_.cancel_connect()`. The links POLL it from their own tasks (no
-task of its own): `poll()` grants kIdle / kDirectConnect / kFinderChunk /
-kUserScan (top priority, preempts anything, including the slot's own
-attempt); `release()` with kConnected / kFailed / kPreempted (NOT a failure:
-no fail count, no backoff) / kScanDone. The finder: one scale missing ->
-the direct 10 s listen as before; two missing -> one passive address-matched
-chunk (`ICentral::scan_for`, stores nothing, stops on the first hit) whose
-SIGHTING the slot's own task turns into a 3 s direct connect (connections
-are never handed across tasks); empty chunks back off 1 -> 5 -> 20 s; a
-chunk counts as serving every missing slot (fairness vs the Micra). Parking
-is a per-slot BITMASK (`ParkSource` saver / portal / shot): the bench slot is
-shot-parked while `BrewSnapshot::phase != kIdle`, the espresso ROLE never
-(it must reconnect mid-shot) — "bench" meaning whichever radio slot holds
-the bench role after a Swap roles (see ROLES OVER LINKS above). The partner-mode Umbra's pause is driven by
-saver/portal only — yielding the radio must never doze it (the old shared
-pause level did, on every Micra Settings scan). Address-type learning
-compares the used type with the STORED one (a sighting hands in the
-advertised type); the Micra learns its type too (`matype`). Max 3
-connections (prebuilt libs): Micra + two scales, or Micra + one inbound
-partner Umbra + one scale.
+**Radio arbiter** → docs/adr/2026-10-21-radio-arbiter-and-address-type.md
+- `core::RadioArbiter` (include/core/radio_arbiter.h) is the ONLY thing that cancels a connect, and only the current holder; core link code never calls `ble_.cancel_connect()` (NimBLE's cancel is global).
+- No task of its own: links poll it. `poll()` grants kIdle / kDirectConnect / kFinderChunk / kUserScan (preempts anything); `release()` with kConnected / kFailed / kPreempted (not a failure) / kScanDone.
+- A connection is never handed across tasks: a finder sighting becomes a direct connect on the slot's own task.
+- Learned address type (`satype`, Micra `matype`) is compared with the STORED type, not the try's.
+- `make test-radio` — keep it green.
 
-## Touch controller diagnostics (2026-10-26)
+**Parking** → docs/adr/2026-09-08-scale-connects-parked-while-idle.md
+- Per-slot bitmask of `ParkSource` (saver / portal / shot) on the arbiter. Scales park for saver + portal; bench role also for shot (phase != kIdle); the Micra for the portal only.
+- A partner Umbra dozes on saver/portal only — yielding the radio must never doze it.
 
-The owner's X-8 spent a night under the screensaver ignoring the glass:
-LVGL rendering, heap flat, Micra link fine, HTTP up, NOTHING in the log —
-a GT911 that has gone quiet and one nobody is touching look identical to
-the driver — and a reset restored it (so: a hung controller, not the
-panel). touch.cpp now keeps health counters (polls, I2C failures, the
-current/longest failure streak, last raw status, last press) in
-/api/summary's `touch` block, logs `touch: controller not answering` when a
-streak passes ~2 s and `answering again` when it ends, and GET /api/touch
-runs a live probe (product id "911", "9271" on the X-8, config version, raw status, INT
-level) ON THE LVGL TASK between two polls (a second task's register read
-would move the chip's pointer mid-poll; the S3s serve HTTP from loop() and
-run it inline). `?reset=1` pulses TP_RST (native GPIO or the expander bit;
-the 2-inch has neither, and the P4-5 / X-7 / X-10.1 have kTouchRst = -1 and no expander, so ?reset=1 is a no-op there too) and re-probes — the in-place recovery. NEXT TIME:
-fetch /api/touch BEFORE any reset; ack=false / empty product = the chip stopped
-answering, ack=true with status bit7 never set = answering but not
-sensing. No auto-reset yet, on purpose: which of the two it is decides the
-fix. Cost: 120 B .bss (measured, X-8 build), the summary's stack buffer 736 -> 896 B
-and a 384 B stack buffer in the touch handler (web task on the P4s, loop
-task on the S3s), no task, no heap. A probe of a chip that NAKs costs the
-LVGL task a few ms (the re-find is single-shot); on a WEDGED bus each
-transaction pays Wire's 50 ms timeout (~250 ms, the same timeout every poll
-already pays there); only ?reset=1 adds the ~110 ms reset pulse. A probe
-never FORGETS the address (gt911_find only writes on a hit) — the polls
-must keep talking to the bus to see the chip come back. A probe request
-that times out (LVGL stalled) is withdrawn, with one acknowledged window: a
-tick that took it in that same instant still runs it (a reset included)
-and the caller sees done=false — re-fetch /api/touch before concluding
-nothing happened.
+## Static IP
 
-## SD mount policy + Settings > Apollo > Storage (v1.0.3)
+- Set ONLY on the WiFi setup portal (`TokenSetup::handle_wifi` validates with
+  the page's regex AND `IPAddress::fromString`; a bad set is refused whole).
+  No on-device editor (owner's call): re-run Set up WiFi, `handle_root`
+  pre-fills it. `Network::start_station` applies `WiFi.config()` before
+  `begin()`, all-zero to return to DHCP.
+- NVS (ADDs): `ipstatic` + `ipaddr`/`ipmask`/`ipgw`/`ipdns`; they travel in
+  the backup's WiFi opt-out group. `INetwork::static_ip()` feeds the Info row.
+- → docs/adr/2026-07-01-wifi-ntp-and-static-ip.md
 
-The slot is probed ONCE per boot — `ShotStore::mount_early()` in setup(),
-deliberately BEFORE `hostedInitBLE()` — and after that only from the Storage
-page's Mount button (a writer-task job). The 5 s cardless retry loop is GONE
-and must not come back: on the P4 the SD slot (SDMMC slot 0) and the C6
-radio (slot 1) share one controller with ONE chip-wide clock divider
-(`HP_SYS_CLKRST`); a cardless probe needs 400 kHz (host_div 10) while the C6
-runs 40 MHz (host_div 4), and IDF's `sdmmc_host_start_command` rewrites the
-shared divider on every slot change, so each probe flipped the C6's clock
-4↔10 around every transaction. Root-caused 2026-10-16 on the owner's X-8:
-coredump = `sdio_read` asserting `sdio_rx_get_buffer` on a 612 KB (garbage
-length) buffer while `shot_store` sat in `sdmmc_card_init` of the probe;
-the morning's silent `software (3)` reset was the same thing via the hosted
-driver's transport-failure restart. A MOUNTED card at 40 MHz shares the C6's
-divider, so the kept 5 s liveness ping (CMD13) never moves the clock — the
-P4-5 with a card never crashed. The X-8 has no card-detect pin and 51 kΩ
-pull-ups on CMD/D0-D3, so presence can only be learned by talking to the
-card. `MediumState` gained kRemoved (pulled while mounted; stays unmounted)
-and kUnmounted (by request); `StorageInfo` carries the CID name/vendor, CSD
-capacity, boot-sector fs type and a `busy` flag for the buttons. A Mount
-tap is one ~25 ms exposure on the user's say-so (~1 in 1,500 probes hit) —
-the radio is NOT torn down for it (owner's call). `GET /coredump` has been
-safe on the P4 since 2026-09-30 (reads via esp_partition_read) — use it.
+## Touch controller diagnostics
 
-## Settings backup to the card (v0.14+)
+- `touch.cpp` health counters in `/api/summary`'s `touch` block; log lines
+  `touch: controller not answering` / `answering again`.
+- `GET /api/touch` = live probe, run ON THE LVGL TASK between polls (never a
+  second task's register read; S3s run it inline from `loop()`). `?reset=1`
+  pulses TP_RST and re-probes; a no-op where `kTouchRst = -1` and no expander
+  bit (P4-5, X-7, X-10.1, the 2-inch).
+- BEFORE any reset, fetch `/api/touch`: `ack=false`/empty product = stopped
+  answering; `ack=true`, status bit7 never set = not sensing. No auto-reset,
+  on purpose — it would destroy that evidence.
+- `gt911_find` writes the address only on a hit; never make a probe forget it.
+  A timed-out probe can still have run (`done=false`): re-fetch.
+- → docs/adr/2026-10-26-touch-controller-health-probe.md
 
-Settings live in NVS, which does NOT travel with the SD card the shot history
-is on — swap hardware and every shot survives while every preference is lost.
-`Settings > Apollo > Backup` copies the whole `micra` namespace to
-`/Apollo2/settings.txt` and back. Shape of it:
+## SD mount policy + Settings > Apollo > Storage
 
-- Port `core::ISettingsBackup` (info/request_backup/request_restore/state).
-  The DEVICE `ShotStore` implements it as a second interface: the writer task
-  already owns the mount and all its hard-won policy, so a settings file is
-  just another job kind on that queue (`JobKind::kBackup/kRestore`). No second
-  mount, no new task, no new mutex. The UI only sees the port.
-- `config_backup.cpp` does the NVS<->file work: keys are ENUMERATED
-  (`nvs_entry_find/next/info`), never listed by hand, so a setting added later
-  is carried without anyone remembering this file. Type-tagged lines
-  (`i32:bright=100`, `str:tz=...`, `blob:tgtg=<hex>` — Preferences stores
-  floats as 4-byte blobs) so values round-trip exactly.
-- RESTORE IS A REPLACE, not a merge: hold the per-unit keys, `nvs_erase_all`,
-  apply the file. A key the file doesn't carry is then ABSENT and every
-  isKey()-guarded getter reads its compiled default — which is what makes an
-  older backup land exactly like an upgrade (the legacy fallbacks ssstyle ->
-  ssstyle2 etc. do the rest). Then a full reboot (`App::set_reboot_handler` —
-  the existing restart handler deliberately only resyncs an RGB panel).
-- PER-UNIT KEYS never leave the board and survive the erase: `padsense`,
-  `paddrive` (repair knobs for a damaged pad), `otainst` (install boot flag),
-  `lastunix` (clock seed), `_init`.
-- The two credentials — `wifipass` (with `ssid`/`wifi_en`, and since beta.7
-  the static-address keys `ipstatic`/`ipaddr`/`ipmask`/`ipgw`/`ipdns`: an
-  SSID with no PSK is a join that can never succeed) and `token` — are OPT-OUT switches in the
-  confirm modal, because the file is plain text on a card that leaves the
-  machine. `mac`/`name` always travel: they identify the machine, not open it.
-- A backup written by NEWER firmware is refused (`core::semver_newer`, shared
-  with update_check.cpp — do not fork it): an older build indexes stored enums
-  into fixed arrays, so a widened value would be an out-of-bounds read. Same
-  reasoning as the NVS RULE below.
-- Boards without a card slot pass `nullptr` for the port and the page is absent.
+- The slot is probed ONCE per boot (`ShotStore::mount_early()` in setup(),
+  BEFORE `hostedInitBLE()`), then only by the Storage page's Mount button (a
+  writer-task job). The 5 s cardless retry loop must NOT come back: on the P4
+  a cardless probe rewrites the SDMMC clock divider the C6 radio shares.
+- The SD side never deinitialises the shared host (`sd_host_deinit_noop`).
+- A mounted card's 5 s CMD13 ping stays. A Mount tap does NOT tear the radio
+  down (owner's call).
+- Reopen issue #4 on any `sdio_rx_get_buffer` coredump. `GET /coredump` is
+  safe on the P4 — use it.
+- → docs/adr/2026-07-25-sd-slot-shares-the-radio-host.md,
+  docs/adr/2026-09-12-backup-and-storage-ux.md
+
+## Settings backup to the card
+
+- `Settings > Apollo > Backup` ⇄ `/Apollo2/settings.txt`. Port
+  `core::ISettingsBackup`, implemented by the device `ShotStore` as job kinds
+  on its writer task — no second mount, task or mutex. No card slot =
+  `nullptr` port, no page.
+- `config_backup.cpp` ENUMERATES NVS — never hand-list keys.
+- RESTORE IS A REPLACE (`nvs_erase_all`, apply, full reboot via
+  `App::set_reboot_handler`), never a merge.
+- Per-unit keys never leave the board (`is_unit_key`: `padsense`,
+  `paddrive`, `padwire`, `otainst`, `sprpend`/`sprpend2`, `lastunix`,
+  `_init`); the knobs, `otainst` and `lastunix` are held across the erase. A
+  new per-unit key needs BOTH lists.
+- WiFi group (`ssid`/`wifipass`/`wifi_en` + static-IP keys) and `token` are
+  opt-out switches; `mac`/`name` always travel.
+- A backup from NEWER firmware is refused via `core::semver_newer` (shared
+  with update_check.cpp — do not fork it).
+- → docs/adr/2026-09-07-nvs-add-only-settings-compat.md,
+  docs/adr/2026-09-12-backup-and-storage-ux.md
+
+## Failed-allocation flight recorder
+
+- `platform::crash_record` (crash_record.*) hooks the heap's
+  failed-allocation callback; the census goes to RTC memory (<1 KB,
+  static_assert) and prints as `memfail:` lines at the next boot. IDF keeps
+  ONE such callback — never register a second.
+- Dev serial: `memfail` exercises it, `reboot` soft-resets (RTC survives; a
+  power cycle does not).
+- → docs/adr/2026-07-30-diagnostics-that-survive-the-morning.md
 
 ## Scheduled on/standby (v1.0, issue #3)
 
-`Settings > Micra > Schedule`: one "on" window per day, the same every day or
-per weekday, with a global warm-up lead. Shape of it:
+`Settings > Micra > Schedule`. Engine `core::ScheduleEngine`
+(`include/core/schedule.h`, `src/core/schedule.cpp`), owned by `ui::App`, fed
+from the 500 ms `App::refresh()`. `make test-schedule`
+(`tools/schedule_test.cpp`) must stay green.
 
-- Pure engine `core::ScheduleEngine` (include/core/schedule.h, src/core/
-  schedule.cpp) owned by `ui::App` like `ReadyChime` and fed from the 500 ms
-  `App::refresh()` (clock, machine link/power, `BrewSnapshot::phase`,
-  `lv_tick_get()`). ~80 B of internal .bss, no task, no heap. `make
-  test-schedule` (tools/schedule_test.cpp, plain g++) checks it — keep it green.
-- RULES the engine encodes (owner's decisions, don't drift): times are ONE-SHOT
-  edges, never a held period; a trigger fires only if the link is Connected
-  inside a 2-min window (`kScheduleFireWindowMin`) and is otherwise dropped, no
-  catch-up; each slot latches by minute-of-week so it fires once; an edit
-  pre-latches anything already in-window (dragging a time across "now" never
-  switches the machine); "on" when already on is a no-op; "off" during a shot
-  or review DEFERS until the phase has been idle for `kStandbyGraceMs` (2 min,
-  covers the auto-flush), then fires if still on; nothing fires unless
-  `App::ntp_ready()` (WiFi enabled + NTP enabled + `ntp_seconds_since_sync()
-  >= 0`, i.e. a real sync THIS boot) and the date is real. The warm-up lead
-  may wrap into the previous evening (minute-of-week arithmetic). A trigger
-  whose window closes UNFIRED logs `schedule: ... MISSED` with the reason
-  it was waiting (Micra not connected / clock not trusted) — added
-  2026-09-30 after a cold morning left no trace. Same day: main.cpp no longer
-  parks Micra reconnects under the screensaver (portal-only now; the saver
-  park was always meant for the scale) — a link lost overnight used to stay
-  lost until the first touch, which is the leading (unproven) explanation.
-- Gate on the page (`sync_schedule_gate`, change-detected): paired Micra AND
-  ntp_ready; otherwise every schedule control is DISABLED (per-widget 40 %
-  opa, not a container) SILENTLY — the owner dropped the explanatory line
-  (2026-09-25, "too much for the page"); the manual carries the reason. `MachineSnapshot::brewing` is
-  NEVER set by the link — use `ShotPhase`.
-- AUTO-STANDBY (v1.0.0-beta.4, owner's spec 2026-09-23; INACTIVITY since
-  2026-11-02) lives in the SAME engine (`tick_auto_standby`,
-  `ScheduleAction::AutoStandby`): a countdown from the END of the last
-  ACTIVITY — a shot (BrewSnapshot::phase leaving kBrewing/kSettling) or
-  `ScheduleInputs::busy` = BrewSnapshot::cleaning (flush or backflush; the
-  owner found a flush didn't count) || BrewSnapshot::brewing (the drive
-  line held: a MANUAL-mode pull, which never sets a shot phase, and the
-  post-shot auto-flush run — review 2026-11-02) — never from turn-on — so a machine the
-  schedule (or a hand) switched on and nobody used stays on; every shot or
-  cleaning restarts it, and neither the count nor a scheduled Off fires
-  while one runs (a deferred Off restarts its 2-min grace on cleaning too); a
-  scheduled "on" (even onto a machine already on) DISARMS it; standby by
-  anyone disarms it; it fires only Connected + On + phase kIdle, and needs
-  NO clock and NOT the master `enabled` (UI gates it on "paired" only). A
-  minutes edit while armed moves the deadline (timed from the shot's end).
-  It needs a SHOT SOURCE (wired paddle, or a paired scale in Shot detect —
-  Manual-unwired has no edge source); `sync_schedule_gate` bit2 shows the
-  `sched_asb_status` line when there is neither.
-  Range 10..240 in 10-min steps (`sanitize_auto_standby_min`), default 30.
-  UI: the Schedule page is TWO lv_menu pages — the switches (one per line,
-  NO group headings: "Auto-standby when idle", "Show auto-standby
-  timer" (Home MICRA header shows "<power> N min" via
-  ui::set_micra_standby_timer from refresh(); IDisplaySettings key
-  `schasbt`), then the gate line and the master labelled "Enable schedules"
-  — Auto-standby sits FIRST on purpose so it never reads as being under the
-  master)
-  + a "Configure schedule" entry whose value label summarises the window
-  ("Per day" only once the enabled days differ), and the times page (chips,
-  the day's own switch, pickers, range bar, Copy times to). The chips are
-  select-only again (the tristate tap was reverted 2026-09-23).
-- NVS keys (all ADDs): `schen`, `schsame`, `schwarm`, `schwarmm`, `schwarn`
-  (cloud-app notice dismissed), `schasb` + `schasbm` (auto-standby on /
-  minutes), `schasbt` (show the countdown), `schall` (daily window) and
-  `schd0`..`schd6`
-  (Mon..Sun), the windows packed by `core::pack_day` (bits 0-10 on, 11-21 off,
-  22 enabled; `unpack_day` sanitizes so garbage degrades to a legal window).
-  `platform::ScheduleSettings::set_config` writes only changed keys.
-- UI: hour dropdowns share `fill_hour_dd` with Time & date (index == hour in
-  both clock formats); the range slider is `LV_SLIDER_MODE_RANGE` (mode BEFORE
-  range; programmatic writes are order-aware because lv_bar clamps each end
-  against the other; VALUE_CHANGED names no knob, read both). The slider
-  persists on RELEASED only. The toast for a scheduled command is skipped
-  under the screensaver on purpose.
+Engine rules (owner's decisions, don't drift):
+- Times are ONE-SHOT edges, never a held period.
+- Fires only if the link is Connected inside `kScheduleFireWindowMin` (2 min);
+  otherwise dropped, no catch-up. A window closing unfired logs
+  `schedule: ... MISSED` with its reason.
+- Each slot latches by minute-of-week; an edit pre-latches anything
+  in-window (dragging a time across "now" never switches the machine).
+- "On" when already on is a no-op.
+- "Off" during a shot, review, cleaning or held drive line DEFERS until idle
+  for `kStandbyGraceMs` (2 min), then fires if still on.
+- Nothing fires unless `App::ntp_ready()` (WiFi + NTP enabled + a real sync
+  THIS boot) and the date is real. Warm-up lead may wrap into the previous
+  evening.
+- `MachineSnapshot::brewing` is NEVER set by the link — use `ShotPhase`.
+- Micra reconnects are NOT parked under the screensaver (portal only).
+- Auto-standby (`tick_auto_standby`, `ScheduleAction::AutoStandby`): counts
+  from the END of the last activity (a shot, `ScheduleInputs::busy` =
+  cleaning || drive line held), never from turn-on; a scheduled "on" or
+  standby by anyone disarms it; fires only Connected + On + kIdle; needs no
+  clock and not the master switch; needs a shot source. Range 10..240 in
+  10-min steps, default 30 (`sanitize_auto_standby_min`).
 
-## Failed-allocation flight recorder (crash_record.*, 2026-09-12)
+Page (owner's calls): two lv_menu pages; switches one per line, NO group
+headings, "Auto-standby when idle" FIRST (never under the master "Enable
+schedules"); no gate explanation line — controls grey silently (per-widget
+40 % opa, `sync_schedule_gate`); day chips are select-only.
 
-Core dumps here hold task stacks only (CONFIG_ESP_COREDUMP_CAPTURE_DRAM is off
-in the prebuilt libs and can't be turned on), so a heap starvation crash — the
-P4 hosted radio's `sdio_rx_get_buffer` assert, the S3's esp-aes/TLS failures —
-left no memory evidence. `platform::crash_record` hooks the heap's
-failed-allocation callback (runtime API), takes a census of the pool that
-refused the request (requested size + caps + function, totals, used blocks by
-EXACT size, largest free holes) into <1 KB of RTC/LP memory (static_assert), and the next boot
-prints it as `memfail:` lines in the log ring. Attribution is by size
-signature (HEAP_TASK_TRACKING is unavailable), which names the big fixed-size
-buffers and not small generic blocks. Dev serial commands: `memfail` forces an
-impossible allocation to exercise it, `reboot` soft-resets (RTC survives; a
-power cycle does not).
+NVS keys (all ADDs): `schen`, `schsame`, `schwarm`, `schwarmm`, `schwarn`,
+`schasb`, `schasbm`, `schasbt`, `schall`, `schd0`..`schd6` (packed by
+`core::pack_day`; layout is stored — don't change it).
+→ docs/adr/2026-09-22-schedule-engine-rules.md
+→ docs/adr/2026-09-22-schedule-page-design.md
 
 ## Memory budget rule (owner, 2026-09-10)
 
-**Never introduce more RAM use without review and a full explanation.** That
-means: no task-stack increase, no new task, no larger buffer, no new
-static/heap allocation on any device env — internal RAM, DMA-capable RAM or
-PSRAM — without first stating what it costs (bytes, which pool, on which
-boards), why the cheaper alternative doesn't work, and getting the owner's
-OK. The S3 boards run a few KB from starvation (esp-aes/TLS and WiFi have
-both failed for lack of internal RAM); a "harmless" 1.5 KB stack bump is
-exactly how that happens. Prefer restructuring (move the work to a task that
-already has the room, log from loop() instead of a small task, reuse an
-existing buffer) over adding memory. Applies to fixes as much as features.
+**Never introduce more RAM use without review and a full explanation.** No
+task-stack increase, no new task, no larger buffer, no new static/heap
+allocation on any device env — internal, DMA-capable or PSRAM — without
+first stating the cost (bytes, which pool, which boards), why the cheaper
+alternative doesn't work, and getting the owner's OK. Applies to fixes as
+much as features. Restructure first: move the work to a task that already
+has the room, log from `loop()` instead of a small task, reuse a buffer.
+Measure `MALLOC_CAP_INTERNAL|MALLOC_CAP_DMA`, not the 8-bit pool.
+→ docs/adr/2026-09-10-memory-budget-rule.md
 
 ## Row alignment rule (owner, 2026-11-01)
 
 **Cards that share a row share their lines — never break that without
-raising it first, the way RAM use is raised.** On Home's large layouts the
-MICRA, SCALE and BENCH panel cards are built from the same grammar:
-header, then a caption line (BREW / STEAM / WEIGHT / TIMER / the bench
-scale's name in caps), a value line, a stepper line (− value +, the shot
-pill, or an EMPTY slot that keeps its height), then the action row — and
-every one of those lines sits at the same y on every card in the row
-(swap mode levels the MICRA header to the switch header's height and
-takes the same slack out of both bodies for this). New content on a card
-goes INTO an existing line, not between two; decoration that must wrap
-text (the Record outline) is a layout-ignoring object fitted behind the
-labels, never a box in the flow; the only card exempt is the one beside
-the graph (nothing beside it to align with, and the graph's height to
-live in). Before saying a layout is right, LOOK: crop the card from the
-sim render at 2-3x (the Preview-sized image hides a cut ring), and read
-the detail log's `home: scale card ... overflow=N` / `home: bench card ... clipped=N`
-lines — measured AFTER the App's show/hide pass, on visible children's
-raw coordinates (a build-time measurement of a hidden widget is
-meaningless, and `lv_obj_get_scroll_bottom` sees direct children only).
-LVGL clips every child to its parent's rectangle: content that overruns a
-body loses its edge even with an empty gap below it. If a design needs a
-line to move, a row to be added or a card to break rank, say so and get
-the owner's OK before building it — "it looks fine" is not the test, the
-rows are.
+raising it first, like RAM use.** On Home's large layouts MICRA, SCALE and
+BENCH share: header, caption line, value line, stepper line (or an EMPTY
+slot that keeps its height), action row — each at the same y on every card.
+- New content goes INTO an existing line, never between two.
+- Decoration that wraps text (the Record outline) is a layout-ignoring
+  object fitted behind the labels, never a box in the flow.
+- Only the bench card beside the graph is exempt.
+- Moving a line, adding a row or breaking rank: ask first, build on an OK.
+- Verify by LOOKING: crop the card from the sim render at 2-3x and read the
+  detail log's `home: scale card ... overflow=N` / `home: bench card ...
+  clipped=N` lines (measured after the App's show/hide pass). "It looks
+  fine" is not the test.
+→ docs/adr/2026-11-01-home-cards-share-rows.md
 
 ## Release checklist (every tag, no exceptions)
 
-1. `include/version.h` — bump `fw::kVersion` to the tag (minus the `v`). The
-   device compares THIS to releases.json; forget it and the new image reports
-   the old version and re-prompts forever (v0.12.3, 2026-09-10). CI fails
-   the build if kVersion != the tag (a compile-time static_assert against
-   `APOLLO_EXPECT_VERSION`, see include/build_check.h; the same for the
-   slug via `APOLLO_EXPECT_SLUG` — never a grep of the image: the xtensa
-   linker tail-merged "1.1.0" into a TZ string and refused a correct v1.1.0
-   build, 2026-10-23), but bump it first anyway.
-2. `CHANGELOG.md` — real notes under `## vX.Y.Z` (the workflow extracts them).
-   **Concise (owner, 2026-09-12): a bolded lead-in plus one or two sentences
-   per bullet, ~50 words at the very most.** Say what the user sees.
-   Mechanism, history and measurements belong in the commit message.
-   **Two lists, features first (owner, 2026-10-30):** `### Features`, then
-   `### Fixes`, inside the version's section (the workflow's extraction
-   stops only at `## `; the device's sanitize_notes() shows a `###` heading
-   as a plain line). Omit an empty list.
-   **NEVER invent a version heading for unreleased work.** Notes for work that
-   isn't tagged yet go under `## Unreleased` at the top; the release commit
-   renames that heading to the tag. A `## vX.Y.Z` heading with no matching
-   GitHub Release is a vestigial version (we've shipped several — v0.13.1 was
-   the last), and the workflow warns if `## Unreleased` is still there at
-   release time.
-3. `make sim` green locally. The device images are CI's job: the run builds
-   every release env (and the kVersion/slug asserts) before the approval
-   gate, so a red build publishes nothing and creates no tag — no local
-   `make build-release` sweep (owner, 2026-10-30). Exception: a platform,
-   bootloader or partition-table change still runs `make build-all`
-   locally, since those images go on a bench unit for the OTA proof anyway.
-   Changed a pinned bootloader or a partition table? Bump that env's
-   `custom_flash_epoch` (the run's `meta` job fails otherwise) — the release
-   then becomes web-flash-only for those boards (see FLASH EPOCH above).
-4. Commit, push main, then `gh workflow run firmware-release.yml -f tag=vX.Y.Z`
-   (CI creates the tag + Release; never build release binaries locally).
-   **Stable tags are cut from main ONLY** — the workflow's first step fails
-   any non-beta tag dispatched from another ref. **Betas may be cut from a
-   branch**: `--ref feat/v1.0 -f tag=v1.0.0-beta.N` (every job checks out the
-   dispatched ref and the tag lands on that branch's head, so never rebase or
-   squash a branch after tagging it; merge main INTO it). Notes for a branch
-   line accumulate under ONE `## vX.Y.Z` heading (the workflow falls back to
-   it for -beta.N tags); promotion = merge to main, bump kVersion, run at the
-   stable tag from main.
-5. **Approve the deploy.** The build runs unattended, then the `release` and
-   `pages` jobs wait in the `release` environment for the owner's click
-   ("Review deployments" on the run page; GitHub emails when it's waiting).
-   Nothing reaches gh-pages — where every device self-updates from — or the
-   Releases page until then. This is the OTA supply-chain gate (2026-09-19):
-   the workflow token is read-only, only the gated environment holds the
-   PAT that can write (secret `RELEASE_TOKEN`, fine-grained, this repo,
-   Contents read+write — rotate it before it expires), and repo rulesets let
-   only an admin push gh-pages or create a `v*` tag, so a workflow edit can't
-   grant itself a way around it. Applies to betas too, on purpose: beta
-   devices install straight from `releases-beta.json`.
+1. `include/version.h` — bump `fw::kVersion` to the tag (minus the `v`).
+   CI static_asserts it (and the slug) at compile time, but bump it first.
+2. `CHANGELOG.md` — real notes under `## vX.Y.Z`: `### Features` then
+   `### Fixes` (omit an empty list); a bolded lead-in plus one or two
+   sentences per bullet, ~50 words max, what the user sees. **NEVER invent a
+   version heading for unreleased work** — it goes under `## Unreleased`,
+   renamed by the release commit.
+3. `make sim` green locally. Device images are CI's job — no local
+   `make build-release` sweep. Exception: a platform, bootloader or
+   partition-table change runs `make build-all` locally and bumps the env's
+   `custom_flash_epoch` (the `meta` job fails otherwise).
+4. Commit, push main, then `gh workflow run firmware-release.yml -f
+   tag=vX.Y.Z` (CI creates tag + Release; never build release binaries
+   locally). **Stable tags from main ONLY.** Betas may be cut from a branch
+   (`--ref feat/v1.x -f tag=vX.Y.Z-beta.N`); never rebase or squash a
+   branch after tagging it — merge main INTO it. A branch line's notes go
+   under ONE `## vX.Y.Z` heading.
+5. **Approve the deploy** ("Review deployments" on the run page). Nothing
+   reaches gh-pages or Releases until then; applies to betas too. Rotate the
+   `RELEASE_TOKEN` PAT before it expires.
 
-**Pushing a beta** is the same five steps with the tag `vX.Y.Z-beta.N` and
-`fw::kVersion` set to `X.Y.Z-beta.N`. CI publishes it as a GitHub pre-release,
-keeps it out of `releases.json` (so only beta-channel devices and the flasher's
-"Include pre-releases" box see it), and falls back to the `## vX.Y.Z` CHANGELOG
-section if there is no `## vX.Y.Z-beta.N` one. **Promoting** it: on the same
-commit, set kVersion to `X.Y.Z`, roll the beta notes up under `## vX.Y.Z`, and
-run the workflow at `vX.Y.Z`. Devices on the beta see the release as newer
-(release > any beta of that number) and update once.
+**Beta:** same steps, tag `vX.Y.Z-beta.N`, `kVersion` = `X.Y.Z-beta.N`;
+published as a pre-release, never in `releases.json`. **Promote** = on the
+same commit set `kVersion` to `X.Y.Z`, roll the notes up under `## vX.Y.Z`,
+run at the stable tag from main — a rebuild, never a copy.
+→ docs/adr/2026-07-22-release-process-and-publish-gate.md
+→ docs/adr/2026-09-12-beta-channel-two-indexes.md
 
 ## Git conventions
 
-- Commit as `marcus@turboio.com` (repo-local config). Do NOT add
-  "Co-Authored-By: Claude" or other AI-signature trailers.
+- Commit as `marcus@turboio.com` (repo-local config).
+- Do NOT add "Co-Authored-By: Claude" or any other AI-signature trailer.
 
 ## Support matrix (READ BEFORE TOUCHING ANY BOARD LIST)
 
-FOUR boards are released and advertised. Nothing else is, on purpose:
+FOUR boards are released and advertised. Nothing else is, on purpose.
+
+The P4-4.3 stays RELEASED: it was de-listed on 2026-09-10 and brought back
+the next day because units were already in use (fielded units self-update
+from its slugs). Don't de-list it again without asking.
 
 | env | product | role | slug |
 |---|---|---|---|
@@ -613,368 +381,114 @@ FOUR boards are released and advertised. Nothing else is, on purpose:
 | `esp32-s3-micra-4-3c` | S3-Touch-LCD-4.3C BOX | mount-on-Micra, nothing to build | `s3-touch-lcd-4.3c` |
 | `esp32-p4-micra-x-8` | P4-WIFI6-Touch-LCD-X 8" | counter-top companion | `p4-wifi6-touch-lcd-x-8` |
 
-Positioning (keep the docs saying this): the **P4-5 is the recommendation** for
-mounting on the machine — it just needs a printed shell and, for Auto shot, a
-DIY opto cable. The **P4-4.3 is THE SAME BOARD with smaller glass** — the -5 env
-literally `extends` the -43 env, and the only board_config deltas are panel
-controller, DSI timings, reset/backlight polarity, touch rst/int and UI scale.
-Everything functional (P4NRW32, C6 radio, ES8311 audio, battery path, SD, paddle
-pins) is byte-identical. **Choose between them on screen size and a small price
-difference — nothing else.** The **4.3C earns its place by removing BOTH DIY
-steps**: it is the only supported board that is a finished box *and* has
-opto-isolators on-board (three wires into screw terminals). It is the slower
-part; that is the trade. The **X 8"** is the counter-top box.
-
-Every OTHER env — `esp32-s3-micra` (2"), `-7b`, `-4-3b`, `-x-7`, `-x-10-1` — is
-**INTERNAL-ONLY**: it still builds, is still maintained,
-and is deliberately absent from the release matrix, the web flasher and every
-user-facing doc. They are kept as the record of how those boards differ, and as
-dev hardware (the 7" X box is the owner's desk unit). **Do not add one back to
-README.md, docs/HARDWARE.md, site/index.html or the CI matrix without asking.**
-Nothing is deleted to de-advertise a board — only de-listed.
-
-The lists that must stay in sync when this changes: the
-`.github/workflows/firmware-release.yml` matrix, `site/index.html` (board cards
-*and* `BOARD_PATTERNS`), README.md ("Which board?", the 3D-print table, the
-flash/`pio run` lists), docs/HARDWARE.md, and the `[RELEASED]`/`[INTERNAL-ONLY]`
-markers in platformio.ini + board_config.h.
-
-- **OTA on de-listed boards: knowingly broken, do not "fix" it.** `releases.json`
-  is global, so an internal-only build still sees "update available" and its
-  install 404s and rolls back harmlessly. Accepted because none of these boards
-  are expected to be in anyone's hands — they get flashed over USB. Revisit only
-  if one actually sees use. No `kOtaPublished` flag, no UI gating.
-- **Rev v3 production silicon for the P4 boards — DONE on feat/v1.0 (issue
-  #2, 2026-09-22). HW-CONFIRMED the same day on a rev v3.2 P4-4.3 AND a rev
-  v3.2 P4-5 (boot, DSI panel, touch, welcome flow); both flashed by the plain
-  make target's chip-revision auto-pick.** Waveshare does not change the SKU, so a buyer cannot tell
-  which silicon they got; **the product list stays FOUR — the silicon split
-  doubles the IMAGES, not the boards** (six images in CI). Never surface it as a
-  separate product in the README/board table; the flasher handles selection.
-  Shape of it, per P4 product (the 4.3 and the 5; the X 8" is rev3-only):
-    * a SECOND env + board json: `esp32-p4-micra-5-rev3` /
-      `esp32-p4-micra-43-rev3` (`boards/esp32-p4-wifi6-{5,43}-rev3.json`,
-      `chip_variant "esp32p4"`), which define `BOARD_P4_SILICON_REV3` from
-      build_flags — the macro display.cpp keys the DSI PHY's XTAL PLL
-      reference on, and which board_config.h now uses to pick the slug
-      `<plain-slug>-rev3`. `kName` is the SAME for both revisions on purpose.
-    * the PLAIN slug keeps meaning rev v1.x ("es") — never rename it, fielded
-      units self-update from that path. A rev3 unit self-updates from the
-      -rev3 slug: one product, two OTA lines.
-    * the flasher keeps ONE card per product: a "Chip revision" radio (v1.x /
-      v3, default v1.x) picks the manifest, and Detect reads the `REV=` field
-      the identify banner has carried since v0.11.0 (efuse major*100+minor,
-      >= 300 = rev3) and sets the radio itself. A blank board can't be probed
-      over Web Serial, so the radio is the explicit choice there.
-    * `make flash-p4-5` / `flash-p4-4-3` (and bare `make flash` auto-detect,
-      which asks a running board `id?` for its REV=) read the chip revision
-      off the ROM loader with esptool — works on a BLANK board — and pick the
-      sibling env themselves, announcing the switch; the explicit `-rev3`
-      targets exist but are rarely needed. P4 only: no scripted resets on an
-      S3's USB-CDC port.
-  **Picking wrong is recoverable and that is fine** — the board just won't come
-  up until the other image is flashed; nothing is damaged. Don't over-engineer
-  the guard-rails for it.
+- Positioning the docs keep: P4-5 = the recommendation; P4-4.3 = the same
+  board with smaller glass (choose on screen size and price, nothing else);
+  4.3C = the only finished box with on-board optos, the slower part; X 8" =
+  counter-top.
+- Every OTHER env (`esp32-s3-micra` 2", `-7b`, `-4-3b`, `-x-7`, `-x-10-1`)
+  is INTERNAL-ONLY: builds, maintained, absent from the release matrix, the
+  flasher and every user-facing doc. **Do not add one back to README.md,
+  docs/HARDWARE.md, site/index.html or the CI matrix without asking.**
+  Nothing is deleted to de-advertise a board. (The X 7" is the owner's desk
+  unit.)
+- Lists that must stay in sync: `.github/workflows/firmware-release.yml`
+  matrix, `site/index.html` (cards *and* `BOARD_PATTERNS`), README.md
+  ("Which board?", 3D-print table, flash/`pio run` lists), docs/HARDWARE.md,
+  and the `[RELEASED]`/`[INTERNAL-ONLY]` markers in platformio.ini +
+  board_config.h.
+- OTA on de-listed boards is knowingly broken (install 404s, rolls back) —
+  do not "fix" it: no `kOtaPublished` flag, no UI gating.
+- P4 silicon: rev v1.x and rev v3 split the IMAGES, not the products. Each
+  P4-5 / P4-4.3 has a `-rev3` env (`BOARD_P4_SILICON_REV3`) and slug
+  `<plain-slug>-rev3`; the X 8" is rev3-only. The PLAIN slug means rev v1.x
+  forever — never rename it (fielded units update from it). `kName` is the
+  same for both. Never surface the revision as a separate product; the
+  flasher's "Chip revision" radio + Detect (`REV=`) and `make flash-p4-5` /
+  `flash-p4-4-3` (esptool reads the revision) pick the image. Picking wrong
+  is recoverable — don't over-engineer guard-rails.
+→ docs/adr/2026-09-10-supported-board-matrix.md
+→ docs/adr/2026-07-17-p4-silicon-revisions.md
 
 ## Boards / build
 
-Board targets are `<chip>-<panel>` after the Waveshare product names.
-Released: `build-p4-5`, `build-p4-4-3`, their `-rev3` siblings (rev v3.0+
-silicon), `build-s3-4-3c`, `build-p4-x-8`. Internal-only:
-`make build` (default, the 2-inch S3), `build-s3-7b`, `build-s3-4-3b`,
-`build-p4-4-3`, `build-p4-x-7`, `build-p4-x-10-1`. Matching `flash-*` targets
-auto-detect the port and can probe a running board's serial banner (pre-rename
-names like `build-p4`/`flash-7b` remain as aliases). Two sweeps:
-`make build-release` (the released envs + sim — no longer a release step:
-CI's matrix builds them, see the Release checklist) and `make build-all`
-(every env + sim).
+- Targets are `<chip>-<panel>`. Released: `build-p4-5`, `build-p4-4-3`, their
+  `-rev3` siblings, `build-s3-4-3c`, `build-p4-x-8`. Internal-only: `make
+  build` (2-inch S3), `build-s3-7b`, `build-s3-4-3b`, `build-p4-x-7`,
+  `build-p4-x-10-1`. Each has a `flash-*` twin that auto-detects the port;
+  old names (`build-p4`, `flash-7b`, ...) are aliases. Sweeps: `make
+  build-release` (released envs + sim) and `make build-all` (every env + sim).
+- While iterating: `make sim` plus at most the ONE env on the bench. `make
+  build-all` passes before a PUSH or RELEASE of a platform change, not per
+  edit, as one invocation. Never build an env that may be being flashed.
+  → docs/adr/2026-07-25-build-discipline.md
+- The History page is a GENERATED, git-ignored header
+  (`include/platform_esp32/webapp_dist.h`, from `tools/webapp/`). Device
+  `make` targets rebuild it and need **node**; bare `pio run` does not, so run
+  `make webapp` first. Never commit it or hand-edit `tools/webapp/dist/`.
+  → docs/adr/2026-07-28-repo-hygiene.md
 
-WHEN to run full builds: `make build-all` must pass before you PUSH or cut a
-RELEASE of a platform change — not on every edit. During debug/development stay
-on `make sim` (fast, no node, no device contention) and at most the ONE device
-env you're actually testing on. Full sweeps mid-investigation are slow, contend
-for the shared `.pio` dir (see the build-workflow notes about flashing), and
-tell you nothing you don't already know until the fix is finished.
+### Per board: what to build and flash
 
-The firmware embeds the History web page as a GENERATED, git-ignored header
-(`include/platform_esp32/webapp_dist.h`). Every device build/flash target
-depends on it, so `make build` rebuilds it from `tools/webapp/` when stale —
-that needs **node** (a real dev dependency; `make sim` does not need it). Bare
-`pio run` does NOT generate it: run `make webapp` first. Never commit the
-header or hand-edit `tools/webapp/dist/`.
+| env | glass / controller | silicon (`chip_variant`) | notes |
+|---|---|---|---|
+| `esp32-p4-micra-43` (+`-rev3`) | 4.3" ST7701 | v1.x `esp32p4_es` / `-rev3` `esp32p4` | released; the P4-5 image hangs silently at display init on it |
+| `esp32-p4-micra-5` (+`-rev3`) | 5" HX8394 | as the 4.3 | released; `extends` the -43 env; daily-driver board |
+| `esp32-p4-micra-x-8` | 8" JD9365 | `esp32p4` only (bench unit rev v3.2) | released; rotates 270 in the flush (`kDsiRotate270`) |
+| `esp32-p4-micra-x-7` | 7" ILI9881C | `esp32p4_es` (bench unit rev v1.3) | internal (desk unit); 180 at the panel |
+| `esp32-p4-micra-x-10-1` | 10.1" JD9365_10 | `esp32p4` (assumed) | internal, never powered (owner's call: stays out of README, flasher, matrix) |
+| `esp32-s3-micra-4-3c` | 4.3" RGB | S3 | released; config-only on the 4.3B wiring + CH32V003 expander |
 
-### ESP32-P4-WIFI6-Touch-LCD-5 (env `esp32-p4-micra-5`, rev3 sibling `esp32-p4-micra-5-rev3`) — HW-VERIFIED on both silicon revisions, the owner's daily-driver board and the default recommendation
+- P4 silicon is per UNIT, not per size or SKU, and one image cannot boot both
+  generations (wrong variant = a boot loop before any log: Illegal
+  instruction at the bootloader on v1.x, `CHIP_LP_WDT_RESET` on v3).
+  `esptool chip-id` a new unit first; `make flash-p4-5` / `flash-p4-4-3`
+  pick the rev sibling themselves. Never "simplify" a json's `chip_variant`.
+  → docs/adr/2026-07-17-p4-silicon-revisions.md
+- DSI glass differences are a table (`BOARD_DSI_PANEL_*` in display.cpp) plus
+  block constants; rev3 keys the PHY clock on `BOARD_P4_SILICON_REV3`. On the
+  ILI9881C only page-0 0x36 writes are MADCTL (page 1 has a GIP 0x36). X-8:
+  GPIO23 = TP_RST, GPIO33 = TP_INT, no backlight enable. The X-7/X-10.1
+  "BL_EN = 23" is a known misread left as verified — fix it only with one on
+  the bench. → docs/adr/2026-07-09-p4-dsi-panels.md
+- P4 radio: `esp-nimble-cpp` with `lib_compat_mode = off` (never
+  NimBLE-Arduino); `hostedInitBLE()` before `NimBLEDevice::init()`. The C6
+  slave auto-updates from the committed `firmware_blobs/c6_slave.bin`
+  (c6_update.cpp, NVS `c6try`); bump the blob with the platform's esp-hosted
+  version. `APOLLO_SKIP_C6_UPDATE` (no env sets it;
+  `PLATFORMIO_BUILD_FLAGS="-D APOLLO_SKIP_C6_UPDATE" pio run -e ... -t
+  upload`, which wipes every env's build dir) leaves a factory slave alone —
+  the X-8's factory dump + RESTORE.md live in ~/firmware-backups/apollo/.
+  Waveshare's FactoryOnly image is the known-good reference for C6/wiring.
+  → docs/adr/2026-07-09-p4-hosted-radio.md
+- S3: NimBLE init before WiFi in `setup()`; never script DTR/RTS on the
+  USB-CDC port (strands it in download mode; physical RST recovers).
+  → docs/adr/2026-07-18-s3-boot-order-and-serial-reset-trap.md
+- P4 battery units power-cycle on USB plug/unplug (hardware, not firmware).
+  USB-vs-battery is voltage-only (`kUsbPowerVolts`) on every board; audio,
+  battery and the 4.3C expander are config-only (`board_config.h`).
+  → docs/adr/2026-07-23-p4-usb-plug-power-cycle.md,
+  docs/adr/2026-07-18-board-peripherals-audio-battery-expander.md
 
-Electronically the P4 4.3 (same radio/audio/battery/paddle wiring — everything
-in that section applies, including the rev v1.x chip_variant); only the panel
-differs: 5" 720x1280 HX8394 over the same 2-lane DSI. Panel deltas, all from
-Waveshare's BSP (esp32_p4_wifi6_touch_lcd_5 + esp_lcd_hx8394): different DCS
-init table (display.cpp, selected by BOARD_DSI_PANEL_HX8394), reset asserts
-HIGH (kLcdRstActiveHigh), backlight LEDC is normal polarity (kBacklightActiveLow
-= false) with NO boost-enable pin, GT911 rst/int not wired to the P4 (probe
-only), 58 MHz DPI / 700 Mbps lanes. UI: `BOARD_UI_SCALE 1.5f` renders the wide
-800x480 layout at 1.5x via ui::dp()/ui::font_dp() (see include/ui/screen.h) —
-scale 1.0 boards are bit-identical, verified against baseline renders.
+### Paddle
 
-### ESP32-P4-WIFI6-Touch-LCD-X 7"/8"/10.1" (envs `esp32-p4-micra-x-7` / `-x-8` / `-x-10-1`) — 7" verified on HW (2026-08-29: boot, display, touch, hosted link, paddle sense); 8" VERIFIED 2026-09-22 (boot, panel, touch, welcome; owner); 10.1" NOT yet
-
-RELEASE STATUS: the **8" is the released counter-top product**; the **7" is
-INTERNAL-ONLY** (the owner's desk/dev unit — de-listed 2026-09-10, not a
-capability judgement) and the 10.1" has never been released. Only the 8"
-appears in CI, the web flasher and the docs.
-
-The finished-box (all-in-one HMI) family. Electronics = the P4 4.3/5 (same
-I2C 7/8, GT911 probe-only, battery GPIO20 ÷3, ES8311 + PA GPIO53, SD 39-44 on
-LDO4, paddle 51/52 on the 40-pin header — GND/52/51 run consecutively in one
-pin column like the 5). Deltas, all verified against the X schematic +
-Waveshare BSP (waveshareteam/Waveshare-ESP32-components,
-bsp/esp32_p4_wifi6_touch_lcd_x):
-
-- **Silicon: X boards exist in BOTH revision generations — PER UNIT, not per
-  size.** The user's 7" (bought 2026-08) is **rev v1.3**; the user's 8" is
-  **rev v3.2** (verified in the countertop-display sister project, 2026-09).
-  The boards jsons currently all use `esp32p4_es`, which boots the 7" but
-  made the v0.9.0 x-8 image WRONG for the real 8": on rev3 the wrong variant
-  boot-loops with `CHIP_LP_WDT_RESET` before printing anything — looks like a
-  dead board. FIXED post-0.9.0: the x-8 and x-10-1 jsons now use `"esp32p4"`
-  (400 MHz real; display.cpp selects the XTAL DSI-PHY PLL ref for those envs
-  and the 8" JD9365 table carries the MADCTL 180° glass flip). The 7" json
-  stays `esp32p4_es`. Always `esptool chip-id` a new unit first.
-- **X-8 bring-up learnings (from the sister project, HW-verified there):**
-  (1) rev3 DSI PHY: the legacy `MIPI_DSI_PHY_CLK_SRC_DEFAULT` (PLL_F20M)
-  aborts inside the HAL on rev3 — it needs `MIPI_DSI_PHY_PLLREF_CLK_SRC_
-  DEFAULT` (XTAL). Now selected by the `BOARD_P4_SILICON_REV3` macro, which a
-  board's block in board_config.h defines when its json is `chip_variant
-  "esp32p4"` — keyed on silicon, not on panel, so a rev3 build of ANY P4 board
-  gets it. (A runtime `efuse_hal_chip_revision() >= 300` check would also work
-  but buys nothing: chip_variant is a link-time split, so rev1 and rev3 are
-  separate binaries regardless.) (2) Our JD9365 8"
-  table + 80 MHz/1500 Mbps timings worked first time (panel up in ~340 ms).
-  HEADS-UP (user, 2026-09): the OTHER P4 boards (4.3/5) may eventually ship
-  with v3 silicon too. For the RELEASED P4-5 this is now planned work — a
-  sample is expected; see the "Support matrix" section for the shape of it
-  (second env + json, slug `p4-wifi6-touch-lcd-5-rev3`, plain slug stays ES).
-  Prep in place: the serial identify line reports `REV=` (efuse
-  major*100+minor) so the web flasher's Detect can pick the right variant, and
-  display.cpp's PHY-clock branch already keys on `BOARD_P4_SILICON_REV3` — the
-  new board block just defines it.
-  (3) The 8" box mounts its glass the OPPOSITE way up from the 7", and the
-  JD9365 IGNORES MADCTL in video mode (sister project: neither GS|SS nor
-  MY|MX moved the picture) — so the fix is rotating 270° instead of 90° in
-  the flush: `kDsiRotate270` in the X-8 block, honoured by dsi_flush_cb AND
-  the install-mode rotate; touch keeps the both-mirrors-toggled mapping.
-  DONE + HW-verified 2026-09-22 (first Apollo boot on an 8": the earlier
-  "blank" report was before this fix + the pin fix below). (4) GT911 at
-  0x5D. **GPIO23 is TP_RST, NOT a backlight enable, and GPIO33 is TP_INT**
-  (X schematic; sister project found driving 23 low held the GT911 in
-  reset). The X-8 block now uses them as kTouchRst/kTouchInt with
-  kLcdBacklightEn = -1 (the X has no boost-enable GPIO; PWM on 26 only).
-  The 7"/10.1" branch still drives 23 high as "BL_EN" — which works only
-  because high = GT911 out of reset; left as the 7" was verified, fix when
-  one is on the bench. (5) Rev3 pads hold state through deep sleep
-  (documented; untested) — the v1.x boards' pull-down mods shouldn't be
-  needed there. (6) `APOLLO_SKIP_C6_UPDATE` (build flag, no env sets it):
-  a validation build that leaves the factory C6 slave alone, so a board can
-  be flash-dumped, tried and restored to factory in every respect
-  (`PLATFORMIO_BUILD_FLAGS="-D APOLLO_SKIP_C6_UPDATE" pio run -e ... -t
-  upload`). Used for the 8" first boot; a factory dump of that unit lives in
-  ~/firmware-backups/apollo/ with its RESTORE.md.
-- Panels (native portrait, rotated like the other P4 DSI boards): 7" =
-  720x1280 ILI9881C (80 MHz DPI, 1000 Mbps), 8" and 10.1" = 800x1280 JD9365
-  (80 MHz, 1500 Mbps) — but the 8" and 10.1" glasses take DIFFERENT vendor
-  init tables (the BSP's #if/#else), so each size is its own env/image.
-  Tables live in display.cpp (BOARD_DSI_PANEL_ILI9881C / _JD9365 /
-  _JD9365_10). Reset active-LOW (unlike the 5's HX8394).
-- The 7" BOX MOUNTS ITS PANEL 180° from the P4-5 convention (camera on top =
-  correct orientation; HW-verified). Fixed at the panel: both MADCTL writes
-  in the ILI9881C table are 0x03 (GS|SS scan flip — both bits = true 180°,
-  one alone would mirror), and the 7"'s touch flags toggle BOTH mirrors vs
-  the P4-5 values (per-size #if in the X block). Careful editing that table:
-  0x36 also appears as a page-1 GIP register mid-table — only the page-0
-  writes are MADCTL. Expect the same 180° question on the 8"/10.1" at
-  bring-up (check camera position; JD9365 has the same GS/SS bits).
-- Backlight: LEDC GPIO26 normal polarity. NO boost-enable GPIO on the X
-  (GPIO23 is TP_RST — see (4) above; the 7" branch's "BL_EN = 23" is a
-  misreading that happens to work).
-- UI scale: 7" = 1.5 (same logical 853x480 as the 5); 8"/10.1" = 1.6 →
-  logical 800x500 — exact 800 width, the extra height feeds the flex-grow
-  regions (sim renders at 1280x800 cover it).
-- Extras we don't drive: ES7210 mic ADC, second USB OTG (GPIO24/25), camera.
-- The 10.1" env exists and builds (`esp32-p4-micra-x-10-1`, its own JD9365_10
-  table) but is deliberately UNRELEASED and unmarketed — no hardware to test
-  it on, so it's kept out of the README, web flasher, and release matrix
-  (owner's call 2026-08-29). Don't re-add it to those without asking.
-
-### ESP32-S3-Touch-LCD-4.3C (env `esp32-s3-micra-4-3c`) — verified on HW
-
-The 4.3B's RGB/GT911/RTC wiring plus the 7B-style register-based IO extension
-(Waveshare CH32V003 @0x24) instead of the 4.3B's CH422G — which adds true PWM
-backlight dimming (reg 0x05, inverted duty; vendor clamps at 95% to avoid
-full-off) and battery monitoring via the expander's ADC (reg 0x06, ÷3 divider,
-scale 3·3.3/1023 — not yet multimeter-calibrated; the 7B's same-family chip
-needed 0.009632). Support is config-only: no new driver code. RGB timings are
-the 4.3C demo's (pulse 4, porches 8/8, 16 MHz), not the 4.3B's.
-(USB-vs-battery is now inferred from the battery-node voltage alone —
-kUsbPowerVolts — on every board; HWCDC::isPlugged() is no longer used.)
-Bring-up gotcha: scripted DTR/RTS toggling on the USB-CDC port can strand the
-board in ROM download mode — black screen, silent serial, yet flashing still
-works. Recover with the physical RST button; don't script reset dances.
-
-Paddle (brew-by-weight, verified on HW): 3-wire harness — Micra white -> DO0,
-paddle switch -> DI0, Micra black + paddle return -> shared GND. DI COM is the
-*biased* side of the input opto (internally ~5V), so a dry contact must close
-DI0 to GND — wiring it to DI COM does nothing. Drive = EXIO6 (active-low),
-sense = EXIO0 (low = closed), direction mask 0xDE. GOTCHA: the expander can
-ACK its init yet DROP the first direction-mask write (inputs read 0xFF
-forever); paddle.cpp re-asserts the mask in begin() and every ~64th sense
-poll — keep that if refactoring.
-
-### ESP32-P4-WIFI6-Touch-LCD-4.3 (env `esp32-p4-micra-43`) — RELEASED, HW-verified
-
-Re-added to the released set 2026-09-11 (a user has one). Display, touch,
-BLE, **paddle, audio and the battery ADC are all confirmed working on
-hardware** (owner, 2026-09-11) — the bring-up list below is kept for the
-wiring detail, not as a to-do. No 4.3 hardware is kept here, so the P4-5
-(same board, different glass) is the proxy for anything non-panel.
-
-First non-S3 board: P4NRW32, 480x800 ST7701 over 2-lane MIPI-DSI (rotated to
-landscape), GT911 touch, WiFi6/BLE via on-board ESP32-C6 over SDIO
-(esp-hosted). HW-verified (2026-09-11; rev3 unit 2026-09-22). Key facts:
-
-- NimBLE-Arduino does NOT support the P4 (maintainer statement, issue #906).
-  This env uses `h2zero/esp-nimble-cpp` (same `NimBLE*` API) against the
-  stock Arduino core's IDF NimBLE host, which ships NimBLE-over-hosted
-  enabled (verified in the core's esp32p4/sdkconfig). `lib_compat_mode = off`
-  is required. Do not "simplify" the P4 env to NimBLE-Arduino.
-- Hosted SDIO pin defaults match the board exactly — no WiFi.setPins needed.
-- The C6 runs factory esp-hosted slave firmware; `make flash-p4-4-3` never
-  touches it. Slave updates (if ever needed): esp-hosted OTA from the P4, or
-  the board's P1 header + esptool.
-
-#### Silicon revision gotcha (hit + solved on first hardware, 2026-07)
-
-ESP32-P4 chips exist in two binary-incompatible generations: pre-production
-rev v1.x ("engineering sample" retroactively; sold in volume through 2025)
-and mass-production rev v3.0+ (v2 was skipped). Our first board is **v1.3**
-— check any new board with `esptool chip-id` (or espefuse `WAFER_VERSION_*`).
-
-- Symptom on v1.x when built for the default (rev >= 3.0) target: the
-  2nd-stage bootloader itself boot-loops with `Guru Meditation ... (Illegal
-  instruction)` where PC == the bootloader entry address and MTVAL=0. Screen
-  stays black; app code never runs. Easy to misread as a display problem —
-  check serial first.
-- Fix: `"chip_variant": "esp32p4_es"` in boards/esp32-p4-wifi6-43.json.
-  The Arduino core ships PREBUILT `esp32p4_es` libs (rev v1.x memory map,
-  NimBLE + esp-hosted enabled) and pioarduino selects them + the matching
-  rev<3 linker templates off that field. Same fix as arduino-esp32
-  PR #12341 (M5Stack Tab5). A rev >= 3.0 board needs `"esp32p4"` instead —
-  one image cannot boot both generations. Dead ends we tried so the next
-  session doesn't: platform downgrade to 54.03.21-2 (P4 BT compiled out) and
-  hand-rolled `custom_sdkconfig` rev overrides (pioarduino's hybrid compile
-  generates rev3 linker scripts regardless — builder bug).
-- v1.x runs the CPU at 360MHz max (boot warning about 400MHz is expected).
-
-#### Hosted BLE bring-up (the second trap)
-
-`NimBLEDevice::init()` alone dies on this board: esp-nimble-cpp drops into
-the IDF NimBLE host whose vhci layer single-shots the hosted-SDIO transport
-init and aborts with `H_SDIO_DRV: card init failed`. The transport must be
-brought up first through Arduino's hosted HAL — `hostedInitBLE()` from
-`esp32-hal-hosted.h` (does esp_hosted_init + connect_to_slave + BT
-controller RPC). main.cpp calls it before NimBLEDevice::init, guarded by
-`CONFIG_ESP_HOSTED_ENABLE_BT_NIMBLE`. Verified on hardware: SDIO link up,
-NimBLE host init clean. A `Req_GetCoprocessorFwVersion` RPC timeout error
-at boot is harmless (factory C6 slave predates that RPC).
-Waveshare's factory image + demo repo (waveshareteam/ESP32-P4-WIFI6-Touch-
-LCD-4.3) is the known-good reference: flashing its FactoryOnly bin is the
-fastest way to prove the C6/slave/wiring are healthy when debugging.
-
-Hardware bring-up detail (2026-07-17: boots clean — hosted link, DSI panel,
-GT911 all up; NimBLE host inits. Paddle/audio/ADC since confirmed, 2026-09-11):
-1. Display: panel + LVGL come up (800x480). Arduino_GFX rotation=1 goes
-   through a per-pixel rotated bitmap path — still check flow-graph fps;
-   fall back to LVGL-side rotation if slow.
-2. Touch: GT911 detected at 0x5D. swap/mirror flags in board_config.h are
-   best-guess; serial logs one line per press for calibration.
-3. BLE: host init verified; Micra + scale connections confirmed on HW (2026-09-11).
-   Known bug esp-hosted-mcu#180: scan results stall after ~60-90s of
-   continuous scanning (our scans are short; reconnects are direct-by-MAC).
-4. Paddle (brew-by-weight): native GPIOs on the header corner — GND, GPIO52,
-   GPIO51 fit one 3-pin screw terminal. GPIO52 -> PC817 opto module IO (module
-   input GND -> board GND); output side VCC left floating so OUT/GND are an
-   isolated dry contact: OUT -> Micra white, output GND -> Micra black.
-   Active-HIGH drive (IO high = contact closed) — opposite of the 4.3C's
-   expander. GPIO51 <- paddle switch to board GND (INPUT_PULLUP, low =
-   closed); the physical paddle touches only this board, never the Micra.
-   Config-only (native-GPIO path in paddle.cpp). CONFIRMED working on HW.
-   **DIY cable (WIRING.md, settled 2026-11-03 on scope evidence): ONE
-   PC817 module (drive) + a 1k series resistor and 100 nF to GND in the
-   paddle-sense wire (resistor THEN cap on the pin side; either end of the
-   cable). Owner's TDS 210 on GPIO51: a bare switch rings the pin to -1 V at
-   every bounce closure (outside the -0.3 V abs max), 1k alone halves it, a
-   cap ALONE rings -1.7 V (LC with the cable), 1k+cap is clean; pump/solenoid
-   put nothing on the wire. Whether the ring kills pads is NOT established —
-   the RC is hygiene, the dead-pad cause is open. A two-module variant
-   (second module at the Apollo end with its LED fed from GPIO50) was built,
-   measured clean, and DROPPED from the guide as too complex; its GPIO50
-   supply (kPaddleSenseSupplyPin) was removed from the firmware the same day
-   — GPIO50 is a free pin again. Never a dual module board: shared output
-   GND would tie the Micra's black to Apollo GND.
-   **Apollo Link (v1.0, 2026-10-01; rev 0.7 drawn 2026-11-03):** the bridge
-   board (hardware/paddle-bridge; rev 0.7 = rev 0.6 + U4 PC817 + D2 1N4148W
-   + R6 560R from 5V so SENSE is opto-isolated, + C1 100 nF on SENSE + D3
-   PESD5V0L1UA ESD diode at J1 (UNIDIRECTIONAL; Nexperia 1UA = uni, 1BA = bi); an opto-only 0.7 was ordered and cancelled
-   the same week, never built, and this 0.7 supersedes it — there is no
-   0.8; connectors unchanged, rev 0.6 boards in the field lack all of it;
-   bridge:D_H pin 1 = K to match the footprint band — D1 on 0.5/0.6 boards
-   is fitted reversed, harmless) uses a SECOND native set on the header's 5V end
-   so one 5-wire cable also POWERS the unit: DRV GPIO3, SENSE GPIO5, CTRL
-   GPIO4 (schematic pins 12/11/14; plus 5V at 1/3 and GND at 5/13). By
-   default (Paddle wiring = Auto) both sets are driven and polled together
-   (paddle.cpp) and the unused set is an open pin; since 2026-11-03 the
-   PADDLE WIRING setting below can pin the unit to one set. CTRL is held
-   HIGH from begin() (Apollo owns the paddle while booted; input = copper
-   otherwise) and dropped by IPaddle::own(false) when the breaker trips.
-   **PADDLE WIRING (2026-11-03):** `core::PaddleWiring` Auto/Link/Cable on
-   the IPaddle port (wiring_selectable / set_wiring / wiring), NVS
-   `padwire` (ADD, i32 0/1/2; per-unit, kept OUT of backups like
-   padsense/paddrive), Settings > Micra > Controls > Paddle wiring (P4
-   boards only; the 4.3C's terminals report no choice). Auto = both sets
-   as always; Link or Cable leaves the other set an open input
-   (Paddle::set_wiring drops only the departing set's outputs and re-runs
-   begin(); before begin() it just records the choice — main.cpp sets it
-   first). WHY: the two senses are ORed and a dead Link sense pad can read
-   LOW (the owner's X-8's GPIO5 did), holding the paddle closed. The manual
-   shows the Controls page as two screenshots (micra_controls_2 render,
-   App::scroll_settings_section).
-   **PADDLE BREAKER (core/brew_controller, 2026-11-03):** every drive goes
-   through `set_drive()`, the one choke point. Trips on either signature in
-   a 60 s window: 10 REJECTED pulses (raw transitions the 75 ms glitch
-   filter threw away) or 4 SHORT accepted pulses (an ON that goes OFF under
-   500 ms; OFF->ON gaps don't count). NEVER a rate rule on accepted edges —
-   a manual backflush is 10+ ON edges in 2 min. Tripped: cancel_shot()
-   (ends cleaning/flush/shot, opens the line; poll_clean returns right
-   after), every drive refused, can_clean false, IPaddle::own(false) drops
-   the Link's CTRL (copper), `paddle_trip_seq` ticks -> the UI's modal with
-   Reset (reset_paddle_breaker(); re-trips at once if the flicker goes on).
-   Nothing persists; a reboot clears it. First real trip 2026-11-03: loose
-   terminal-block contacts while the owner fitted the resistor live. `make
-   test-paddle` replays the X-8's chatter, a bouncy backflush, quick flicks,
-   trips mid-cleaning and a reset — keep it green.
-   GPIO2 deliberately avoided (touch INT on the 4.3); GPIO7/8 = I2C and
-   GPIO37/38 = console UART are unusable. X boards: the SAME set since
-   2026-10-16 — the X schematic's J8 is pin-identical at the 5V end (11 =
-   GPIO5, 12 = GPIO3, 14 = GPIO4); v1.0.0's X-8 image shipped it unmapped,
-   so a Link-wired X-8 powered up but never saw the paddle (LED dark).
-5. Audio: config-only reuse of the 4.3C's ES8311 driver — BSP pins MCLK 13 /
-   BCLK 12 / LRCLK 10 / DOUT 9, codec at 0x18 on the shared I2C bus, PA
-   enable native GPIO53 active-high (BOARD_AUDIO_PA_IOEXT selects expander-vs-
-   GPIO PA in sound.cpp). CONFIRMED working on HW.
-6. Battery: WORKING — BAT_ADC GPIO20, divider ÷3 (confirmed: raw*3 == 4.20V
-   LiPo CV level while charging). The bring-up calibration log that used to sit
-   in battery.cpp behind BOARD_WAVESHARE_P4_WIFI6_43 is gone — divider settled. `HWCDC::isPlugged()` is non-functional on
-   the P4's USB-Serial-JTAG (always false) — moot now that USB-vs-battery is
-   voltage-only (>= kUsbPowerVolts) on all boards. Known hardware trait:
-   plugging/unplugging USB with a battery attached FULLY POWER-CYCLES the
-   board (reset reason: power-on) — the power path's VBUS<->boost switchover
-   drops the rail; not fixable in firmware.
+- Pins live in board_config.h only. 4.3C: DO0/EXIO6 drive (active-LOW),
+  DI0/EXIO0 sense to **GND, not DI COM**; keep paddle.cpp's direction-mask
+  (0xDE) re-assert in `begin()` and every ~64th poll. P4: GPIO52 drive
+  (active-HIGH) into one PC817 module, GPIO51 sense (pull-up); Link set DRV
+  GPIO3 / SENSE GPIO5 / CTRL GPIO4, the same on the X boards. GPIO2, 7/8,
+  37/38 are off-limits; GPIO50 is free. Never a dual opto module board.
+  → docs/adr/2026-07-18-paddle-output-path-by-board.md
+- DIY cable sense wire: 1 kΩ in series, then 100 nF on the pin side; never a
+  capacitor alone. The dead-pad cause is UNPROVEN — treat theories as
+  hypotheses for the bench. → docs/adr/2026-07-31-paddle-sense-protection.md
+- Apollo Link: CTRL HIGH from `Paddle::begin()` for as long as firmware runs
+  (input = paddle in copper). Paddle wiring Auto/Link/Cable =
+  `core::PaddleWiring` on `IPaddle`, NVS `padwire` (per-unit, out of backups
+  like `padsense`/`paddrive`), P4 only; main.cpp sets it before `begin()`.
+  Rev 0.7 is the last rev (there is no 0.8); D3 must be UNIDIRECTIONAL.
+  → docs/adr/2026-09-16-apollo-link-bridge.md
+- Paddle breaker (core/brew_controller): every drive goes through
+  `set_drive()`; trips on 10 rejected pulses or 4 sub-500 ms accepted pulses
+  per 60 s. NEVER add a rate rule on accepted edges (a backflush is 10+
+  edges). Reset is manual; nothing persists. Keep `make test-paddle` green.
+  → docs/adr/2026-11-03-paddle-breaker.md

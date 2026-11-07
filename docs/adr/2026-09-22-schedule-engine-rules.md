@@ -30,7 +30,7 @@ rules are deliberate decisions, not to drift:
 | latch | each slot latches by minute-of-week and fires once; an edit pre-latches anything already in-window, so dragging a time across "now" never switches the machine |
 | no-op "on" | "on" when already on does nothing |
 | deferred "off" | during a shot, its review, a cleaning cycle or a held drive line ([since](#history)), standby waits until everything has been idle for `kStandbyGraceMs` = 2 min (covers the auto-flush), then fires if still on; new activity restarts the grace |
-| trusted time | nothing fires unless WiFi and NTP are enabled, a real SNTP sync landed this boot (`ntp_seconds_since_sync() >= 0`) and the date is real ([why](#alternatives-and-dead-ends)) |
+| trusted time | nothing fires unless `App::ntp_ready()`: WiFi and NTP are enabled, a real SNTP sync landed this boot (`ntp_seconds_since_sync() >= 0`) and the date is real ([why](#alternatives-and-dead-ends)) |
 | wrap | the warm-up lead may cross into the previous evening (minute-of-week arithmetic) |
 | brewing source | `MachineSnapshot::brewing` is never set by the link; the engine reads `ShotPhase` |
 

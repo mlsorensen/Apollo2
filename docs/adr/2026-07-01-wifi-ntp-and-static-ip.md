@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** platform
-- **First decided:** 2026-07-01 · **Last changed:** 2026-09-30
+- **First decided:** 2026-07-01 · **Last changed:** 2026-11-07
 - **Boards:** all (native WiFi on the S3 boards, via the C6 on the P4 boards)
 
 ## Context
@@ -30,19 +30,22 @@ holds the wrong credentials.
 - A static address is set only on the portal's WiFi page ("Network
   address": DHCP default; Static reveals IP, mask, gateway and an optional
   DNS defaulting to the gateway). The page's regex and
-  `IPAddress::fromString` both validate; a bad set is refused whole. There
+  `IPAddress::fromString` in `TokenSetup::handle_wifi` both validate; a bad
+  set is refused whole, nothing half-saved. There
   is no on-device editor ([why](#alternatives-and-dead-ends)): re-run Set
-  up WiFi, which pre-fills the stored values. `start_station` applies
-  `WiFi.config()` before `begin()`, or an all-zero config to return to DHCP
-  in the same boot.
+  up WiFi, whose page `TokenSetup::handle_root` pre-fills with the stored
+  values. `Network::start_station` applies `WiFi.config()` before
+  `begin()`, or an all-zero config to return to DHCP in the same boot;
+  stored fields that no longer parse fall back to DHCP with a log line.
 
 ## Consequences
 
 - NVS keys, adds only: `wifi_en`, `ssid`, `wifipass`, `tz`, `ntp`, `ntp_en`,
-  and for static addressing `ipstatic`, `ipaddr`, `ipmask`, `ipgw`, `ipdns`.
+  and for static addressing `ipstatic` (bool) plus `ipaddr`, `ipmask`,
+  `ipgw`, `ipdns` (strings, as typed).
   Credentials and the static set travel in the settings backup's WiFi
   opt-out group: an SSID with no PSK is a join that cannot succeed.
-- `INetwork::static_ip()` feeds the Info row "x.x.x.x (static|DHCP)".
+- `INetwork::static_ip()` (default false) feeds the Info row "x.x.x.x (static|DHCP)".
 - The P4's radio is a separate chip, so the S3's sleep and heap findings do
   not transfer to it.
 
@@ -82,8 +85,9 @@ holds the wrong credentials.
 - 2026-09-09: network-ready gate on a landed SNTP reply (`7760dfe`).
 - 2026-09-30: static IP on the portal (`c28f459`); the Info row says DHCP
   or static (`ea74db8`); v1.0.0-beta.7.
+- 2026-11-07: folded in from the project's working notes (CLAUDE.md).
 
 ### Sources
 
 Commits `170949f`, `8a2ff61`, `7760dfe`, `c28f459`, `ea74db8`;
-`src/platform_esp32/network.cpp`; CLAUDE.md "Static IP".
+`src/platform_esp32/network.cpp`, `token_setup.cpp`; CLAUDE.md "Static IP".

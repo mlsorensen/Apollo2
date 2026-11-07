@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** ota-release
-- **First decided:** 2026-09-10 · **Last changed:** 2026-09-22
+- **First decided:** 2026-09-10 · **Last changed:** 2026-11-07
 - **Boards:** all
 
 ## Context
@@ -51,11 +51,37 @@ Lists that change together when the matrix changes: the workflow matrix,
 `site/index.html` (cards and `BOARD_PATTERNS`), README.md,
 `docs/HARDWARE.md`, and the `[RELEASED]` / `[INTERNAL-ONLY]` markers in
 `platformio.ini` and `board_config.h`. A change to an internal-only board
-updates CLAUDE.md and the code only.
+updates the code and its decision record only.
 
 ---
 
 ## Details
+
+### Design detail
+
+- Positioning the docs keep: the P4-5 is the recommendation for mounting on
+  the machine (it needs a printed shell and, for Auto shot, a DIY opto
+  cable); the P4-4.3 is the same board with smaller glass, the only
+  `board_config` deltas being panel controller, DSI timings, reset and
+  backlight polarity, touch rst/int and UI scale, so the choice is screen
+  size and a small price difference; the 4.3C removes both DIY steps (the
+  only finished box with on-board opto-isolators, three wires into screw
+  terminals) at the cost of being the slower part; the X 8" is the
+  counter-top box. Re-adding an internal-only board to any user-facing list
+  is asked first.
+- The rev3 siblings: `boards/esp32-p4-wifi6-{5,43}-rev3.json` (`chip_variant
+  "esp32p4"`), `-D BOARD_P4_SILICON_REV3` from build_flags, which selects
+  the DSI PHY's XTAL PLL reference and the `<plain-slug>-rev3` slug in
+  `board_config.h`. The X 8" is rev3-only and has no sibling.
+- Picking the image: the identify reply's `REV=` is efuse
+  major*100+minor, >= 300 = rev3. The flasher's radio defaults to v1.x and
+  Detect sets it from a running board; a blank board cannot be probed over
+  Web Serial, so the radio is the explicit choice there. `make flash-p4-5` /
+  `flash-p4-4-3` (`tools/flash.sh`) read the revision off the ROM loader
+  with esptool, which works on a blank board, and switch to the sibling
+  env, announcing it; bare `make flash` asks a running board `id?`. The
+  explicit `-rev3` targets exist but are rarely needed. P4 only: no scripted
+  resets on an S3's USB-CDC port.
 
 ### Evidence
 
@@ -93,6 +119,7 @@ updates CLAUDE.md and the code only.
 - 2026-09-11: P4-4.3 returned, a user has one (`240ff9b`, v0.13.0).
 - 2026-09-22: `-rev3` images and slugs for both P4 products (`770f51f`,
   v1.0.0-beta.2); hardware-confirmed the same day.
+- 2026-11-07: folded in from the project's working notes (CLAUDE.md).
 
 ### Sources
 

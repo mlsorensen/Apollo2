@@ -2,7 +2,7 @@
 
 - **Status:** Open (the mount policy and the driver update stand; why the C6's length reads go bad on the X 8" is unknown)
 - **Area:** platform
-- **First decided:** 2026-07-25 · **Last changed:** 2026-10-23
+- **First decided:** 2026-07-25 · **Last changed:** 2026-11-07
 - **Boards:** all P4 boards (SD on SDMMC slot 0, the ESP32-C6 radio on slot 1); the S3 boards have a native radio and are unaffected
 
 ## Context
@@ -28,14 +28,18 @@ like one bug ([the faults](#ev-faults)).
    must not come back ([the shared divider](#ev-divider); [why not a slower
    poll](#alternatives-and-dead-ends)). A mounted card keeps a 5 s CMD13
    liveness ping, which at 40 MHz shares the C6's divider and never moves
-   the clock.
+   the clock (why the P4-5 with a card never crashed).
 3. The platform runs esp-hosted 2.12.13 (pioarduino 55.03.312-1, core
    3.3.12), whose RX path drops and re-reads a bad length instead of
    asserting ([driver history](#ev-driver); [soak](#ev-soak)).
 
 ## Consequences
 
-- `MediumState` gained `kRemoved` and `kUnmounted`; a card inserted after
+- `MediumState` gained `kRemoved` (pulled while mounted; stays unmounted
+  until Mount or a restart) and `kUnmounted` (by request); `StorageInfo`
+  carries the CID vendor/name (`card`), CSD capacity (`card_bytes`), the
+  boot-sector filesystem type and a `busy` flag that greys the buttons. Mount
+  and Unmount are writer-task jobs. A card inserted after
   boot is mounted from Settings > Apollo > Storage, one ~25 ms exposure on
   the user's say-so; the radio is not torn down for it.
 - Unproven: why the X 8"'s length reads go bad (SDIO margin at 40 MHz, a
@@ -89,6 +93,7 @@ like one bug ([the faults](#ev-faults)).
   (`99f66fd`); issue #4 opened. The bump's bootloader fallout is the
   ota-release area's L2-cache record.
 - 2026-10-23: v1.1.0 ships both fixes; #4 closed.
+- 2026-11-07: folded in from the project's working notes (CLAUDE.md).
 
 ### Sources
 

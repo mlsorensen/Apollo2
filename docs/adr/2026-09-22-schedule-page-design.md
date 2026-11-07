@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** ux
-- **First decided:** 2026-09-22 · **Last changed:** 2026-11-02
+- **First decided:** 2026-09-22 · **Last changed:** 2026-11-07
 - **Boards:** all; auto-standby needs a shot source (a wired paddle or a paired scale in Shot detect)
 
 ## Context
@@ -71,6 +71,28 @@ rules are `2026-09-22-schedule-engine-rules.md`; this record is the page.
 
 ## Details
 
+### Design detail
+
+- Gate: `App::sync_schedule_gate()` is change-detected (bit 0 paired, bit 1
+  `App::ntp_ready()`, bit 2 a shot source) and only then re-applies
+  clickability; with no shot source (no wired paddle and no paired scale)
+  it shows the muted `sched_asb_status` line.
+- Home countdown: `ui::set_micra_standby_timer` from `App::refresh()`; the
+  switch is the IDisplaySettings key `schasbt`.
+- Auto-standby minutes go through `core::sanitize_auto_standby_min`; an edit
+  while armed moves the deadline (it is timed from the activity's end).
+- Day windows are stored packed by `core::pack_day` (bits 0-10 on-minute,
+  11-21 off-minute, 22 enabled); `unpack_day` sanitizes, so a garbage value
+  degrades to a legal window. `platform::ScheduleSettings::set_config`
+  writes only the keys that changed.
+- Hour dropdowns share `fill_hour_dd` with Time & date (index == hour in
+  both clock formats).
+- The range slider is `LV_SLIDER_MODE_RANGE`, mode set BEFORE the range;
+  programmatic writes are order-aware because lv_bar clamps each end
+  against the other; VALUE_CHANGED names no knob, so both ends are read. It
+  persists on RELEASED only.
+- The toast for a scheduled command is skipped under the screensaver.
+
 ### Evidence
 
 - Host test `make test-schedule`: 61 checks at `194dd92`, 99 with
@@ -115,6 +137,7 @@ rules are `2026-09-22-schedule-engine-rules.md`; this record is the page.
 - 2026-10-10: issue #3 closed.
 - 2026-11-02: auto-standby is an inactivity count: cleaning and a held
   drive line are activity (`7a9cdf7`, `8c2a918`).
+- 2026-11-07: folded in from the project's working notes (CLAUDE.md).
 
 ### Sources
 

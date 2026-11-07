@@ -2,7 +2,7 @@
 
 - **Status:** Open (device gate and CI job proven; no release has yet raised an epoch, so the WEB FLASH REQUIRED notes path has only run against a bench build)
 - **Area:** ota-release
-- **First decided:** 2026-10-18 · **Last changed:** 2026-10-21
+- **First decided:** 2026-10-18 · **Last changed:** 2026-11-07
 - **Boards:** all device envs
 
 ## Context
@@ -39,8 +39,9 @@ generation a unit was last web-flashed with. Everything is epoch 1.
   `UpdateInfo::web_flash`: the modal says "must be installed from a computer"
   and has NO Install button ([seen on the bench](#evidence)).
 - The index files stay flat tag lists ([why](#alternatives-and-dead-ends)).
-  Bootloader IDF version and epoch are logged at boot and in `/api/summary`
-  as evidence only; the epoch is the gate.
+  Bootloader IDF version and epoch are logged at boot (`boot: bootloader
+  IDF ... flash epoch N`) and in `/api/summary` (`bootloader`, `epoch`) as
+  evidence only; the epoch is the gate.
 
 ## Consequences
 
@@ -75,7 +76,8 @@ device's own parser (`core/release_meta.h` via `tools/meta_epoch.cpp`).
 - A marker line in `notes.txt` as the only flag (the first sketch): kept
   as the human-readable half; older firmware can only display it and newer
   firmware needs a per-slug value.
-- Changing the index format: refused, every fielded device parses it.
+- Changing the index format: refused, every fielded device and the web
+  flasher parse it.
 - Reasoning from the bootloader's version string at runtime: logged, but a
   version does not say whether a given app loads under it; the epoch does.
 
@@ -88,6 +90,7 @@ device's own parser (`core/release_meta.h` via `tools/meta_epoch.cpp`).
   the pre-script define fix (`ebdd41c`) landed an hour after that tag and
   shipped in v1.1.0-beta.6.
 - 2026-10-21: device path confirmed on the epoch-0 bench unit.
+- 2026-11-07: folded in from the project's working notes (CLAUDE.md).
 
 ### Sources
 

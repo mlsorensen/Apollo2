@@ -2,7 +2,7 @@
 
 - **Status:** Accepted (rev 0.6 in service; rev 0.7 drawn, gerbers cut and parts ordered 2026-11-03, not yet built)
 - **Area:** hardware
-- **First decided:** 2026-09-16 · **Last changed:** 2026-11-03
+- **First decided:** 2026-09-16 · **Last changed:** 2026-11-07
 - **Boards:** P4-5, P4-4.3, X 8" (any P4 with the 40-pin header). Not the S3-4.3C: no header, its own isolators.
 
 ## Context
@@ -61,6 +61,23 @@ BOM) in the paddle loop:
 
 ## Details
 
+### Design detail
+
+- Header pins for the Link set (P4-4.3 / P4-5 header; the X's J8 is
+  pin-identical at the 5 V end): 5 V on 1 and 3, GND on 5 and 13, SENSE
+  GPIO5 on 11, DRV GPIO3 on 12, CTRL GPIO4 on 14.
+- Paddle wiring is `core::PaddleWiring` (kAuto 0, kLink 1, kCable 2) on the
+  `IPaddle` port: `wiring_selectable()` (true only where both native sets
+  exist, the P4s; the 4.3C reports no choice and the row is absent),
+  `set_wiring()`, `wiring()`. NVS `padwire` (i32, an added key) is per
+  unit: it stays out of backups and survives a restore, like `padsense` /
+  `paddrive`. `main.cpp` sets the stored choice before `Paddle::begin()`,
+  which then applies it once; a change at runtime drives the departing
+  set's outputs low, makes them inputs (a Link on it drops to copper) and
+  re-runs `begin()`, leaving the kept set in place.
+- The manual shows Settings > Micra > Controls as two screenshots (the
+  `micra_controls_2` render, scrolled by `App::scroll_settings_section`).
+
 ### Evidence
 
 <a id="ev-bench"></a>Bench results by date:
@@ -101,6 +118,7 @@ diodes.
 - 2026-10-16: v1.0.1 maps the Link pins on the X boards (`6aa35cc`).
 - 2026-11-02: the bench X 8"'s GPIO5 (Link SENSE) found dead, reading LOW; rev 0.7 drawn with SENSE opto-isolated and the D_H symbol fixed (`4fdaea0`).
 - 2026-11-03: the opto-only 0.7 withdrawn; C1 and D3 added under the number 0.8, then renamed 0.7 (`89bcba9`, `4011ba3`, `846d9d4`); layout and gerbers (`cac0a35`); D3 corrected to a unidirectional part (`e482d11`, `1a803ab`); Paddle wiring setting (`455e7c9`).
+- 2026-11-07: folded in from the project's working notes (CLAUDE.md).
 
 <a id="hist-d1"></a>The D1 footprint slip: the rev 0.5 and 0.6 sheets
 place D1 reversed (symbol pin 1 was the anode, the footprint's band is
@@ -115,4 +133,4 @@ reversed D1 exists only on rev 0.6 boards.
 
 ### Sources
 
-hardware/paddle-bridge/ (sheet notes, BOM); docs/WIRING.md "Apollo Link"; src/platform_esp32/paddle.cpp; src/linktest/main.cpp; the sense-protection record `2026-07-31-paddle-sense-protection.md`.
+hardware/paddle-bridge/ (sheet notes, BOM); docs/WIRING.md "Apollo Link"; src/platform_esp32/paddle.cpp; include/core/paddle.h; src/platform_esp32/config_backup.cpp (per-unit keys); src/linktest/main.cpp; the sense-protection record `2026-07-31-paddle-sense-protection.md`.

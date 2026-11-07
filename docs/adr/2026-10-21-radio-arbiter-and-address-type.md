@@ -2,7 +2,7 @@
 
 - **Status:** Open (arbiter and address-type learning accepted; why a continuous 5 s listen misses an advertising scale about half the time on the P4/C6 is unproven, WiFi coexistence being the untested suspect)
 - **Area:** radio
-- **First decided:** 2026-10-21 · **Last changed:** 2026-10-30
+- **First decided:** 2026-10-21 · **Last changed:** 2026-11-07
 - **Boards:** all (miss measurements on the P4 X-8 only)
 
 ## Context
@@ -64,6 +64,11 @@ The direct connect is a 100 % duty listen for that address, answered in the
 same advertising event. The chunk is `ICentral::scan_for`: it stores
 nothing and stops on the first hit.
 
+A learned type is compared with the STORED type, not the type the try
+used: a sighting connect hands in the advertised type, so comparing with
+the try would never record it. It is persisted only while the same address
+is still saved (a save or forget during the connect wins).
+
 <a id="constants"></a>
 
 | Constant | Value |
@@ -124,6 +129,7 @@ both scales up 16 s after boot; `make test-radio` holds 12 cases.
 - 2026-10-21: ~50 % per-window miss measured; `satype` + 10 s listen (f389809, v1.1.0-beta.6). The WiFi-off experiment was not pursued in 2026-10.
 - 2026-10-24: `core::RadioArbiter`, finder, bitmask parking, `matype` (67e6f3e); review fixes (park/Forget preempt a chunk, preempted chunk != empty).
 - 2026-10-30: v1.2.0 released.
+- 2026-11-07: folded in from the project's working notes (CLAUDE.md).
 
 ### Sources
 

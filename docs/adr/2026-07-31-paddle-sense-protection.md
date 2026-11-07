@@ -20,7 +20,9 @@ The DIY cable keeps ONE opto module (the drive) and adds two parts in the
 paddle-sense wire, fitted in the 4-slot terminal block at the Apollo end:
 a **1 kΩ resistor in series**, then **100 nF from the pin side of it to
 GND**. Order matters: wire, resistor, pin, capacitor on the pin's side.
-Never a capacitor alone. Plug the block in with the board powered off.
+The same two parts also work spliced in at the machine end of the
+cable (WIRING.md). Never a capacitor alone. Plug the block in with the
+board powered off.
 Apollo Link rev 0.7 carries the equivalent on the board (C1 100 nF plus an
 opto and an ESD diode on SENSE; see the Link record). The firmware side is
 the paddle breaker (its own record).

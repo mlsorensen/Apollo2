@@ -41,8 +41,9 @@ join ([a 90 s join](#evidence)).
 
 - A scheduled trigger that cannot fire logs why ("Micra not connected" /
   "clock not trusted") and `MISSED` if its window closes.
-- The bench ROLE's radio slot also parks for the shot source; the espresso
-  role never does (see the two-slot record).
+- The bench ROLE's radio slot also parks for the shot source, while
+  `BrewSnapshot::phase != kIdle` (a shot or its review); the espresso role
+  never does (see the two-slot record).
 - The S3's daily update check runs in the parked window, where the radio's
   listening memory is free ([measured](#evidence)).
 

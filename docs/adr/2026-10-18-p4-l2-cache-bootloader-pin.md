@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** ota-release
-- **First decided:** 2026-10-18 · **Last changed:** 2026-10-26
+- **First decided:** 2026-10-18 · **Last changed:** 2026-11-07
 - **Boards:** L2 work is P4 only; the bootloader pin covers every device env (P4 rev v1.x, P4 rev v3, S3)
 
 ## Context
@@ -32,11 +32,13 @@ All P4 envs:
    IRAM / NOT IRAM verdict. A build that says NOT IRAM must not ship
    ([the boot loop that taught this](#ev-bootloop)).
 
-Bootloader pin, every device env: no published image carries a bootloader
+Bootloader pin, every device env except the standalone `esp32-p4-dltest`
+proof firmware: no published image carries a bootloader
 the fleet does not run. `tools/pio_flash_layout.py` swaps the core's
 bootloader for `firmware_blobs/p4_bootloader_{rev3,rev1}.bin` /
 `s3_bootloader.bin` (byte-for-byte the v1.1.0-beta.1 ones, core 3.3.9 /
-IDF 5.5.4) in both `FLASH_EXTRA_IMAGES` (factory image, web flasher) and
+IDF 5.5.4; cut from those images with `tools/flash_layout.py extract`)
+in both `FLASH_EXTRA_IMAGES` (factory image, web flasher) and
 `UPLOADERFLAGS` (`make flash`). A new bootloader is a deliberate
 web-flash-only release (see the flash-epoch record).
 
@@ -55,6 +57,17 @@ web-flash-only release (see the flash-epoch record).
 ---
 
 ## Details
+
+### Design detail
+
+The switch (`l2_cache_256k()`) follows the libs' own startup order, plus a
+write-back first because PSRAM may already hold dirty lines: interrupts
+off, `Cache_WriteBack_All` (L1 D-cache and L2), `Cache_Set_L2_Cache_Mode`
+(256 KB, 8 ways, 128 B), `Cache_Invalidate_All` (L2). Everything it calls
+is ROM except `Cache_WriteBack_All`, the libs' IRAM patch. The ROM's
+`Cache_Set_L2_Cache_Mode` is two register writes and ignores its ways
+argument; the enum is passed anyway. It runs as an `ESP_SYSTEM_INIT_FN` at
+the CORE stage, on core 0 with the other core still parked.
 
 ### Evidence
 
@@ -96,9 +109,12 @@ layouts booted with `noinline`; the same two looped without.
 - Reclaiming the reserved window at runtime: Store access fault from
   `setup()`, bench 2026-10-18.
 - 64 B lines "to be safe": the libs read the line size from the register at
-  runtime everywhere but the startup mode-set, misaligned syncs are refused,
-  and the L2 only fronts PSRAM. 128 B is what the core itself shipped Feb to
-  Sep 2026 (lib-builder #350). The ROM offers only 64 and 128.
+  runtime everywhere but the startup mode-set, misaligned syncs are refused
+  rather than rounded, and the L2 only fronts PSRAM and flash (internal-SRAM
+  DMA, the radio's SDIO pool included, sits behind the L1 D-cache, whose
+  line stays 64 B). 128 B is what the core itself shipped Feb to Sep 2026
+  (lib-builder #350, an ESP-SR override; #395 dropped it as a cleanup, not
+  a fix). The ROM offers only 64 and 128.
 - Suspending the L2 around the write: the size write never returns.
 
 ### History
@@ -106,14 +122,18 @@ layouts booted with `noinline`; the same two looped without.
 - 2026-10-18: 256 KB link + reserve (`6cf7a3f`, beta.3); 256 KB / 64 B
   restore on rev3 (`2cb7bbf`, beta.4); bootloader pin for the P4s, rev v1.x
   restore (`2594d44`).
-- 2026-10-19: S3 bootloader pinned too; pin reaches `make flash` (`f4d2639`,
-  `0962214`).
+- 2026-10-19: S3 bootloader pinned too (`f4d2639`), so beta.4's S3 web
+  flash had carried the core's unpinned IDF 5.5.5 bootloader (bench units
+  only, harmless). The pin reaches `make flash` (`0962214`): until then a
+  USB upload wrote the core's IDF 5.5.5 bootloader while the factory image
+  carried the pin.
 - 2026-10-21: 128 B lines restored (`177aa16`, beta.6).
 - 2026-10-26: noinline + `l2:` readback (`8375920`, v1.2.0-beta.3). The
   commit message of `8375920` and CLAUDE.md say the from-flash switch dates
   from beta.3, but beta.3 only re-linked and reserved; the switch,
   `2cb7bbf`, first shipped in beta.4, so the affected images are beta.4 to
   v1.2.0-beta.2.
+- 2026-11-07: folded in from the project's working notes (CLAUDE.md).
 
 ### Sources
 

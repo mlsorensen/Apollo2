@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** platform
-- **First decided:** 2026-10-26 · **Last changed:** 2026-10-26
+- **First decided:** 2026-10-26 · **Last changed:** 2026-11-07
 - **Boards:** every GT911 board for the counters and probe; the reset lever needs a TP_RST line (`kTouchCanReset`: an expander bit on the 7B/4.3B/4.3C, GPIO23 on the P4-4.3 and X 8"), which the P4-5 and X 7"/10.1" (`kTouchRst = -1`, not wired to the P4) and the 2-inch (CST816) lack
 
 ## Context
@@ -26,8 +26,11 @@ differs.
   few seconds.
 - `GET /api/touch` runs a live probe (ACK, GT9xx product id, config version,
   raw status, INT level) on the LVGL task between two polls ([why not the
-  web task](#alternatives-and-dead-ends)): queued with a sequence number,
-  completed by the reader, one caller at a time, withdrawn on timeout.
+  web task](#alternatives-and-dead-ends)); the id reads "911", or "9271" on
+  the X 8". On the S3 boards HTTP is served from `loop()`, the poll's own
+  task, so the probe runs inline there. On the P4s it is queued with a
+  sequence number, completed by the reader, one caller at a time, withdrawn
+  on timeout.
   `?reset=1` pulses TP_RST (~110 ms) and re-probes: the in-place recovery,
   no reboot ([exercised on the X 8"](#ev-cost)).
 - No automatic reset, on purpose ([why](#alternatives-and-dead-ends)). The
@@ -97,6 +100,7 @@ built; two independent reviews (9 + 3 findings) were applied.
 - 2026-10-25: the overnight hang on the X 8"; a reset restored it.
 - 2026-10-26: counters, probe, reset lever and the two log lines shipped
   (`de3c6d8`); MANUAL "Touch check" added.
+- 2026-11-07: folded in from the project's working notes (CLAUDE.md).
 
 ### Sources
 

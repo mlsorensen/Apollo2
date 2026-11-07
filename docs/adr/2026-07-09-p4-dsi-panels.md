@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** display
-- **First decided:** 2026-07-09 · **Last changed:** 2026-09-22
+- **First decided:** 2026-07-09 · **Last changed:** 2026-11-07
 - **Boards:** P4-4.3, P4-5 (both silicon revisions), X 8"; X 7" and X 10.1" internal-only
 
 ## Context
@@ -50,6 +50,29 @@ samples.
 ---
 
 ## Details
+
+### Design detail
+
+- Table selectors in board_config.h: `BOARD_DSI_PANEL_ST7701` (4.3),
+  `_HX8394` (5), `_ILI9881C` (X-7), `_JD9365` (X-8), `_JD9365_10` (X-10.1).
+  The 8" and 10.1" glasses share a controller but take different vendor
+  init tables, so each size is its own env and image.
+- Logical UI size: scale 1.5 on a 1280-wide glass gives 853x480 (the 5 and
+  X-7); 1.6 gives 800x500 on the X-8 / X-10.1, an exact 800 width whose
+  extra height feeds the flex-grow regions (the sim's 1280x800 renders
+  cover it).
+- Touch on the boxes: the GT911 is not flipped with the glass on either
+  the X-7 (180 at the panel) or the X-8 (270 in the flush), so both boxes
+  toggle both mirror flags against the P4-5 mapping (one `#if` in the X
+  block). `kDsiRotate270` is honoured by `dsi_flush_cb` and by the
+  install-mode rotate alike.
+- The X 7" and X 8" units differ in silicon as well as glass: silicon is
+  per unit, not per size (the bench X 7" is rev v1.3, `esp32p4_es`; the
+  bench X 8" rev v3.2, `esp32p4` + `BOARD_P4_SILICON_REV3`; the X-10.1 is
+  assumed rev3). Run `esptool chip-id` on a new unit before choosing an
+  image.
+- Not driven on the X boxes: the ES7210 microphone ADC, the second USB OTG
+  port (GPIO24/25) and the camera.
 
 ### Evidence
 
@@ -114,6 +137,7 @@ the dirty box and the install-mode rotate following.
 - 2026-09-04: X-8 / X-10.1 target rev3; XTAL PHY clock (`94a9be5`).
 - 2026-09-22: rev3 envs for the 5 and 4.3 (`770f51f`, issue #2); X-8
   verified: 270 flush, real touch pins, no BL_EN (`7bb4565`).
+- 2026-11-07: folded in from the project's working notes (CLAUDE.md).
 
 ### Sources
 `src/platform_esp32/display.cpp` (init tables, `dsi_flush_cb`,

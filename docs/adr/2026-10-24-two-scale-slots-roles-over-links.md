@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** radio
-- **First decided:** 2026-10-24 · **Last changed:** 2026-10-30
+- **First decided:** 2026-10-24 · **Last changed:** 2026-11-07
 - **Boards:** all
 
 ## Context
@@ -65,14 +65,23 @@ no reconnect and no restart.
 
 <a id="dd-keys"></a>
 Espresso: `smac`, `sname`, `sprtnr`, `sprpend`, `satype`, `sbatest`. Bench:
-the same names suffixed `2`.
+the same names suffixed `2`. Plus `benchhome` (i32, 0 = in the scale card,
+1 = beside the graph; see the Home record).
+
+The ports carry the slot: `core::IScaleProvisioner` takes a `ScaleSlot`
+(`kEspresso` / `kBench`) on save, forget, name and connect-enable, and
+`App::build` takes the bench `IScale*` (nullable; a null bench is a
+one-scale build).
 
 <a id="dd-lock"></a>
 `persist_for(link, fn)` takes `swap_mu_`, resolves `slot_of` and writes;
 the persisters today are the learned address type and the battery blob.
 `save_scale`, `forget` and `set_partner_mode` hold the lock too. It is the
-OUTERMOST lock (links, arbiter, NVS run under it); a persister is called
-holding nothing. Backup/restore stay outside it (restore reboots; accepted).
+OUTERMOST lock (the roles' atomics, NVS, the links' setters with their own
+mutex, the arbiter's, and NimBLE's connect cancel, a short HCI round trip,
+run under it; never a wait on a link task); a persister is called holding
+nothing, and nothing under the lock calls back into the provisioner or the
+UI (it is not recursive). Backup/restore stay outside it (restore reboots; accepted).
 
 ### Evidence
 
@@ -104,6 +113,7 @@ holding nothing. Backup/restore stay outside it (restore reboots; accepted).
 - 2026-07-18: a multi-scale registry dropped.
 - 2026-10-24: design settled (until v1.1 Apollo knew one scale); second link + slot-aware provisioner (0134038), roles over links (d075cdd), review fixes (0316f74); v1.2.0-beta.1/2.
 - 2026-10-30: issue #6 fixed, `swap_mu_` + `persist_for` (740a54c), save/forget/partner RMW under the lock, a save or forget overtaking a connect drops its learned type (30a6317); v1.2.0.
+- 2026-11-07: folded in from the project's working notes (CLAUDE.md).
 
 ### Sources
 

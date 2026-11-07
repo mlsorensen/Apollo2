@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** ota-release
-- **First decided:** 2026-09-07 · **Last changed:** 2026-09-22
+- **First decided:** 2026-09-07 · **Last changed:** 2026-11-07
 - **Boards:** all released boards; the SPI 2-inch dev board is a no-op
 
 ## Context
@@ -50,6 +50,27 @@ reverts on its own.
 ---
 
 ## Details
+
+### Design detail
+
+- Artifact contract: the install fetches
+  `<site>/<tag>/firmware/app/<kUpdateSlug>.bin`, the app-only image. The
+  `firmware/parts/` files are not usable for OTA: they bundle otadata with
+  the app. `kUpdateSlug` (`board_config.h`) must equal the CI matrix
+  `board` field (a compile-time assert, see the release-process record).
+- The check (`update_check.cpp`) is a short-lived task that fetches the
+  index and `notes.txt` through `esp_http_client` with
+  `crt_bundle_attach`: the certificate bundle in the core libs is reachable
+  only that way, not through the Arduino `NetworkClientSecure` wrapper.
+  `use_psram_for_tls()` points mbedTLS's ~46 KB of record buffers at PSRAM
+  so the fetch runs with BLE up. It notifies only and never installs.
+- Cadence `Config::update_check_mode()` (NVS `updmode`): Off / On boot /
+  Daily / Hourly. Daily and Hourly fire only while the screensaver is up
+  (`main.cpp`), so a repeating check never runs during use; with the saver
+  disabled only the boot and manual checks run.
+- Rollback: `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y` in the prebuilt libs of
+  every core; `main.cpp` overrides `verifyRollbackLater()` and calls
+  `esp_ota_mark_app_valid_cancel_rollback()` after 60 s of healthy `loop()`.
 
 ### Evidence
 
@@ -109,9 +130,10 @@ only that the network is really up.
   index but not yet their images; the check now HEADs the board's exact
   image before offering a version, and the install survives the C6 slave's
   first-boot restart (`9a24cb5`).
+- 2026-11-07: folded in from the project's working notes (CLAUDE.md).
 
 ### Sources
 
 `89e1d0e`, `51ebec6`, `d667f68`, `ac6f0ae`, `9140cf2`, `9a24cb5`;
 `src/platform_esp32/install_mode.cpp`, `display.cpp` (`install_panel_*`),
-`src/dltest/`, `src/device/main.cpp`.
+`src/dltest/`, `src/device/main.cpp`, `src/platform_esp32/update_check.cpp`.

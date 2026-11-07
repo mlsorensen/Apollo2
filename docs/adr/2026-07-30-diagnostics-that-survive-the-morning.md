@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** platform
-- **First decided:** 2026-07-30 · **Last changed:** 2026-10-31
+- **First decided:** 2026-07-30 · **Last changed:** 2026-11-07
 - **Boards:** all
 
 ## Context
@@ -43,7 +43,12 @@ leaves no record of the pool ([the crash that showed it](#history)).
 
 - The recorder's live log line runs only with >2 KB of stack headroom (it
   runs on the failing task's stack); the RTC record is written regardless.
-  A power cycle clears RTC memory, a software or panic reset does not.
+  A power cycle clears RTC memory, a software or panic reset does not. Both
+  RTC records are `static_assert`ed to 1 KB (the S3 has 8 KB of RTC slow
+  RAM).
+- Two dev serial commands exercise it (`poll_serial_id` in
+  `src/device/main.cpp`): `memfail` forces an impossible allocation
+  (`crash_record::self_test`), `reboot` soft-resets so the record survives.
 - Attribution is by size signature only (`HEAP_TASK_TRACKING` is
   unavailable): big fixed-size buffers are named, small generic blocks are
   not.
@@ -98,6 +103,7 @@ leaves no record of the pool ([the crash that showed it](#history)).
 - 2026-10-16: the SD heartbeat itself ended with the probe-once mount policy
   (see the SD/radio record).
 - 2026-10-31: Detailed log switch, ring 512 / 128 KB (`f7499ad`).
+- 2026-11-07: folded in from the project's working notes (CLAUDE.md).
 
 ### Sources
 

@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** ota-release
-- **First decided:** 2026-09-07 · **Last changed:** 2026-11-04
+- **First decided:** 2026-09-07 · **Last changed:** 2026-11-07
 - **Boards:** all; the backup page exists only on boards with a card slot
 
 ## Context
@@ -25,14 +25,18 @@ semantics = a new key, the old one read as a fallback
 read wherever a stored value indexes an array.
 
 Settings backup (`Settings > Apollo > Backup`): the device `ShotStore`
-implements `core::ISettingsBackup` as a second port, two more job kinds on
-the writer task that owns the mount; no second mount, task or mutex.
+implements `core::ISettingsBackup` as a second port, two more job kinds
+(`JobKind::kBackup` / `kRestore`) on the writer task that owns the mount; no
+second mount, task or mutex. The UI sees only the port; a board without a
+card slot (no `BOARD_HAS_SD_MMC`) passes `nullptr` and has no Backup page.
 `config_backup.cpp` ENUMERATES NVS ([why not a key
 list](#alternatives-and-dead-ends)) into type-tagged lines (`i32:`, `str:`,
 `blob:` hex for floats), so values round-trip exactly.
 
 RESTORE IS A REPLACE ([why not a merge](#alternatives-and-dead-ends)): hold
-the per-unit keys, `nvs_erase_all`, apply the file, reboot. A key the file
+the per-unit keys, `nvs_erase_all`, apply the file, reboot through
+`App::set_reboot_handler` (a full `esp_restart`; the separate restart
+handler heals an RGB panel in place instead of rebooting). A key the file
 lacks reads its compiled default, so an older backup lands like an upgrade.
 A backup from NEWER firmware is refused via `core::semver_newer` (shared with
 the update check), for the widened-enum reason.
@@ -115,10 +119,12 @@ confirm reverts a bad image with nobody present, and betas make that common.
   beta.3 reset the wiring choice to Auto.
 - 2026-11-04: `padwire` added to `UnitKeys`, so a restore keeps it, for
   v1.3.0 (found by the decision-log audit; issue #8).
+- 2026-11-07: folded in from the project's working notes (CLAUDE.md).
 
 ### Sources
 
 `9140cf2`, `8d0962b`, `4c2beef`, `4379227`, `6305121`, `8cea6ad`, `c28f459`,
 `0134038`, `455e7c9`;
 `src/platform_esp32/config.cpp`, `src/platform_esp32/config_backup.cpp`,
-`include/core/semver.h`.
+`include/core/semver.h`, `src/device/main.cpp` (the backup port, the
+reboot handler).

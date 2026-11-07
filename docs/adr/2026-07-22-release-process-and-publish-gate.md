@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** ota-release
-- **First decided:** 2026-07-22 · **Last changed:** 2026-10-23
+- **First decided:** 2026-07-22 · **Last changed:** 2026-11-07
 - **Boards:** all released boards
 
 ## Context
@@ -55,6 +55,29 @@ check after every reboot ([which releases](#ev-hand-releases)).
 
 ## Details
 
+### Design detail
+
+- Notes: inside a version's section, `### Features` then `### Fixes`
+  (`d63a68d`); an empty list is omitted. The workflow's extraction stops
+  only at the next `## `, and the device's `sanitize_notes()` shows a `###`
+  heading as a plain line, so the subheadings travel intact. Bullets are a
+  bolded lead-in plus one or two sentences of what the user sees; mechanism
+  and measurements go in the commit message.
+- A `## vX.Y.Z` heading with no matching GitHub Release is a vestigial
+  version (several shipped; v0.13.1 was the last). The workflow warns when
+  `## Unreleased` is still present at release time: its notes are not in
+  the release.
+- Local checks before dispatch: `make sim` green. The device images are the
+  run's job (every release env and both asserts build before the gate, so a
+  red build publishes nothing and creates no tag; `cec4258`); a platform,
+  bootloader or partition-table change still runs `make build-all` locally,
+  since those images go on a bench unit for the OTA proof, and bumps the
+  affected envs' `custom_flash_epoch` (the flash-epoch record).
+- Betas from a branch: every job checks out the dispatched ref; the
+  branch line's notes accumulate under one `## vX.Y.Z` heading. Promotion =
+  merge to main, set `kVersion` to `X.Y.Z`, roll the beta notes up, run at
+  the stable tag from main.
+
 ### Evidence
 
 <a id="ev-hand-releases"></a>
@@ -101,9 +124,12 @@ Events under the gate:
   the OTA security review of the same day.
 - 2026-09-22: stable from main only, betas from a branch (`a7ae510`).
 - 2026-10-23: compile-time asserts replace the image grep (`605e553`).
+- 2026-10-30: CI's matrix is the device build gate, `make sim` stays local
+  (`cec4258`); notes split into Features then Fixes (`d63a68d`).
+- 2026-11-07: folded in from the project's working notes (CLAUDE.md).
 
 ### Sources
 
 `bf203de`, `93a925d`, `70cc037`, `4cc216f`, `0122b0b`, `a7ae510`, `c8c6779`,
-`8f6c1d6`, `605e553`; `.github/workflows/firmware-release.yml`,
+`8f6c1d6`, `605e553`, `cec4258`, `d63a68d`; `.github/workflows/firmware-release.yml`,
 `include/build_check.h`, `include/version.h`, `CHANGELOG.md`.

@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** ux
-- **First decided:** 2026-10-24 · **Last changed:** 2026-11-01
+- **First decided:** 2026-10-24 · **Last changed:** 2026-11-07
 - **Boards:** every board with the large Home layout (all released boards); the internal 2-inch compact layout shows nothing of it
 
 ## Context
@@ -61,6 +61,29 @@ The gate is UI quality at 800x480. The radio side is
 
 ## Details
 
+### Design detail
+
+<a id="dd-code"></a>
+- **Home.** `build_home_tab(parent, screen, scale_enabled, bench_enabled,
+  bench_mode, out)`; `bench_mode` is the stored `benchhome` (0 = in the
+  scale card, 1 = beside the graph), and a bench scale alone is
+  `bench_only`. In swap mode `show_bench_side()` picks the side;
+  `App::pump_scale_chart()` snaps it back to ESPRESSO when a shot starts.
+- **Graph.** A third ring, `bench_weights`. No data is `kFlowNoData` (pen
+  up), never 0, so one scale's drop does not blank the other's trace.
+  `flow_mode` 2 plots the bench ring in grams on the left axis (the BENCH
+  side, or bench-only); `bench_overlay` (beside-the-graph mode) draws both
+  series on one canvas, the bench against its own right axis
+  (`flow_ylabels_r`). Theme role `bench` colours all of it.
+- **Settings > Scale.** Bluetooth: the two scale rows plus Swap roles.
+  Shot settings: Target, Review hold and Detect lead-in only. Device
+  settings: an Espresso/Bench picker when both are saved, then the scale's
+  own rows. Display: Battery display, Smoothing, Drop negative g/s,
+  Oscilloscope graph, Window growth, Bench scale on Home.
+- **Sim.** `FakeScale::set_bench`; render poses 1 (the BENCH side) and 2
+  (the save modal); renders `home_bench_*`, `scale_bt_bench`,
+  `scale_bt_modal`, `scale_display*`, `scale_device_pick`.
+
 ### Evidence
 
 - The gate as stated when the work started: "if it can't look good I don't
@@ -96,6 +119,7 @@ The gate is UI quality at 800x480. The radio side is
 - 2026-10-30: v1.2.0 released from main.
 - 2026-11-01: bench card re-laid as a panel column on the shared lines
   (`f1d0ee1`).
+- 2026-11-07: folded in from the project's working notes (CLAUDE.md).
 
 ### Sources
 

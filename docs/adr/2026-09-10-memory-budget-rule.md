@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** platform
-- **First decided:** 2026-09-10 · **Last changed:** 2026-10-26
+- **First decided:** 2026-09-10 · **Last changed:** 2026-11-07
 - **Boards:** all; the S3 boards are the ones a few KB from starvation
 
 ## Context
@@ -22,8 +22,9 @@ Never add RAM use on a device env (a task stack increase, a new task, a
 buffer, a static or heap allocation, in internal, DMA-capable or PSRAM)
 without first stating the cost in bytes, the pool and the boards, why the
 zero-memory alternative does not work, and getting an explicit OK.
-Restructure first: log from `loop()` instead of a small task, reuse an
-existing buffer, shrink something else ([the stack bump that set the
+Restructure first: move the work to a task that already has the room, log
+from `loop()` instead of a small task, reuse an existing buffer, shrink
+something else ([the stack bump that set the
 rule](#alternatives-and-dead-ends)). Applies to fixes as much as features.
 
 Measure the DMA-capable pool, not the 8-bit one; the heap telltale and the
@@ -124,6 +125,7 @@ card):
   +6.1 KB S3 static (`99f66fd`).
 - 2026-10-26: touch diagnostics shipped with the cost itemised (`de3c6d8`),
   the pattern every change now follows.
+- 2026-11-07: folded in from the project's working notes (CLAUDE.md).
 
 ### Sources
 
