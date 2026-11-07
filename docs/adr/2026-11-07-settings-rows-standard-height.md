@@ -43,8 +43,12 @@ rows overshot an 800x480 page by 8 px, leaving a sliver of scroll
 ## Consequences
 
 - Shot settings, Scale Display and Device settings fit without scrolling
-  at 800x480; Apollo Display (eight rows) and Controls (headings) still
-  scroll.
+  at 800x480, and Controls does too once its Brew / Steam Boiler headings
+  were folded into the row names (seven rows, 2026-11-07); Apollo Display
+  (eight rows) still scrolls.
+- A stepper's value box is content-wide with the old 1.5 x button width as
+  a floor: fixed, it clipped "30 min" at the P4-5's 1.5x scale once the
+  buttons shrank and the font did not.
 - The round stepper buttons are 46 px on the wide tier (were 50), still a
   comfortable touch target; the X-8 at 1280x800 runs this tier at 1.6x.
 - Every settings screenshot in the manual was re-cut and its callout boxes

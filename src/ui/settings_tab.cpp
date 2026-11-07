@@ -177,7 +177,11 @@ void make_inline_stepper(lv_obj_t* row, const lv_font_t* text_font,
   lv_obj_t* stack = lv_obj_create(grp);
   lv_obj_remove_style_all(stack);
   lv_obj_remove_flag(stack, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_size(stack, btn_size * 3 / 2, LV_SIZE_CONTENT);
+  // Content-wide with a floor, never fixed: a fixed box clipped "30 min" at
+  // the P4-5's 1.5x scale once the buttons shrank to the standard row (the
+  // font did not). The buttons move only for a value wider than the floor.
+  lv_obj_set_size(stack, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_style_min_width(stack, btn_size * 3 / 2, 0);
   lv_obj_set_flex_flow(stack, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(stack, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
@@ -1175,18 +1179,18 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   build_micra_schedule_rows(menu, out.micra_schedule_page, out.micra_schedule_times_page,
                             font, symbol_font, btn_size, btn_h, compact, out);
 
-  section_label(out.micra_controls_page, "Brew", font);
+  // No group headings (owner, 2026-11-07): the row names carry the group, and
+  // seven rows then fit an 800x480 page without scrolling.
   {
-    lv_obj_t* r = make_setting_row(out.micra_controls_page, "Temperature", font, row_h);
+    lv_obj_t* r = make_setting_row(out.micra_controls_page, "Brew temperature", font, row_h);
     make_inline_stepper(r, font, symbol_font, btn_size, &out.brew_minus,
                         &out.brew_value, &out.brew_plus, nullptr);
   }
-  section_label(out.micra_controls_page, "Steam Boiler", font);
   {
-    lv_obj_t* r1 = make_setting_row(out.micra_controls_page, "Enable", font, row_h);
+    lv_obj_t* r1 = make_setting_row(out.micra_controls_page, "Boiler enable", font, row_h);
     out.steam_switch = lv_switch_create(r1);
     lv_obj_set_size(out.steam_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
-    lv_obj_t* r2 = make_setting_row(out.micra_controls_page, "Temperature", font, row_h);
+    lv_obj_t* r2 = make_setting_row(out.micra_controls_page, "Boiler temperature", font, row_h);
     make_inline_stepper(r2, font, symbol_font, btn_size, &out.boiler_minus,
                         &out.boiler_value, &out.boiler_plus, &out.boiler_sub);
   }

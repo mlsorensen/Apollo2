@@ -75,8 +75,10 @@ BOM) in the paddle loop:
   which then applies it once; a change at runtime drives the departing
   set's outputs low, makes them inputs (a Link on it drops to copper) and
   re-runs `begin()`, leaving the kept set in place.
-- The manual shows Settings > Micra > Controls as two screenshots (the
-  `micra_controls_2` render, scrolled by `App::scroll_settings_section`).
+- The manual showed Settings > Micra > Controls as two screenshots from
+  2026-11-03 (a `micra_controls_2` render scrolled by
+  `App::scroll_settings_section`); since 2026-11-07 the page fits one
+  (`2026-11-07-settings-rows-standard-height.md`).
 
 ### Evidence
 

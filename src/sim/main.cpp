@@ -329,11 +329,6 @@ int main() {
   ok &= r({320, 240}, "renders/micra_bt_320x240.png", 1, ui::kSectionMicraBt);
   ok &= r({320, 240}, "renders/micra_controls_320x240.png", 1, ui::kSectionMicraControls);
   ok &= r({800, 480}, "renders/micra_controls_800x480.png", 1, ui::kSectionMicraControls);
-  // The Controls page outgrew one 480-px shot (Paddle wiring, 2026-11-03): a
-  // second one scrolled to the Brew / Steam Boiler rows for the manual.
-  ok &= r({800, 480}, "renders/micra_controls_2_800x480.png", 1, ui::kSectionMicraControls,
-          false, 0, -1, false, -1, 0, false, false, 0, false, false, false, false, 0, -1,
-          false, -1, 0, 0, 300);
   ok &= r({320, 240}, "renders/micra_cleaning_320x240.png", 1, ui::kSectionMicraCleaning);
   ok &= r({800, 480}, "renders/micra_cleaning_800x480.png", 1, ui::kSectionMicraCleaning);
   // ...and with the wired paddle off: the page greys with the reason on top.
@@ -449,6 +444,7 @@ int main() {
   network.set_synced(true);
   schedule.pose_daily();
   ok &= r({800, 480}, "renders/micra_schedule_800x480.png", 1, ui::kSectionMicraSchedule);
+  ok &= r({1280, 720, 1.5f}, "renders/micra_schedule_1280x720.png", 1, ui::kSectionMicraSchedule);
   ok &= r({320, 240}, "renders/micra_schedule_320x240.png", 1, ui::kSectionMicraSchedule);
   // Schedule > Configure schedule: the times page, daily and per weekday.
   ok &= r({800, 480}, "renders/micra_schedule_times_800x480.png", 1,

@@ -53,7 +53,7 @@ Settings
 ├─ Micra
 │  ├─ Bluetooth — Scan · saved machine (Setup / Connect / Forget) · Auto connect
 │  ├─ Controls  — Wired paddle* · Paddle wiring* · Chime melody* · Chime volume*
-│  │             · Brew Temperature · Steam Enable + Temperature
+│  │             · Brew temperature · Boiler enable · Boiler temperature
 │  ├─ Cleaning* — Auto flush · Flush delay · Backflush cleaning  → cleaning mode
 │  └─ Schedule  — Auto-standby when idle · Show auto-standby timer
 │                · Enable schedules · Same every day · Smart Warm-up
@@ -402,13 +402,11 @@ Plots the live flow rate (or weight) from the scale.
   turn‑on's warm‑up chimes again. With the steam boiler **off** the chime
   follows the coffee boiler alone; with it **on**, both boilers have to be
   there.
-![Micra Controls, scrolled down](docs/img/manual/micra-controls-2.png)
-
-- ⑤ **Brew → Temperature** — coffee boiler set‑point stepper (0.1 °C steps;
+- ⑤ **Brew temperature** — coffee boiler set‑point stepper (0.1 °C steps;
   long‑press for 0.5 °C).
-- ⑥ **Steam Boiler → Enable** — steam boiler on/off.
-- ⑦ **Steam Boiler → Temperature** — one of the Micra's three steam levels
-  (shown as Level 1–3 with the temperature underneath).
+- ⑥ **Boiler enable** — steam boiler on/off.
+- ⑦ **Boiler temperature** — one of the Micra's three steam levels (shown as
+  Level 1–3 with the temperature underneath).
 
 ### Cleaning *(paddle‑capable boards)*
 
