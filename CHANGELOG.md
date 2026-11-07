@@ -12,13 +12,13 @@ the headings as plain lines); leave out a list that would be empty.
 ## v1.4.0
 
 ### Features
-- **See and reset the learned drip.** Shot settings shows "Learned drip N g" beside Target: what the auto-stop subtracts for the drips that land after the cut. Reset puts it back to 2.0 g after a change of beans or grind, instead of waiting three or four short or long shots for it to catch up.
+- **See and reset the learned drip.** Shot settings shows "Learned drip N g" beside Target: what the auto-stop subtracts for the drips that land after the cut. Reset puts it back to 2.0 g after a change of beans or grind, instead of three or four off shots while it catches up.
 
 ### Fixes
-- **Record follows a dose weighed in stages.** Beans added to a cup that already offered Record, or a few taken back out, now change the offer to the new total. Before, the first pause fixed the dose and a top-up was measured on its own, so Record 8.0 g never became Record 10.0 g.
+- **Record follows a dose weighed in stages.** Beans added to a cup that already offered Record, or a few taken back out, now change the offer to the new total. Before, a top-up was measured on its own, so Record 8.0 g never became Record 10.0 g.
 - **Settings rows line up.** Every settings row is now the same height, so pages that mix switches and steppers are evenly spaced, and seven rows fit a 4.3" or 5" screen without scrolling. Shot settings no longer needs a nudge to reach Container 2.
-- **Scheduled power keeps the button busy as long as a tap does.** A scheduled on, standby or auto-standby showed Working... for 8 s where a tap showed it for 12 s, so a command sent while the link was re-dialling could free the button before the machine had reported. Every power command now uses the same 12 s ceiling.
-- **A recorded dose holds until its shot.** Once you tap Record, the bench card offers nothing more until the shot starts or you tap the chip's ×, so a cup or jug set down in the meantime no longer asks to be recorded. To change a recorded dose, × then Record.
+- **Scheduled power keeps the button busy as long as a tap does.** A scheduled on, standby or auto-standby held Working... for 8 s where a tap held it 12 s, so a command sent during a re-dial could free the button early. Every power command now uses the same 12 s ceiling.
+- **A recorded dose holds until its shot.** Once you tap Record, the bench card offers nothing more until the shot starts or you tap the chip's ×, so a cup or jug set down meanwhile no longer asks to be recorded. To change it, × then Record.
 - **A Lunar or Pyxis sleeps while Apollo is idle.** Those scales stay awake for as long as they are connected, so Apollo now drops the link when the screensaver or setup portal comes up and reconnects when it ends. The Bookoo and a paired Umbra are unchanged.
 
 ## v1.3.0
