@@ -2274,6 +2274,7 @@ void App::tare_scale() {
 // The bench scale has no shot role, so neither of these is refused mid-shot.
 void App::tare_bench() {
   if (bench_ != nullptr) bench_->tare();
+  dose_.on_tare();  // zero is the dose base from now, whatever the scale settles at
 }
 
 void App::toggle_bench_connection() {

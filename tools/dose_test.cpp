@@ -511,6 +511,16 @@ int test_staged_dose() {
   CHECK(near(t.dose_basis(), 0.0f));
   now = hold(t, 23.0f, now, 1500);
   CHECK(t.candidate() && near(t.candidate_dose(), 23.0f));
+  // Apollo's own Tare: explicit, no settle needed. The scale sits at -27 g
+  // again; Tare is tapped and the scale lands at 0.3 g (outside the zero
+  // band) — the base is zero regardless, and 23 g on top offers 23 g.
+  now = hold(t, 0.0f, now, 1500);
+  now = hold(t, -27.0f, now, 1500);
+  t.on_tare();
+  now = hold(t, 0.3f, now, 1500);
+  CHECK(!t.candidate() && near(t.dose_basis(), 0.3f));
+  now = hold(t, 23.3f, now, 1500);
+  CHECK(t.candidate() && near(t.candidate_dose(), 23.3f));
   // A tare with the loaded portafilter already on, then more ground in:
   // the dose is what was added since the tare.
   now = hold(t, 498.3f, now, 1500);

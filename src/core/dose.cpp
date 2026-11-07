@@ -143,6 +143,15 @@ DoseClear DoseTracker::tick(const DoseInputs& in) {
   return why;
 }
 
+void DoseTracker::on_tare() {
+  base_g_ = 0.0f;
+  base_valid_ = true;
+  // The plateau the scale is leaving is stale too: the next settled reading
+  // is the first one after the tare, not a step from before it.
+  plateau_valid_ = false;
+  was_stable_ = false;
+}
+
 bool DoseTracker::reading_stable() const {
   return fed_ && last_connected_ && now_ms_ - stable_since_ms_ >= kDoseStableMs;
 }

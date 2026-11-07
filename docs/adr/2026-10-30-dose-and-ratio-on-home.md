@@ -31,8 +31,9 @@ line to the Home cards (`2026-11-01-home-cards-share-rows.md`).
   (a step of at most 30 g either way that leaves the total positive) keeps
   it, so a dose weighed in stages is offered whole and a few beans taken
   back out offer the remainder; a container-sized landing re-bases on the
-  plateau just left, a lift on the new one, and a settled ZERO (a tare,
-  whoever asked for it) makes zero the base
+  plateau just left, a lift on the new one, and a tare makes zero the
+  base: Apollo's own Tare says so at once (`on_tare`), a settled ZERO
+  covers the scale's button and an auto-zero
   ([why sticky](#evidence), [why zero](#evidence)). Capture refuses
   a container under 50 g or within the dose range of another; a reading
   equal to a container is the empty container, 0 g.
@@ -102,7 +103,9 @@ line to the Home cards (`2026-11-01-home-cards-share-rows.md`).
   moves the zero the step rule assumes fixed, and we cannot see the
   scale's own button, so the signal is the settled zero itself: it resets
   the base. A dose is never zero and a loaded portafilter on an untared
-  scale never settles at zero, so nothing legitimate is lost.
+  scale never settles at zero, so nothing legitimate is lost. Apollo's own
+  Tare resets explicitly as well, so the settle time and the zero band play
+  no part when we are the ones taring.
 - Lock, 2026-11-07: with "re-Record replaces", the 1 g "same weight" band
   decided whether a top-up after a Record re-offered, and anything else
   landing (a jug, a cup) pulled an offer while a dose waited for its shot.
