@@ -329,6 +329,16 @@ constexpr uint32_t kRestoreHoldMs = 8000;
 // the OUTCOME of something rather than as an unexplained dialog.
 constexpr uint32_t kWorkingFloorMs = 1500;
 
+// How long the MICRA card's power button stays disabled as "Working..." after
+// a power command — from the tap, the schedule, or anything else — unless
+// the reported power changes first (HomeWidgets::power_pending_until; a
+// deadline, not a hold). A couple of poll rounds past the normal 1-3 s
+// confirm, and long enough to cover a stalled request's 5 s watchdog +
+// re-dial (the command waits in its mailbox and lands after), so a swallowed
+// command can't lock the button and a queued one doesn't flip it back to the
+// old state before it lands. One value for every sender (issue #9).
+constexpr uint32_t kPowerPendingMs = 12000;
+
 // "12 Sep 2026 08:14" — a card can outlive several firmwares, so the stamp is
 // written long-form rather than in the numeric style the Stats cards use.
 void format_stamp(char* out, size_t n, int64_t unix_time) {
@@ -2228,17 +2238,7 @@ void App::toggle_power() {
     return;
   }
   if (link == core::Link::Connected) {
-    const core::Power prev = machine_->snapshot().power;
-    machine_->set_power(prev != core::Power::On);
-    // Immediate feedback for the 1-3 s command->report lag: the button
-    // disables and reads "Working..." until the reported power changes (see
-    // HomeWidgets::power_pending_until). 12 s deadline: a couple of poll
-    // rounds past the normal confirm, and long enough to cover a stalled
-    // request's 5 s watchdog + re-dial (the command waits in its mailbox and
-    // lands after), so a swallowed command can't lock it and a queued one
-    // doesn't flip the button back to the old state before it lands.
-    home_.power_pending_from = prev;
-    home_.power_pending_until = lv_tick_get() + 12000;
+    send_power(machine_->snapshot().power != core::Power::On);
     refresh();
     return;
   }
@@ -5759,17 +5759,23 @@ void App::sync_dose_settings_rows() {
   }
 }
 
-// The Home power button's own path minus the tap: same command, a shorter
-// "Working..." hold (8 s here vs the tap's 12 s in toggle_power) while the
-// machine's report catches up. The toast is
-// skipped under the screensaver — a 06:00 turn-on has nobody to read it, and a
-// notice deferred to the next touch would be hours stale.
+// Every power command goes through here: the command, and the immediate
+// feedback for the command->report lag (the button disables as "Working..."
+// until the reported power changes or kPowerPendingMs passes).
+void App::send_power(bool on) {
+  if (machine_ == nullptr) return;
+  home_.power_pending_from = machine_->snapshot().power;
+  machine_->set_power(on);
+  home_.power_pending_until = lv_tick_get() + kPowerPendingMs;
+}
+
+// The Home power button's own path minus the tap: the same command and the
+// same "Working..." gate (send_power). The toast is skipped under the
+// screensaver — a 06:00 turn-on has nobody to read it, and a notice deferred
+// to the next touch would be hours stale.
 void App::apply_scheduled_power(bool on, bool auto_standby) {
   if (machine_ == nullptr) return;
-  const core::Power prev = machine_->snapshot().power;
-  machine_->set_power(on);
-  home_.power_pending_from = prev;
-  home_.power_pending_until = lv_tick_get() + 8000;
+  send_power(on);
   // Say WHY when the warm-up lead is what fired: "on" minutes before the
   // scheduled time looks like a bug unless the notice names it.
   char msg[72];

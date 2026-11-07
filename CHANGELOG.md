@@ -13,6 +13,7 @@ the headings as plain lines); leave out a list that would be empty.
 
 ### Fixes
 - **Record follows a dose weighed in stages.** Beans added to a cup that already offered Record, or a few taken back out, now change the offer to the new total. Before, the first pause fixed the dose and a top-up was measured on its own, so Record 8.0 g never became Record 10.0 g.
+- **Scheduled power keeps the button busy as long as a tap does.** A scheduled on, standby or auto-standby showed Working... for 8 s where a tap showed it for 12 s, so a command sent while the link was re-dialling could free the button before the machine had reported. Every power command now uses the same 12 s ceiling.
 - **A recorded dose holds until its shot.** Once you tap Record, the bench card offers nothing more until the shot starts or you tap the chip's ×, so a cup or jug set down in the meantime no longer asks to be recorded. To change a recorded dose, × then Record.
 - **A Lunar or Pyxis sleeps while Apollo is idle.** Those scales stay awake for as long as they are connected, so Apollo now drops the link when the screensaver or setup portal comes up and reconnects when it ends. The Bookoo and a paired Umbra are unchanged.
 

@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** ux
-- **First decided:** 2026-06-28 · **Last changed:** 2026-11-04
+- **First decided:** 2026-06-28 · **Last changed:** 2026-11-07
 - **Boards:** all
 
 ## Context
@@ -30,9 +30,10 @@ other records; this one is what the screens do.
   line ([why](#alternatives-and-dead-ends)).
 - **A tap is acknowledged** ([why](#evidence)): after Standby / Turn On the
   button disables and reads "Working..." until the REPORTED power changes,
-  the link leaves Connected, or a deadline passes: 12 s for a tap
-  ([how sized](#history)), 8 s for a scheduled command. A deadline, not a
-  hold, so a swallowed command can never lock the button.
+  the link leaves Connected, or a 12 s deadline passes ([how
+  sized](#history)). One sender, `App::send_power`, arms it for the tap,
+  the schedule and auto-standby alike. A deadline, not a hold, so a
+  swallowed command can never lock the button.
 - **Token entry** is a WiFi setup page (SoftAP portal), not an on-screen
   keyboard ([why](#alternatives-and-dead-ends)); the link verifies the token
   with a read before declaring Connected.
@@ -100,6 +101,9 @@ other records; this one is what the screens do.
 - 2026-11-01: tap deadline 8 -> 12 s (`5c9bb70`), to cover a stalled
   request's 5 s watchdog and re-dial; the scheduled command's stays 8 s.
 - 2026-11-04: Device settings "none" text (`62218cc`).
+- 2026-11-07: the scheduled command's 8 s deadline folded into the tap's
+  12 s behind one sender (issue #9): a scheduled command landing during a
+  masked re-dial could re-enable the button before the machine reported.
 
 ### Sources
 

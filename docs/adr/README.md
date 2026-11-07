@@ -60,7 +60,7 @@ record's header; do not edit by hand.
 
 #### ux
 
-- 2026-06-28 [Connection UX: no startup scan, a saved machine, discovery in Settings, Home says the state](2026-06-28-connection-ux.md) (Accepted; last changed 2026-11-04)
+- 2026-06-28 [Connection UX: no startup scan, a saved machine, discovery in Settings, Home says the state](2026-06-28-connection-ux.md) (Accepted; last changed 2026-11-07)
 - 2026-06-29 [Stats tab: temperature history with a tap-to-zoom window, device info from the standard DIS, a manual clock](2026-06-29-stats-tab.md) (Accepted; last changed 2026-09-08)
 - 2026-07-01 [Docs rules: 800x480 is the reference size, screenshots come from the sim, the manual moves with the code](2026-07-01-docs-screenshots-and-manual-sync.md) (Accepted; last changed 2026-08-31)
 - 2026-07-22 [Flush and backflush: one duration everywhere, the sequence in the controller, Standby \| Flush on Home](2026-07-22-flush-and-backflush-on-home.md) (Accepted; last changed 2026-11-03)
@@ -98,7 +98,7 @@ record's header; do not edit by hand.
 
 | First decided | Last changed | Record | Area | Status |
 |---|---|---|---|---|
-| 2026-06-28 | 2026-11-04 | [Connection UX: no startup scan, a saved machine, discovery in Settings, Home says the state](2026-06-28-connection-ux.md) | ux | Accepted |
+| 2026-06-28 | 2026-11-07 | [Connection UX: no startup scan, a saved machine, discovery in Settings, Home says the state](2026-06-28-connection-ux.md) | ux | Accepted |
 | 2026-06-28 | 2026-11-01 | [The host simulator is the UI verification path](2026-06-28-host-simulator-ui-verification.md) | display | Accepted |
 | 2026-06-29 | 2026-09-11 | [RGB panel pipeline on the S3 boards: single framebuffer, bounce buffers, and the ghost that was a parity bit](2026-06-29-s3-rgb-panel-pipeline.md) | display | Accepted |
 | 2026-06-29 | 2026-09-08 | [Stats tab: temperature history with a tap-to-zoom window, device info from the standard DIS, a manual clock](2026-06-29-stats-tab.md) | ux | Accepted |

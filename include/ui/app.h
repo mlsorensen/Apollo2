@@ -320,6 +320,7 @@ class App {
   }
 
   void apply_scheduled_power(bool on, bool auto_standby);
+  void send_power(bool on);        // the ONE sender: command + the "Working..." gate
   core::DaySchedule& sched_edit_day();
   static void format_clock_min(char* out, size_t n, int min_of_day, bool h24);
   void schedule_commit();          // engine + persisted copy follow schedule_cfg_
