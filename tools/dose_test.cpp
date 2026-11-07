@@ -138,9 +138,13 @@ int test_record_and_spend() {
   // Portafilter lifted: the card goes dormant, the dose stays pending.
   now = hold(t, 0.0f, now + 200, 2000);
   CHECK(!t.recorded_showing() && !t.candidate() && t.has_pending());
-  // A new dose-sized weight: Record offered again; recording replaces.
+  // A new dose-sized weight: nothing offered while the recorded dose is
+  // pending (the card is locked); the x on the chip, then Record, replaces.
   now = hold(t, 496.0f, now, 2000);
-  CHECK(t.candidate());
+  CHECK(!t.candidate());
+  CHECK(near(t.record(), 0.0f) && near(t.pending(), 18.3f));
+  t.clear();
+  CHECK(!t.has_pending() && t.candidate());
   CHECK(near(t.record(), 16.0f));
   CHECK(near(t.pending(), 16.0f));
   // The shot starts: the dose is spent.
@@ -150,8 +154,8 @@ int test_record_and_spend() {
   CHECK(near(t.take_for_shot().grams, 0.0f) && t.take_for_shot().source == DoseSource::kNone);
   // The user's tap clears too.
   hold(t, 496.0f, now + 100, 2000);
-  // (496 g is within the recorded band of the last record, but nothing is
-  // pending now, so it is a candidate again.)
+  // (Nothing is pending now, so the card is unlocked and 496 g is a
+  // candidate again.)
   CHECK(t.candidate());
   t.record();
   t.clear();
@@ -357,8 +361,8 @@ int test_realistic_sweep() {
   return 0;
 }
 
-// The step rule: the dose is what landed, measured from the previous
-// plateau, so the scale's zero doesn't matter.
+// The step rule: the dose is what landed, measured from the base plateau, so
+// the scale's zero doesn't matter.
 int test_step_rule() {
   const float c[] = {480.0f, 111.0f};
   DoseTracker t;
@@ -381,7 +385,7 @@ int test_step_rule() {
   now = hold(t, 480.0f, now, 1500);
   CHECK(!t.candidate());
   now = hold(t, 498.0f, now, 1500);
-  CHECK(near(t.dose_basis(), 18.0f));
+  CHECK(near(t.dose_basis(), 498.0f));  // measured from the empty scale, the container taken off
   CHECK(t.candidate() && near(t.candidate_dose(), 18.0f));
   // The Niche cup placed untared (111 g step: empty), beans poured in.
   now = hold(t, 0.0f, now, 1500);
@@ -403,6 +407,106 @@ int test_step_rule() {
   now = hold(fresh, 535.3f, now + 200, 1500);  // 37 g of junk + the load, no step seen
   CHECK(near(fresh.dose_basis(), 535.3f));
   CHECK(!fresh.candidate());  // 535.3 - 480 = 55.3: over the gate, honestly unknown
+  return 0;
+}
+
+// The base is sticky across small adjustments (owner, 2026-11-07): a dose
+// built up in stages is offered whole, not as its last top-up.
+int test_staged_dose() {
+  const float c[] = {480.0f, 111.0f};
+  DoseTracker t;
+  t.set_containers(c, 2);
+  // Beans weighed into a tared cup: 8 g, a pause, then on to 10 g. The field
+  // report: Record 8.0 g showed, the top-up never re-offered (it measured
+  // 2 g from the 8 g plateau).
+  uint32_t now = hold(t, 0.0f, 0, 1500);
+  now = hold(t, 8.0f, now, 1500);
+  CHECK(t.candidate() && near(t.candidate_dose(), 8.0f));
+  now = hold(t, 10.0f, now, 1500);
+  CHECK(t.candidate() && near(t.candidate_dose(), 10.0f));
+  // With nothing recorded the offer follows every bump: a 0.1 g creep
+  // inside the stillness band tracks live, a 0.3 g pinch settles and
+  // re-offers after the second.
+  t.tick(in(10.1f, now + 100));
+  CHECK(t.candidate() && near(t.candidate_dose(), 10.1f));
+  t.tick(in(10.4f, now + 200));
+  CHECK(!t.candidate());  // moved: holding still again first
+  now = hold(t, 10.4f, now + 300, 1100);
+  CHECK(t.candidate() && near(t.candidate_dose(), 10.4f));
+  now = hold(t, 10.0f, now, 1500);
+  CHECK(t.candidate() && near(t.candidate_dose(), 10.0f));
+  // Recorded at 10: the card is LOCKED. A top-up, a different load, nothing
+  // is offered until the x on the chip; the caption says "recorded" only
+  // while the recorded weight still sits there.
+  CHECK(near(t.record(), 10.0f));
+  CHECK(t.recorded_showing() && !t.candidate());
+  now = hold(t, 12.5f, now, 1500);
+  CHECK(!t.recorded_showing() && !t.candidate());
+  now = hold(t, 0.0f, now, 1500);
+  now = hold(t, 498.3f, now, 1500);
+  CHECK(!t.candidate());
+  now = hold(t, 0.0f, now, 1500);
+  now = hold(t, 12.5f, now, 1500);
+  CHECK(!t.candidate());
+  t.clear();
+  CHECK(!t.has_pending());
+  CHECK(t.candidate() && near(t.candidate_dose(), 12.5f));
+  // A few beans taken back out: the remainder, not a negative step.
+  now = hold(t, 11.0f, now, 1500);
+  CHECK(t.candidate() && near(t.candidate_dose(), 11.0f));
+  // A staged DEFAULT never locks: Record is offered and overrides it.
+  t.set_default_dose(18.0f);
+  CHECK(t.pending_source() == DoseSource::kDefault);
+  CHECK(t.candidate() && near(t.candidate_dose(), 11.0f));
+  CHECK(near(t.record(), 11.0f) && t.pending_source() == DoseSource::kRecorded);
+  CHECK(!t.candidate());
+  // The shot spends it and the card unlocks (the default is staged again).
+  SpentDose sp = t.take_for_shot();
+  CHECK(near(sp.grams, 11.0f) && sp.source == DoseSource::kRecorded);
+  CHECK(t.pending_source() == DoseSource::kDefault);
+  CHECK(t.candidate() && near(t.candidate_dose(), 11.0f));
+  t.set_default_dose(0.0f);
+  // Overshot past the gate and brought back: 32 g offers nothing, 28 g offers 28 g.
+  now = hold(t, 32.0f, now, 1500);
+  CHECK(!t.candidate());
+  now = hold(t, 28.0f, now, 1500);
+  CHECK(t.candidate() && near(t.candidate_dose(), 28.0f));
+  // The cup lifted: nothing; a loaded portafilter landing is measured from
+  // the empty scale again, not from the beans that were there.
+  now = hold(t, 0.0f, now, 1500);
+  CHECK(!t.candidate());
+  now = hold(t, 498.3f, now, 1500);
+  CHECK(t.candidate() && near(t.candidate_dose(), 18.3f));
+  // The empty portafilter placed, then ground into in stages: each stage is
+  // the whole dose so far (the container step is not an adjustment).
+  now = hold(t, 0.0f, now, 1500);
+  now = hold(t, 480.0f, now, 1500);
+  CHECK(!t.candidate());
+  now = hold(t, 487.0f, now, 1500);
+  CHECK(t.candidate() && near(t.candidate_dose(), 7.0f));
+  now = hold(t, 498.0f, now, 1500);
+  CHECK(t.candidate() && near(t.candidate_dose(), 18.0f));
+  // Untared: a 37 g spoon on the scale, then the Niche cup, then beans in
+  // stages. The cup landing re-bases on the spoon; the stages do not.
+  now = hold(t, 0.0f, now, 1500);
+  now = hold(t, 37.0f, now, 1500);
+  now = hold(t, 148.0f, now, 1500);
+  CHECK(!t.candidate());  // 111 g step: the empty cup
+  now = hold(t, 157.0f, now, 1500);
+  CHECK(t.candidate() && near(t.candidate_dose(), 9.0f));
+  now = hold(t, 166.0f, now, 1500);
+  CHECK(t.candidate() && near(t.candidate_dose(), 18.0f));
+  // Milk poured in pauses into a tared jug: once the total is past a dose
+  // nothing is offered again until the jug is lifted.
+  now = hold(t, 0.0f, now, 1500);
+  now = hold(t, 12.0f, now, 1500);
+  CHECK(t.candidate());  // a look-alike the stillness gate normally hides
+  now = hold(t, 40.0f, now, 1500);
+  CHECK(!t.candidate());
+  now = hold(t, 55.0f, now, 1500);
+  CHECK(!t.candidate());
+  now = hold(t, 200.0f, now, 1500);
+  CHECK(!t.candidate());
   return 0;
 }
 
@@ -459,7 +563,7 @@ int test_ratio() {
 
 int main() {
   if (test_container_rule() || test_candidate_gate() || test_record_and_spend() ||
-      test_walk_away() || test_realistic_sweep() || test_step_rule() || test_default_dose() ||
+      test_walk_away() || test_realistic_sweep() || test_step_rule() || test_staged_dose() || test_default_dose() ||
       test_ratio())
     return 1;
   std::printf("dose_test: all %d checks passed\n", checks);

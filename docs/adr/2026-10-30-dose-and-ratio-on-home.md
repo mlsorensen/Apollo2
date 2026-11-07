@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** ux
-- **First decided:** 2026-10-30 · **Last changed:** 2026-11-02
+- **First decided:** 2026-10-30 · **Last changed:** 2026-11-07
 - **Boards:** every board with the large Home layout; needs an espresso scale (the ratio needs a yield) and, for weighing, a bench scale
 
 ## Context
@@ -19,12 +19,20 @@ line to the Home cards (`2026-11-01-home-cards-share-rows.md`).
   caption. When the reading has held still ~1 s and the net dose is
   dose-sized, weight and caption become one outlined amber block captioned
   "Record 18.3 g"; tapped, a deeper fill and "✓ 18.3 g recorded" until the
-  weight changes. Disconnect and Tare stay in every layout. The block is
+  weight changes. A recorded dose LOCKS the card: nothing more is offered,
+  whatever lands on the bench, until the × on the chip, the shot or a
+  walk-away clear ([why](#evidence)); a staged default never locks it.
+  Disconnect and Tare stay in every layout. The block is
   sized to the body, never the body to the block
   ([what lost](#alternatives-and-dead-ends)).
-- **Candidate gate and containers.** Dose = the STEP from the previous
-  stable plateau to the current one, minus the heaviest stored container
-  not heavier than the reading ([why the step](#evidence)). Capture refuses
+- **Candidate gate and containers.** Dose = the STEP from a BASE plateau to
+  the current one, minus the heaviest stored container not heavier than the
+  step ([why the step](#evidence)). The base is sticky: a small adjustment
+  (a step of at most 30 g either way that leaves the total positive) keeps
+  it, so a dose weighed in stages is offered whole and a few beans taken
+  back out offer the remainder; a container-sized landing re-bases on the
+  plateau just left, a lift on the new one
+  ([why sticky](#evidence)). Capture refuses
   a container under 50 g or within the dose range of another; a reading
   equal to a container is the empty container, 0 g.
 - **The chip in the graph** builds up in words
@@ -34,7 +42,7 @@ line to the Home cards (`2026-11-01-home-cards-share-rows.md`).
   a left-flush column; only its × is a control.
 - **Walk-away clearing**, silent: screensaver start, a scale link down for
   30 s (once it has been seen up since the Record), Micra to standby, or
-  60 min. Re-Record replaces.
+  60 min. A correction is × then Record ([was re-Record replaces](#history)).
 - **Storage:** `ShotSummary.dose_g` and `dose_src` (recorded / default) as
   trailing CSV columns; History shows the ratio.
 - **Opt-in** ([since v1.3.0-beta.2](#history)): "Record dose" is off until
@@ -76,10 +84,28 @@ line to the Home cards (`2026-11-01-home-cards-share-rows.md`).
   dose; the biggest baskets take ~28 g) and demanded a tare first. Both
   fixed by the step rule (so the scale's zero never matters) and
   `kDoseMaxG` 50 -> 30.
+- Bench 2026-11-07: beans weighed into a tared cup in two pours, 8 g then
+  10 g, offered "Record 8.0 g" and then nothing: the step was measured from
+  the previous plateau, so the top-up read as 2 g. Fixed by the sticky base
+  (the plateau a load is measured from survives small adjustments). The
+  host sweep's look-alike count is unchanged (29) and a staged milk pour now
+  offers nothing once past a dose where it offered its last step before.
+  Dropping the step rule for the raw reading was weighed and rejected: the
+  stored containers never needed it either way, but it keeps an untared,
+  unstored cup and a drifted zero working for free, and taring makes the two
+  behave the same.
+- Lock, 2026-11-07: with "re-Record replaces", the 1 g "same weight" band
+  decided whether a top-up after a Record re-offered, and anything else
+  landing (a jug, a cup) pulled an offer while a dose waited for its shot.
+  A timed "recorded" (a few seconds, then offer again even for the same
+  weight) was weighed; the lock won because it needs no band and no timer
+  and keeps the card quiet until the shot. The band now decides only the
+  caption. A correction after a Record costs the × and a second tap.
 - The container floor's refusal text: "too light to tell apart from a dose,
   tare it instead".
 - RAM: +16 B static for the plateaus (X-8 build 94,864 B static after
-  `3df12b0`).
+  `3df12b0`); the sticky base replaced the previous-plateau fields one for
+  one.
 
 ### Alternatives and dead ends
 
@@ -113,11 +139,15 @@ line to the Home cards (`2026-11-01-home-cards-share-rows.md`).
   v1.3.0-beta.2); `dosen` flipped to default false with no migration: a
   beta.1 unit that never toggled it sees the feature off and turns it on
   once by hand, acceptable because the beta.1 units were all bench units.
+- 2026-11-07: the base plateau made sticky across small adjustments so a
+  dose weighed in stages is offered whole; a recorded dose locks the card
+  until × / the shot (re-Record replaced before) (feat/v1.4, for v1.4.0).
 
 ### Sources
 
 Commits `4d1d5d6`, `c2ca58c`, `8a7bcb5`, `bcc5eb1`, `3df12b0`, `f492fa2`,
 `0d3084a`; `include/core/dose.h` (the constants in the table),
+`tools/dose_test.cpp` (`test_staged_dose`),
 `include/core/dose_settings.h`; `src/platform_esp32/config.cpp` (`dosen`,
 `dosec0`/`dosec1`, `dosedef`, `dosedeflast`); MANUAL.md "Recording your
 dose".

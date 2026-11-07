@@ -32,7 +32,7 @@ float DoseTracker::net_dose(float basis) const {
 }
 
 float DoseTracker::dose_basis() const {
-  return prev_plateau_valid_ ? last_g_ - prev_plateau_g_ : last_g_;
+  return base_valid_ ? last_g_ - base_g_ : last_g_;
 }
 
 DoseClear DoseTracker::tick(const DoseInputs& in) {
@@ -50,19 +50,30 @@ DoseClear DoseTracker::tick(const DoseInputs& in) {
   fed_ = true;
 
   // Plateaus. A link drop forgets them (a reconnect starts from the raw
-  // reading); a new plateau more than the band away from the current one
-  // pushes it back to "previous".
+  // reading). A new plateau more than the band away from the current one
+  // either ADJUSTS the load on the base (a small step, total still positive:
+  // the base stays, so a dose built up in stages is offered whole) or starts
+  // a new base: the plateau just left when something landed, the new plateau
+  // when something was lifted.
   if (!in.bench_connected) {
-    plateau_valid_ = prev_plateau_valid_ = false;
+    plateau_valid_ = base_valid_ = false;
     was_stable_ = false;
   } else {
     const bool st = in.now_ms - stable_since_ms_ >= kDoseStableMs;
-    if (st && !was_stable_ &&
-        (!plateau_valid_ || fabs_f(stable_ref_g_ - plateau_g_) > kDoseStableBandG)) {
-      prev_plateau_g_ = plateau_g_;
-      prev_plateau_valid_ = plateau_valid_;
-      plateau_g_ = stable_ref_g_;
-      plateau_valid_ = true;
+    if (st && !was_stable_) {
+      const float p = stable_ref_g_;
+      if (!plateau_valid_) {
+        plateau_g_ = p;
+        plateau_valid_ = true;
+      } else if (fabs_f(p - plateau_g_) > kDoseStableBandG) {
+        const float q = plateau_g_;
+        const float base = base_valid_ ? base_g_ : q;
+        const float step = p - q;
+        const bool adjust = fabs_f(step) <= kDoseMaxG && p - base > 0.0f;
+        base_g_ = adjust ? base : (step < 0.0f ? p : q);
+        base_valid_ = true;
+        plateau_g_ = p;
+      }
     }
     was_stable_ = st;
   }
@@ -128,7 +139,7 @@ bool DoseTracker::reading_stable() const {
 
 bool DoseTracker::candidate() const {
   if (!reading_stable()) return false;
-  if (recorded_showing()) return false;  // the same weight: "recorded", not Record
+  if (pending_g_ > 0.0f) return false;  // a recorded dose locks the card until x / the shot
   const float basis = dose_basis();
   if (basis <= 0.0f) return false;  // something lifted, nothing put down
   const float d = net_dose(basis);

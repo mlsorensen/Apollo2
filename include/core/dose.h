@@ -19,22 +19,32 @@
 //     (container_ok / container_spacing_ok).
 //   - THE STEP, not the reading (owner, 2026-10-31: "the user has to tare
 //     before placing the portafilter, unless we detect the jump"). The scale
-//     settles on plateaus; the dose basis is the step from the PREVIOUS
-//     plateau to the current one, so the scale's zero never matters: a tared
-//     scale steps from 0 (same as the raw reading), an untared scale with a
-//     cup already on it steps by exactly what was put down, and grinding
-//     into an empty portafilter already on the scale steps by the dose. With
-//     no earlier plateau (connected with the load already on) the raw
-//     reading is the basis, as before. A negative step (something lifted)
-//     is never a dose.
+//     settles on plateaus; the dose basis is the step from a BASE plateau to
+//     the current one, so the scale's zero never matters: a tared scale steps
+//     from 0 (same as the raw reading), an untared scale with a cup already
+//     on it steps by exactly what was put down, and grinding into an empty
+//     portafilter already on the scale steps by the dose. With no earlier
+//     plateau (connected with the load already on) the raw reading is the
+//     basis. A negative step (something lifted) is never a dose.
+//   - THE BASE IS STICKY (owner, 2026-11-07: dosing in stages). A load being
+//     ADJUSTED — a small step up or down, no more than kDoseMaxG, that leaves
+//     the total since the base positive — keeps its base, so beans added to
+//     8 g in a cup offer 10 g, not the 2 g top-up, a few beans taken back out
+//     offer the remainder, and 32 g brought back down to 28 g offers 28 g.
+//     A step bigger than a dose (a container or a loaded portafilter landing)
+//     or one that takes the total to zero or below (a lift) starts a new
+//     base: the plateau just left for a landing, the new plateau for a lift.
 //   - CANDIDATE: the reading has held still for kDoseStableMs AND the net
 //     dose of its basis is dose-sized (kDoseMinG..kDoseMaxG, singles
 //     included). Only then does the bench card offer Record — a milk jug or
 //     an empty scale shows nothing.
 //   - RECORD stores the net dose as PENDING for the next shot to START, which
-//     spends it (take_for_shot). Re-record replaces. While the same weight
-//     still sits on the scale the card says "recorded" instead of offering
-//     Record again (recorded_showing).
+//     spends it (take_for_shot). While a RECORDED dose is pending the card
+//     offers nothing more, whatever lands on the bench (owner, 2026-11-07:
+//     quiet until the shot; a correction is x on the chip, then Record). A
+//     staged DEFAULT never locks it. While the recorded weight still sits on
+//     the scale the caption says "recorded" (recorded_showing); once it
+//     changes the caption is plain and the card stays locked.
 //   - DEFAULT DOSE (owner, 2026-11-01): an opt-in constant for people who
 //     dose the same every day, or have no bench scale. It is STAGED whenever
 //     nothing is recorded — the chip shows it, every shot spends it — and a
@@ -105,7 +115,7 @@ class DoseTracker {
 
   // The container rule on a basis (grams put on the bench).
   float net_dose(float basis) const;
-  // What the current reading is measured against: the step from the previous
+  // What the current reading is measured against: the step from the base
   // plateau when one was seen, else the raw reading (for tests / logs).
   float dose_basis() const;
 
@@ -116,9 +126,9 @@ class DoseTracker {
   // The bench reading has held still for kDoseStableMs (Capture uses this too).
   bool reading_stable() const;
   // What the bench card shows.
-  bool candidate() const;          // stable, connected, dose-sized: offer Record
+  bool candidate() const;          // stable, connected, dose-sized, nothing recorded: offer Record
   float candidate_dose() const;    // the dose Record would store right now
-  bool recorded_showing() const;   // pending AND the recorded weight still on
+  bool recorded_showing() const;   // recorded AND that weight still on (the caption only)
 
   // Record the candidate. Returns the dose stored, 0 if there was no candidate.
   float record();
@@ -148,13 +158,13 @@ class DoseTracker {
   uint32_t stable_since_ms_ = 0;
   uint32_t now_ms_ = 0;
   bool fed_ = false;
-  // Plateaus: the reading the scale last held still at, and the one before
-  // it — their difference is the step the current load made.
+  // Plateaus: the reading the scale last held still at, and the BASE the
+  // current load is measured from (sticky across small adjustments).
   bool was_stable_ = false;
   float plateau_g_ = 0.0f;
   bool plateau_valid_ = false;
-  float prev_plateau_g_ = 0.0f;
-  bool prev_plateau_valid_ = false;
+  float base_g_ = 0.0f;
+  bool base_valid_ = false;
 
   float pending_g_ = 0.0f;           // the recorded dose (0 = none)
   float recorded_reading_g_ = 0.0f;

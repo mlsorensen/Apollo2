@@ -254,7 +254,9 @@ second and is dose‑sized, the weight and its caption gain an amber outline
 and the caption reads **Record 18.3 g** — the dose Apollo would store ①. Tap
 it to record; the caption turns to **✓ 18.3 g recorded** until you lift the
 portafilter, and a chip appears above the graph's legend ② with the dose:
-**18.3 g in**. That dose belongs to the **next shot you start**: when the
+**18.3 g in**. While that dose waits, the bench card offers nothing more,
+whatever you put on the scale; to change it, tap the chip's **×** and record
+again. That dose belongs to the **next shot you start**: when the
 shot begins the chip adds a placeholder for the yield (**--.- g out**), fills
 it in live as the shot runs with the ratio growing beside it, and freezes
 with the graph for review (**36.4 g out · 1:2.0**).
@@ -266,10 +268,14 @@ with the graph for review (**36.4 g out · 1:2.0**).
   reading with a 480 g portafilter stored records 18 g. Apollo measures the
   *step* the load made on the scale (from whatever it read before), so you
   don't have to tare first — a spoon already on the scale, or a cup you
-  tared earlier, makes no difference. Record is only offered for a step
-  whose dose would be 5–30 g — a milk jug never offers it.
-- **A dose clears** when you record again (the new one replaces it), when
-  you tap the **×** on the chip, or when you've evidently walked away: the
+  tared earlier, makes no difference. Weighing in stages is fine too: beans
+  added to, or taken out of, what is already on the scale change the offer
+  to the new total, so 8 g topped up to 10 g offers **Record 10.0 g**. Only
+  lifting the load, or putting a container down, starts the count over.
+  Record is only offered for a step whose dose would be 5–30 g — a milk
+  jug never offers it.
+- **A dose clears** when you tap the **×** on the chip, when the shot it
+  belongs to starts, or when you've evidently walked away: the
   screensaver starting, a scale going to sleep (a link that drops and stays
   down half a minute), the Micra going to standby, or an hour passing.
 - **The default dose** is staged for every shot: the chip shows it as
