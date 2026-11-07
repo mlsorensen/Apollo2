@@ -240,6 +240,9 @@ class App {
   void confirm_delete_shot();             // modal "Delete": remove + refresh
   void open_reset_stats_modal();          // metric-card tap -> confirm dialog
   void confirm_reset_stats();             // modal "Reset": set the marker
+  void open_reset_learning_modal();       // Shot settings > Target > Reset -> confirm dialog
+  void confirm_reset_learning();          // modal "Reset": both learned overshoots to default
+  void sync_learned_drip();               // the Target row's "Learned drip N g" follows the controller
   void open_log_modal();                  // Info "Diagnostic log" row -> viewer
   void shot_button();  // shot-mode toggle, or Reset while a shot is in review
   // Settings "Restart display" handler: wired by device main to an RGB panel

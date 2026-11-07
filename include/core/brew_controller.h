@@ -82,6 +82,7 @@ class BrewController : public IBrewController {
   void cancel_backflush() override;
   void reset_paddle_breaker() override;
   void set_paddle_wiring(PaddleWiring w) override;
+  void reset_learning() override;
 
  private:
   // end_ms = when brewing ACTUALLY ceased, which is not always now: the unwired
@@ -178,18 +179,18 @@ class BrewController : public IBrewController {
   float target_g_ = 36.0f;
   // Drip/lag compensation: the shot is stopped overshoot_g_ EARLY, and each
   // auto-stopped shot's settled final weight nudges the estimate (learned, NVS).
-  float overshoot_g_ = 2.0f;
+  float overshoot_g_ = kOvershootDefaultG;
   // The SAME idea for the unwired stop hint, kept separate on purpose: this one
   // also contains the user's reaction time (hint shown -> they flip the paddle
   // -> drips land), so it is a different number from the relay's drip lag. One
   // shared value would have the two modes fighting each other on a wired rig.
-  float hint_overshoot_g_ = 2.0f;
+  float hint_overshoot_g_ = kOvershootDefaultG;
   // Last values actually written to NVS. The dead-band compares against these,
   // not the live estimate, so a long slow drift in one direction still gets
   // stored — it just does not write once per shot to record hundredths of a
   // gram the scale cannot resolve.
-  float overshoot_saved_ = 2.0f;
-  float hint_overshoot_saved_ = 2.0f;
+  float overshoot_saved_ = kOvershootDefaultG;
+  float hint_overshoot_saved_ = kOvershootDefaultG;
   bool hint_fired_ = false;  // stop hint shown during THIS shot (gates learning)
   int review_hold_s_ = 30;  // review linger before auto-dismiss (user setting)
   int detect_lead_in_s_ = 3;  // detect-mode preinfusion lead-in (user setting)

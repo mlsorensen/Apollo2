@@ -113,7 +113,10 @@ struct BrewSnapshot {
                           // it's the detector's untared baseline — the UI
                           // subtracts it so the review plot shows shot grams
   float target_weight_g;  // stop target (informational when !paddle_wired)
-  float overshoot_g;      // current learned drip/lag compensation
+  float overshoot_g;      // current learned drip/lag compensation (the relay's)
+  float hint_overshoot_g; // the same for the unwired stop hint (reaction time
+                          // included); the UI shows whichever the effective
+                          // mode stops on
   int   review_hold_s;    // how long kReview lingers before auto-dismissing
   int   detect_lead_in_s; // detect-mode preinfusion lead-in (seconds): how far
                           // before the detector's flow onset the shot actually
@@ -264,6 +267,15 @@ class IBrewController {
   // Which paddle wiring this unit carries (Settings > Micra > Controls >
   // Paddle wiring). Cancels any in-flight shot: the pins change. Persisted.
   virtual void set_paddle_wiring(PaddleWiring w) = 0;
+
+  // Settings > Scale > Shot settings > Reset (issue #7): both learned
+  // overshoots back to kOvershootDefaultG and persisted so, after a change of
+  // beans or grind, the stop stops chasing the old drip tail at half the
+  // error per shot. The values only — no new NVS key.
+  virtual void reset_learning() = 0;
 };
+
+// Where both learners start (and return to on reset_learning).
+constexpr float kOvershootDefaultG = 2.0f;
 
 }  // namespace core

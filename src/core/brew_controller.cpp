@@ -626,6 +626,16 @@ void BrewController::learn_overshoot(float& est, float& saved, float err,
   }
 }
 
+void BrewController::reset_learning() {
+  logf("Brew: learned overshoot reset (relay %.1f g, hint %.1f g -> %.1f g)\n",
+       static_cast<double>(overshoot_g_), static_cast<double>(hint_overshoot_g_),
+       static_cast<double>(kOvershootDefaultG));
+  overshoot_g_ = overshoot_saved_ = kOvershootDefaultG;
+  hint_overshoot_g_ = hint_overshoot_saved_ = kOvershootDefaultG;
+  if (persist_overshoot_) persist_overshoot_(kOvershootDefaultG);
+  if (persist_hint_overshoot_) persist_hint_overshoot_(kOvershootDefaultG);
+}
+
 void BrewController::end_shot(uint32_t now_ms, uint32_t end_ms) {
   stop_hint_ = false;  // the shot is over; the signal must not outlive it
   // Universal flush gate: a run this short — manual paddle cut, auto-stop, or
@@ -662,6 +672,7 @@ BrewSnapshot BrewController::snapshot() const {
       .start_weight_g = start_g_,
       .target_weight_g = target_g_,
       .overshoot_g = overshoot_g_,
+      .hint_overshoot_g = hint_overshoot_g_,
       .review_hold_s = review_hold_s_,
       .detect_lead_in_s = detect_lead_in_s_,
       .review_reject_seq = review_reject_seq_,

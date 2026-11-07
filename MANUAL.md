@@ -62,7 +62,7 @@ Settings
 ├─ Scale
 │  ├─ Bluetooth       — Scan → Espresso / Bench · saved scales (ESPRESSO / BENCH:
 │  │                    Connect / Forget) · Swap roles · Umbra pairing
-│  ├─ Shot settings   — Target · Review hold · Detect lead-in
+│  ├─ Shot settings   — Target (Learned drip · Reset) · Review hold · Detect lead-in
 │  │                    · Record dose · Default dose · Container 1–2 (Capture / ×)
 │  ├─ Device settings — Scale (Espresso / Bench picker)
 │  │                    · the scale's own settings (Beep · Auto-off/sleep · Unit …)
@@ -594,7 +594,13 @@ which is a weight readout with its own Tare (see the BENCH card above).
 ![Shot settings](docs/img/manual/scale-shot-settings.png)
 
 - ① **Target** — brew‑by‑weight stop target, 5–120 g. Also editable from Home on
-  larger screens.
+  larger screens. Beside it, **Learned drip 2.6 g** is what the auto‑stop
+  subtracts from the target to allow for the drips that land after the cut
+  (the stop hint's own figure in Shot detect mode). Apollo learns it from
+  each auto‑stopped shot, half the error at a time, so after a change of
+  beans or grind that moves the drip tail a few shots land short or long
+  while it catches up. **Reset** (with a confirm) puts it back to 2.0 g and
+  it relearns from the next shots.
 - ② **Review hold** *(5–120 s, default 30 s)* — how long a finished shot's frozen
   graph and weight linger before auto‑dismissing. **Reset** dismisses early.
 - ③ **Detect lead‑in** *(0–10 s, default 3 s)* — Shot detect mode only. The

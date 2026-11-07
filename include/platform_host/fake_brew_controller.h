@@ -30,7 +30,8 @@ class FakeBrewController : public core::IBrewController {
         .baseline_set = true,
         .start_weight_g = 0.0f,
         .target_weight_g = target_g_,
-        .overshoot_g = 2.0f,
+        .overshoot_g = overshoot_g_,
+        .hint_overshoot_g = hint_overshoot_g_,
         .review_hold_s = review_hold_s_,
         .detect_lead_in_s = detect_lead_in_s_,
         .review_reject_seq = 0,
@@ -61,6 +62,7 @@ class FakeBrewController : public core::IBrewController {
   void set_wired_paddle(bool on) override { wired_ = on; }
   void reset_paddle_breaker() override {}
   void set_paddle_wiring(core::PaddleWiring w) override { wiring_ = w; }
+  void reset_learning() override { overshoot_g_ = hint_overshoot_g_ = core::kOvershootDefaultG; }
   void set_flush_s(int seconds) override { flush_s_ = seconds; }
   void set_flush_delay_s(int seconds) override { flush_delay_s_ = seconds; }
   void dismiss_review() override {
@@ -100,6 +102,10 @@ class FakeBrewController : public core::IBrewController {
 
  private:
   bool paddle_hw_ = true;  // board has the paddle harness (wired-capable)
+  // A learned-looking value so the Shot settings render shows "Learned drip
+  // 2.6 g" rather than the default.
+  float overshoot_g_ = 2.6f;
+  float hint_overshoot_g_ = 2.6f;
   bool wired_ = true;      // the "Wired paddle" user setting. NOTE: the DEVICE
   core::PaddleWiring wiring_ = core::PaddleWiring::kAuto;
                            // default is now OFF (Config::wired_paddle); the sim

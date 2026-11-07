@@ -46,7 +46,7 @@ record's header; do not edit by hand.
 #### radio
 
 - 2026-07-18 [Acaia driver: weight-stream liveness, the excursion hold, and no vendor references](2026-07-18-acaia-driver-liveness.md) (Accepted; last changed 2026-11-05)
-- 2026-07-18 [Auto-stop fires at target minus a learned overshoot, taught only by target-triggered stops](2026-07-18-auto-stop-overshoot-learning.md) (Accepted; last changed 2026-11-04)
+- 2026-07-18 [Auto-stop fires at target minus a learned overshoot, taught only by target-triggered stops](2026-07-18-auto-stop-overshoot-learning.md) (Accepted; last changed 2026-11-07)
 - 2026-07-19 [Shot detect (unwired) mode: the weight stream drives the shot state machine](2026-07-19-unwired-shot-detect-mode.md) (Open; last changed 2026-10-17)
 - 2026-08-20 [On-scale settings are descriptor-driven and owned by the scale](2026-08-20-scale-device-settings.md) (Accepted; last changed 2026-11-04)
 - 2026-08-24 [The Micra Bluetooth token is minted by a cloud-seed handshake, so Apollo takes it from lmtoken](2026-08-24-micra-pairing-token.md) (Accepted; last changed 2026-08-29)
@@ -110,7 +110,7 @@ record's header; do not edit by hand.
 | 2026-07-09 | 2026-11-07 | [P4 radio over the on-board ESP32-C6: esp-nimble-cpp, hostedInitBLE first, a self-updating slave, and measure the DMA pool](2026-07-09-p4-hosted-radio.md) | platform | Accepted |
 | 2026-07-17 | 2026-11-07 | [P4 silicon revisions: two binary-incompatible generations, one image each, picked per unit](2026-07-17-p4-silicon-revisions.md) | platform | Accepted |
 | 2026-07-18 | 2026-11-05 | [Acaia driver: weight-stream liveness, the excursion hold, and no vendor references](2026-07-18-acaia-driver-liveness.md) | radio | Accepted |
-| 2026-07-18 | 2026-11-04 | [Auto-stop fires at target minus a learned overshoot, taught only by target-triggered stops](2026-07-18-auto-stop-overshoot-learning.md) | radio | Accepted |
+| 2026-07-18 | 2026-11-07 | [Auto-stop fires at target minus a learned overshoot, taught only by target-triggered stops](2026-07-18-auto-stop-overshoot-learning.md) | radio | Accepted |
 | 2026-07-18 | 2026-11-07 | [Board peripherals: the 4.3C's register expander, one ES8311 driver, and battery state from voltage alone](2026-07-18-board-peripherals-audio-battery-expander.md) | hardware | Accepted |
 | 2026-07-18 | 2026-11-03 | [The paddle path by board: expander DI/DO on the 4.3C, native GPIO plus an external opto on the P4s](2026-07-18-paddle-output-path-by-board.md) | hardware | Accepted |
 | 2026-07-18 | 2026-09-09 | [S3 boards: bring NimBLE up before WiFi, and never script a reset over USB-CDC](2026-07-18-s3-boot-order-and-serial-reset-trap.md) | platform | Accepted |

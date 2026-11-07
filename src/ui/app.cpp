@@ -417,6 +417,13 @@ void on_reset_stats_cancel(lv_event_t* e) {
   static_cast<ui::App*>(lv_event_get_user_data(e))->dismiss_modal();
 }
 
+void on_reset_learning_clicked(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->open_reset_learning_modal();
+}
+void on_reset_learning_confirm(lv_event_t* e) {
+  static_cast<ui::App*>(lv_event_get_user_data(e))->confirm_reset_learning();
+}
+
 void on_stats_segment(lv_event_t* e) {
   auto* app = static_cast<ui::App*>(lv_event_get_user_data(e));
   auto* btn = static_cast<lv_obj_t*>(lv_event_get_target(e));
@@ -1416,6 +1423,8 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     lv_obj_add_event_cb(settings_.scale_cal_btn, on_cal_clicked, LV_EVENT_CLICKED, this);
   }
   lv_obj_add_event_cb(settings_.target_minus, on_target_minus, LV_EVENT_CLICKED, this);
+  if (settings_.target_reset_btn != nullptr)
+    lv_obj_add_event_cb(settings_.target_reset_btn, on_reset_learning_clicked, LV_EVENT_CLICKED, this);
   if (settings_.review_minus != nullptr) {
     lv_obj_add_event_cb(settings_.review_minus, on_review_minus, LV_EVENT_CLICKED, this);
     lv_obj_add_event_cb(settings_.review_plus, on_review_plus, LV_EVENT_CLICKED, this);
@@ -1651,6 +1660,7 @@ void App::build(core::IMachine& machine, core::IProvisioner& provisioner,
     settings_.review_hold_s = b.review_hold_s;
     settings_.detect_lead_in_s = b.detect_lead_in_s;
   }
+  sync_learned_drip();
   update_settings_view();
   update_temp_panels(machine_->snapshot());
 
@@ -1768,6 +1778,9 @@ void App::refresh() {
         remaining_s = static_cast<int>(schedule_engine_.auto_standby_remaining_ms(lv_tick_get()) / 1000u);
       }
       ui::set_micra_standby_timer(home_, remaining_s);
+      // The learned drip moves at a shot's settle: keep the Target row's
+      // readout honest without a hook into the controller.
+      sync_learned_drip();
     }
 
     // Fresh unit (nothing configured, not opted out) -> the welcome, on the
@@ -4509,6 +4522,48 @@ void App::refresh_log_modal() {
     lv_obj_update_layout(log_box_);
     lv_obj_scroll_to_y(log_box_, LV_COORD_MAX, LV_ANIM_OFF);
   }
+}
+
+// Shot settings > Target > Reset: the learned drip compensation back to its
+// default (issue #7). Confirmed, because three or four shots of learning go
+// with it; the row shows what the stop currently subtracts so the user can
+// judge whether it is chasing an old tail.
+void App::open_reset_learning_modal() {
+  if (brew_ == nullptr) return;
+  char body[224];
+  std::snprintf(body, sizeof(body),
+                "The drip compensation Apollo learned from your shots goes back to "
+                "%.1f g and is relearned from the next auto-stopped shots. Use it "
+                "after a change of beans or grind that left shots landing short "
+                "or long.",
+                static_cast<double>(core::kOvershootDefaultG));
+  lv_obj_t* card = open_modal("Reset learning?", body);
+  lv_obj_t* row = lv_obj_create(card);
+  lv_obj_remove_style_all(row);
+  lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_style_pad_column(row, ui::dp(10), 0);
+  modal_button(row, "Reset", ui::theme::warn(), on_reset_learning_confirm, this);
+  modal_button(row, "Cancel", ui::theme::rail(), on_reset_stats_cancel, this);
+}
+
+void App::confirm_reset_learning() {
+  if (brew_ != nullptr) brew_->reset_learning();
+  close_modal();
+  sync_learned_drip();
+}
+
+// "Learned drip 2.6 g": the overshoot the EFFECTIVE mode stops on — the
+// relay's in Auto, the stop hint's otherwise (they are learned apart).
+void App::sync_learned_drip() {
+  if (settings_.target_learned == nullptr || brew_ == nullptr) return;
+  const core::BrewSnapshot b = brew_->snapshot();
+  const float g = b.mode == core::ShotMode::kAuto ? b.overshoot_g : b.hint_overshoot_g;
+  if (g == settings_.learned_g) return;
+  settings_.learned_g = g;
+  char buf[32];
+  std::snprintf(buf, sizeof(buf), "Learned drip %.1f g", static_cast<double>(g));
+  lv_label_set_text(settings_.target_learned, buf);
 }
 
 void App::confirm_reset_stats() {

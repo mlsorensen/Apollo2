@@ -1252,6 +1252,35 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   // Scale > Settings: target weight + flow-graph options
   {
     lv_obj_t* r = make_setting_row(out.scale_settings_page, "Target", font);
+    // Between the label and the stepper: "Learned drip 2.6 g" + Reset (issue
+    // #7). The auto-stop fires at target minus this learned value; after a
+    // change of beans the learner chases the new tail at half the error per
+    // shot, so the user can see what it holds and put it back to default.
+    {
+      lv_obj_t* grp = lv_obj_create(r);
+      lv_obj_remove_style_all(grp);
+      lv_obj_remove_flag(grp, LV_OBJ_FLAG_SCROLLABLE);
+      lv_obj_set_height(grp, LV_SIZE_CONTENT);
+      lv_obj_set_flex_grow(grp, 1);
+      lv_obj_set_flex_flow(grp, LV_FLEX_FLOW_ROW);
+      lv_obj_set_flex_align(grp, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+      lv_obj_set_style_pad_left(grp, ui::dp(24), 0);
+      lv_obj_set_style_pad_column(grp, ui::dp(10), 0);
+      out.target_learned = lv_label_create(grp);
+      lv_label_set_text(out.target_learned, "");
+      lv_obj_set_style_text_color(out.target_learned, lv_color_hex(ui::theme::muted()), 0);
+      lv_obj_set_style_text_font(out.target_learned, font, 0);
+      out.target_reset_btn = ui::make_button(grp);
+      lv_obj_set_height(out.target_reset_btn, btn_size);
+      lv_obj_set_style_pad_hor(out.target_reset_btn, ui::dp(14), 0);
+      lv_obj_set_style_bg_color(out.target_reset_btn, lv_color_hex(ui::theme::card()), 0);
+      lv_obj_t* l = lv_label_create(out.target_reset_btn);
+      lv_label_set_text(l, "Reset");
+      lv_obj_set_style_text_color(l, lv_color_hex(ui::theme::text()), 0);
+      lv_obj_set_style_text_font(l, font, 0);
+      lv_obj_center(l);
+      if (compact) lv_obj_add_flag(grp, LV_OBJ_FLAG_HIDDEN);
+    }
     make_inline_stepper(r, font, symbol_font, btn_size, &out.target_minus,
                         &out.target_value, &out.target_plus, nullptr);
     // How long the frozen shot-review graph lingers before auto-resetting.

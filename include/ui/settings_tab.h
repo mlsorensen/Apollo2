@@ -173,6 +173,12 @@ struct SettingsWidgets {
   lv_obj_t* target_plus = nullptr;
   lv_obj_t* target_value = nullptr;
   float target_g = 36.0f;
+  // On the Target row (no row of its own: the page already scrolls at
+  // 800x480): the learned drip the stop compensates for, and its Reset
+  // (confirm modal). Hidden on the compact layout.
+  lv_obj_t* target_learned = nullptr;
+  lv_obj_t* target_reset_btn = nullptr;
+  float learned_g = -1.0f;  // last value shown (the label is rewritten on change only)
   // Shot-review hold stepper (seconds the frozen graph lingers before auto-reset)
   lv_obj_t* review_minus = nullptr;
   lv_obj_t* review_plus = nullptr;

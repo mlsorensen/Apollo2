@@ -11,6 +11,9 @@ the headings as plain lines); leave out a list that would be empty.
 
 ## v1.4.0
 
+### Features
+- **See and reset the learned drip.** Shot settings shows "Learned drip N g" beside Target: what the auto-stop subtracts for the drips that land after the cut. Reset puts it back to 2.0 g after a change of beans or grind, instead of waiting three or four short or long shots for it to catch up.
+
 ### Fixes
 - **Record follows a dose weighed in stages.** Beans added to a cup that already offered Record, or a few taken back out, now change the offer to the new total. Before, the first pause fixed the dose and a top-up was measured on its own, so Record 8.0 g never became Record 10.0 g.
 - **Scheduled power keeps the button busy as long as a tap does.** A scheduled on, standby or auto-standby showed Working... for 8 s where a tap showed it for 12 s, so a command sent while the link was re-dialling could free the button before the machine had reported. Every power command now uses the same 12 s ceiling.

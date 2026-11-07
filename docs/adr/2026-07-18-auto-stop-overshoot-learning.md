@@ -1,8 +1,8 @@
 # Auto-stop fires at target minus a learned overshoot, taught only by target-triggered stops
 
-- **Status:** Accepted (a Reset action is planned, issue #7, v1.4.0)
+- **Status:** Accepted
 - **Area:** radio
-- **First decided:** 2026-07-18 · **Last changed:** 2026-11-04
+- **First decided:** 2026-07-18 · **Last changed:** 2026-11-07
 - **Boards:** all with a paddle drive (the hint variant on every board)
 
 ## Context
@@ -34,18 +34,24 @@ minus overshoot, adapt the overshoot from each shot's settled weight.
   fixed 3 s](#alternatives-and-dead-ends), [why two calm windows](#ev-calm)).
 - The learner runs at the freeze, independent of History. Deleting a shot
   from History does not undo what it taught.
+- **The learned value is visible and resettable** (issue #7): Shot settings
+  shows "Learned drip N g" on the Target row (the relay's overshoot in Auto,
+  the hint's otherwise, i.e. whichever the effective mode stops on) with a
+  Reset behind a confirm. `IBrewController::reset_learning()` puts BOTH
+  estimates back to `kOvershootDefaultG` through the existing persisters:
+  values only, no new NVS key. It sits on the Target row, not a row of its
+  own, because the page already scrolls at 800x480.
 
 ## Consequences
 
 - Fail-open rule from the original design: if the scale drops mid-shot the
   line is never stranded (a 4 s blind grace, then the shot ends).
 - Half the error per shot means a drip tail that moves by a few grams takes
-  three or four shots to chase, and the learned value is invisible with no
-  way to clear it short of a settings restore ([short shots after a bean
-  change](#ev-bean-change)). Planned for v1.4.0: a "Learned drip: N g" line
-  and a Reset button under Shot settings, resetting both estimates to 2.0 g
-  through the existing persisters (values only, no new NVS key)
-  ([issue](#sources)).
+  three or four shots to chase ([short shots after a bean
+  change](#ev-bean-change)); Reset is the way out, and the row shows when
+  it is worth taking.
+- The sim's fake controller reports 2.6 g so the manual's screenshot shows
+  a learned value rather than the default.
 
 ---
 
@@ -99,8 +105,12 @@ mean "settled".
 - 2026-07-21: 8 s minimum-shot gate made universal (6e6319d).
 - 2026-07-27: drip-stop settle, separate hint overshoot, NVS dead-band (0d099bd).
 - 2026-11-04: short shots after a bean change observed; issue #7 opened (target v1.4.0).
+- 2026-11-07: "Learned drip" readout + Reset on the Target row (issue #7, feat/v1.4 for v1.4.0).
 
 ### Sources
 
 - Commits 59999de, 6e6319d, 0d099bd; issue #7.
-- `include/core/brew_controller.h`, `src/core/brew_controller.cpp`, `src/platform_esp32/config.cpp`.
+- `include/core/brew.h` (`kOvershootDefaultG`, `reset_learning`),
+  `include/core/brew_controller.h`, `src/core/brew_controller.cpp`,
+  `src/platform_esp32/config.cpp`; `src/ui/app.cpp` (`sync_learned_drip`,
+  `open_reset_learning_modal`); MANUAL.md "Shot settings".
