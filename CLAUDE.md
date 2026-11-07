@@ -242,9 +242,10 @@ ends, history — lives in `docs/adr/` (index by area and date in `docs/adr/READ
 - RESTORE IS A REPLACE (`nvs_erase_all`, apply, full reboot via
   `App::set_reboot_handler`), never a merge.
 - Per-unit keys never leave the board (`is_unit_key`: `padsense`,
-  `paddrive`, `padwire`, `otainst`, `sprpend`/`sprpend2`, `lastunix`,
-  `_init`); the knobs, `otainst` and `lastunix` are held across the erase. A
-  new per-unit key needs BOTH lists.
+  `paddrive`, `otainst`, `sprpend`/`sprpend2`, `lastunix`, `_init`); the
+  knobs, `otainst` and `lastunix` are held across the erase, and so is
+  `padwire` although it travels in the file (since v1.4.0, issue #11: a
+  pre-v1.4 file has no line for it). A new per-unit key needs BOTH lists.
 - WiFi group (`ssid`/`wifipass`/`wifi_en` + static-IP keys) and `token` are
   opt-out switches; `mac`/`name` always travel.
 - A backup from NEWER firmware is refused via `core::semver_newer` (shared
@@ -483,8 +484,9 @@ from its slugs). Don't de-list it again without asking.
   hypotheses for the bench. → docs/adr/2026-07-31-paddle-sense-protection.md
 - Apollo Link: CTRL HIGH from `Paddle::begin()` for as long as firmware runs
   (input = paddle in copper). Paddle wiring Auto/Link/Cable =
-  `core::PaddleWiring` on `IPaddle`, NVS `padwire` (per-unit, out of backups
-  like `padsense`/`paddrive`), P4 only; main.cpp sets it before `begin()`.
+  `core::PaddleWiring` on `IPaddle`, NVS `padwire` (in backups since
+  v1.4.0, unlike the `padsense`/`paddrive` pad remaps), P4 only; main.cpp
+  sets it before `begin()`.
   Rev 0.7 is the last rev (there is no 0.8); D3 must be UNIDIRECTIONAL.
   → docs/adr/2026-09-16-apollo-link-bridge.md
 - Paddle breaker (core/brew_controller): every drive goes through

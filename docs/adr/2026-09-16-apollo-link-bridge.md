@@ -37,7 +37,7 @@ BOM) in the paddle loop:
   X boards use the same set ([since v1.0.1](#ev-bench)).
 - Both pin sets are driven and polled together by default (no connector
   to pick). **Settings > Micra > Controls > Paddle wiring** (Auto / Apollo
-  Link / Opto cable, NVS `padwire`, per unit) pins a unit to one set: the
+  Link / Opto cable, NVS `padwire`) pins a unit to one set: the
   senses are ORed, and a dead pad on the unused set can read LOW and hold
   the paddle closed ([the bench X 8"'s did](#history)).
 - Rev 0.6 is in service with R6 1 kΩ on SENSE. Rev 0.7 puts SENSE behind
@@ -69,9 +69,10 @@ BOM) in the paddle loop:
 - Paddle wiring is `core::PaddleWiring` (kAuto 0, kLink 1, kCable 2) on the
   `IPaddle` port: `wiring_selectable()` (true only where both native sets
   exist, the P4s; the 4.3C reports no choice and the row is absent),
-  `set_wiring()`, `wiring()`. NVS `padwire` (i32, an added key) is per
-  unit: it stays out of backups and survives a restore, like `padsense` /
-  `paddrive`. `main.cpp` sets the stored choice before `Paddle::begin()`,
+  `set_wiring()`, `wiring()`. NVS `padwire` (i32, an added key) travels in
+  a settings backup since v1.4.0 (issue #11: the Link or cable moves with
+  the user, unlike the `padsense` / `paddrive` pad remaps) and survives a
+  restore from an older file. `main.cpp` sets the stored choice before `Paddle::begin()`,
   which then applies it once; a change at runtime drives the departing
   set's outputs low, makes them inputs (a Link on it drops to copper) and
   re-runs `begin()`, leaving the kept set in place.
@@ -120,7 +121,8 @@ diodes.
 - 2026-10-16: v1.0.1 maps the Link pins on the X boards (`6aa35cc`).
 - 2026-11-02: the bench X 8"'s GPIO5 (Link SENSE) found dead, reading LOW; rev 0.7 drawn with SENSE opto-isolated and the D_H symbol fixed (`4fdaea0`).
 - 2026-11-03: the opto-only 0.7 withdrawn; C1 and D3 added under the number 0.8, then renamed 0.7 (`89bcba9`, `4011ba3`, `846d9d4`); layout and gerbers (`cac0a35`); D3 corrected to a unidirectional part (`e482d11`, `1a803ab`); Paddle wiring setting (`455e7c9`).
-- 2026-11-07: folded in from the project's working notes (CLAUDE.md).
+- 2026-11-07: folded in from the project's working notes (CLAUDE.md);
+  `padwire` moved into the settings backup (issue #11).
 
 <a id="hist-d1"></a>The D1 footprint slip: the rev 0.5 and 0.6 sheets
 place D1 reversed (symbol pin 1 was the anode, the footprint's band is

@@ -35,8 +35,13 @@ constexpr size_t kMaxLine = 256;  // "str:" + 15-char key + kMaxValue + slack
 // back after it (UnitKeys below); the pairing-prompt flags and the
 // namespace marker are simply dropped by the erase (the marker is
 // re-created at boot).
+// `padwire` (the Paddle wiring choice) is NOT here (issue #11): it says what
+// is plugged into the header, which moves with the user like `wiredpad`,
+// so it travels in the file. It stays in UnitKeys below, lifted across the
+// erase, so a v1.3 file that lacks it leaves the board's choice alone; a
+// file that has it wins, being applied after the held keys go back.
 bool is_unit_key(const char* k) {
-  static const char* kUnit[] = {"padsense", "paddrive", "padwire", "otainst", "sprpend", "sprpend2",
+  static const char* kUnit[] = {"padsense", "paddrive", "otainst", "sprpend", "sprpend2",
                                 "lastunix", "_init"};
   for (const char* u : kUnit)
     if (std::strcmp(k, u) == 0) return true;
@@ -225,7 +230,7 @@ struct UnitKeys {
 void read_unit_keys(nvs_handle_t h, UnitKeys& u) {
   u.has_sense = nvs_get_i32(h, "padsense", &u.sense) == ESP_OK;
   u.has_drive = nvs_get_i32(h, "paddrive", &u.drive) == ESP_OK;
-  u.has_wire = nvs_get_i32(h, "padwire", &u.wire) == ESP_OK;  // v1.3: Paddle wiring
+  u.has_wire = nvs_get_i32(h, "padwire", &u.wire) == ESP_OK;  // held for a file without it (pre-v1.4)
   u.has_seed = nvs_get_i64(h, "lastunix", &u.seed) == ESP_OK;
   size_t len = sizeof(u.pending);
   u.has_pending = nvs_get_str(h, "otainst", u.pending, &len) == ESP_OK;

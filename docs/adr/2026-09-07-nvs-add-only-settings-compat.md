@@ -75,10 +75,12 @@ Fallback pairs ([when each was added](#history)):
 
 <a id="ev-unit-keys"></a>
 Per-unit keys, kept out of the file by `is_unit_key`: `padsense`,
-`paddrive`, `padwire`, `otainst`, `sprpend` / `sprpend2`, `lastunix` and
-`_init`. Of those, `padsense`, `paddrive`, `padwire`, `lastunix` and
-`otainst` are read out before the erase and written back after it
-(`UnitKeys`; `padwire` only since v1.3.0, see [History](#history));
+`paddrive`, `otainst`, `sprpend` / `sprpend2`, `lastunix` and `_init`. Of
+those, `padsense`, `paddrive`, `lastunix` and `otainst` are read out before
+the erase and written back after it (`UnitKeys`). `padwire` is in the file
+since v1.4.0 but is ALSO held across the erase, so a file from before it
+leaves the board's choice alone and a file that has it wins, being applied
+after the held keys go back (see [History](#history));
 `sprpend` / `sprpend2` are one-boot flags dropped on purpose and `_init` is
 re-created at the next boot. The WiFi opt-out group is `ssid`, `wifipass`,
 `wifi_en`, plus the static-address keys since v1.0.0-beta.7 (an SSID with no
@@ -120,6 +122,10 @@ confirm reverts a bad image with nobody present, and betas make that common.
 - 2026-11-04: `padwire` added to `UnitKeys`, so a restore keeps it, for
   v1.3.0 (found by the decision-log audit; issue #8).
 - 2026-11-07: folded in from the project's working notes (CLAUDE.md).
+- 2026-11-07: `padwire` moved INTO the file for v1.4.0 (issue #11): the
+  wiring choice describes what is plugged in, not the board, and a restore
+  onto a replacement unit came up on Auto. Still held across the erase for
+  files that predate it.
 
 ### Sources
 

@@ -957,9 +957,12 @@ copies the settings onto that same card, so a replacement can pick them up.
 A few things worth knowing:
 
 - **Moving between boards is the point.** A backup taken on any supported board
-  restores onto any other; nothing in it is board-specific. Settings that
-  belong to the board itself — the paddle pin repair knobs and the Paddle
-  wiring choice — stay on the board and are untouched by a restore.
+  restores onto any other; nothing in it is board-specific. The one setting
+  that belongs to the board itself — the paddle pin repair knobs, which
+  describe one board's dead pad — stays on the board and is untouched by a
+  restore. The Paddle wiring choice travels, since the Link or cable moves
+  with you (a backup from before v1.4.0 has no record of it, so a restore
+  from one leaves the board's current choice alone).
 - **A backup from newer firmware is refused** — update this Apollo first, then
   restore. Older backups are always fine.
 - **Nothing happens on its own.** No automatic backup, no automatic restore;

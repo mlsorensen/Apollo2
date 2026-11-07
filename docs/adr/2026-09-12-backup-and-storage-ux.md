@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** ux
-- **First decided:** 2026-09-12 · **Last changed:** 2026-11-04
+- **First decided:** 2026-09-12 · **Last changed:** 2026-11-07
 - **Boards:** boards with an SD slot (all released boards); the page is absent elsewhere
 
 ## Context
@@ -49,9 +49,11 @@ release v1.1.0):
 ## Consequences
 
 - Per-unit keys never leave the board ([the list](#ev-unit-keys)); the
-  paddle repair knobs, the paddle wiring choice, the install flag and the
-  clock seed are held across the erase, the Umbra pairing-prompt flags are
-  dropped by design ([the betas that lost the wiring choice](#history)).
+  paddle repair knobs, the install flag and the clock seed are held across
+  the erase, the Umbra pairing-prompt flags are dropped by design. The
+  paddle wiring choice travels in the file since v1.4.0 and is held across
+  the erase as well, for files from before it ([the betas that lost the
+  wiring choice, and the swap that moved it](#history)).
 - Screenshots: `../img/manual/device-backup.png`,
   `../img/manual/backup-modal.png`, `../img/manual/device-storage.png`.
 
@@ -70,11 +72,12 @@ release v1.1.0):
 
 <a id="ev-unit-keys"></a>
 The unit keys, `is_unit_key` in `config_backup.cpp`: `padsense`,
-`paddrive`, `padwire`, `otainst`, `sprpend`, `sprpend2`, `lastunix`,
-`_init`. Of those, `padsense`, `paddrive`, `padwire`, `otainst` and
-`lastunix` are lifted out before the erase and put back (`read_unit_keys` /
-`write_unit_keys`); `sprpend` and `sprpend2` (the Umbra pairing-prompt
-flags) are dropped by design.
+`paddrive`, `otainst`, `sprpend`, `sprpend2`, `lastunix`, `_init`. Of
+those, `padsense`, `paddrive`, `otainst` and `lastunix` are lifted out
+before the erase and put back (`read_unit_keys` / `write_unit_keys`), and so
+is `padwire` although it is in the file (a pre-v1.4.0 file has no line for
+it); `sprpend` and `sprpend2` (the Umbra pairing-prompt flags) are dropped
+by design.
 
 ### Alternatives and dead ends
 
@@ -105,6 +108,10 @@ flags) are dropped by design.
   it to Auto.
 - 2026-11-04: `padwire` held across the erase like the repair knobs
   (issue #8).
+- 2026-11-07: `padwire` written to the file (issue #11): planning an X 8"
+  swap showed it was the one setting a fresh unit would not pick up from
+  the card. The repair knobs stay per-unit; the hold across the erase stays
+  for older files.
 
 ### Sources
 

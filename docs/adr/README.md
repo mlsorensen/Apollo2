@@ -65,7 +65,7 @@ record's header; do not edit by hand.
 - 2026-07-01 [Docs rules: 800x480 is the reference size, screenshots come from the sim, the manual moves with the code](2026-07-01-docs-screenshots-and-manual-sync.md) (Accepted; last changed 2026-08-31)
 - 2026-07-22 [Flush and backflush: one duration everywhere, the sequence in the controller, Standby \| Flush on Home](2026-07-22-flush-and-backflush-on-home.md) (Accepted; last changed 2026-11-03)
 - 2026-09-04 [Idle screen: Lion / Apollo / Alternate / Dim / Off, with a per-board dim floor](2026-09-04-idle-screen-styles.md) (Accepted; last changed 2026-11-05)
-- 2026-09-12 [Backup and Storage pages: opt-out credentials, restore reboots, Mount is a tap](2026-09-12-backup-and-storage-ux.md) (Accepted; last changed 2026-11-04)
+- 2026-09-12 [Backup and Storage pages: opt-out credentials, restore reboots, Mount is a tap](2026-09-12-backup-and-storage-ux.md) (Accepted; last changed 2026-11-07)
 - 2026-09-22 [Schedule page: one switch per line, triggers not periods, auto-standby from the last use](2026-09-22-schedule-page-design.md) (Accepted; last changed 2026-11-07)
 - 2026-10-24 [Two scales on Home and in Settings: card swap or beside the graph, scan then choose, Swap roles](2026-10-24-two-scales-home-and-settings.md) (Accepted; last changed 2026-11-07)
 - 2026-10-30 [Dose and brew ratio: Record is the bench weight block, the chip builds in, out, ratio](2026-10-30-dose-and-ratio-on-home.md) (Accepted; last changed 2026-11-07)
@@ -135,7 +135,7 @@ record's header; do not edit by hand.
 | 2026-09-09 | 2026-09-17 | [Screensaver frame cost: the saver runs on its own screen](2026-09-09-screensaver-frame-cost.md) | display | Accepted |
 | 2026-09-10 | 2026-11-07 | [No new RAM use on a device build without its cost stated and an explicit OK](2026-09-10-memory-budget-rule.md) | platform | Accepted |
 | 2026-09-10 | 2026-11-07 | [Four boards are released; every other env is internal-only, de-listed not deleted](2026-09-10-supported-board-matrix.md) | ota-release | Accepted |
-| 2026-09-12 | 2026-11-04 | [Backup and Storage pages: opt-out credentials, restore reboots, Mount is a tap](2026-09-12-backup-and-storage-ux.md) | ux | Accepted |
+| 2026-09-12 | 2026-11-07 | [Backup and Storage pages: opt-out credentials, restore reboots, Mount is a tap](2026-09-12-backup-and-storage-ux.md) | ux | Accepted |
 | 2026-09-12 | 2026-09-29 | [Beta channel: a frozen stable index and a second merged index](2026-09-12-beta-channel-two-indexes.md) | ota-release | Accepted |
 | 2026-09-16 | 2026-11-07 | [Apollo Link: a solid-state bridge so the paddle works without Apollo, on one cable that also powers it](2026-09-16-apollo-link-bridge.md) | hardware | Accepted |
 | 2026-09-22 | 2026-11-02 | [The schedule engine fires one-shot edges inside a 2-minute window, and only on a clock it trusts](2026-09-22-schedule-engine-rules.md) | platform | Accepted |
