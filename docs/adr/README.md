@@ -71,6 +71,7 @@ record's header; do not edit by hand.
 - 2026-10-30 [Dose and brew ratio: Record is the bench weight block, the chip builds in, out, ratio](2026-10-30-dose-and-ratio-on-home.md) (Accepted; last changed 2026-11-07)
 - 2026-11-01 [Home panel cards share their rows, and a line never moves without asking](2026-11-01-home-cards-share-rows.md) (Accepted; last changed 2026-11-01)
 - 2026-11-04 [The graph legend's box: shaped to its digits, unit pinned, no repaint throttle](2026-11-04-graph-legend-sizing.md) (Accepted; last changed 2026-11-05)
+- 2026-11-07 [Settings rows have one standard height per tier; controls are sized to fit it](2026-11-07-settings-rows-standard-height.md) (Accepted; last changed 2026-11-07)
 
 #### display
 
@@ -154,6 +155,7 @@ record's header; do not edit by hand.
 | 2026-11-01 | 2026-11-01 | [Home panel cards share their rows, and a line never moves without asking](2026-11-01-home-cards-share-rows.md) | ux | Accepted |
 | 2026-11-03 | 2026-11-03 | [The paddle breaker: a flickering sense input opens the drive until a person resets it](2026-11-03-paddle-breaker.md) | hardware | Accepted |
 | 2026-11-04 | 2026-11-05 | [The graph legend's box: shaped to its digits, unit pinned, no repaint throttle](2026-11-04-graph-legend-sizing.md) | ux | Accepted |
+| 2026-11-07 | 2026-11-07 | [Settings rows have one standard height per tier; controls are sized to fit it](2026-11-07-settings-rows-standard-height.md) | ux | Accepted |
 <!-- index:end -->
 
 ## Conventions

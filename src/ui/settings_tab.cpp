@@ -21,10 +21,10 @@ void section_label(lv_obj_t* parent, const char* text, const lv_font_t* font) {
 }
 
 // Lay out a menu page as a padded vertical column (the page itself scrolls).
-void page_column(lv_obj_t* page, bool compact) {
+void page_column(lv_obj_t* page, bool compact, int row_gap) {
   lv_obj_set_flex_flow(page, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_style_pad_all(page, ui::dp(compact ? 8 : 12), 0);
-  lv_obj_set_style_pad_row(page, ui::dp(compact ? 8 : 12), 0);
+  lv_obj_set_style_pad_row(page, row_gap, 0);
   // OPAQUE page background (same color as the screen, so visually identical):
   // a transparent scrollable forces LVGL to re-render every layer beneath it
   // on each scroll frame — the bulk of the settings-scroll CPU cost.
@@ -130,13 +130,22 @@ void build_connection_panel(lv_obj_t* panel, const lv_font_t* font, int btn_h,
 }
 
 // One settings row: a left-aligned label and a right-aligned control slot.
+// Every row is at least `row_h` tall — the STANDARD row height the layout
+// chose (seven rows fill an 800x480 page) — and the controls are sized to fit
+// it (btn_size == row_h), never the other way round, so a switch row and a
+// stepper row sit the same distance apart. Only a two-line value (the boiler's
+// "Level 3" over "131 C") may grow a row past it.
 lv_obj_t* make_setting_row(lv_obj_t* parent, const char* label,
-                           const lv_font_t* font) {
+                           const lv_font_t* font, int row_h) {
   lv_obj_t* row = lv_obj_create(parent);
   lv_obj_remove_style_all(row);
   lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_set_width(row, lv_pct(100));
-  lv_obj_set_height(row, LV_SIZE_CONTENT);
+  // A FIXED height, not a minimum on a content-sized row: with the latter the
+  // flex track is the content band and a 29 px switch would sit centred in
+  // the top of a 46 px row. Rows whose value is two lines re-size themselves
+  // to content (make_inline_stepper with a sub label, value_row).
+  lv_obj_set_height(row, row_h);
   lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER);
@@ -179,6 +188,7 @@ void make_inline_stepper(lv_obj_t* row, const lv_font_t* text_font,
   lv_obj_set_style_text_font(*out_value, text_font, 0);
 
   if (out_sub != nullptr) {
+    lv_obj_set_height(row, LV_SIZE_CONTENT);  // two lines: taller than the standard row
     *out_sub = lv_label_create(stack);
     lv_obj_set_style_text_color(*out_sub, lv_color_hex(ui::theme::muted()), 0);
     lv_obj_set_style_text_font(*out_sub, text_font, 0);
@@ -243,7 +253,7 @@ void build_device_display_rows(lv_obj_t* page, const lv_font_t* text_font,
                                bool with_brightness, bool with_sound,
                                ui::SettingsWidgets& out) {
   if (with_brightness) {
-    lv_obj_t* rb = make_setting_row(page, "Brightness", text_font);
+    lv_obj_t* rb = make_setting_row(page, "Brightness", text_font, btn_size);
     make_inline_stepper(rb, text_font, symbol_font, btn_size, &out.brightness_minus,
                         &out.brightness_value, &out.brightness_plus, nullptr);
   } else {
@@ -252,7 +262,7 @@ void build_device_display_rows(lv_obj_t* page, const lv_font_t* text_font,
 
   // Screen dim: tap cycles Off / 15 min / 30 min. On every board — on/off-only
   // backlights just switch off instead of dimming.
-  lv_obj_t* rd = make_setting_row(page, "Screen timeout", text_font);
+  lv_obj_t* rd = make_setting_row(page, "Screen timeout", text_font, btn_size);
   out.dim_btn = ui::make_button(rd);
   lv_obj_set_height(out.dim_btn, btn_size);
   lv_obj_set_style_pad_hor(out.dim_btn, ui::dp(14), 0);
@@ -265,7 +275,7 @@ void build_device_display_rows(lv_obj_t* page, const lv_font_t* text_font,
   // Idle-screen style: what the timeout shows — bouncing logo, the dimmed UI,
   // or lights out. Hidden while Screen timeout is Off (see App's sync of
   // saver_row).
-  out.saver_row = make_setting_row(page, "Idle screen", text_font);
+  out.saver_row = make_setting_row(page, "Idle screen", text_font, btn_size);
   out.saver_btn = ui::make_button(out.saver_row);
   lv_obj_set_height(out.saver_btn, btn_size);
   lv_obj_set_style_pad_hor(out.saver_btn, ui::dp(14), 0);
@@ -275,7 +285,7 @@ void build_device_display_rows(lv_obj_t* page, const lv_font_t* text_font,
   lv_obj_set_style_text_font(out.saver_value, text_font, 0);
   lv_obj_center(out.saver_value);
 
-  lv_obj_t* rt = make_setting_row(page, "Theme", text_font);
+  lv_obj_t* rt = make_setting_row(page, "Theme", text_font, btn_size);
   out.theme_btn = ui::make_button(rt);
   lv_obj_set_style_bg_color(out.theme_btn, lv_color_hex(ui::theme::card()), 0);
   out.theme_value = lv_label_create(out.theme_btn);
@@ -283,26 +293,26 @@ void build_device_display_rows(lv_obj_t* page, const lv_font_t* text_font,
   lv_obj_set_style_text_font(out.theme_value, text_font, 0);
   lv_obj_center(out.theme_value);
 
-  lv_obj_t* ru = make_setting_row(page, "Fahrenheit", text_font);
+  lv_obj_t* ru = make_setting_row(page, "Fahrenheit", text_font, btn_size);
   out.units_switch = lv_switch_create(ru);
   lv_obj_set_size(out.units_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 
   // Button-press click, only on boards with a speaker (core::ISound).
   if (with_sound) {
-    lv_obj_t* rs = make_setting_row(page, "Button sounds", text_font);
+    lv_obj_t* rs = make_setting_row(page, "Button sounds", text_font, btn_size);
     out.click_sound_switch = lv_switch_create(rs);
     lv_obj_set_size(out.click_sound_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
   } else {
     out.click_sound_switch = nullptr;
   }
 
-  lv_obj_t* rp = make_setting_row(page, "Performance overlay", text_font);
+  lv_obj_t* rp = make_setting_row(page, "Performance overlay", text_font, btn_size);
   out.perf_overlay_switch = lv_switch_create(rp);
   lv_obj_set_size(out.perf_overlay_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 
   // Detailed log: the per-minute perf/heap lines and other housekeeping in
   // the log ring (events are always logged). Also sizes the ring at boot.
-  lv_obj_t* rdl = make_setting_row(page, "Detailed log", text_font);
+  lv_obj_t* rdl = make_setting_row(page, "Detailed log", text_font, btn_size);
   out.detailed_log_switch = lv_switch_create(rdl);
   lv_obj_set_size(out.detailed_log_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 }
@@ -345,22 +355,22 @@ lv_obj_t* make_field_group(lv_obj_t* row) {
 void build_device_time_rows(lv_obj_t* page, const lv_font_t* text_font,
                             int btn_size, bool compact,
                             ui::SettingsWidgets& out) {
-  lv_obj_t* rt = make_setting_row(page, "Time", text_font);
+  lv_obj_t* rt = make_setting_row(page, "Time", text_font, btn_size);
   lv_obj_t* tg = make_field_group(rt);
   out.hour_dd = make_field_dropdown(tg, text_font, ui::dp(compact ? 92 : 128), compact);
   out.minute_dd = make_field_dropdown(tg, text_font, ui::dp(compact ? 66 : 92), compact);
 
-  lv_obj_t* rd = make_setting_row(page, "Date", text_font);
+  lv_obj_t* rd = make_setting_row(page, "Date", text_font, btn_size);
   lv_obj_t* dg = make_field_group(rd);
   out.month_dd = make_field_dropdown(dg, text_font, ui::dp(compact ? 74 : 100), compact);
   out.day_dd = make_field_dropdown(dg, text_font, ui::dp(compact ? 62 : 84), compact);
   out.year_dd = make_field_dropdown(dg, text_font, ui::dp(compact ? 82 : 112), compact);
 
-  lv_obj_t* rc = make_setting_row(page, "24-hour", text_font);
+  lv_obj_t* rc = make_setting_row(page, "24-hour", text_font, btn_size);
   out.clock_mode_switch = lv_switch_create(rc);
   lv_obj_set_size(out.clock_mode_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 
-  lv_obj_t* rtz = make_setting_row(page, "Timezone", text_font);
+  lv_obj_t* rtz = make_setting_row(page, "Timezone", text_font, btn_size);
   out.tz_dropdown = lv_dropdown_create(rtz);
   std::string opts;
   for (int i = 0; i < ui::kTimezoneCount; ++i) {
@@ -386,11 +396,11 @@ void build_device_time_rows(lv_obj_t* page, const lv_font_t* text_font,
 // Time & date page — it's a time preference, not a network one.)
 void build_device_wifi_rows(lv_obj_t* page, const lv_font_t* text_font,
                             int btn_size, ui::SettingsWidgets& out) {
-  lv_obj_t* rw = make_setting_row(page, "Enable", text_font);
+  lv_obj_t* rw = make_setting_row(page, "Enable", text_font, btn_size);
   out.wifi_switch = lv_switch_create(rw);
   lv_obj_set_size(out.wifi_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 
-  lv_obj_t* rst = make_setting_row(page, "Status", text_font);
+  lv_obj_t* rst = make_setting_row(page, "Status", text_font, btn_size);
   out.wifi_status = lv_label_create(rst);
   lv_obj_set_style_text_color(out.wifi_status, lv_color_hex(ui::theme::muted()), 0);
   lv_obj_set_style_text_font(out.wifi_status, text_font, 0);
@@ -399,7 +409,7 @@ void build_device_wifi_rows(lv_obj_t* page, const lv_font_t* text_font,
   // Address: the IP with how it was assigned, and beneath it, smaller and
   // muted, the gateway and mask the network actually applied. Shown only
   // while connected (App hides the row otherwise) so the page stays short.
-  out.wifi_addr_row = make_setting_row(page, "Address", text_font);
+  out.wifi_addr_row = make_setting_row(page, "Address", text_font, btn_size);
   lv_obj_t* col = lv_obj_create(out.wifi_addr_row);
   lv_obj_remove_style_all(col);
   lv_obj_remove_flag(col, LV_OBJ_FLAG_SCROLLABLE);
@@ -447,14 +457,14 @@ void build_device_wifi_rows(lv_obj_t* page, const lv_font_t* text_font,
   lv_obj_set_style_text_font(fg, text_font, 0);
   lv_obj_center(fg);
 
-  lv_obj_t* rnt = make_setting_row(page, "Auto time (NTP)", text_font);
+  lv_obj_t* rnt = make_setting_row(page, "Auto time (NTP)", text_font, btn_size);
   out.ntp_switch = lv_switch_create(rnt);
   lv_obj_set_size(out.ntp_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 
   // Check for updates (needs WiFi + NTP, so it lives with them). Cycle button:
   // Off / On boot / Daily / Hourly. App hides the row when no update source is
   // wired.
-  out.update_check_row = make_setting_row(page, "Check for updates", text_font);
+  out.update_check_row = make_setting_row(page, "Check for updates", text_font, btn_size);
   out.update_check_btn = ui::make_button(out.update_check_row);
   lv_obj_set_height(out.update_check_btn, btn_size);
   lv_obj_set_style_pad_hor(out.update_check_btn, ui::dp(14), 0);
@@ -470,7 +480,7 @@ void build_device_wifi_rows(lv_obj_t* page, const lv_font_t* text_font,
   // Beta channel opt-in. Only meaningful when checks are on at all, so App
   // hides this row whenever the cadence above reads Off (and when no update
   // source is wired).
-  out.beta_row = make_setting_row(page, "Beta updates", text_font);
+  out.beta_row = make_setting_row(page, "Beta updates", text_font, btn_size);
   out.beta_switch = lv_switch_create(out.beta_row);
   lv_obj_set_size(out.beta_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
 }
@@ -505,8 +515,8 @@ lv_obj_t* split_row(lv_obj_t* page, bool compact) {
   return row;
 }
 lv_obj_t* split_half(lv_obj_t* split, const char* label, const lv_font_t* font,
-                     bool compact) {
-  lv_obj_t* half = make_setting_row(split, label, font);
+                     bool compact, int row_h) {
+  lv_obj_t* half = make_setting_row(split, label, font, row_h);
   if (!compact) lv_obj_set_width(half, lv_pct(48));
   return half;
 }
@@ -563,12 +573,12 @@ void build_micra_schedule_rows(lv_obj_t* menu, lv_obj_t* page, lv_obj_t* times_p
   // row names carry it, and the page keeps its air.
   //   Auto-standby when idle [sw] [-] 30 min [+]
   //   Show auto-standby timer [sw]        (the countdown on the Home MICRA card)
-  make_switch_stepper(make_setting_row(page, "Auto-standby when idle", font), font,
+  make_switch_stepper(make_setting_row(page, "Auto-standby when idle", font, btn_size), font,
                       symbol_font, btn_size, compact, &out.sched_standby_switch,
                       &out.sched_standby_minus, &out.sched_standby_value,
                       &out.sched_standby_plus);
   out.sched_timer_switch =
-      make_switch(make_setting_row(page, "Show auto-standby timer", font), btn_size);
+      make_switch(make_setting_row(page, "Show auto-standby timer", font, btn_size), btn_size);
   // Auto-standby counts from a SHOT, which the device only sees through a
   // wired paddle or the scale's detector: say so when it has neither.
   out.sched_asb_status = lv_label_create(page);
@@ -585,13 +595,13 @@ void build_micra_schedule_rows(lv_obj_t* menu, lv_obj_t* page, lv_obj_t* times_p
   // Enable schedules [sw]: the master switch for the TIMES, named for what it
   // switches so it doesn't read as the master of the whole page.
   out.sched_enable_switch =
-      make_switch(make_setting_row(page, "Enable schedules", font), btn_size);
+      make_switch(make_setting_row(page, "Enable schedules", font, btn_size), btn_size);
   // Same every day [sw]
   out.sched_same_switch =
-      make_switch(make_setting_row(page, "Same every day", font), btn_size);
+      make_switch(make_setting_row(page, "Same every day", font, btn_size), btn_size);
   // Smart Warm-up [sw] [-] 8 min [+]: start early so the boilers are there on
   // time. One setting for the week.
-  make_switch_stepper(make_setting_row(page, "Smart Warm-up", font), font, symbol_font,
+  make_switch_stepper(make_setting_row(page, "Smart Warm-up", font, btn_size), font, symbol_font,
                       btn_size, compact, &out.sched_warm_switch, &out.sched_warm_minus,
                       &out.sched_warm_value, &out.sched_warm_plus);
   // Configure schedule   6:30 AM - 9:00 AM  >   (the summary is dropped on the
@@ -641,7 +651,7 @@ void build_micra_schedule_rows(lv_obj_t* menu, lv_obj_t* page, lv_obj_t* times_p
   }
 
   // Day enabled [sw]: the selected day takes part in the schedule.
-  out.sched_day_enable_row = make_setting_row(times_page, "Day enabled", font);
+  out.sched_day_enable_row = make_setting_row(times_page, "Day enabled", font, btn_size);
   out.sched_day_enable_switch = make_switch(out.sched_day_enable_row, btn_size);
 
   // On at [hh][mm]      Off at [hh][mm]
@@ -650,11 +660,11 @@ void build_micra_schedule_rows(lv_obj_t* menu, lv_obj_t* page, lv_obj_t* times_p
     if (!compact) lv_obj_set_style_pad_top(split, ui::dp(8), 0);
     const int hour_w = ui::dp(compact ? 92 : 128);
     const int min_w = ui::dp(compact ? 66 : 84);
-    lv_obj_t* ron = split_half(split, "On at", font, compact);
+    lv_obj_t* ron = split_half(split, "On at", font, compact, btn_size);
     lv_obj_t* gon = make_field_group(ron);
     out.sched_on_hour_dd = make_field_dropdown(gon, font, hour_w, compact);
     out.sched_on_min_dd = make_field_dropdown(gon, font, min_w, compact);
-    lv_obj_t* roff = split_half(split, "Off at", font, compact);
+    lv_obj_t* roff = split_half(split, "Off at", font, compact, btn_size);
     lv_obj_t* goff = make_field_group(roff);
     out.sched_off_hour_dd = make_field_dropdown(goff, font, hour_w, compact);
     out.sched_off_min_dd = make_field_dropdown(goff, font, min_w, compact);
@@ -728,7 +738,7 @@ void build_micra_schedule_rows(lv_obj_t* menu, lv_obj_t* page, lv_obj_t* times_p
   // Copy times to [All days v] [Copy]: the edited day's window onto another
   // day (or all of them). Per-day mode only; App shows/hides it.
   {
-    out.sched_copy_row = make_setting_row(times_page, "Copy times to", font);
+    out.sched_copy_row = make_setting_row(times_page, "Copy times to", font, btn_size);
     lv_obj_t* grp = make_field_group(out.sched_copy_row);
     lv_obj_set_style_pad_column(grp, ui::dp(10), 0);
     out.sched_copy_dd = make_field_dropdown(grp, font, ui::dp(compact ? 130 : 190), compact);
@@ -825,7 +835,7 @@ lv_obj_t* root_entry(lv_obj_t* menu, lv_obj_t* root_page, lv_obj_t* target,
 // what is actually on the card, and App greys Restore when there is nothing
 // to restore (or the backup is newer than this firmware).
 void build_device_backup_rows(lv_obj_t* page, const lv_font_t* text_font,
-                              int btn_h, ui::SettingsWidgets& out) {
+                              int btn_h, int row_h, ui::SettingsWidgets& out) {
   section_label(page, "On the card", text_font);
   out.backup_status = lv_label_create(page);
   lv_label_set_text(out.backup_status, "");
@@ -843,8 +853,9 @@ void build_device_backup_rows(lv_obj_t* page, const lv_font_t* text_font,
 
 // A "label | value + muted sub-line" row (the WiFi Address row's shape).
 lv_obj_t* value_row(lv_obj_t* page, const char* label, const lv_font_t* text_font,
-                    lv_obj_t** value, lv_obj_t** sub) {
-  lv_obj_t* row = make_setting_row(page, label, text_font);
+                    int row_h, lv_obj_t** value, lv_obj_t** sub) {
+  lv_obj_t* row = make_setting_row(page, label, text_font, row_h);
+  lv_obj_set_height(row, LV_SIZE_CONTENT);  // value + sub-line: taller than the standard row
   lv_obj_t* col = lv_obj_create(row);
   lv_obj_remove_style_all(col);
   lv_obj_remove_flag(col, LV_OBJ_FLAG_SCROLLABLE);
@@ -867,7 +878,7 @@ void build_device_storage_rows(lv_obj_t* page, const lv_font_t* text_font, int b
                                ui::SettingsWidgets& out) {
   // Status + the one action. The button's label is Mount or Unmount depending
   // on the state (App flips it); greyed while a mount/unmount is in flight.
-  lv_obj_t* rs = make_setting_row(page, "SD card", text_font);
+  lv_obj_t* rs = make_setting_row(page, "SD card", text_font, btn_size);
   lv_obj_t* right = lv_obj_create(rs);
   lv_obj_remove_style_all(right);
   lv_obj_remove_flag(right, LV_OBJ_FLAG_SCROLLABLE);
@@ -891,9 +902,9 @@ void build_device_storage_rows(lv_obj_t* page, const lv_font_t* text_font, int b
   lv_obj_center(out.storage_mount_label);
 
   out.storage_card_row =
-      value_row(page, "Card", text_font, &out.storage_card_value, &out.storage_card_sub);
+      value_row(page, "Card", text_font, btn_size, &out.storage_card_value, &out.storage_card_sub);
   out.storage_space_row =
-      value_row(page, "Space", text_font, &out.storage_space_value, &out.storage_space_sub);
+      value_row(page, "Space", text_font, btn_size, &out.storage_space_value, &out.storage_space_sub);
   lv_obj_add_flag(out.storage_card_row, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_flag(out.storage_space_row, LV_OBJ_FLAG_HIDDEN);
   // Why there is a button at all (the slot is not watched continuously).
@@ -920,7 +931,15 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   const bool xl = is_xl(screen);
   const lv_font_t* font = ui::font_dp(compact ? 14 : xl ? 28 : 20);
   const lv_font_t* symbol_font = ui::font_dp(compact ? 20 : 28);
-  const int btn_size = ui::dp(compact ? 36 : xl ? 64 : 50);
+  // The standard setting-row height and gap, chosen so SEVEN rows fill a
+  // page below the header on the wide tier (800x480: 80 px header + 24 px
+  // page padding leaves 376; 7 x 46 + 6 x 8 = 370) and on XL (1024x600: 108
+  // + 24 leaves 468; 7 x 58 + 6 x 10 = 466). Every control on a row is sized
+  // from row_h (owner, 2026-11-07: controls fit the row, not rows the
+  // controls), so pages with a mix of switches and steppers stay even.
+  const int row_h = ui::dp(compact ? 36 : xl ? 58 : 46);
+  const int row_gap = ui::dp(compact ? 8 : xl ? 10 : 8);
+  const int btn_size = row_h;
   // Match Home's action-button height so nav rows and connection buttons don't
   // read as cramped on the wider boards.
   const int btn_h = ui::dp(compact ? 40 : xl ? 92 : 64);
@@ -1014,19 +1033,19 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   out.device_wifi_page = lv_menu_page_create(menu, "WiFi");
   if (with_backup) out.device_backup_page = lv_menu_page_create(menu, "Backup");
   if (with_backup) out.device_storage_page = lv_menu_page_create(menu, "Storage");
-  page_column(out.micra_bt_page, compact);
-  page_column(out.micra_controls_page, compact);
-  page_column(out.micra_schedule_page, compact);
-  page_column(out.micra_schedule_times_page, compact);
-  page_column(out.scale_bt_page, compact);
-  page_column(out.scale_settings_page, compact);
-  page_column(out.scale_device_page, compact);
-  page_column(out.scale_display_page, compact);
-  page_column(out.device_display_page, compact);
-  page_column(out.device_time_page, compact);
-  page_column(out.device_wifi_page, compact);
-  if (out.device_backup_page != nullptr) page_column(out.device_backup_page, compact);
-  if (out.device_storage_page != nullptr) page_column(out.device_storage_page, compact);
+  page_column(out.micra_bt_page, compact, row_gap);
+  page_column(out.micra_controls_page, compact, row_gap);
+  page_column(out.micra_schedule_page, compact, row_gap);
+  page_column(out.micra_schedule_times_page, compact, row_gap);
+  page_column(out.scale_bt_page, compact, row_gap);
+  page_column(out.scale_settings_page, compact, row_gap);
+  page_column(out.scale_device_page, compact, row_gap);
+  page_column(out.scale_display_page, compact, row_gap);
+  page_column(out.device_display_page, compact, row_gap);
+  page_column(out.device_time_page, compact, row_gap);
+  page_column(out.device_wifi_page, compact, row_gap);
+  if (out.device_backup_page != nullptr) page_column(out.device_backup_page, compact, row_gap);
+  if (out.device_storage_page != nullptr) page_column(out.device_storage_page, compact, row_gap);
 
   // Micra > Bluetooth: connection, and the one preference about it
   lv_obj_t* micra_bt_prefs = nullptr;
@@ -1040,7 +1059,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     // expectation for a dedicated remote); turn off when another controller
     // needs the Micra's single BLE slot. It lives on this page because it is a
     // fact about the link, not about the coffee.
-    lv_obj_t* ra = make_setting_row(micra_bt_prefs, "Auto connect", font);
+    lv_obj_t* ra = make_setting_row(micra_bt_prefs, "Auto connect", font, row_h);
     out.auto_connect_switch = lv_switch_create(ra);
     lv_obj_set_size(out.auto_connect_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
   }
@@ -1050,7 +1069,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     // scale's weight stream instead of paddle edges. Only offered where the
     // paddle hardware exists — other boards are permanently unwired.
     if (with_wired_paddle) {
-      lv_obj_t* rw = make_setting_row(out.micra_controls_page, "Wired paddle", font);
+      lv_obj_t* rw = make_setting_row(out.micra_controls_page, "Wired paddle", font, row_h);
       out.wired_paddle_switch = lv_switch_create(rw);
       lv_obj_set_size(out.wired_paddle_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
     } else {
@@ -1061,7 +1080,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     // Link or Opto cable leaves the other set an open input, so a dead pin on
     // it can't hold the paddle closed. Tap cycles the three.
     if (with_wired_paddle && with_paddle_wiring) {
-      lv_obj_t* rp = make_setting_row(out.micra_controls_page, "Paddle wiring", font);
+      lv_obj_t* rp = make_setting_row(out.micra_controls_page, "Paddle wiring", font, row_h);
       out.paddle_wiring_btn = ui::make_button(rp);
       lv_obj_set_height(out.paddle_wiring_btn, btn_size);
       lv_obj_set_style_pad_hor(out.paddle_wiring_btn, ui::dp(14), 0);
@@ -1076,7 +1095,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     // its level (Off / 25% / 50% / 75% / 100%); both audition as you tap so
     // the choice is made by ear.
     if (with_sound) {
-      lv_obj_t* rm = make_setting_row(out.micra_controls_page, "Chime melody", font);
+      lv_obj_t* rm = make_setting_row(out.micra_controls_page, "Chime melody", font, row_h);
       out.chime_mel_btn = ui::make_button(rm);
       lv_obj_set_height(out.chime_mel_btn, btn_size);
       lv_obj_set_style_pad_hor(out.chime_mel_btn, ui::dp(14), 0);
@@ -1088,7 +1107,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
       // Chime volume: slider + [-]/[+] + readout. The scale is a plain linear
       // 0-100; sound.cpp turns it into amplitude on a dB curve, so equal steps
       // here are equal steps by ear (see kChimeRangeDb).
-      lv_obj_t* rc = make_setting_row(out.micra_controls_page, "Chime volume", font);
+      lv_obj_t* rc = make_setting_row(out.micra_controls_page, "Chime volume", font, row_h);
       make_inline_slider(rc, font, symbol_font, btn_size, &out.chime_vol_minus,
                          &out.chime_vol_slider, &out.chime_vol_value,
                          &out.chime_vol_plus);
@@ -1104,7 +1123,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   // boards (the chooser entry is omitted otherwise).
   if (with_wired_paddle) {
     out.micra_cleaning_page = lv_menu_page_create(menu, "Cleaning");
-    page_column(out.micra_cleaning_page, compact);
+    page_column(out.micra_cleaning_page, compact, row_gap);
     // Every row here drives the group through the paddle relay, so without
     // the harness switched on none of it can act: App shows this line and
     // greys the rows (not just Backflush, which used to be the only one).
@@ -1118,7 +1137,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
                       "Wired paddle (with the harness fitted).");
     lv_obj_add_flag(out.clean_status, LV_OBJ_FLAG_HIDDEN);
     // Post-shot auto-flush: tap cycles Off / 3 / 6 / 9 / 15 s.
-    lv_obj_t* rf = make_setting_row(out.micra_cleaning_page, "Auto flush", font);
+    lv_obj_t* rf = make_setting_row(out.micra_cleaning_page, "Auto flush", font, row_h);
     out.flush_btn = ui::make_button(rf);
     lv_obj_set_style_opa(out.flush_btn, LV_OPA_40, LV_STATE_DISABLED);
     lv_obj_set_height(out.flush_btn, btn_size);
@@ -1130,7 +1149,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_center(out.flush_value);
     // Cup-off -> flush pause: tap cycles 5 / 10 / 15 s. Only meaningful
     // (and only shown — App manages the HIDDEN flag) while the flush is on.
-    out.flush_delay_row = make_setting_row(out.micra_cleaning_page, "Flush delay", font);
+    out.flush_delay_row = make_setting_row(out.micra_cleaning_page, "Flush delay", font, row_h);
     out.flush_delay_btn = ui::make_button(out.flush_delay_row);
     lv_obj_set_style_opa(out.flush_delay_btn, LV_OPA_40, LV_STATE_DISABLED);
     lv_obj_set_height(out.flush_delay_btn, btn_size);
@@ -1158,16 +1177,16 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
 
   section_label(out.micra_controls_page, "Brew", font);
   {
-    lv_obj_t* r = make_setting_row(out.micra_controls_page, "Temperature", font);
+    lv_obj_t* r = make_setting_row(out.micra_controls_page, "Temperature", font, row_h);
     make_inline_stepper(r, font, symbol_font, btn_size, &out.brew_minus,
                         &out.brew_value, &out.brew_plus, nullptr);
   }
   section_label(out.micra_controls_page, "Steam Boiler", font);
   {
-    lv_obj_t* r1 = make_setting_row(out.micra_controls_page, "Enable", font);
+    lv_obj_t* r1 = make_setting_row(out.micra_controls_page, "Enable", font, row_h);
     out.steam_switch = lv_switch_create(r1);
     lv_obj_set_size(out.steam_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
-    lv_obj_t* r2 = make_setting_row(out.micra_controls_page, "Temperature", font);
+    lv_obj_t* r2 = make_setting_row(out.micra_controls_page, "Temperature", font, row_h);
     make_inline_stepper(r2, font, symbol_font, btn_size, &out.boiler_minus,
                         &out.boiler_value, &out.boiler_plus, &out.boiler_sub);
   }
@@ -1251,7 +1270,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   }
   // Scale > Settings: target weight + flow-graph options
   {
-    lv_obj_t* r = make_setting_row(out.scale_settings_page, "Target", font);
+    lv_obj_t* r = make_setting_row(out.scale_settings_page, "Target", font, row_h);
     // Between the label and the stepper: "Learned drip 2.6 g" + Reset (issue
     // #7). The auto-stop fires at target minus this learned value; after a
     // change of beans the learner chases the new tail at half the error per
@@ -1284,12 +1303,12 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     make_inline_stepper(r, font, symbol_font, btn_size, &out.target_minus,
                         &out.target_value, &out.target_plus, nullptr);
     // How long the frozen shot-review graph lingers before auto-resetting.
-    lv_obj_t* rr = make_setting_row(out.scale_settings_page, "Review hold", font);
+    lv_obj_t* rr = make_setting_row(out.scale_settings_page, "Review hold", font, row_h);
     make_inline_stepper(rr, font, symbol_font, btn_size, &out.review_minus,
                         &out.review_value, &out.review_plus, nullptr);
     // Detect-mode preinfusion lead-in: how far before the first drip the shot
     // actually started (lever-on -> water through the puck).
-    lv_obj_t* rl = make_setting_row(out.scale_settings_page, "Detect lead-in", font);
+    lv_obj_t* rl = make_setting_row(out.scale_settings_page, "Detect lead-in", font, row_h);
     make_inline_stepper(rl, font, symbol_font, btn_size, &out.lead_minus,
                         &out.lead_value, &out.lead_plus, nullptr);
 
@@ -1297,7 +1316,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     // weights (a portafilter, a dosing cup) captured from the bench scale.
     // Record subtracts the heaviest stored container lighter than the
     // reading; a container under 50 g is refused (it could be a dose).
-    lv_obj_t* rd = make_setting_row(out.scale_settings_page, "Record dose", font);
+    lv_obj_t* rd = make_setting_row(out.scale_settings_page, "Record dose", font, row_h);
     out.dose_switch_row = rd;
     out.dose_switch = lv_switch_create(rd);
     lv_obj_set_size(out.dose_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
@@ -1305,14 +1324,14 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     // shot when nothing was recorded — for a constant daily dose, or no
     // bench scale. The value controls exist only while the switch is on
     // (owner, 2026-11-02: no "Off" notch at the bottom of a stepper).
-    out.dose_def_row = make_setting_row(out.scale_settings_page, "Default dose", font);
+    out.dose_def_row = make_setting_row(out.scale_settings_page, "Default dose", font, row_h);
     make_switch_stepper(out.dose_def_row, font, symbol_font, btn_size, compact,
                         &out.dose_def_switch, &out.dose_def_minus, &out.dose_def_value,
                         &out.dose_def_plus);
     for (int i = 0; i < core::kMaxDoseContainers; ++i) {
       char title[16];
       std::snprintf(title, sizeof(title), "Container %d", i + 1);
-      lv_obj_t* rc = make_setting_row(out.scale_settings_page, title, font);
+      lv_obj_t* rc = make_setting_row(out.scale_settings_page, title, font, row_h);
       out.dose_container_row[i] = rc;
       lv_obj_t* grp = lv_obj_create(rc);
       lv_obj_remove_style_all(grp);
@@ -1349,7 +1368,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   // settings, which is now purely shot behaviour), and where the bench scale
   // lives on Home.
   {
-    lv_obj_t* rb = make_setting_row(out.scale_display_page, "Battery display", font);
+    lv_obj_t* rb = make_setting_row(out.scale_display_page, "Battery display", font, row_h);
     out.sbatt_btn = ui::make_button(rb);
     lv_obj_set_height(out.sbatt_btn, btn_size);
     lv_obj_set_style_pad_hor(out.sbatt_btn, ui::dp(14), 0);
@@ -1359,7 +1378,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_set_style_text_font(out.sbatt_value, font, 0);
     lv_obj_center(out.sbatt_value);
     // Shot-graph line smoothing: tap cycles Off / Light / Medium / Strong.
-    lv_obj_t* rs2 = make_setting_row(out.scale_display_page, "Smoothing", font);
+    lv_obj_t* rs2 = make_setting_row(out.scale_display_page, "Smoothing", font, row_h);
     out.smooth_btn = ui::make_button(rs2);
     lv_obj_set_height(out.smooth_btn, btn_size);
     lv_obj_set_style_pad_hor(out.smooth_btn, ui::dp(14), 0);
@@ -1368,14 +1387,14 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_set_style_text_color(out.smooth_value, lv_color_hex(ui::theme::text()), 0);
     lv_obj_set_style_text_font(out.smooth_value, font, 0);
     lv_obj_center(out.smooth_value);
-    lv_obj_t* rn = make_setting_row(out.scale_display_page, "Drop negative g/s", font);
+    lv_obj_t* rn = make_setting_row(out.scale_display_page, "Drop negative g/s", font, row_h);
     out.drop_neg_flow_switch = lv_switch_create(rn);
     lv_obj_set_size(out.drop_neg_flow_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
-    lv_obj_t* rs = make_setting_row(out.scale_display_page, "Oscilloscope graph", font);
+    lv_obj_t* rs = make_setting_row(out.scale_display_page, "Oscilloscope graph", font, row_h);
     out.scope_graph_switch = lv_switch_create(rs);
     lv_obj_set_size(out.scope_graph_switch, btn_size + ui::dp(8), btn_size / 2 + ui::dp(6));
     // Shot-graph X-window growth: tap cycles Snap / Smooth / Continuous.
-    lv_obj_t* rg = make_setting_row(out.scale_display_page, "Window growth", font);
+    lv_obj_t* rg = make_setting_row(out.scale_display_page, "Window growth", font, row_h);
     out.xgrow_btn = ui::make_button(rg);
     lv_obj_set_height(out.xgrow_btn, btn_size);
     lv_obj_set_style_pad_hor(out.xgrow_btn, ui::dp(14), 0);
@@ -1386,7 +1405,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_center(out.xgrow_value);
     // Bench scale on Home: tap cycles In the scale card / Beside the graph.
     // Hidden until a bench scale is saved (App::update_scale_view).
-    out.bench_home_row = make_setting_row(out.scale_display_page, "Bench scale on Home", font);
+    out.bench_home_row = make_setting_row(out.scale_display_page, "Bench scale on Home", font, row_h);
     out.bench_home_btn = ui::make_button(out.bench_home_row);
     lv_obj_set_height(out.bench_home_btn, btn_size);
     lv_obj_set_style_pad_hor(out.bench_home_btn, ui::dp(14), 0);
@@ -1405,7 +1424,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   {
     // Scale [Espresso]: which saved scale the rows below address. Shown
     // only with both slots saved (App::update_scale_view).
-    out.dev_slot_row = make_setting_row(out.scale_device_page, "Scale", font);
+    out.dev_slot_row = make_setting_row(out.scale_device_page, "Scale", font, row_h);
     out.dev_slot_btn = ui::make_button(out.dev_slot_row);
     lv_obj_set_height(out.dev_slot_btn, btn_size);
     lv_obj_set_style_pad_hor(out.dev_slot_btn, ui::dp(14), 0);
@@ -1424,7 +1443,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_set_width(out.scale_dev_hint, lv_pct(100));
     lv_label_set_long_mode(out.scale_dev_hint, LV_LABEL_LONG_WRAP);
     out.scale_dev_connect_row =
-        make_setting_row(out.scale_device_page, "Connect to adjust", font);
+        make_setting_row(out.scale_device_page, "Connect to adjust", font, row_h);
     out.scale_dev_connect_btn = ui::make_button(out.scale_dev_connect_row);
     lv_obj_set_height(out.scale_dev_connect_btn, btn_size);
     lv_obj_set_style_pad_hor(out.scale_dev_connect_btn, ui::dp(14), 0);
@@ -1435,7 +1454,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     lv_obj_set_style_text_font(out.scale_dev_connect_label, font, 0);
     lv_obj_center(out.scale_dev_connect_label);
     for (int i = 0; i < core::kMaxScaleSettings; ++i) {
-      lv_obj_t* row = make_setting_row(out.scale_device_page, "", font);
+      lv_obj_t* row = make_setting_row(out.scale_device_page, "", font, row_h);
       out.scale_dev_rows[i] = row;
       out.scale_dev_labels[i] = lv_obj_get_child(row, 0);
       out.scale_dev_btns[i] = ui::make_button(row);
@@ -1452,12 +1471,12 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
     // Battery estimate (partner-mode Umbra): the drain rate the estimate runs
     // on, and the one-shot calibration that measures it. Greyed while the
     // scale's sleep is Off (App::update_scale_view).
-    out.scale_drain_row = make_setting_row(out.scale_device_page, "Battery drain per day", font);
+    out.scale_drain_row = make_setting_row(out.scale_device_page, "Battery drain per day", font, row_h);
     make_inline_stepper(out.scale_drain_row, font, symbol_font, btn_size, &out.scale_drain_minus,
                         &out.scale_drain_value, &out.scale_drain_plus, nullptr);
     lv_obj_set_style_opa(out.scale_drain_minus, LV_OPA_40, LV_STATE_DISABLED);
     lv_obj_set_style_opa(out.scale_drain_plus, LV_OPA_40, LV_STATE_DISABLED);
-    out.scale_cal_row = make_setting_row(out.scale_device_page, "Calibrate drain", font);
+    out.scale_cal_row = make_setting_row(out.scale_device_page, "Calibrate drain", font, row_h);
     out.scale_cal_btn = ui::make_button(out.scale_cal_row);
     lv_obj_set_height(out.scale_cal_btn, btn_size);
     lv_obj_set_style_pad_hor(out.scale_cal_btn, ui::dp(14), 0);
@@ -1480,7 +1499,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   build_device_time_rows(out.device_time_page, font, btn_size, compact, out);
   build_device_wifi_rows(out.device_wifi_page, font, btn_size, out);
   if (out.device_backup_page != nullptr)
-    build_device_backup_rows(out.device_backup_page, font, btn_h, out);
+    build_device_backup_rows(out.device_backup_page, font, btn_h, row_h, out);
   if (out.device_storage_page != nullptr)
     build_device_storage_rows(out.device_storage_page, font, btn_size, out);
 
@@ -1488,9 +1507,9 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
   out.micra_page = lv_menu_page_create(menu, "Micra");
   out.scale_page = lv_menu_page_create(menu, "Scale");
   out.device_page = lv_menu_page_create(menu, "Apollo");
-  page_column(out.micra_page, compact);
-  page_column(out.scale_page, compact);
-  page_column(out.device_page, compact);
+  page_column(out.micra_page, compact, row_gap);
+  page_column(out.scale_page, compact, row_gap);
+  page_column(out.device_page, compact, row_gap);
   root_entry(menu, out.micra_page, out.micra_bt_page, "Bluetooth", font, btn_h);
   root_entry(menu, out.micra_page, out.micra_controls_page, "Controls", font, btn_h);
   if (out.micra_cleaning_page != nullptr)
@@ -1510,7 +1529,7 @@ void build_settings_tab(lv_obj_t* parent, const ScreenProfile& screen,
 
   // --- Root page: Micra / Scale / Device -----------------------------------
   out.root_page = lv_menu_page_create(menu, "Settings");
-  page_column(out.root_page, compact);
+  page_column(out.root_page, compact, row_gap);
   root_entry(menu, out.root_page, out.micra_page, "Micra", font, btn_h);
   root_entry(menu, out.root_page, out.scale_page, "Scale", font, btn_h);
   root_entry(menu, out.root_page, out.device_page, "Apollo", font, btn_h);
