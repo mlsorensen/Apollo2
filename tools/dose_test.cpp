@@ -496,6 +496,30 @@ int test_staged_dose() {
   CHECK(t.candidate() && near(t.candidate_dose(), 9.0f));
   now = hold(t, 166.0f, now, 1500);
   CHECK(t.candidate() && near(t.candidate_dose(), 18.0f));
+  // A tare is a reset. The scale was left at -27 g (something lifted after
+  // a tare); a plate goes on and Tare is hit before it settles; the bench
+  // reads 0. Nothing is offered (before: a 27 g phantom), and 23 g of bread
+  // put on after it offers 23 g (before: 50 g since the stale base, so
+  // nothing). The same for a tare the scale's own button did: a settled
+  // zero is the signal, not who asked for it.
+  now = hold(t, 0.0f, now, 1500);
+  now = hold(t, -27.0f, now, 1500);
+  CHECK(!t.candidate());
+  t.tick(in(310.0f, now + 100));  // the plate, not yet settled
+  now = hold(t, 0.0f, now + 200, 1500);
+  CHECK(!t.candidate());
+  CHECK(near(t.dose_basis(), 0.0f));
+  now = hold(t, 23.0f, now, 1500);
+  CHECK(t.candidate() && near(t.candidate_dose(), 23.0f));
+  // A tare with the loaded portafilter already on, then more ground in:
+  // the dose is what was added since the tare.
+  now = hold(t, 498.3f, now, 1500);
+  now = hold(t, 0.0f, now, 1500);
+  CHECK(!t.candidate());
+  now = hold(t, 1.2f, now, 1500);
+  CHECK(!t.candidate());  // under the floor
+  now = hold(t, 6.0f, now, 1500);
+  CHECK(t.candidate() && near(t.candidate_dose(), 6.0f));
   // Milk poured in pauses into a tared jug: once the total is past a dose
   // nothing is offered again until the jug is lifted.
   now = hold(t, 0.0f, now, 1500);

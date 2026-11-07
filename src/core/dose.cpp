@@ -69,8 +69,18 @@ DoseClear DoseTracker::tick(const DoseInputs& in) {
         const float q = plateau_g_;
         const float base = base_valid_ ? base_g_ : q;
         const float step = p - q;
-        const bool adjust = fabs_f(step) <= kDoseMaxG && p - base > 0.0f;
-        base_g_ = adjust ? base : (step < 0.0f ? p : q);
+        if (fabs_f(p) <= kDoseStableBandG) {
+          // A settled ZERO is a tare (Apollo's, the scale's own button, an
+          // auto-zero): whatever sits on the scale is the new reference, so
+          // the base is zero and earlier plateaus are forgotten. Without this
+          // a scale left at -27 g (something lifted after a tare) that is
+          // tared with a plate on it reads as a 27 g step, and bread put on
+          // after it as 50 g since the base: a phantom offer, then none.
+          base_g_ = 0.0f;
+        } else {
+          const bool adjust = fabs_f(step) <= kDoseMaxG && p - base > 0.0f;
+          base_g_ = adjust ? base : (step < 0.0f ? p : q);
+        }
         base_valid_ = true;
         plateau_g_ = p;
       }

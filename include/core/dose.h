@@ -34,6 +34,10 @@
 //     A step bigger than a dose (a container or a loaded portafilter landing)
 //     or one that takes the total to zero or below (a lift) starts a new
 //     base: the plateau just left for a landing, the new plateau for a lift.
+//     A settled reading of ZERO is a tare (ours, the scale's button, an
+//     auto-zero) and makes zero the base whatever came before (owner,
+//     2026-11-07: a scale left at -27 g, tared with a plate on, offered a
+//     27 g phantom and then nothing for the 23 g that followed).
 //   - CANDIDATE: the reading has held still for kDoseStableMs AND the net
 //     dose of its basis is dose-sized (kDoseMinG..kDoseMaxG, singles
 //     included). Only then does the bench card offer Record — a milk jug or

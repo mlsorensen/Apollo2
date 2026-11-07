@@ -15,6 +15,7 @@ the headings as plain lines); leave out a list that would be empty.
 - **See and reset the learned drip.** Shot settings shows "Learned drip N g" beside Target: what the auto-stop subtracts for the drips that land after the cut. Reset puts it back to 2.0 g after a change of beans or grind, instead of three or four off shots while it catches up.
 
 ### Fixes
+- **A tare resets dose detection.** Taring the bench scale, on Apollo or on the scale itself, makes the new zero the reference, so a scale left reading below zero no longer offers a phantom dose after a tare, and what you put on next is offered at its real weight.
 - **Record follows a dose weighed in stages.** Beans added to a cup that already offered Record, or a few taken back out, now change the offer to the new total. Before, a top-up was measured on its own, so Record 8.0 g never became Record 10.0 g.
 - **Settings rows line up.** Every settings row is now the same height, so pages that mix switches and steppers are evenly spaced, and seven rows fit a 4.3" or 5" screen without scrolling. Shot settings no longer needs a nudge to reach Container 2.
 - **Scheduled power keeps the button busy as long as a tap does.** A scheduled on, standby or auto-standby held Working... for 8 s where a tap held it 12 s, so a command sent during a re-dial could free the button early. Every power command now uses the same 12 s ceiling.

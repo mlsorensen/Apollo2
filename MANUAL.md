@@ -271,7 +271,8 @@ with the graph for review (**36.4 g out · 1:2.0**).
   tared earlier, makes no difference. Weighing in stages is fine too: beans
   added to, or taken out of, what is already on the scale change the offer
   to the new total, so 8 g topped up to 10 g offers **Record 10.0 g**. Only
-  lifting the load, or putting a container down, starts the count over.
+  lifting the load, putting a container down, or taring (on Apollo or on
+  the scale) starts the count over.
   Record is only offered for a step whose dose would be 5–30 g — a milk
   jug never offers it.
 - **A dose clears** when you tap the **×** on the chip, when the shot it

@@ -31,8 +31,9 @@ line to the Home cards (`2026-11-01-home-cards-share-rows.md`).
   (a step of at most 30 g either way that leaves the total positive) keeps
   it, so a dose weighed in stages is offered whole and a few beans taken
   back out offer the remainder; a container-sized landing re-bases on the
-  plateau just left, a lift on the new one
-  ([why sticky](#evidence)). Capture refuses
+  plateau just left, a lift on the new one, and a settled ZERO (a tare,
+  whoever asked for it) makes zero the base
+  ([why sticky](#evidence), [why zero](#evidence)). Capture refuses
   a container under 50 g or within the dose range of another; a reading
   equal to a container is the empty container, 0 g.
 - **The chip in the graph** builds up in words
@@ -94,6 +95,14 @@ line to the Home cards (`2026-11-01-home-cards-share-rows.md`).
   stored containers never needed it either way, but it keeps an untared,
   unstored cup and a drifted zero working for free, and taring makes the two
   behave the same.
+- Tare, 2026-11-07 (bench, first hour of v1.4.0-beta.1): a scale left at
+  -27 g (something lifted after a tare), a plate put on and Tare hit before
+  it settled: the settled 0 read as a 27 g step and was offered; 23 g of
+  bread put on next made 50 g since the stale base, so nothing. A tare
+  moves the zero the step rule assumes fixed, and we cannot see the
+  scale's own button, so the signal is the settled zero itself: it resets
+  the base. A dose is never zero and a loaded portafilter on an untared
+  scale never settles at zero, so nothing legitimate is lost.
 - Lock, 2026-11-07: with "re-Record replaces", the 1 g "same weight" band
   decided whether a top-up after a Record re-offered, and anything else
   landing (a jug, a cup) pulled an offer while a dose waited for its shot.
@@ -141,7 +150,8 @@ line to the Home cards (`2026-11-01-home-cards-share-rows.md`).
   once by hand, acceptable because the beta.1 units were all bench units.
 - 2026-11-07: the base plateau made sticky across small adjustments so a
   dose weighed in stages is offered whole; a recorded dose locks the card
-  until × / the shot (re-Record replaced before) (feat/v1.4, for v1.4.0).
+  until × / the shot (re-Record replaced before) (feat/v1.4, for v1.4.0);
+  later the same day a settled zero resets the base (the tare case).
 
 ### Sources
 
