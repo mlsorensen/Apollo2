@@ -1,10 +1,9 @@
 # Apollo 2
 
-<!-- The light image's ink is #888, not black, so it still reads on a dark
+<!-- The light image's ink is #555, not black, so it still reads on a dark
      page when the viewer's colour-scheme preference doesn't match the site
-     theme (GitHub forced dark with the OS light): the <source> below only
-     fires on the browser's own preference. #555 was tried and is invisible
-     at 96 px on the dark page. -->
+     theme (GitHub forced dark with the OS light): the <source> above only
+     fires on the browser's own preference. -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/apollo-logo-dark.png">
   <img align="left" width="96" src="docs/img/apollo-logo.png"
