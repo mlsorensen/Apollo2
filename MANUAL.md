@@ -1022,6 +1022,9 @@ action lives directly on the root:
 
 ## Stats
 
+The tab opens on **History**; the selector at the top switches between the
+sections, and the one you pick stays until the next restart.
+
 ![Temperature history](docs/img/manual/stats-graphs.png)
 
 - **Brew / Boiler** — temperature history graphs, chosen with the selector ①.

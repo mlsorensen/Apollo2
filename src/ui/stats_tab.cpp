@@ -502,7 +502,10 @@ void build_stats_tab(lv_obj_t* parent, const ScreenProfile& screen, StatsWidgets
   for (int i = 0; i < 5; ++i)
     out.info_val[5 + i] = make_info_row(out.info_box, kMicraKeys[i], font, compact);
 
-  stats_select_section(out, kStatsBrew);
+  // Opens on the shot History (owner, 2026-11-08): it is what the tab is
+  // visited for; the segment chosen afterwards is kept while the firmware
+  // runs. The selector keeps its Brew / Boiler / History / Info order.
+  stats_select_section(out, kStatsHistory);
 }
 
 void stats_select_section(StatsWidgets& w, int section) {

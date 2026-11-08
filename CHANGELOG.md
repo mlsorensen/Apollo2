@@ -14,6 +14,8 @@ the headings as plain lines); leave out a list that would be empty.
 ### Features
 - **See and reset the learned drip.** Shot settings shows "Learned drip N g" beside Target: what the auto-stop subtracts for the drips that land after the cut. Reset puts it back to 2.0 g after a change of beans or grind, instead of three or four off shots while it catches up.
 
+- **Stats opens on History.** The Stats tab starts on the shot history instead of the Brew graph; the section you pick afterwards stays until the next restart.
+
 ### Fixes
 - **A tare resets dose detection.** Taring the bench scale, on Apollo or on the scale itself, makes the new zero the reference, so a scale left reading below zero no longer offers a phantom dose after a tare, and what you put on next is offered at its real weight.
 - **Record follows a dose weighed in stages.** Beans added to a cup that already offered Record, or a few taken back out, now change the offer to the new total. Before, a top-up was measured on its own, so Record 8.0 g never became Record 10.0 g.
