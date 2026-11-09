@@ -1,14 +1,13 @@
 # Apollo 2
 
-<!-- The light image's ink is #555, not black, so it still reads on a dark
-     page when the viewer's colour-scheme preference doesn't match the site
-     theme (GitHub forced dark with the OS light): the <source> above only
-     fires on the browser's own preference. -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/img/apollo-logo-dark.png">
-  <img align="left" width="96" src="docs/img/apollo-logo.png"
-       alt="Apollo, laurel-crowned, sipping an espresso">
-</picture>
+<!-- One logo for both GitHub themes: dark ink on a solid white silhouette
+     with a white halo around the outside, so it reads on white (fill and halo
+     invisible) and on a dark page (a light bust with a glow). A <picture> +
+     prefers-color-scheme switch was tried and follows the BROWSER's colour
+     scheme, not the GitHub theme: Safari on a dark-mode Mac served the white
+     logo onto a light GitHub page. -->
+<img align="left" width="96" src="docs/img/apollo-logo.png"
+     alt="Apollo, laurel-crowned, sipping an espresso">
 
 Firmware project that turns a small ESP32 touchscreen into a local
 controller for a **La Marzocco Micra** espresso machine — over Bluetooth, with
