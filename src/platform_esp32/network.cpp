@@ -92,7 +92,7 @@ void Network::start_station() {
   WiFi.setSleep(false);
   status_ = core::NetState::Connecting;
   connect_deadline_ms_ = millis() + kConnectTimeoutMs;
-  core::logf("Network: connecting to '%s'\n", ssid.c_str());
+  core::logf("Network: connecting to '%s' as %s\n", ssid.c_str(), WiFi.macAddress().c_str());
 }
 
 void Network::stop_station() {
