@@ -26,15 +26,21 @@
 //     floored at 0. It feeds the normal low-battery warning, marked estimated.
 //   - Nothing is persisted per reading (a live gauge flickers 35/34/35): only
 //     the transitions and session ends dirty the state.
-//   - Calibration, armed by the user ("charge fully, use until empty, then
-//     charge"): measures the next whole stale period. Start = the last-live %
-//     when it goes stale; end = the stale -> live flip (the charge restart),
-//     assuming the scale hit 0 % when it was last seen. The result is offered
-//     to the user (Store / Discard); off-procedure runs are theirs to discard.
-//     Arming is the UI's to gate (disabled while the scale's sleep is Off).
-//     A run that can't be measured (charged before a whole period was seen)
-//     is still reported — as 0, "too short" — so the user is told, never
-//     silently disarmed. A pending result is part of the persisted state.
+//   - Calibration, armed by the user: measures the next stale period. Start =
+//     the last-live % when it goes stale; end = the stale -> live flip, i.e.
+//     the scale restarted (its button, or a charger plug-in — both restart
+//     it). The reading that ends the run is the measurement when it is BELOW
+//     the start (a restart after a day or more, or the plug-in reading of a
+//     drained scale): drop = start - reading over the time since going stale.
+//     A reading at or above the start (it came back charged, Apollo slept
+//     through the plug-in) assumes the scale hit 0 % when it was last seen,
+//     as before. Guard rails (owner, 2026-11-13): a run shorter than
+//     kCalibrationMinSpanS or a drop under kCalibrationMinDropPct is noise
+//     on an integer gauge and is reported as 0, "too short" — the user is
+//     told, never silently disarmed. Otherwise the result is offered (Store /
+//     Discard) with the measured drop and hours; off-procedure runs are the
+//     user's to discard. Arming is the UI's to gate (disabled while the
+//     scale's sleep is Off). A pending result is part of the persisted state.
 //   - No trusted clock (now == 0 — the caller passes 0 until a real sync, not
 //     a seeded guess): never go stale, and a stale estimate holds at its
 //     last-live value rather than guessing.
@@ -50,6 +56,10 @@ constexpr int kScaleDrainMaxPctPerDay = 30;
 // take_calibration_result(): none due / due but unmeasurable / 1..30 %/day.
 constexpr int kCalibrationNone = -1;
 constexpr int kCalibrationTooShort = 0;
+// Guard rails for a run ended by a restart reading: anything shorter, or a
+// smaller drop, is quantisation noise on a whole-percent gauge.
+constexpr long kCalibrationMinSpanS = 24L * 60 * 60;
+constexpr int kCalibrationMinDropPct = 10;
 
 // Everything that must survive a reboot (see pack/unpack below).
 struct ScaleBatteryState {
@@ -62,6 +72,8 @@ struct ScaleBatteryState {
   bool cal_running = false;    // armed AND a stale period began after arming
   uint8_t cal_start_pct = 0;   // last-live % when that stale period began
   int8_t cal_result = kCalibrationNone;  // a finished run not yet offered
+  uint8_t cal_drop = 0;        // that run's measured drop, %
+  uint16_t cal_hours = 0;      // ... over this many hours (0 = unknown)
 };
 
 struct ScaleBatteryView {
@@ -82,8 +94,9 @@ class ScaleBatteryEstimate {
     return d;
   }
 
-  // Every battery reading the scale reports.
-  void on_reading(int pct);
+  // Every battery reading the scale reports. `now` = trusted Unix time, or 0:
+  // it only matters for the reading that ends a calibration run.
+  void on_reading(int pct, std::time_t now = 0);
   // A session with the scale ended; `slept` = we sent it the sleep command.
   // `now` = trusted Unix time, or 0.
   void on_session_end(bool slept, std::time_t now);
@@ -99,8 +112,11 @@ class ScaleBatteryEstimate {
   void disarm();
   bool armed() const { return s_.cal_armed; }
   // A finished run's result, handed out once: kCalibrationNone,
-  // kCalibrationTooShort, or the measured rate (1..30 %/day, clamped).
+  // kCalibrationTooShort, or the measured rate (1..30 %/day, clamped). The
+  // measurement behind it stays readable until the next arm().
   int take_calibration_result();
+  int calibration_drop_pct() const { return s_.cal_drop; }
+  int calibration_hours() const { return s_.cal_hours; }
 
  private:
   ScaleBatteryState s_;
@@ -112,7 +128,8 @@ class ScaleBatteryEstimate {
 //   [1] live %  [2] cal start %  [3] cal_result + 1 (0 = none)
 //   [4..7] stale_since LE  [8..11] last_seen LE
 //   [12..15] tag: FNV-1a 32 of the scale's MAC string, LE
-//   [16] rate %/day  [17..19] reserved (0)
+//   [16] rate %/day  [17] cal drop %  [18..19] cal hours LE (0 = unknown;
+//   both were reserved zeros before v1.4.0)
 constexpr int kScaleBatteryBlobLen = 20;
 void pack_scale_battery(const ScaleBatteryState& s, const char* mac,
                         uint8_t out[kScaleBatteryBlobLen]);

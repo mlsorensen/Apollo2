@@ -149,8 +149,135 @@ int test_calibration() {
     e.on_reading(100);  // frozen every morning
     e.on_session_end(true, kT0 + d * kDay);
   }
-  // Dead after day 12's session; plugged in later — the changed reading ends it.
+  // Dead after day 12's session; plugged in later — the changed reading ends
+  // it. Plugged-in readings are inflated, but 28 is still below the start, so
+  // it is taken as the measurement: 72 % over the 15 days to this reading.
   CHECK(e.take_calibration_result() == kCalibrationNone);
+  e.on_reading(28, kT0 + 15 * kDay);
+  CHECK(e.state().cal_result == 5);  // pending, so a reboot keeps it
+  CHECK(e.calibration_drop_pct() == 72 && e.calibration_hours() == 15 * 24);
+  e.take_dirty();
+  CHECK(e.take_calibration_result() == 5);
+  CHECK(e.take_dirty());                    // handing it out is persisted
+  CHECK(e.take_calibration_result() == kCalibrationNone);  // once
+  CHECK(!e.armed() && !e.state().cal_running);
+  return 0;
+}
+
+int test_calibration_full_drain_without_clock() {
+  // The same run, but the ending reading comes with no trusted clock (or at
+  // or above the start): the pack is taken to have died when last seen.
+  ScaleBatteryEstimate e;
+  e.on_reading(100);
+  e.arm();
+  e.on_session_end(true, kT0);
+  for (int d = 1; d <= 12; ++d) {
+    e.on_reading(100);
+    e.on_session_end(true, kT0 + d * kDay);
+  }
+  e.on_reading(28);  // now = 0
+  CHECK(e.state().cal_result == 8);  // 100 % / 12 days = 8.3
+  CHECK(e.calibration_drop_pct() == 100 && e.calibration_hours() == 12 * 24);
+  CHECK(e.take_calibration_result() == 8);
+  // Armed at 80 and came back charged to 100: the reading is above the
+  // start, so the pack is taken to have died when last seen: 80 % / 10 days.
+  e.on_reading(80);
+  e.arm();
+  e.on_session_end(true, kT0 + 20 * kDay);
+  e.on_reading(80);
+  e.on_session_end(true, kT0 + 30 * kDay);
+  e.on_reading(100, kT0 + 31 * kDay);
+  CHECK(e.calibration_drop_pct() == 80 && e.calibration_hours() == 10 * 24);
+  CHECK(e.take_calibration_result() == 8);
+  // Armed at 100 and charged back to exactly 100 while Apollo wasn't looking:
+  // the frozen value repeats (no flip), and the first real tick down is a
+  // 1 % drop over the whole span -- too small to tell from a recharge, so it
+  // is reported as too short rather than guessed at.
+  e.on_reading(100);
+  e.arm();
+  e.on_session_end(true, kT0 + 40 * kDay);
+  e.on_reading(100, kT0 + 52 * kDay);
+  CHECK(e.take_calibration_result() == kCalibrationNone);
+  e.on_reading(99, kT0 + 52 * kDay);
+  CHECK(e.take_calibration_result() == kCalibrationTooShort);
+  return 0;
+}
+
+int test_calibration_from_restart_reading() {
+  // Owner's case: armed at 100 %, the scale restarted (re-pairing, or its
+  // button) after 13.8 days and reads 7 % live: 93 % over 13.8 days = 6.7.
+  ScaleBatteryEstimate e;
+  e.on_reading(100);
+  e.arm();
+  e.on_session_end(true, kT0);
+  e.on_reading(100);
+  e.on_session_end(true, kT0 + 13 * kDay);
+  const std::time_t end = kT0 + 13 * kDay + 19 * kHour;
+  e.on_reading(7, end);
+  CHECK(e.calibration_drop_pct() == 93 && e.calibration_hours() == 13 * 24 + 19);
+  CHECK(e.take_calibration_result() == 7);
+  CHECK(!e.armed() && e.state().stale_since == 0 && e.state().live_pct == 7);
+  // Re-armed from the live 7 %: the next run measures from there.
+  e.arm();
+  CHECK(e.calibration_drop_pct() == 0 && e.calibration_hours() == 0);
+  e.on_session_end(true, end + kHour);
+  CHECK(e.state().cal_running && e.state().cal_start_pct == 7);
+  return 0;
+}
+
+int test_calibration_guard_rails() {
+  // Under a day: too short, whatever the drop.
+  ScaleBatteryEstimate e;
+  e.on_reading(100);
+  e.arm();
+  e.on_session_end(true, kT0);
+  e.on_reading(70, kT0 + 23 * kHour);
+  CHECK(e.take_calibration_result() == kCalibrationTooShort);
+  CHECK(e.calibration_drop_pct() == 30 && e.calibration_hours() == 23);
+  // Under 10 % of drop: too short, however long.
+  e.on_reading(100);
+  e.arm();
+  e.on_session_end(true, kT0 + 2 * kDay);
+  e.on_reading(91, kT0 + 5 * kDay);
+  CHECK(e.take_calibration_result() == kCalibrationTooShort);
+  // Exactly at both limits: accepted (10 % / 1 day).
+  e.on_reading(100);
+  e.arm();
+  e.on_session_end(true, kT0 + 10 * kDay);
+  e.on_reading(90, kT0 + 11 * kDay);
+  CHECK(e.take_calibration_result() == 10);
+  return 0;
+}
+
+int test_calibration_pending_detail_round_trip() {
+  ScaleBatteryEstimate e;
+  e.on_reading(100);
+  e.arm();
+  e.on_session_end(true, kT0);
+  e.on_reading(40, kT0 + 6 * kDay);  // 60 % / 6 days
+  uint8_t blob[kScaleBatteryBlobLen];
+  pack_scale_battery(e.state(), kMac, blob);
+  ScaleBatteryState s;
+  CHECK(unpack_scale_battery(blob, kScaleBatteryBlobLen, kMac, &s));
+  CHECK(s.cal_result == 10 && s.cal_drop == 60 && s.cal_hours == 6 * 24);
+  // A pre-v1.4 blob has zeros there: no detail, the result still stands.
+  blob[17] = blob[18] = blob[19] = 0;
+  CHECK(unpack_scale_battery(blob, kScaleBatteryBlobLen, kMac, &s));
+  CHECK(s.cal_result == 10 && s.cal_drop == 0 && s.cal_hours == 0);
+  return 0;
+}
+
+int test_calibration_old_tail() {
+  // (kept as the old ending of test_calibration: the pending result is handed
+  // out once and persisted)
+  ScaleBatteryEstimate e;
+  e.on_reading(100);
+  e.arm();
+  e.on_session_end(true, kT0);
+  for (int d = 1; d <= 12; ++d) {
+    e.on_reading(100);
+    e.on_session_end(true, kT0 + d * kDay);
+  }
   e.on_reading(28);
   CHECK(e.state().cal_result == 8);  // pending, so a reboot keeps it
   e.take_dirty();
@@ -200,8 +327,14 @@ int test_calibration_clamped_and_disarm() {
   e.on_reading(100);
   e.arm();
   e.on_session_end(true, kT0);
-  e.on_session_end(true, kT0 + kHour);  // charged an hour later: off procedure
+  e.on_session_end(true, kT0 + kHour);  // charged an hour later: too short now
   e.on_reading(50);
+  CHECK(e.take_calibration_result() == kCalibrationTooShort);
+  // A long run that would compute above the range is clamped.
+  e.on_reading(100);
+  e.arm();
+  e.on_session_end(true, kT0 + 2 * kDay);
+  e.on_reading(10, kT0 + 3 * kDay);  // 90 % in a day
   CHECK(e.take_calibration_result() == kScaleDrainMaxPctPerDay);
   e.on_reading(49);
   e.arm();
@@ -273,6 +406,11 @@ int main() {
       test_changed_value_goes_live,
       test_no_clock,
       test_calibration,
+      test_calibration_full_drain_without_clock,
+      test_calibration_from_restart_reading,
+      test_calibration_guard_rails,
+      test_calibration_pending_detail_round_trip,
+      test_calibration_old_tail,
       test_calibration_too_short_is_reported,
       test_calibration_armed_while_stale_waits,
       test_calibration_clamped_and_disarm,

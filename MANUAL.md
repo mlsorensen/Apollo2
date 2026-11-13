@@ -694,14 +694,19 @@ shows as normal.
 - ① **Battery drain per day** *(1–30 %, default 15 %)* — how much charge the
   scale loses per day, asleep or not; for an Umbra, time matters far more than
   how long it's used each day. 13–15 % suits a stock battery.
-- ② **Calibrate drain** — measures your scale's own figure. Tap **Start**,
-  charge the scale fully, use it as usual until it runs flat, then charge it
-  again. When it comes back, Apollo shows the measured drain next to the
-  current setting: **Store** saves it, **Discard** keeps the setting (discard
-  it if the scale was charged before it ran flat). If the scale is charged
-  before Apollo has measured a whole sleep, you see **Calibration
-  incomplete** instead; start again to retry. While a calibration is running
-  the button reads **Cancel**.
+- ② **Calibrate drain** — measures your scale's own figure. Tap **Start**
+  and use the scale as usual. After a day or more — the longer the better —
+  restart it: hold its button to turn it off and on, or put it on the charger
+  (that restarts it too). When it comes back, Apollo shows how much it used
+  over how long, the drain per day that works out to, and the current
+  setting: **Store** saves it, **Discard** keeps the setting. Connect the
+  scale to Apollo soon after the restart: a scale left charging first reads
+  higher than it was, and the figure comes out low. A scale that comes back
+  at or above the level it started from is taken to have run flat first, as
+  one charged from empty has. Less than a day, or less than 10 % used, is
+  too little to measure: you see **Calibration incomplete**; start again and
+  leave it longer. While a calibration is running the button reads
+  **Cancel**.
 
 Both rows are greyed out while the Umbra's **Auto sleep** is **Off**: a scale
 that never sleeps keeps reporting its battery, and nothing needs estimating.

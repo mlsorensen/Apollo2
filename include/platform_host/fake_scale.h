@@ -85,13 +85,16 @@ class FakeScale : public core::IScale {
     return core::ScaleBatteryInfo{.supported = true,
                                   .rate_pct_per_day = drain_,
                                   .armed = armed_,
-                                  .sleep_off = setting_value_[1] == 0};
+                                  .sleep_off = setting_value_[1] == 0,
+                                  .cal_drop_pct = last_cal_ > 0 ? 62 : 0,
+                                  .cal_hours = last_cal_ > 0 ? 213 : 0};
   }
   void set_battery_drain_rate(int pct_per_day) override { drain_ = pct_per_day; }
   void set_battery_calibration(bool armed) override { armed_ = armed; }
   int take_battery_calibration_result() override {
     const int r = cal_result_;
     cal_result_ = -1;
+    if (r != -1) last_cal_ = r;  // the measurement stays readable, as on the link
     return r;
   }
 
@@ -121,6 +124,7 @@ class FakeScale : public core::IScale {
   bool armed_ = false;
   int drain_ = 15;
   int cal_result_ = -1;
+  int last_cal_ = -1;
   int setting_value_[4] = {3, 2, 0, 3};  // Beep / Auto-off / Unit g / Mode 4
 };
 

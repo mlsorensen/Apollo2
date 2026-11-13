@@ -159,7 +159,7 @@ void ScaleLink::on_battery(int pct) {
   std::lock_guard<std::mutex> lk(mutex_);
   battery_pct_ = pct;
   battery_valid_ = true;
-  if (partner_mode_.load()) battery_est_.on_reading(pct);
+  if (partner_mode_.load()) battery_est_.on_reading(pct, now_unix());
 }
 
 void ScaleLink::load_battery(const ScaleBatteryState& state) {
@@ -190,6 +190,8 @@ ScaleBatteryInfo ScaleLink::battery_info() const {
   info.rate_pct_per_day = battery_est_.rate();
   info.armed = battery_est_.armed();
   info.sleep_off = setting_value_[kPartnerSleepSetting] == 0;
+  info.cal_drop_pct = battery_est_.calibration_drop_pct();
+  info.cal_hours = battery_est_.calibration_hours();
   return info;
 }
 

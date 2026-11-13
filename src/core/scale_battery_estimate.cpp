@@ -38,7 +38,7 @@ void ScaleBatteryEstimate::load(const ScaleBatteryState& s) {
   dirty_ = false;
 }
 
-void ScaleBatteryEstimate::on_reading(int pct) {
+void ScaleBatteryEstimate::on_reading(int pct, std::time_t now) {
   if (pct < 0) pct = 0;
   if (pct > 100) pct = 100;
   if (!s_.have_live) {
@@ -53,13 +53,26 @@ void ScaleBatteryEstimate::on_reading(int pct) {
     // A frozen gauge can't change: the scale restarted.
     core::logf("ScaleBattery: live again (%d%% -> %d%%)\n", s_.live_pct, pct);
     if (s_.cal_running) {
-      const std::time_t span = static_cast<std::time_t>(s_.last_seen) -
-                               static_cast<std::time_t>(s_.stale_since);
+      // A reading below the start is the measurement itself (the scale
+      // restarted part-way down); at or above it, the scale came back
+      // charged and the pack is taken to have died when last seen.
+      std::time_t span;
+      int drop;
+      if (pct < s_.cal_start_pct && now > static_cast<std::time_t>(s_.stale_since)) {
+        span = now - static_cast<std::time_t>(s_.stale_since);
+        drop = s_.cal_start_pct - pct;
+      } else {
+        span = static_cast<std::time_t>(s_.last_seen) - static_cast<std::time_t>(s_.stale_since);
+        drop = s_.cal_start_pct;
+      }
       int rate = kCalibrationTooShort;
-      if (span > 0)
-        rate = clamp_rate(static_cast<int>((s_.cal_start_pct * kSecondsPerDay + span / 2) / span));
-      core::logf("ScaleBattery: calibration %d%% over %lds -> %d%%/day\n",
-                 s_.cal_start_pct, static_cast<long>(span), rate);
+      if (span >= kCalibrationMinSpanS && drop >= kCalibrationMinDropPct)
+        rate = clamp_rate(static_cast<int>((drop * kSecondsPerDay + span / 2) / span));
+      s_.cal_drop = static_cast<uint8_t>(drop < 0 ? 0 : drop);
+      const std::time_t hours = span > 0 ? span / 3600 : 0;
+      s_.cal_hours = static_cast<uint16_t>(hours > 65535 ? 65535 : hours);
+      core::logf("ScaleBattery: calibration %d%% over %lds -> %d%%/day\n", drop,
+                 static_cast<long>(span), rate);
       s_.cal_result = static_cast<int8_t>(rate);
       s_.cal_armed = false;
       s_.cal_running = false;
@@ -112,6 +125,8 @@ void ScaleBatteryEstimate::arm() {
   s_.cal_armed = true;
   s_.cal_running = false;
   s_.cal_result = kCalibrationNone;
+  s_.cal_drop = 0;
+  s_.cal_hours = 0;
   dirty_ = true;
 }
 
@@ -143,6 +158,9 @@ void pack_scale_battery(const ScaleBatteryState& s, const char* mac,
   put32(out + 8, s.last_seen);
   put32(out + 12, mac_tag(mac));
   out[16] = s.rate;
+  out[17] = s.cal_drop > 100 ? 100 : s.cal_drop;
+  out[18] = static_cast<uint8_t>(s.cal_hours);
+  out[19] = static_cast<uint8_t>(s.cal_hours >> 8);
 }
 
 bool unpack_scale_battery(const uint8_t* data, int len, const char* mac,
@@ -161,6 +179,8 @@ bool unpack_scale_battery(const uint8_t* data, int len, const char* mac,
   r.stale_since = get32(data + 4);
   r.last_seen = get32(data + 8);
   r.rate = static_cast<uint8_t>(clamp_rate(data[16]));
+  r.cal_drop = data[17] <= 100 ? data[17] : 100;
+  r.cal_hours = static_cast<uint16_t>(data[18] | (data[19] << 8));
   *s = r;
   return true;
 }

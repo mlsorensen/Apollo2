@@ -56,7 +56,7 @@ record's header; do not edit by hand.
 - 2026-10-17 [Apollo is grams-only; a scale's Unit row is kept only where it changes the scale's own display](2026-10-17-scale-units-grams-only.md) (Accepted; last changed 2026-10-17)
 - 2026-10-21 [One radio listener at a time: the arbiter, the finder and learned address types](2026-10-21-radio-arbiter-and-address-type.md) (Open; last changed 2026-11-07)
 - 2026-10-24 [Two scale slots: the slot is the role, and roles sit over links](2026-10-24-two-scale-slots-roles-over-links.md) (Accepted; last changed 2026-11-07)
-- 2026-10-30 [Umbra battery: estimate the level once the scale's gauge freezes on sleep](2026-10-30-umbra-battery-estimate.md) (Open; last changed 2026-11-01)
+- 2026-10-30 [Umbra battery: estimate the level once the scale's gauge freezes on sleep](2026-10-30-umbra-battery-estimate.md) (Open; last changed 2026-11-13)
 
 #### ux
 
@@ -151,7 +151,7 @@ record's header; do not edit by hand.
 | 2026-10-24 | 2026-11-07 | [Two scales on Home and in Settings: card swap or beside the graph, scan then choose, Swap roles](2026-10-24-two-scales-home-and-settings.md) | ux | Accepted |
 | 2026-10-26 | 2026-11-07 | [A quiet touch controller gets counters and a live probe, not an automatic reset](2026-10-26-touch-controller-health-probe.md) | platform | Accepted |
 | 2026-10-30 | 2026-11-07 | [Dose and brew ratio: Record is the bench weight block, the chip builds in, out, ratio](2026-10-30-dose-and-ratio-on-home.md) | ux | Accepted |
-| 2026-10-30 | 2026-11-01 | [Umbra battery: estimate the level once the scale's gauge freezes on sleep](2026-10-30-umbra-battery-estimate.md) | radio | Open |
+| 2026-10-30 | 2026-11-13 | [Umbra battery: estimate the level once the scale's gauge freezes on sleep](2026-10-30-umbra-battery-estimate.md) | radio | Open |
 | 2026-11-01 | 2026-11-01 | [Home panel cards share their rows, and a line never moves without asking](2026-11-01-home-cards-share-rows.md) | ux | Accepted |
 | 2026-11-03 | 2026-11-03 | [The paddle breaker: a flickering sense input opens the drive until a person resets it](2026-11-03-paddle-breaker.md) | hardware | Accepted |
 | 2026-11-04 | 2026-11-05 | [The graph legend's box: shaped to its digits, unit pinned, no repaint throttle](2026-11-04-graph-legend-sizing.md) | ux | Accepted |

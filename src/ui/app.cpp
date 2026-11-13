@@ -2332,9 +2332,9 @@ void App::battery_calibration_tapped() {
   if (bi.sleep_off) return;
   lv_obj_t* card = open_modal(
       "Calibrate battery drain",
-      "Charge the scale fully, then use it as usual until it runs flat, then "
-      "charge it again. Apollo measures the drain over that time and offers "
-      "the result when the scale comes back.");
+      "Use the scale as usual. After a day or more, restart it (hold its "
+      "button to turn it off and on) or charge it. Apollo measures the drain "
+      "up to that restart and offers the result when the scale comes back.");
   lv_obj_t* row = modal_button_row(card);
   modal_button(row, "Start", ui::theme::accent(), on_cal_arm, this);
   modal_button(row, "Cancel", ui::theme::rail(), on_token_cancel, this);
@@ -2353,21 +2353,30 @@ void App::poll_battery_calibration() {
     if (sc == nullptr) continue;
     const int rate = sc->take_battery_calibration_result();
     if (rate == core::kCalibrationNone) continue;
-    if (rate == core::kCalibrationTooShort) {  // charged before a full period
+    if (rate == core::kCalibrationTooShort) {  // under a day, or under 10 %
       lv_obj_t* card = open_modal(
           "Calibration incomplete",
-          "The scale was recharged before a full drain could be measured. "
-          "Start the calibration again to retry.");
+          "Less than a day, or less than 10% of charge, was measured, which "
+          "is too little to tell from noise (or the scale was recharged while "
+          "Apollo was not connected). Start again and leave it longer.");
       modal_button(modal_button_row(card), "OK", ui::theme::rail(), on_token_cancel, this);
       return;
     }
     cal_scale_ = sc;
     cal_result_ = rate;
-    char body[160];
-    std::snprintf(body, sizeof(body),
-                  "The scale was recharged. It drained about %d%% per day; "
-                  "the setting is %d%%.",
-                  rate, sc->battery_info().rate_pct_per_day);
+    const core::ScaleBatteryInfo bi = sc->battery_info();
+    char body[200];
+    if (bi.cal_hours > 0)
+      std::snprintf(body, sizeof(body),
+                    "The scale used %d%% in %d.%d days: about %d%% per day. "
+                    "The setting is %d%%.",
+                    bi.cal_drop_pct, bi.cal_hours / 24, (bi.cal_hours % 24) * 10 / 24, rate,
+                    bi.rate_pct_per_day);
+    else
+      std::snprintf(body, sizeof(body),
+                    "The scale was recharged. It drained about %d%% per day; "
+                    "the setting is %d%%.",
+                    rate, bi.rate_pct_per_day);
     lv_obj_t* card = open_modal("Store measured drain?", body);
     lv_obj_t* row = modal_button_row(card);
     modal_button(row, "Store", ui::theme::accent(), on_cal_store, this);

@@ -80,6 +80,8 @@ struct ScaleBatteryInfo {
   int rate_pct_per_day = 0; // the drain setting
   bool armed = false;       // a calibration is armed or running
   bool sleep_off = false;   // the scale reports its sleep Off: no calibration
+  int cal_drop_pct = 0;     // the last finished calibration's measured drop...
+  int cal_hours = 0;        // ...over this many hours (0 = none / unknown)
 };
 
 // The port the UI depends on for scale data + commands. The BLE ScaleLink and
