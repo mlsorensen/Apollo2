@@ -61,9 +61,11 @@ Calibration: arm, use the scale, restart it after a day or more (its button,
 or the charger: both restart it). The run starts at the last-live % when the
 scale goes stale and ends on the first reading that differs from it. That
 reading is the measurement when it is below the start (drop = start minus
-reading, over the time from going stale to the reading); at or above the
-start the scale came back charged and the pack is taken to have died when
-last seen, the original "use until empty" arithmetic. Guard rails: a span
+reading, over the time from going stale to the reading); two or more
+ABOVE the start the scale came back charged and the pack is taken to have
+died when last seen, the original "use until empty" arithmetic (one above
+is the gauge's +-1 flicker: a ~0 drop, reported as too short, never a
+charge). Guard rails: a span
 under 24 h or a drop under 10 % is reported as too short (a whole-percent
 gauge cannot resolve less; a 1 % tick after a recharge Apollo missed looks
 the same). The measured drop and hours are persisted with the pending result

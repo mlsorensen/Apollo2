@@ -53,12 +53,14 @@ void ScaleBatteryEstimate::on_reading(int pct, std::time_t now) {
     // A frozen gauge can't change: the scale restarted.
     core::logf("ScaleBattery: live again (%d%% -> %d%%)\n", s_.live_pct, pct);
     if (s_.cal_running) {
-      // A reading below the start is the measurement itself (the scale
-      // restarted part-way down); at or above it, the scale came back
-      // charged and the pack is taken to have died when last seen.
+      // A reading not clearly above the start is the measurement itself (the
+      // scale restarted part-way down; a live gauge flickers +-1, so one
+      // above the start is a ~0 drop, not a charge); 2 or more above it, the
+      // scale came back charged and the pack is taken to have died when
+      // last seen.
       std::time_t span;
       int drop;
-      if (pct < s_.cal_start_pct && now > static_cast<std::time_t>(s_.stale_since)) {
+      if (pct <= s_.cal_start_pct + 1 && now > static_cast<std::time_t>(s_.stale_since)) {
         span = now - static_cast<std::time_t>(s_.stale_since);
         drop = s_.cal_start_pct - pct;
       } else {

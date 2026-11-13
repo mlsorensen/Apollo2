@@ -32,9 +32,10 @@
 //     it). The reading that ends the run is the measurement when it is BELOW
 //     the start (a restart after a day or more, or the plug-in reading of a
 //     drained scale): drop = start - reading over the time since going stale.
-//     A reading at or above the start (it came back charged, Apollo slept
+//     A reading 2 or more ABOVE the start (it came back charged, Apollo slept
 //     through the plug-in) assumes the scale hit 0 % when it was last seen,
-//     as before. Guard rails (owner, 2026-11-13): a run shorter than
+//     as before; one above is gauge flicker, a ~0 drop, never a charge.
+//     Guard rails (owner, 2026-11-13): a run shorter than
 //     kCalibrationMinSpanS or a drop under kCalibrationMinDropPct is noise
 //     on an integer gauge and is reported as 0, "too short" — the user is
 //     told, never silently disarmed. Otherwise the result is offered (Store /

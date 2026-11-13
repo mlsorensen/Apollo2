@@ -249,6 +249,31 @@ int test_calibration_guard_rails() {
   return 0;
 }
 
+int test_calibration_flicker_above_start_is_not_a_charge() {
+  // Owner's case (2026-11-13): stale at 46, restarted days later with no
+  // charge, the live gauge reads 47 (+-1 flicker). That is a ~0 drop, not a
+  // full drain: too short, never "46 % over the span".
+  ScaleBatteryEstimate e;
+  e.on_reading(46);
+  e.arm();
+  e.on_session_end(true, kT0);
+  e.on_reading(46);
+  e.on_session_end(true, kT0 + 2 * kDay);
+  e.on_reading(47, kT0 + 2 * kDay + kHour);
+  CHECK(e.take_calibration_result() == kCalibrationTooShort);
+  CHECK(e.calibration_drop_pct() == 0 && e.calibration_hours() == 49);
+  // Two above is a charge: the old full-drain arithmetic, 46 % / 2 days.
+  e.on_reading(46);
+  e.arm();
+  e.on_session_end(true, kT0 + 10 * kDay);
+  e.on_reading(46);
+  e.on_session_end(true, kT0 + 12 * kDay);
+  e.on_reading(48, kT0 + 12 * kDay + kHour);
+  CHECK(e.take_calibration_result() == 23);
+  CHECK(e.calibration_drop_pct() == 46 && e.calibration_hours() == 48);
+  return 0;
+}
+
 int test_calibration_pending_detail_round_trip() {
   ScaleBatteryEstimate e;
   e.on_reading(100);
@@ -409,6 +434,7 @@ int main() {
       test_calibration_full_drain_without_clock,
       test_calibration_from_restart_reading,
       test_calibration_guard_rails,
+      test_calibration_flicker_above_start_is_not_a_charge,
       test_calibration_pending_detail_round_trip,
       test_calibration_old_tail,
       test_calibration_too_short_is_reported,
