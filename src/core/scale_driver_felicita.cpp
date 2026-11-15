@@ -33,12 +33,11 @@ constexpr size_t kFrameLen = 18;
 
 // Battery byte -> percent. The references disagree (Beanconqueror 129..158,
 // pyfelicita 137..161), and neither matches the scale's own app: on an Arc,
-// raw 140 is 20 % in the Felicita app (HW, 2026-11-15), which puts empty at
-// ~135 whichever upper end is right. The upper end splits the references'
-// difference until a full-charge reading pins it. The raw value is logged on
-// change for calibration.
-constexpr int kBatteryRawMin = 135;
-constexpr int kBatteryRawMax = 160;
+// raw 155 is 100 % and raw 140 is 20 % in the Felicita app (HW, 2026-11-15),
+// and the line through those two puts empty at ~136. The raw value is logged
+// on change, for calibrating other Felicita models.
+constexpr int kBatteryRawMin = 136;
+constexpr int kBatteryRawMax = 155;
 
 // The scale streams continuously while on (pyfelicita treats 5 s of silence
 // as disconnected), so a silent link is a dead one.
