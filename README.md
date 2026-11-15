@@ -41,8 +41,8 @@ to the machine instead of a phone app.
 
 - **Local Micra control over Bluetooth** — brew and steam temperatures, steam
   boiler on/off, standby, and live machine status. No cloud, no phone app.
-- **Bluetooth scales** — Bookoo Themis, Acaia (Umbra, Lunar, Prochef, Pyxis)
-  and Varia Aku: live weight, shot timer, flow graph, tare, and the scale's
+- **Bluetooth scales** — Bookoo Themis, Acaia (Umbra, Lunar, Prochef, Pyxis),
+  Felicita Arc and Varia Aku: live weight, shot timer, flow graph, tare, and the scale's
   own settings from the screen. A second, **bench** scale for the counter
   shows its weight on Home too — in the scale card or beside the graph —
   and, with **Record dose** turned on, records your dose for the next shot
@@ -439,6 +439,10 @@ This project stands on the work of others. Grateful thanks to:
   the cloud auth flow that `tools/lmtoken` re‑implements in Go.
 - **[goscale](https://github.com/mlsorensen/goscale)** (Apache‑2.0) — the model
   for the scale interface and the Bookoo Themis notification decode.
+- **[Beanconqueror](https://github.com/graphefruit/Beanconqueror)**,
+  **[pyfelicita](https://github.com/kevinstampe/pyfelicita)** (MIT) and
+  **[Acaia_Felicita_ArduinoBLE](https://github.com/baettigp/Acaia_Felicita_ArduinoBLE)**
+  (MIT) — the Felicita scale protocol (frame layout, battery range, commands).
 - **[apollo](https://github.com/mlsorensen/apollo)** — brew‑by‑weight /
   paddle‑stop approach that inspires the (in‑progress) brew controller.
 - **Waveshare** — board bring‑up details and register maps for the CH422G IO

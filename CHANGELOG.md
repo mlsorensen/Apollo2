@@ -9,6 +9,12 @@ maps — plain ASCII plus `— – → … × ' "` — or they render as empty b
 Each version lists `### Features` first, then `### Fixes` (the device shows
 the headings as plain lines); leave out a list that would be empty.
 
+## Unreleased
+
+### Features
+
+- **Felicita Arc scale.** Pair it under Settings → Scale → Bluetooth for live weight, flow graph, battery, tare and brew by weight. Keep the Arc in grams and in its plain weighing mode.
+
 ## v1.3.0
 
 ### Features
