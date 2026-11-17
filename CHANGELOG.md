@@ -16,9 +16,10 @@ the headings as plain lines); leave out a list that would be empty.
 
 - **Stats opens on History.** The Stats tab starts on the shot history instead of the Brew graph; the section you pick afterwards stays until the next restart.
 
-- **Calibrate the Umbra's drain from any restart.** Start the calibration, use the scale for a day or more, then turn it off and on or put it on the charger. Apollo measures what it used over that time and offers the figure, instead of needing the scale run flat first. Under a day, or under 10% used, is reported as too little to measure.
+- **Calibrate the Umbra's drain from any restart.** Start the calibration, use the scale, then the next day or later turn it off and on or put it on the charger. Apollo measures what it used over that time and offers the figure, instead of needing the scale run flat first. Under 12 hours, or under 3% used, is reported as too little to measure.
 
 ### Fixes
+- **No chime after a Bluetooth blip.** A machine that is already warm when Apollo connects, or reconnects after a short link drop, no longer chimes when the next shot's boiler dip recovers. The chime still marks a real warm-up, once per turn-on.
 - **A tare resets dose detection.** Taring the bench scale, on Apollo or on the scale itself, makes the new zero the reference, so a scale left reading below zero no longer offers a phantom dose after a tare, and what you put on next is offered at its real weight.
 - **Record follows a dose weighed in stages.** Beans added to a cup that already offered Record, or a few taken back out, now change the offer to the new total. Before, a top-up was measured on its own, so Record 8.0 g never became Record 10.0 g.
 - **Backups carry the Paddle wiring choice.** Settings > Apollo > Backup now writes the Apollo Link / Opto cable choice to the card, so a restore onto a replacement board comes up wired as before instead of on Auto. A backup from an older version leaves the board's current choice alone.

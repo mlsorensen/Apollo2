@@ -398,8 +398,10 @@ Plots the live flow rate (or weight) from the scale.
   temperature, so it sounds **at most once per turn‑on** and then stays quiet
   through everything the session brings — the small dips and reheats that hold
   the temperature, heavy steaming, refills, steam boiler toggles. It re‑arms
-  only when the machine goes to standby (or off, or disconnects), so the next
-  turn‑on's warm‑up chimes again. With the steam boiler **off** the chime
+  only when the machine goes to standby (or off), so the next turn‑on's
+  warm‑up chimes again. A machine that is already warm when Apollo connects,
+  or reconnects after a short Bluetooth drop, has had its warm‑up and stays
+  quiet for that session. With the steam boiler **off** the chime
   follows the coffee boiler alone; with it **on**, both boilers have to be
   there.
 - ⑤ **Brew temperature** — coffee boiler set‑point stepper (0.1 °C steps;
@@ -695,7 +697,7 @@ shows as normal.
   scale loses per day, asleep or not; for an Umbra, time matters far more than
   how long it's used each day. 13–15 % suits a stock battery.
 - ② **Calibrate drain** — measures your scale's own figure. Tap **Start**
-  and use the scale as usual. After a day or more — the longer the better —
+  and use the scale as usual. The next day or later — the longer the better —
   restart it: hold its button to turn it off and on, or put it on the charger
   (that restarts it too). When it comes back, Apollo shows how much it used
   over how long, the drain per day that works out to, and the current
@@ -703,7 +705,7 @@ shows as normal.
   scale to Apollo soon after the restart: a scale left charging first reads
   higher than it was, and the figure comes out low. A scale that comes back
   at or above the level it started from is taken to have run flat first, as
-  one charged from empty has. Less than a day, or less than 10 % used, is
+  one charged from empty has. Less than 3 % used, or under 12 hours, is
   too little to measure: you see **Calibration incomplete**; start again and
   leave it longer. While a calibration is running the button reads
   **Cancel**.

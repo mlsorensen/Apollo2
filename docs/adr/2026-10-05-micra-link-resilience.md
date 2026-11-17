@@ -2,7 +2,7 @@
 
 - **Status:** Open (the watchdog stands; a re-dial whose service discovery stalls still outruns the mask, and the cause of the stalls is a correlation, not a proven mechanism)
 - **Area:** radio
-- **First decided:** 2026-10-05 · **Last changed:** 2026-11-04
+- **First decided:** 2026-10-05 · **Last changed:** 2026-11-15
 - **Boards:** all (evidence from the P4 X-8)
 
 ## Context
@@ -43,9 +43,11 @@ stall the full 30 s while a partner-mode Umbra holds us as its slave
   firing logged at ~5,000 ms](#ev-firings)).
 - Open gap: a re-dial can connect at once and then stall in service
   discovery past the 15 s mask; the link then goes Connected -> Disconnected
-  -> Connected honestly and `ReadyChime` re-arms ([observed](#ev-firings)).
-  Not taken: a discovery-phase watchdog, or a chime latch that survives a
-  short drop.
+  -> Connected honestly ([observed](#ev-firings)). The chime side of that is
+  closed: `ReadyChime` now starts its session FIRED when the first real
+  readings after a connect show a machine that is not heating, so a blip on a
+  warm machine no longer buys a chime at the next boiler sag. Not taken: a
+  discovery-phase watchdog, or a latch that survives the drop itself.
 - The stall cause is a correlation with the Umbra's slave scheduling, [not a
   proven mechanism](#ev-umbra); the Umbra refuses the parameter changes that
   would test it ([dead ends](#alternatives-and-dead-ends)).
@@ -120,6 +122,7 @@ re-dial landed afterwards on the bench, none dropped.
 - 2026-10-31: reasons, parameters, timed reads logged (f746a58, c45adf9, 2e5b502); 30 ms experiment reverted (5809fc1); watchdog `kRequestStallMs` 5 s / `kRecoverMaskMs` 15 s (0f00614, v1.3.0-beta.1).
 - 2026-11-01: same shape on an inbound stream: `kFirstWeightMs` 5 s re-dial for a scale link that never delivers a weight; the power button's "Working..." hold 8 -> 12 s (5c9bb70).
 - 2026-11-04: discovery-stall case observed past the mask.
+- 2026-11-15: the visible-drop chime recurred on the second X-8 (a 31 s discovery stall at 08:57 then the post-shot sag); `ReadyChime` starts fired when a connect finds the machine already warm (connect-time assessment on the first real readings).
 
 ### Sources
 

@@ -18,6 +18,13 @@ namespace core {
 //     the next turn-on's warm-up chimes again. A temperature-drop re-arm used
 //     to exist here (heavy steaming / a refill cools a boiler 10 C+) and made
 //     nuisance re-chimes; removed 2026-08-23.
+//   - a machine that is already warm when the link comes up (first poll with
+//     real readings and not heating) has had its warm-up: the latch starts
+//     FIRED for that session (owner, 2026-11-15). Before, a short Bluetooth
+//     drop on a warm machine cleared the latch, and the next shot's boiler
+//     sag re-armed it, so the recovery chimed an hour into the session. The
+//     assessment waits for real readings, so the stale 0 C of a fresh
+//     connection never passes for "warm".
 // "Ready" itself is just !heating, so it inherits derive_heating()'s
 // hysteresis and its steam rule: with the steam boiler off the brew boiler
 // alone decides, with it on both boilers must be there.
@@ -37,6 +44,12 @@ class ReadyChime {
       reset();
       steam_known_ = false;
       return false;
+    }
+    // First real readings of this session: warm already = nothing to
+    // announce until the next turn-on.
+    if (!assessed_ && readings_real(s)) {
+      assessed_ = true;
+      if (!heating) fired_ = true;
     }
     // Steam toggled: the ready condition itself changed, so restart the
     // arming observation — but NOT the fired latch: once-per-turn-on is a
@@ -69,6 +82,7 @@ class ReadyChime {
     armed_ = false;
     fired_ = false;
     arming_ = 0;
+    assessed_ = false;
   }
 
  private:
@@ -80,6 +94,14 @@ class ReadyChime {
     return target_c - temp_c;
   }
 
+  // Both sides of every boiler that counts have reported (0 = not yet).
+  static bool readings_real(const MachineSnapshot& s) {
+    const bool brew = s.brew_temp_c > 0.0f && s.brew_target_c > 0.0f;
+    const bool boiler = s.boiler_temp_c > 0.0f && s.boiler_target_c > 0.0f;
+    return brew && (!s.steam_enabled || boiler);
+  }
+
+  bool assessed_ = false;    // the connect-time warm/cold call has been made
   bool armed_ = false;       // a warm-up has been observed; ready will chime
   bool fired_ = false;       // chimed this session; only reset() clears it
   int arming_ = 0;           // consecutive warming polls seen so far

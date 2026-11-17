@@ -51,12 +51,12 @@ record's header; do not edit by hand.
 - 2026-08-20 [On-scale settings are descriptor-driven and owned by the scale](2026-08-20-scale-device-settings.md) (Accepted; last changed 2026-11-04)
 - 2026-08-24 [The Micra Bluetooth token is minted by a cloud-seed handshake, so Apollo takes it from lmtoken](2026-08-24-micra-pairing-token.md) (Accepted; last changed 2026-08-29)
 - 2026-09-08 [Scale reconnects are parked while the screensaver or setup portal is up; the Micra's only for the portal](2026-09-08-scale-connects-parked-while-idle.md) (Accepted; last changed 2026-11-05)
-- 2026-10-05 [Micra link resilience: the stalled-request watchdog and the "machine wedged" rule](2026-10-05-micra-link-resilience.md) (Open; last changed 2026-11-04)
+- 2026-10-05 [Micra link resilience: the stalled-request watchdog and the "machine wedged" rule](2026-10-05-micra-link-resilience.md) (Open; last changed 2026-11-15)
 - 2026-10-16 [Umbra partner mode: Apollo acts as the scale's paired device so it sleeps and wakes](2026-10-16-umbra-partner-mode.md) (Accepted; last changed 2026-11-05)
 - 2026-10-17 [Apollo is grams-only; a scale's Unit row is kept only where it changes the scale's own display](2026-10-17-scale-units-grams-only.md) (Accepted; last changed 2026-10-17)
 - 2026-10-21 [One radio listener at a time: the arbiter, the finder and learned address types](2026-10-21-radio-arbiter-and-address-type.md) (Open; last changed 2026-11-07)
 - 2026-10-24 [Two scale slots: the slot is the role, and roles sit over links](2026-10-24-two-scale-slots-roles-over-links.md) (Accepted; last changed 2026-11-07)
-- 2026-10-30 [Umbra battery: estimate the level once the scale's gauge freezes on sleep](2026-10-30-umbra-battery-estimate.md) (Open; last changed 2026-11-13)
+- 2026-10-30 [Umbra battery: estimate the level once the scale's gauge freezes on sleep](2026-10-30-umbra-battery-estimate.md) (Open; last changed 2026-11-17)
 
 #### ux
 
@@ -141,7 +141,7 @@ record's header; do not edit by hand.
 | 2026-09-22 | 2026-11-02 | [The schedule engine fires one-shot edges inside a 2-minute window, and only on a clock it trusts](2026-09-22-schedule-engine-rules.md) | platform | Accepted |
 | 2026-09-22 | 2026-11-07 | [Schedule page: one switch per line, triggers not periods, auto-standby from the last use](2026-09-22-schedule-page-design.md) | ux | Accepted |
 | 2026-09-29 | 2026-09-29 | [The web flasher's engine is vendored and rebuilt with a newer esptool-js](2026-09-29-web-flasher-vendored.md) | ota-release | Accepted |
-| 2026-10-05 | 2026-11-04 | [Micra link resilience: the stalled-request watchdog and the "machine wedged" rule](2026-10-05-micra-link-resilience.md) | radio | Open |
+| 2026-10-05 | 2026-11-15 | [Micra link resilience: the stalled-request watchdog and the "machine wedged" rule](2026-10-05-micra-link-resilience.md) | radio | Open |
 | 2026-10-16 | 2026-11-05 | [Umbra partner mode: Apollo acts as the scale's paired device so it sleeps and wakes](2026-10-16-umbra-partner-mode.md) | radio | Accepted |
 | 2026-10-17 | 2026-10-17 | [Apollo is grams-only; a scale's Unit row is kept only where it changes the scale's own display](2026-10-17-scale-units-grams-only.md) | radio | Accepted |
 | 2026-10-18 | 2026-11-07 | [Flash epochs and meta.json: how a release declares itself web-flash-only](2026-10-18-flash-epoch-web-flash-lever.md) | ota-release | Open |
@@ -151,7 +151,7 @@ record's header; do not edit by hand.
 | 2026-10-24 | 2026-11-07 | [Two scales on Home and in Settings: card swap or beside the graph, scan then choose, Swap roles](2026-10-24-two-scales-home-and-settings.md) | ux | Accepted |
 | 2026-10-26 | 2026-11-07 | [A quiet touch controller gets counters and a live probe, not an automatic reset](2026-10-26-touch-controller-health-probe.md) | platform | Accepted |
 | 2026-10-30 | 2026-11-07 | [Dose and brew ratio: Record is the bench weight block, the chip builds in, out, ratio](2026-10-30-dose-and-ratio-on-home.md) | ux | Accepted |
-| 2026-10-30 | 2026-11-13 | [Umbra battery: estimate the level once the scale's gauge freezes on sleep](2026-10-30-umbra-battery-estimate.md) | radio | Open |
+| 2026-10-30 | 2026-11-17 | [Umbra battery: estimate the level once the scale's gauge freezes on sleep](2026-10-30-umbra-battery-estimate.md) | radio | Open |
 | 2026-11-01 | 2026-11-01 | [Home panel cards share their rows, and a line never moves without asking](2026-11-01-home-cards-share-rows.md) | ux | Accepted |
 | 2026-11-03 | 2026-11-03 | [The paddle breaker: a flickering sense input opens the drive until a person resets it](2026-11-03-paddle-breaker.md) | hardware | Accepted |
 | 2026-11-04 | 2026-11-05 | [The graph legend's box: shaped to its digits, unit pinned, no repaint throttle](2026-11-04-graph-legend-sizing.md) | ux | Accepted |

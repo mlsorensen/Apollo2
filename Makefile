@@ -32,6 +32,7 @@
 #   make test-schedule      host check of the schedule engine (plain g++, <1 s)
 #   make test-battery       host check of the scale battery estimate (plain g++, <1 s)
 #   make test-dose          host check of the dose tracker (plain g++, <1 s)
+#   make test-chime         host check of the ready-chime latch (plain g++, <1 s)
 #   make test-csv           host check of the shot index row format (plain g++, <1 s)
 #   make docs-img           regenerate the manual's annotated screenshots
 #                           (docs/img/manual/) from the sim renders
@@ -81,7 +82,7 @@ site-vendor:
         build-p4-x-7 build-p4-x-8 build-p4-x-10-1 \
         build-7b build-4-3b build-4-3c build-p4 \
         build-release build-all \
-        webapp site-vendor monitor padsense paddrive sim test-schedule test-battery test-dose test-csv docs-img adr-index lmtoken lmtoken-release lmtoken-publish clean
+        webapp site-vendor monitor padsense paddrive sim test-schedule test-battery test-dose test-chime test-csv docs-img adr-index lmtoken lmtoken-release lmtoken-publish clean
 
 flash: $(WEBAPP_HDR)
 	@tools/flash.sh $(BOARD)
@@ -223,6 +224,11 @@ test-battery:
 	@mkdir -p .pio/build
 	g++ -std=c++20 -Wall -Wextra -Iinclude tools/scale_battery_test.cpp src/core/scale_battery_estimate.cpp \
 	    -o .pio/build/scale_battery_test && ./.pio/build/scale_battery_test
+
+test-chime:
+	@mkdir -p .pio/build
+	g++ -std=c++20 -Wall -Wextra -Iinclude tools/ready_chime_test.cpp \
+	    -o .pio/build/ready_chime_test && ./.pio/build/ready_chime_test
 
 test-dose:
 	@mkdir -p .pio/build
