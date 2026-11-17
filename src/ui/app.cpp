@@ -2332,7 +2332,7 @@ void App::battery_calibration_tapped() {
   if (bi.sleep_off) return;
   lv_obj_t* card = open_modal(
       "Calibrate battery drain",
-      "Use the scale as usual. After a day or more, restart it (hold its "
+      "Use the scale as usual. The next day or later, restart it (hold its "
       "button to turn it off and on) or charge it. Apollo measures the drain "
       "up to that restart and offers the result when the scale comes back.");
   lv_obj_t* row = modal_button_row(card);
@@ -2353,12 +2353,12 @@ void App::poll_battery_calibration() {
     if (sc == nullptr) continue;
     const int rate = sc->take_battery_calibration_result();
     if (rate == core::kCalibrationNone) continue;
-    if (rate == core::kCalibrationTooShort) {  // under a day, or under 10 %
+    if (rate == core::kCalibrationTooShort) {  // under 12 h, or under 3 %
       lv_obj_t* card = open_modal(
           "Calibration incomplete",
-          "Less than a day, or less than 10% of charge, was measured, which "
-          "is too little to tell from noise (or the scale was recharged while "
-          "Apollo was not connected). Start again and leave it longer.");
+          "The scale used less than 3% of its charge, or ran for under 12 "
+          "hours, which is too little to tell from noise (or it was recharged "
+          "while Apollo was not connected). Start again and leave it longer.");
       modal_button(modal_button_row(card), "OK", ui::theme::rail(), on_token_cancel, this);
       return;
     }

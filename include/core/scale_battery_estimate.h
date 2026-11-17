@@ -30,15 +30,18 @@
 //     the last-live % when it goes stale; end = the stale -> live flip, i.e.
 //     the scale restarted (its button, or a charger plug-in — both restart
 //     it). The reading that ends the run is the measurement when it is BELOW
-//     the start (a restart after a day or more, or the plug-in reading of a
+//     the start (a restart the next morning, or the plug-in reading of a
 //     drained scale): drop = start - reading over the time since going stale.
 //     A reading 2 or more ABOVE the start (it came back charged, Apollo slept
 //     through the plug-in) assumes the scale hit 0 % when it was last seen,
 //     as before; one above is gauge flicker, a ~0 drop, never a charge.
-//     Guard rails (owner, 2026-11-13): a run shorter than
-//     kCalibrationMinSpanS or a drop under kCalibrationMinDropPct is noise
-//     on an integer gauge and is reported as 0, "too short" — the user is
-//     told, never silently disarmed. Otherwise the result is offered (Store /
+//     Guard rails (owner, 2026-11-13, loosened 2026-11-17): a run shorter
+//     than kCalibrationMinSpanS or a drop under kCalibrationMinDropPct is
+//     noise on an integer gauge and is reported as 0, "too short" — the user
+//     is told, never silently disarmed. The floors are 12 h and 3 %, low on
+//     purpose: a user who arms one morning and restarts the next must never
+//     be sent round again for being minutes short of a day, and a 4 %/day
+//     Umbra must complete overnight. Otherwise the result is offered (Store /
 //     Discard) with the measured drop and hours; off-procedure runs are the
 //     user's to discard. Arming is the UI's to gate (disabled while the
 //     scale's sleep is Off). A pending result is part of the persisted state.
@@ -59,8 +62,8 @@ constexpr int kCalibrationNone = -1;
 constexpr int kCalibrationTooShort = 0;
 // Guard rails for a run ended by a restart reading: anything shorter, or a
 // smaller drop, is quantisation noise on a whole-percent gauge.
-constexpr long kCalibrationMinSpanS = 24L * 60 * 60;
-constexpr int kCalibrationMinDropPct = 10;
+constexpr long kCalibrationMinSpanS = 12L * 60 * 60;
+constexpr int kCalibrationMinDropPct = 3;
 
 // Everything that must survive a reboot (see pack/unpack below).
 struct ScaleBatteryState {

@@ -226,26 +226,41 @@ int test_calibration_from_restart_reading() {
 }
 
 int test_calibration_guard_rails() {
-  // Under a day: too short, whatever the drop.
+  // Under 12 h: too short, whatever the drop.
   ScaleBatteryEstimate e;
   e.on_reading(100);
   e.arm();
   e.on_session_end(true, kT0);
-  e.on_reading(70, kT0 + 23 * kHour);
+  e.on_reading(70, kT0 + 11 * kHour);
   CHECK(e.take_calibration_result() == kCalibrationTooShort);
-  CHECK(e.calibration_drop_pct() == 30 && e.calibration_hours() == 23);
-  // Under 10 % of drop: too short, however long.
+  CHECK(e.calibration_drop_pct() == 30 && e.calibration_hours() == 11);
+  // Under 3 % of drop: too short, however long.
   e.on_reading(100);
   e.arm();
   e.on_session_end(true, kT0 + 2 * kDay);
-  e.on_reading(91, kT0 + 5 * kDay);
+  e.on_reading(98, kT0 + 5 * kDay);
   CHECK(e.take_calibration_result() == kCalibrationTooShort);
-  // Exactly at both limits: accepted (10 % / 1 day).
+  // Exactly at both limits: accepted (3 % / 12 h = 6 %/day).
   e.on_reading(100);
   e.arm();
   e.on_session_end(true, kT0 + 10 * kDay);
-  e.on_reading(90, kT0 + 11 * kDay);
-  CHECK(e.take_calibration_result() == 10);
+  e.on_reading(97, kT0 + 10 * kDay + 12 * kHour);
+  CHECK(e.take_calibration_result() == 6);
+  // Owner's bench run (2026-11-17): 9 % over 48.1 h was rejected by the old
+  // 10 % floor; a 4 %/day Umbra must complete. Rounds 4.49 -> 4.
+  e.on_reading(45);
+  e.arm();
+  e.on_session_end(true, kT0 + 20 * kDay);
+  e.on_reading(36, kT0 + 20 * kDay + 173122);
+  CHECK(e.take_calibration_result() == 4);
+  CHECK(e.calibration_drop_pct() == 9 && e.calibration_hours() == 48);
+  // Armed one morning, restarted the next a few minutes short of a day: a
+  // 4 % drop over 23.5 h is a result, not a do-over.
+  e.on_reading(36);
+  e.arm();
+  e.on_session_end(true, kT0 + 30 * kDay);
+  e.on_reading(32, kT0 + 30 * kDay + 23 * kHour + 30 * 60);
+  CHECK(e.take_calibration_result() == 4);
   return 0;
 }
 
