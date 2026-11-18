@@ -276,10 +276,12 @@ void update_flow_legend(HomeWidgets& w) {
   if (w.flow_value_label2 != nullptr) {
     if (w.legend_bench_g < 0.0f) std::snprintf(v2, sizeof(v2), "--");
     else std::snprintf(v2, sizeof(v2), "%.1f", static_cast<double>(w.legend_bench_g));
-    const int32_t w2 = shaped_width(font, v2);
-    const int32_t floor2 = shaped_width(font, "888.8");
-    if (w2 > width) width = w2;
-    if (floor2 > width) width = floor2;
+    if (!w.bench_legend_hidden) {  // a hidden row doesn't size the shared box
+      const int32_t w2 = shaped_width(font, v2);
+      const int32_t floor2 = shaped_width(font, "888.8");
+      if (w2 > width) width = w2;
+      if (floor2 > width) width = floor2;
+    }
   }
   set_width_if_changed(w.flow_value_label, width);
   ui::set_text(w.flow_value_label, v1);
@@ -658,7 +660,8 @@ void populate_flow_graph(lv_obj_t* card, HomeWidgets& out) {
     // The bench series' own axis on the right, in the bench colour so the
     // two scales can't be read against the wrong line.
     for (int t = 0; t < 3; ++t) out.flow_ylabels_r[t] = make_ylabel(ph * t / 3, true);
-    lv_label_set_text(make_ylabel(ph, true), "0");
+    out.flow_ylabel_r0 = make_ylabel(ph, true);
+    lv_label_set_text(out.flow_ylabel_r0, "0");
   }
   set_flow_ylabels(out);
 
@@ -1593,6 +1596,8 @@ void build_home_tab(lv_obj_t* parent, const ScreenProfile& screen, bool scale_en
   out.flow_xspan_label = nullptr;
   for (lv_obj_t*& yl : out.flow_ylabels) yl = nullptr;
   for (lv_obj_t*& yl : out.flow_ylabels_r) yl = nullptr;
+  out.flow_ylabel_r0 = nullptr;
+  out.bench_legend_hidden = false;
   for (lv_obj_t*& xl : out.flow_xlabels) xl = nullptr;
   // Bench scale widgets: large scale-aware layout only (bench_weights is
   // freed by App before each rebuild, with the other rings).
@@ -1898,6 +1903,23 @@ void set_micra_standby_timer(HomeWidgets& w, int remaining_s) {
   if (hidden) lv_obj_remove_flag(w.micra_timer_label, LV_OBJ_FLAG_HIDDEN);
 }
 
+// Beside mode only (the row and axis exist nowhere else): hide or show the
+// bench legend row and the right-hand axis together, and re-fit the legend's
+// shared value box (the hidden row no longer sizes it).
+static void set_bench_legend_hidden(HomeWidgets& w, bool hidden) {
+  if (w.flow_legend_dot2 == nullptr || hidden == w.bench_legend_hidden) return;
+  w.bench_legend_hidden = hidden;
+  auto vis = [hidden](lv_obj_t* o) {
+    if (o == nullptr) return;
+    if (hidden) lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_remove_flag(o, LV_OBJ_FLAG_HIDDEN);
+  };
+  vis(lv_obj_get_parent(w.flow_legend_dot2));  // the row: dot + value + unit
+  for (lv_obj_t* yl : w.flow_ylabels_r) vis(yl);
+  vis(w.flow_ylabel_r0);
+  update_flow_legend(w);
+}
+
 void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
                  const core::BatteryState& battery, const core::WallTime& clock,
                  bool clock_24h, bool fahrenheit, const core::ScaleSnapshot& scale,
@@ -1977,6 +1999,10 @@ void update_home(HomeWidgets& w, const core::MachineSnapshot& state,
       if (brew.phase != core::ShotPhase::kIdle) lv_obj_add_state(w.seg_bench[i], LV_STATE_DISABLED);
       else lv_obj_remove_state(w.seg_bench[i], LV_STATE_DISABLED);
     }
+    // Beside the graph, the same span hides the bench legend row and its
+    // right axis: no bench trace is drawn, and the bench card next to the
+    // plot already shows the weight.
+    set_bench_legend_hidden(w, brew.phase != core::ShotPhase::kIdle);
     if (w.bench_connect_btn != nullptr) {
       const bool connecting = bench_connect_enabled && !bench->connected;
       ui::set_text(w.bench_connect_label, connecting            ? "Connecting..."

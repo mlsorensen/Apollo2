@@ -220,6 +220,12 @@ struct HomeWidgets {
   lv_obj_t* flow_legend_dot2 = nullptr;   // beside mode: the bench entry
   lv_obj_t* flow_value_label2 = nullptr;
   lv_obj_t* flow_unit_label2 = nullptr;
+  lv_obj_t* flow_ylabel_r0 = nullptr;     // beside mode: the right axis's static "0"
+  // Beside mode, from a shot's start through its review: the shot plot owns
+  // the canvas and draws no bench trace, so the bench legend row and its
+  // right axis are hidden (the bench card beside shows the weight). Back at
+  // idle with the sweep (owner, 2026-11-18).
+  bool bench_legend_hidden = false;
   // The dose chip ABOVE the legend (its own box; only its x is a control):
   // builds up over the shot (see set_dose_chip). Hidden with no dose.
   lv_obj_t* dose_chip = nullptr;

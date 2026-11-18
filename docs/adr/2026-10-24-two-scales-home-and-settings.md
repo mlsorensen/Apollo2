@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** ux
-- **First decided:** 2026-10-24 · **Last changed:** 2026-11-07
+- **First decided:** 2026-10-24 · **Last changed:** 2026-11-18
 - **Boards:** every board with the large Home layout (all released boards); the internal 2-inch compact layout shows nothing of it
 
 ## Context
@@ -74,7 +74,12 @@ The gate is UI quality at 800x480. The radio side is
   `flow_mode` 2 plots the bench ring in grams on the left axis (the BENCH
   side, or bench-only); `bench_overlay` (beside-the-graph mode) draws both
   series on one canvas, the bench against its own right axis
-  (`flow_ylabels_r`). Theme role `bench` colours all of it.
+  (`flow_ylabels_r`). Theme role `bench` colours all of it. From a shot's
+  start through its review the shot plot owns the canvas and draws no bench
+  trace, so the bench legend row and the right axis are hidden
+  (`set_bench_legend_hidden`); the bench card beside the plot shows the
+  weight. Nothing of this exists in the other layouts: the legend box is
+  content-sized and the right axis is built only for `bench_overlay`.
 - **Settings > Scale.** Bluetooth: the two scale rows plus Swap roles.
   Shot settings: Target, Review hold and Detect lead-in only. Device
   settings: an Espresso/Bench picker when both are saved, then the scale's
@@ -120,6 +125,7 @@ The gate is UI quality at 800x480. The radio side is
 - 2026-11-01: bench card re-laid as a panel column on the shared lines
   (`f1d0ee1`).
 - 2026-11-07: folded in from the project's working notes (CLAUDE.md).
+- 2026-11-18: beside mode hides the bench legend row and right axis from a shot's start through review; the row duplicated the bench card while no bench trace was drawn.
 
 ### Sources
 

@@ -382,6 +382,10 @@ int main() {
   brew.set_shot_ms(9000);
   ok &= r({800, 480}, "renders/home_dose_shot_800x480.png", 0, -1, false, 0, -1,
           false, -1, 0, false, false, 9000, false, false, false, false, 0, -1, false, -1, 0, 3);
+  disp.set_bench_home_style(1);  // beside: the legend during a shot
+  ok &= r({800, 480}, "renders/home_dose_shot_beside_800x480.png", 0, -1, false, 0, -1,
+          false, -1, 0, false, false, 9000, false, false, false, false, 0, -1, false, -1, 0, 3);
+  disp.set_bench_home_style(0);
   brew.set_phase(core::ShotPhase::kReview);
   brew.set_shot_ms(27000);
   ok &= r({800, 480}, "renders/home_dose_review_800x480.png", 0, -1, false, 0, -1,

@@ -309,7 +309,10 @@ Plots the live flow rate (or weight) from the scale.
   scale's weight in grams instead (its own amber trace, hundreds of grams on
   the axis). *Beside the graph*, both scales share the plot: the espresso
   trace against the left axis in its unit, the bench weight in amber against
-  its own right‑hand axis in grams, and the legend carries both dots.
+  its own right‑hand axis in grams, and the legend carries both dots. From a
+  shot's start through its review the plot follows the shot alone, so the
+  bench dot and its axis step out of the way; the bench card beside the
+  graph keeps showing the weight.
 - During a shot the graph restarts and follows the shot, widening its time
   window as the shot runs on (see **Window growth**); when the shot ends it
   freezes for review (see **Review hold**) and then resumes.
