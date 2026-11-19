@@ -1,0 +1,10 @@
+[
+  {
+    "path": "part0-0x000000.bin",
+    "offset": 0
+  },
+  {
+    "path": "part1-0x00e000.bin",
+    "offset": 57344
+  }
+]
