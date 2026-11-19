@@ -1,14 +1,13 @@
 # Apollo 2
 
-<!-- The light image's ink is #555, not black, so it still reads on a dark
-     page when the viewer's colour-scheme preference doesn't match the site
-     theme (GitHub forced dark with the OS light): the <source> above only
-     fires on the browser's own preference. -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/img/apollo-logo-dark.png">
-  <img align="left" width="96" src="docs/img/apollo-logo.png"
-       alt="Apollo, laurel-crowned, sipping an espresso">
-</picture>
+<!-- One logo for both GitHub themes: dark ink on a solid white silhouette
+     with a white halo around the outside, so it reads on white (fill and halo
+     invisible) and on a dark page (a light bust with a glow). A <picture> +
+     prefers-color-scheme switch was tried and follows the BROWSER's colour
+     scheme, not the GitHub theme: Safari on a dark-mode Mac served the white
+     logo onto a light GitHub page. -->
+<img align="left" width="96" src="docs/img/apollo-logo.png"
+     alt="Apollo, laurel-crowned, sipping an espresso">
 
 Firmware project that turns a small ESP32 touchscreen into a local
 controller for a **La Marzocco Micra** espresso machine — over Bluetooth, with
@@ -42,8 +41,8 @@ to the machine instead of a phone app.
 
 - **Local Micra control over Bluetooth** — brew and steam temperatures, steam
   boiler on/off, standby, and live machine status. No cloud, no phone app.
-- **Bluetooth scales** — Bookoo Themis, Acaia (Umbra, Lunar, Prochef, Pyxis)
-  and Varia Aku: live weight, shot timer, flow graph, tare, and the scale's
+- **Bluetooth scales** — Bookoo Themis, Acaia (Umbra, Lunar, Prochef, Pyxis),
+  Felicita Arc and Varia Aku: live weight, shot timer, flow graph, tare, and the scale's
   own settings from the screen. A second, **bench** scale for the counter
   shows its weight on Home too — in the scale card or beside the graph —
   and, with **Record dose** turned on, records your dose for the next shot
@@ -440,6 +439,10 @@ This project stands on the work of others. Grateful thanks to:
   the cloud auth flow that `tools/lmtoken` re‑implements in Go.
 - **[goscale](https://github.com/mlsorensen/goscale)** (Apache‑2.0) — the model
   for the scale interface and the Bookoo Themis notification decode.
+- **[Beanconqueror](https://github.com/graphefruit/Beanconqueror)**,
+  **[pyfelicita](https://github.com/kevinstampe/pyfelicita)** (MIT) and
+  **[Acaia_Felicita_ArduinoBLE](https://github.com/baettigp/Acaia_Felicita_ArduinoBLE)**
+  (MIT) — the Felicita scale protocol (frame layout, battery range, commands).
 - **[apollo](https://github.com/mlsorensen/apollo)** — brew‑by‑weight /
   paddle‑stop approach that inspires the (in‑progress) brew controller.
 - **Waveshare** — board bring‑up details and register maps for the CH422G IO

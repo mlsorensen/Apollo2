@@ -25,7 +25,7 @@
 // model, do_connect() instantiates a fresh driver per connection, and decoded
 // weight/timer/battery frames land in a mutex-guarded cache that snapshot()
 // reads from the UI thread. Drivers today: Bookoo Themis, Acaia (Umbra/Lunar/
-// Pyxis).
+// Pyxis), Varia Aku, Felicita (Arc).
 
 namespace core {
 

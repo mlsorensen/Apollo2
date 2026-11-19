@@ -35,7 +35,8 @@ the display. **P4 boards only — the S3‑4.3C cannot use it** (it has its own
 isolators and no header for the Link).
 
 A supported Bluetooth scale (Bookoo Themis, Acaia Umbra / Lunar / Prochef /
-Pyxis, or Varia Aku — Pyxis and Aku untested) is optional but unlocks the shot
+Pyxis, Felicita Arc, or Varia Aku — Pyxis and Aku untested, the Arc tested by
+its contributor) is optional but unlocks the shot
 timer, flow graph, and brew‑by‑weight features.
 
 ## Power, battery, and RTC

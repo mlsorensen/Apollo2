@@ -18,6 +18,8 @@ the headings as plain lines); leave out a list that would be empty.
 
 - **Calibrate the Umbra's drain from any restart.** Start the calibration, use the scale, then the next day or later turn it off and on or put it on the charger. Apollo measures what it used over that time and offers the figure, instead of needing the scale run flat first. Under 12 hours, or under 3% used, is reported as too little to measure.
 
+- **Felicita Arc scale.** Pair it under Settings → Scale → Bluetooth for live weight, flow graph, battery, tare and brew by weight. Keep the Arc in grams and in its plain weighing mode.
+
 ### Fixes
 - **The bench legend steps aside during a shot.** With the bench scale beside the graph, the amber dot, its reading and the right-hand axis leave the legend from the shot's start through its review, when the plot follows the shot alone and the bench card already shows the weight. They return with the live sweep.
 - **No chime after a Bluetooth blip.** A machine that is already warm when Apollo connects, or reconnects after a short link drop, no longer chimes when the next shot's boiler dip recovers. The chime still marks a real warm-up, once per turn-on.

@@ -48,7 +48,7 @@ record's header; do not edit by hand.
 - 2026-07-18 [Acaia driver: weight-stream liveness, the excursion hold, and no vendor references](2026-07-18-acaia-driver-liveness.md) (Accepted; last changed 2026-11-05)
 - 2026-07-18 [Auto-stop fires at target minus a learned overshoot, taught only by target-triggered stops](2026-07-18-auto-stop-overshoot-learning.md) (Accepted; last changed 2026-11-07)
 - 2026-07-19 [Shot detect (unwired) mode: the weight stream drives the shot state machine](2026-07-19-unwired-shot-detect-mode.md) (Open; last changed 2026-10-17)
-- 2026-08-20 [On-scale settings are descriptor-driven and owned by the scale](2026-08-20-scale-device-settings.md) (Accepted; last changed 2026-11-04)
+- 2026-08-20 [On-scale settings are descriptor-driven and owned by the scale](2026-08-20-scale-device-settings.md) (Accepted; last changed 2026-11-19)
 - 2026-08-24 [The Micra Bluetooth token is minted by a cloud-seed handshake, so Apollo takes it from lmtoken](2026-08-24-micra-pairing-token.md) (Accepted; last changed 2026-08-29)
 - 2026-09-08 [Scale reconnects are parked while the screensaver or setup portal is up; the Micra's only for the portal](2026-09-08-scale-connects-parked-while-idle.md) (Accepted; last changed 2026-11-05)
 - 2026-10-05 [Micra link resilience: the stalled-request watchdog and the "machine wedged" rule](2026-10-05-micra-link-resilience.md) (Open; last changed 2026-11-15)
@@ -124,7 +124,7 @@ record's header; do not edit by hand.
 | 2026-07-28 | 2026-09-09 | [Repo hygiene: generated output is built, photos are stripped, the S3 hybrid build is a dead end](2026-07-28-repo-hygiene.md) | ota-release | Accepted |
 | 2026-07-30 | 2026-11-07 | [Diagnostics that survive until someone looks: the log ring, a bounded /log, and a failed-allocation flight recorder in RTC memory](2026-07-30-diagnostics-that-survive-the-morning.md) | platform | Accepted |
 | 2026-07-31 | 2026-11-03 | [Protecting the paddle sense pin: 1 kΩ in series, then 100 nF at the pin](2026-07-31-paddle-sense-protection.md) | hardware | Open |
-| 2026-08-20 | 2026-11-04 | [On-scale settings are descriptor-driven and owned by the scale](2026-08-20-scale-device-settings.md) | radio | Accepted |
+| 2026-08-20 | 2026-11-19 | [On-scale settings are descriptor-driven and owned by the scale](2026-08-20-scale-device-settings.md) | radio | Accepted |
 | 2026-08-24 | 2026-08-29 | [The Micra Bluetooth token is minted by a cloud-seed handshake, so Apollo takes it from lmtoken](2026-08-24-micra-pairing-token.md) | radio | Accepted |
 | 2026-08-24 | 2026-10-01 | [No "Start anyway" override for a paddle flip refused without a scale](2026-08-24-paddle-override-without-scale.md) | hardware | Dropped |
 | 2026-09-04 | 2026-11-05 | [Idle screen: Lion / Apollo / Alternate / Dim / Off, with a per-board dim floor](2026-09-04-idle-screen-styles.md) | ux | Accepted |

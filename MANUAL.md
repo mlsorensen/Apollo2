@@ -566,7 +566,7 @@ runs every shot feature, and an optional **bench** scale for the counter,
 which is a weight readout with its own Tare (see the BENCH card above).
 
 - ② **Scan** — searches for supported scales (Bookoo Themis, Acaia Umbra /
-  Lunar / Prochef / Pyxis, Varia Aku — Pyxis and Aku untested). Wake the scale first — most
+  Lunar / Prochef / Pyxis, Felicita Arc, Varia Aku — Pyxis and Aku untested, the Arc tested by its contributor). Wake the scale first — most
   sleep their Bluetooth quickly. Tapping a result asks **Use … as which
   scale?** — **Espresso** or **Bench** — and saves it there, replacing
   whatever that slot held. With one scale, choose **Espresso** and you will
@@ -665,6 +665,11 @@ model (a Bookoo Themis's ① **Beep** and ② **Auto‑off** shown above):
 - **Varia Aku** — none. Its Bluetooth protocol exposes weight, tare and
   battery only, so the page says *No device settings available for this
   scale*.
+- **Felicita Arc** — none, for the same reason (its beep can only be toggled
+  blind, with nothing to read back). Keep the Arc set to **grams**: unlike a
+  Lunar it isn't converted yet. In ounces Apollo shows no weight — or, if you
+  switch during a session, holds the last gram reading — until the scale is
+  back in grams.
 
 **Unit** only changes what the *scale's own display* shows — Apollo always
 works and displays in grams (an oz‑mode Lunar/Pyxis streams ounces over
@@ -773,6 +778,10 @@ machine is already warming up when you arrive.
   **cannot** wake it with Connect. Leave Apollo
   connecting, **turn the scale on** in the morning and you're good; when
   you're done, just walk away — the scale sleeps on its own from inactivity.
+- **Felicita Arc** — no sleep mode Apollo can wake: **turn the scale on** in
+  the morning and Apollo reconnects. Use the Arc's plain weighing mode — its
+  auto‑tare and auto‑timer modes zero or time the shot on their own, and that
+  fights Apollo's shot detection and brew‑by‑weight.
 
 ---
 

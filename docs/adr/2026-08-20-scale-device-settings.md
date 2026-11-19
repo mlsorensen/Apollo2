@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Area:** radio
-- **First decided:** 2026-08-20 · **Last changed:** 2026-11-04
+- **First decided:** 2026-08-20 · **Last changed:** 2026-11-19
 - **Boards:** all
 
 ## Context
@@ -32,7 +32,7 @@ persist because the scale is the authority.
 - Rows per scale ([wire detail](#dd-wire)): Bookoo Themis Mini / Ultra,
   Beep and Auto-off. Acaia Umbra, Beep and Auto sleep, [power-off values
   withheld](#alternatives-and-dead-ends). Acaia Lunar/Pyxis, Beep, Auto-off,
-  Unit and a read-only Mode. Varia Aku, none.
+  Unit and a read-only Mode. Varia Aku and Felicita Arc, none.
 
 ## Consequences
 
@@ -63,6 +63,7 @@ for display (index != wire value).
 | Acaia Umbra | Beep On/Off; Auto sleep Off/1/5/10/30 min (wire 0/7/1/2/3) | status frame payload[2] sleep, [3] beep; the wire's power-off values 4/5/6 are deliberately not offered |
 | Acaia Lunar/Pyxis | Beep Off/1/2/3 (a volume); Auto-off Off/5/10/20/30/60; Unit g/oz; Mode (read-only) | 2 s status poll; sound id 5, sleep id 1, unit id 0; no mode write exists |
 | Varia Aku | none | weight, tare, battery only; the page says "No device settings available for this scale" (62218cc, 2026-11-04) |
+| Felicita Arc | none | one characteristic FFE1 for notify and write; 18-byte ASCII frame (sign, six centigram digits, unit, raw battery at [15]); tare is the byte `0x54`; the beep is a blind toggle (`0x42`) with no readback, so it cannot be a row; the on-scale modes are left alone |
 
 ### Evidence
 
@@ -98,6 +99,7 @@ the 4 s grace window comes from that (601e9b9).
 - 2026-08-29: Themis Ultra, beep capped 0-3 on both Bookoos (8a637a4).
 - 2026-10-17: Umbra Unit row removed (see the units record).
 - 2026-11-04: Aku's empty page replaced by an explanatory line (62218cc).
+- 2026-11-19: Felicita Arc driver, a community contribution (issue #14, 1b20fdd + 6b94f2f): no rows. Tested by its contributor on an Arc with a P4-4.3; we have no unit on the bench. Ounce frames are dropped, not converted (issue #17).
 
 ### Sources
 

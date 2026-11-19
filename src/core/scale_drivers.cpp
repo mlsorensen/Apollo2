@@ -11,6 +11,7 @@ namespace core {
 std::shared_ptr<IScaleDriver> make_bookoo_driver();                // scale_driver_bookoo.cpp
 std::shared_ptr<IScaleDriver> make_acaia_driver(bool umbra_hint);  // scale_driver_acaia.cpp
 std::shared_ptr<IScaleDriver> make_aku_driver();                   // scale_driver_aku.cpp
+std::shared_ptr<IScaleDriver> make_felicita_driver();              // scale_driver_felicita.cpp
 
 namespace {
 
@@ -32,6 +33,10 @@ bool is_bookoo(const char* name) { return has_prefix_ci(name, "BOOKOO"); }
 bool is_aku(const char* name) {
   return has_prefix_ci(name, "VARIA") || has_prefix_ci(name, "AKU");
 }
+
+// Felicita advertises its brand only ("FELICITA", seen on an Arc) — the model
+// (Arc, Incline, Parallel) isn't in the name, and the protocol is shared.
+bool is_felicita(const char* name) { return has_prefix_ci(name, "FELICITA"); }
 
 bool is_acaia(const char* name) {
   if (has_prefix_ci(name, kPartnerAdvertName)) return false;  // another Apollo
@@ -57,11 +62,13 @@ const char* scale_display_name(const char* name) {
   if (has_prefix_ci(name, "PROCH")) return "Acaia Prochef";
   if (has_prefix_ci(name, "ACAIA")) return "Acaia";
   if (is_aku(name)) return "Varia Aku";
+  if (is_felicita(name)) return "Felicita";
   return nullptr;
 }
 
 bool scale_name_supported(const char* name) {
-  return name != nullptr && (is_bookoo(name) || is_acaia(name) || is_aku(name));
+  return name != nullptr && (is_bookoo(name) || is_acaia(name) || is_aku(name) ||
+                            is_felicita(name));
 }
 
 std::shared_ptr<IScaleDriver> make_scale_driver(const char* name) {
@@ -69,6 +76,7 @@ std::shared_ptr<IScaleDriver> make_scale_driver(const char* name) {
   if (is_bookoo(name)) return make_bookoo_driver();
   if (is_acaia(name)) return make_acaia_driver(has_prefix_ci(name, "UMBRA"));
   if (is_aku(name)) return make_aku_driver();
+  if (is_felicita(name)) return make_felicita_driver();
   return nullptr;
 }
 
